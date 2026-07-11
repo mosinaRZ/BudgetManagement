@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.BudgetManagement" parent="android:Theme.Material.Light.NoActionBar">
+
+                <!-- خاموش کردن و بی‌اثر کردن اسپلش اسکرین پیش‌فرض اندروید ۱۲ به بالا -->
+                <!-- ۱. پس‌زمینه اسپلش اسکرین رو سفید می‌کنه تا با پس‌زمینه لایت برنامه یکی بشه -->
+                <item name="android:windowSplashScreenBackground">#FFFFFF</item>
+
+                <!-- ۲. آیکون بزرگ پیش‌فرض رو کاملاً مخفی و شفاف می‌کنه -->
+                <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+
+                <!-- ۳. مدت زمان ایستادن روی اسپلش رو به صفر می‌رسونه -->
+                <item name="android:windowSplashScreenAnimationDuration">0</item>
+
+                <!-- برای اینکه نوار وضعیت گوشی با پس‌زمینه برنامه هماهنگ و شیک بشه -->
+                <item name="android:statusBarColor">@android:color/transparent</item>
+                <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

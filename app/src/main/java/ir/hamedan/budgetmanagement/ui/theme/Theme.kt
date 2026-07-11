@@ -1,0 +1,46 @@
+package ir.hamedan.budgetmanagement.ui.theme
+
+import android.app.Activity
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import ir.hamedan.budgetmanagement.data.ThemePreferences
+
+@Composable
+fun BudgetManagementTheme(
+    themeMode: Int = ThemePreferences.MODE_SYSTEM,
+    content: @Composable () -> Unit
+) {
+    val darkTheme = when (themeMode) {
+        ThemePreferences.MODE_LIGHT -> false
+        ThemePreferences.MODE_DARK -> true
+        else -> isSystemInDarkTheme()
+    }
+
+    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val typography = getAppTypography()
+
+    val view = LocalView.current
+
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as Activity).window
+            window.statusBarColor = colorScheme.background.toArgb()
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !darkTheme
+                // اختیاری: navigation bar
+                isAppearanceLightNavigationBars = !darkTheme
+            }
+        }
+    }
+
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = typography,
+        content = content
+    )
+}
