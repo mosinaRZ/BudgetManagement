@@ -1,27 +1,30 @@
 package ir.hamedan.budgetmanagement.ui.theme.view
 
 import android.app.Activity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Brightness6
-import androidx.compose.material.icons.filled.Language // اضافه شدن آیکون مناسب زبان
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
+import ir.hamedan.budgetmanagement.item.AuroraBackground
 import ir.hamedan.budgetmanagement.item.BottomNavItem
-import ir.hamedan.budgetmanagement.item.CapsuleBottomNavigation
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.getFormattedEnglishDate
 import ir.hamedan.budgetmanagement.utils.getFormattedPersianDate
@@ -39,17 +42,12 @@ data class Transaction(
     val categoryEn: String
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onTransactionClick: (Transaction) -> Unit = {},
-    onFabClick: () -> Unit = {},
-    onBottomNavItemClick: (BottomNavItem) -> Unit = {},
     onThemeToggle: () -> Unit = {}
 ) {
     val context = LocalContext.current
-
-    // حل مشکل تعریف دوگانه: فقط یک بار و بر اساس لوکال هلپر خوانده می‌شود
     val currentLang = LocaleHelper.getLanguage(context)
     val isPersian = currentLang == "fa"
 
@@ -59,82 +57,35 @@ fun HomeScreen(
         )
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .height(64.dp)
-                    .padding(horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // دکمه تغییر تم
-                IconButton(onClick = onThemeToggle) {
-                    Icon(
-                        imageVector = Icons.Default.Brightness6,
-                        contentDescription = "تغییر تم",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+    // 🚀 تغییر لایه اصلی به Box به جای Scaffold برای آزادی مطلق لایه‌ها
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+    ) {
 
-                // عنوان صفحه
-                Text(
-                    text = if (isPersian) "مدیریت هزینه‌ها" else "Expense Manager",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier
-                        .weight(1f)
-                        .wrapContentWidth(Alignment.CenterHorizontally)
-                )
+        AuroraBackground()
 
-                // دکمه تغییر زبان (آیکون به Language تغییر یافت)
-                IconButton(onClick = {
-                    val newLang = if (isPersian) "en" else "fa"
-                    LocaleHelper.setLocale(context, newLang)
-                    // بازسازی اکتیویتی برای اعمال آنی زبان، فونت و جهت لایه‌ها
-                    (context as? Activity)?.recreate()
-                }) {
-                    Icon(
-                        imageVector = Icons.Default.Language,
-                        contentDescription = "تغییر زبان",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onFabClick,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = if (isPersian) "افزودن تراکنش" else "Add Transaction"
-                )
-            }
-        },
-        bottomBar = {
-            CapsuleBottomNavigation(
-                currentRoute = "home",
-                onItemSelected = onBottomNavItemClick
-            )
-        }
-    ) { innerPadding ->
+        // ۱. لیست محتوای اصلی (پایین‌ترین لایه، اسکرول آزاد از سقف تا کف)
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // ۱. بخش خوش‌آمدگویی
+            // 💡 اصلاح فاصله اول لیست برای حل مشکل مخفی شدن زیر کپسول
+            item {
+                Spacer(
+                    modifier = Modifier
+                        .statusBarsPadding() // ۱. به صورت هوشمند ارتفاع ساعت و باتری گوشی را رد می‌کند
+                        .height(55.dp)       // ۲. دقیقاً به اندازه مجموع ارتفاع کپسول و فاصله‌هایش فضا باز می‌کند
+                )
+            }
+
+            // بخش خوش‌آمدگویی
             item {
                 Column {
                     Text(
-                        text = if (isPersian) "سلام، سینا 👋" else "Hi, Sina 👋",
+                        text = if (isPersian) "سلام، سینا 👋" else "Hi, Cenna 👋",
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onBackground
                     )
@@ -146,7 +97,7 @@ fun HomeScreen(
                 }
             }
 
-            // ۲. کارت موجودی اصلی
+            // کارت موجودی اصلی
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -178,7 +129,7 @@ fun HomeScreen(
                 }
             }
 
-            // ۳. ردیف کارت‌های خلاصه (درآمد، هزینه زیر هم + تراکنش‌ها جلو)
+            // ردیف کارت‌های خلاصه
             item {
                 Row(
                     modifier = Modifier
@@ -207,7 +158,7 @@ fun HomeScreen(
                                 )
                                 Spacer(Modifier.height(8.dp))
                                 Text(
-                                    text = "${numberFormatter.format(25800000)}${if (isPersian) " تومان" else ""}",
+                                    text = "${numberFormatter.format(25800000)}${if (isPersian) " تومان" else " T"}",
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.SemiBold,
@@ -234,7 +185,7 @@ fun HomeScreen(
                                 )
                                 Spacer(Modifier.height(8.dp))
                                 Text(
-                                    text = "${numberFormatter.format(-13260000)}${if (isPersian) " تومان" else ""}",
+                                    text = "${numberFormatter.format(-13260000)}${if (isPersian) " تومان" else " T"}",
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.error,
                                     fontWeight = FontWeight.SemiBold,
@@ -287,7 +238,7 @@ fun HomeScreen(
                 )
             }
 
-            // ۴. لیست تراکنش‌ها
+            // لیست تراکنش‌ها
             items(getDummyTransactions(), key = { it.id }) { transaction ->
                 val emoji = when (transaction.category) {
                     "غذا", "Food" -> "🍔"
@@ -339,7 +290,63 @@ fun HomeScreen(
                 }
             }
 
-            item { Spacer(modifier = Modifier.height(100.dp)) }
+            // 💡 ضربه‌گیر پایینی: افزایش ارتفاع به 110.dp تا لیست پشت داک کپسول و FAB پایینی گیر نکند
+            item { Spacer(modifier = Modifier.height(110.dp)) }
+        }
+
+        // ۲. 🚀 لایه بالایی (تاپ‌بار کپسولی شناور - با چیدمان اختصاصی روی Box)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .statusBarsPadding() // فاصله هوشمند از نوار بالای گوشی
+                .padding(horizontal = 24.dp, vertical = 8.dp)
+        ) {
+            val shape = RoundedCornerShape(24.dp)
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), shape) // افزایش اندک آلفا برای خوانایی بهتر متن‌های زیر آن موقع اسکرول
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape)
+                    .clip(shape)
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // دکمه تغییر تم
+                IconButton(onClick = onThemeToggle) {
+                    Icon(
+                        imageVector = Icons.Default.Brightness6,
+                        contentDescription = "تغییر تم",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // عنوان صفحه
+                Text(
+                    text = if (isPersian) "مدیریت هزینه‌ها" else "Expense Manager",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .weight(1f)
+                        .wrapContentWidth(Alignment.CenterHorizontally)
+                )
+
+                // دکمه تغییر زبان
+                IconButton(onClick = {
+                    val newLang = if (isPersian) "en" else "fa"
+                    LocaleHelper.setLocale(context, newLang)
+                    (context as? Activity)?.recreate()
+                }) {
+                    Icon(
+                        imageVector = Icons.Default.Language,
+                        contentDescription = "تغییر زبان",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }

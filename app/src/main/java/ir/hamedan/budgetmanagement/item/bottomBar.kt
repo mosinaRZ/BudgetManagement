@@ -1,11 +1,6 @@
 package ir.hamedan.budgetmanagement.item
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,8 +15,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
 
@@ -49,23 +44,21 @@ fun CapsuleBottomNavigation(
     onItemSelected: (BottomNavItem) -> Unit
 ) {
     val isPersian = isPersianLocale()
-    val shape = RoundedCornerShape(32.dp)
+    val shape = RoundedCornerShape(24.dp) // کاهش انحنا برای فیت شدن بهتر با آیکون‌های عمودی
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 8.dp)
-            .shadow(8.dp, shape)
-            .background(MaterialTheme.colorScheme.surface, shape)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), shape)
+            // 💡 نکته مهم: پدینگ‌های بیرونی و ناوبارپدینگ را برداشتم چون حالا در MainActivity داخل یک Row مدیریت می‌شوند
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), shape) // افزایش اندک آلفا برای خوانایی بهتر متن‌های زیر آن موقع اسکرول
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape)
             .clip(shape)
     ) {
         Row(
             modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .padding(horizontal = 8.dp, vertical = 6.dp)
                 .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.SpaceAround, // تقسیم مساوی فضا بین آیتم‌ها
             verticalAlignment = Alignment.CenterVertically
         ) {
             bottomNavItems.forEach { item ->
@@ -88,45 +81,38 @@ private fun NavigationBarItemCustom(
     isPersian: Boolean,
     onClick: () -> Unit
 ) {
-    val backgroundColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-        label = "itemBg"
-    )
-
+    // انیمیشن رنگ‌ها هنگام سوئیچ
     val contentColor by animateColorAsState(
         targetValue = if (isSelected)
-            MaterialTheme.colorScheme.onPrimaryContainer
+            MaterialTheme.colorScheme.primary // رنگ سبز جدید شما برای آیتم فعال
         else
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), // خاکستری برای غیرفعال
         label = "itemColor"
     )
 
-    Row(
+    // تغییر چیدمان به حالت عمودی (آیکون بالا، متن پایین)
+    Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(24.dp))
-            .background(backgroundColor)
+            .clip(RoundedCornerShape(16.dp))
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(vertical = 6.dp, horizontal = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp) // فاصله ظریف بین آیکون و متن
     ) {
         Icon(
             imageVector = item.icon,
             contentDescription = null,
-            tint = contentColor
+            tint = contentColor,
+            modifier = Modifier.size(24.dp)
         )
 
-        AnimatedVisibility(
-            visible = isSelected,
-            enter = fadeIn() + expandHorizontally(),
-            exit = fadeOut() + shrinkHorizontally()
-        ) {
-            Text(
-                text = if (isPersian) item.label else getEnglishLabel(item),
-                style = MaterialTheme.typography.labelMedium,
-                color = contentColor,
-                modifier = Modifier.padding(start = 8.dp)
-            )
-        }
+        // متن همیشه در زیر آیکون قرار دارد بدون تکان خوردن انیمیشن افقی
+        Text(
+            text = if (isPersian) item.label else getEnglishLabel(item),
+            style = MaterialTheme.typography.labelSmall, // فونت ریز استاندارد
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            color = contentColor
+        )
     }
 }
 
