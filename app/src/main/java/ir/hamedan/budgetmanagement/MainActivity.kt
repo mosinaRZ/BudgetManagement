@@ -45,6 +45,8 @@ import ir.hamedan.budgetmanagement.item.CapsuleBottomNavigation
 import ir.hamedan.budgetmanagement.ui.theme.BudgetManagementTheme
 import ir.hamedan.budgetmanagement.ui.theme.view.HomeScreen
 import ir.hamedan.budgetmanagement.ui.theme.view.SplashScreen
+import ir.hamedan.budgetmanagement.ui.theme.view.TransactionsScreen
+import ir.hamedan.budgetmanagement.ui.theme.view.settings.SettingsScreen
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 
 @Suppress("DEPRECATION")
@@ -136,14 +138,26 @@ class MainActivity : ComponentActivity() {
                         composable(BottomNavItem.Home.route) {
                             HomeScreen(onThemeToggle = onThemeToggle) // ❌ حتماً FAB قبلی را از داخل لایه HomeScreen پاک کن
                         }
+                        // 🚀 جایگزین کردن صفحه پیش‌فرض با صفحه تراکنش‌های جدید و لوکس
                         composable(BottomNavItem.Transactions.route) {
-                            PlaceholderScreen(title = "تراکنش‌ها", titleEn = "Transactions")
+                            TransactionsScreen(
+                                onBackClick = {
+                                    // رفتن به صفحه خانه هنگام زدن دکمه بازگشت در تاپ‌بار
+                                    navController.navigate(BottomNavItem.Home.route) {
+                                        popUpTo(BottomNavItem.Home.route) { inclusive = false }
+                                    }
+                                },
+                                onFilterClick = {
+                                    // اینجا بعداً می‌توانی دیالوگ فیلتر یا باتم‌شیت دسته‌بندی‌ها را باز کنی
+                                }
+                            )
                         }
                         composable(BottomNavItem.Analytics.route) {
                             PlaceholderScreen(title = "آنالیز", titleEn = "Analytics")
                         }
                         composable(BottomNavItem.Settings.route) {
-                            PlaceholderScreen(title = "تنظیمات", titleEn = "Settings")
+                            SettingsScreen(
+                            )
                         }
                     }
 
@@ -184,7 +198,7 @@ class MainActivity : ComponentActivity() {
                             FloatingActionButton(
                                 onClick = { /* اکشن دکمه پلاس */ },
                                 containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
-                                contentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.9f),
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
                                 shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
                                 // 📐 هماهنگ کردن دقیق ارتفاع FAB با ارتفاع جدید کپسول عمودی (حدوداً ۶۴ دی‌پی‌آی)
                                 modifier = Modifier.size(56.dp),

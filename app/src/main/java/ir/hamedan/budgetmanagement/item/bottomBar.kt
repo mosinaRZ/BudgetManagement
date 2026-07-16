@@ -93,7 +93,7 @@ private fun NavigationBarItemCustom(
     // تغییر چیدمان به حالت عمودی (آیکون بالا، متن پایین)
     Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(24.dp))
             .clickable { onClick() }
             .padding(vertical = 6.dp, horizontal = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -110,8 +110,8 @@ private fun NavigationBarItemCustom(
         Text(
             text = if (isPersian) item.label else getEnglishLabel(item),
             style = MaterialTheme.typography.labelSmall, // فونت ریز استاندارد
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = contentColor
+            color = contentColor,
+            maxLines = 1
         )
     }
 }
