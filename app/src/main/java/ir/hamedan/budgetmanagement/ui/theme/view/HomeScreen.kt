@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,6 +15,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.CheckCircle
@@ -26,13 +30,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.item.AuroraBackground
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.getFormattedEnglishDate
@@ -75,7 +81,8 @@ data class Transaction(
 @Composable
 fun HomeScreen(
     onTransactionClick: (Transaction) -> Unit = {},
-    onThemeToggle: () -> Unit = {}
+    onThemeToggle: () -> Unit = {},
+    onSeeAllTransactionsClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val currentLang = LocaleHelper.getLanguage(context)
@@ -147,9 +154,22 @@ fun HomeScreen(
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), balanceShape)
                         .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), balanceShape)
                         .clip(balanceShape)
-                        .padding(24.dp)
                 ) {
-                    Column {
+                    // ۱. تصویر پس‌زمینه (کاملاً ریسپانسیو و متناسب با ابعاد کانتینر)
+                    Image(
+                        painter = painterResource(id = R.drawable.balancebanner), // آیدی عکس خود را جایگزین کنید
+                        contentDescription = null,
+                        modifier = Modifier.matchParentSize(), // رندر دقیق به اندازه ابعاد نهایی باکس والد
+                        contentScale = ContentScale.Crop, // یا ContentScale.Inside اگر می‌خواهید عکس دفرمه نشود و کامل بیفتد
+                        alpha = 0.15f // میزان شفافیت عکس برای اینکه متن‌ها کاملاً خوانا باقی بمانند
+                    )
+
+                    // ۲. لایه محتوای متنی کارت
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp) // پدینگ به محتوا داده می‌شود نه به باکس والد
+                    ) {
                         Text(
                             text = if (isPersian) "تراز این ماه" else "This Month Balance",
                             style = MaterialTheme.typography.titleMedium,
@@ -174,74 +194,17 @@ fun HomeScreen(
                 }
             }
 
-            // ردیف کارت‌های خلاصه
+            // ردیف کارت‌های خلاصه (درآمد و هزینه با بنرهای اختصاصی جدید)
             item {
                 val summaryCardShape = RoundedCornerShape(20.dp)
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(IntrinsicSize.Max),
+                        .height(IntrinsicSize.Max), // هماهنگ شدن خودکار ارتفاع هر دو کارت با یکدیگر
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), summaryCardShape)
-                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), summaryCardShape)
-                                .clip(summaryCardShape)
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = if (isPersian) "درآمد این ماه" else "Income",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                Text(
-                                    text = "${numberFormatter.format(25800000)}${if (isPersian) " تومان" else " T"}",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), summaryCardShape)
-                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), summaryCardShape)
-                                .clip(summaryCardShape)
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = if (isPersian) "هزینه این ماه" else "Expense",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                Text(
-                                    text = "${numberFormatter.format(-13260000)}${if (isPersian) " تومان" else " T"}",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.error,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-
+                    // ۱. کارت درآمد این ماه
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -249,25 +212,404 @@ fun HomeScreen(
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), summaryCardShape)
                             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), summaryCardShape)
                             .clip(summaryCardShape)
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
                     ) {
+                        // بنر پس‌زمینه درآمد (طراحی مینی‌مال صعودی)
+                        Image(
+                            painter = painterResource(id = R.drawable.incomebanner), // آیدی عکس درآمد را اینجا جایگزین کنید
+                            contentDescription = null,
+                            modifier = Modifier.matchParentSize(),
+                            contentScale = ContentScale.Crop,
+                            alpha = 0.12f
+                        )
+
+                        // محتوای متنی کارت درآمد
                         Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
                             Text(
-                                text = if (isPersian) "تراکنش‌ها" else "Transactions",
+                                text = if (isPersian) "درآمد این ماه" else "Income",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(Modifier.height(12.dp))
+                            Spacer(Modifier.height(8.dp))
                             Text(
-                                text = "42",
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.Bold
+                                text = "${numberFormatter.format(25800000)}${if (isPersian) " تومان" else " T"}",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
+                        }
+                    }
+
+                    // ۲. کارت هزینه این ماه
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), summaryCardShape)
+                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), summaryCardShape)
+                            .clip(summaryCardShape)
+                    ) {
+                        // بنر پس‌زمینه هزینه (طراحی مینی‌مال نزولی)
+                        Image(
+                            painter = painterResource(id = R.drawable.expensebanner), // آیدی عکس هزینه را اینجا جایگزین کنید
+                            contentDescription = null,
+                            modifier = Modifier.matchParentSize(),
+                            contentScale = ContentScale.Crop,
+                            alpha = 0.12f
+                        )
+
+                        // محتوای متنی کارت هزینه
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = if (isPersian) "هزینه این ماه" else "Expense",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = "${numberFormatter.format(13260000)}${if (isPersian) " تومان" else " T"}",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+
+            // بخش قلک پس‌انداز هوشمند
+// بخش قلک پس‌انداز هوشمند با دو هدف مالی و بنر پس‌زمینه
+            item {
+                val piggyShape = RoundedCornerShape(24.dp)
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), piggyShape)
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), piggyShape)
+                        .clip(piggyShape)
+                ) {
+                    // ۱. بنر پس‌زمینه قلک (کاملاً ریسپانسیو و متناسب با ابعاد کل کارت)
+                    Image(
+                        painter = painterResource(id = R.drawable.goalbanner), // آیدی عکس قلک جدید را اینجا جایگزین کنید
+                        contentDescription = null,
+                        modifier = Modifier.matchParentSize(),
+                        contentScale = ContentScale.Crop,
+                        alpha = 0.12f // آلفای ملایم جهت جلوگیری از شلوغ شدن پس‌زمینه و حفظ خوانایی مبالغ
+                    )
+
+                    // ۲. لایه محتوای کارت
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp)
+                    ) {
+                        // هدر کارت: عنوان و آیکون
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "🎯",
+                                    fontSize = MaterialTheme.typography.titleLarge.fontSize
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = if (isPersian) "قلک‌های پس‌انداز" else "Savings Goals",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = if (isPersian) "پیشرفت هدف‌های مالی شما" else "Your financial targets progress",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(20.dp))
+
+                        // هدف اول: خرید لپ‌تاپ
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (isPersian) "خرید لپ‌تاپ (۶۵٪ پر شده)" else "Buy Laptop (65% filled)",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "${numberFormatter.format(13000000)} / ${numberFormatter.format(20000000)} ${if (isPersian) "تومان" else "T"}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+
+                            LinearProgressIndicator(
+                                progress = { 0.65f },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(CircleShape),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            )
+                        }
+
+                        Spacer(Modifier.height(16.dp))
+
+                        // هدف دوم: خرید ماشین (نوار جدید اضافه شده)
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (isPersian) "خرید ماشین (۱۵٪ پر شده)" else "Buy Car (15% filled)",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "${numberFormatter.format(75000000)} / ${numberFormatter.format(500000000)} ${if (isPersian) "تومان" else "T"}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+
+                            LinearProgressIndicator(
+                                progress = { 0.15f },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(CircleShape),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            )
+                        }
+
+                        Spacer(Modifier.height(24.dp))
+
+                        // دکمه دعوت به اقدام (CTA) برای ایجاد هدف جدید
+                        Button(
+                            onClick = { /* باز کردن صفحه ساخت قلک */ },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = if (isPersian) "ساخت یک قلک جدید" else "Create a New Goal",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // بخش محدودیت خرج‌کرد (بودجه‌بندی دسته‌بندی‌ها)
+            item {
+                val budgetShape = RoundedCornerShape(24.dp)
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), budgetShape)
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), budgetShape)
+                        .clip(budgetShape)
+                ) {
+                    // ۱. بنر پس‌زمینه بخش محدودیت (طراحی مینیمال متناسب با پرامپت بعدی)
+                    Image(
+                        painter = painterResource(id = R.drawable.limitbanner), // آیدی عکس را اینجا جایگزین کنید
+                        contentDescription = null,
+                        modifier = Modifier.matchParentSize(),
+                        contentScale = ContentScale.Crop,
+                        alpha = 0.12f
+                    )
+
+                    // ۲. لایه محتوای کارت
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp)
+                    ) {
+                        // هدر کارت
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "⚠️",
+                                    fontSize = MaterialTheme.typography.titleLarge.fontSize
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = if (isPersian) "محدودیت‌های خرج‌کرد" else "Expense Limits",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = if (isPersian) "مدیریت سقف بودجه دسته‌ها" else "Manage category budget ceilings",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(20.dp))
+
+                        // دسته اول: کافه و رستوران (نزدیک به اتمام بودجه - ۸۵٪)
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (isPersian) "☕ کافه و رستوران (۸۵٪)" else "☕ Cafe & Restaurant (85%)",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "${numberFormatter.format(3400000)} / ${numberFormatter.format(4000000)} ${if (isPersian) "تومان" else "T"}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.error, // رنگ ارور برای هشدار نزدیک شدن به سقف
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+
+                            LinearProgressIndicator(
+                                progress = { 0.85f },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(CircleShape),
+                                color = MaterialTheme.colorScheme.error, // تغییر رنگ نوار به نشانه هشدار
+                                trackColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
+                            )
+                        }
+
+                        Spacer(Modifier.height(16.dp))
+
+                        // دسته دوم: سوخت و خودرو (وضعیت نرمال - ۴۰٪)
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (isPersian) "🚗 سوخت و خودرو (۴۰٪)" else "🚗 Fuel & Car (40%)",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "${numberFormatter.format(2000000)} / ${numberFormatter.format(5000000)} ${if (isPersian) "تومان" else "T"}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+
+                            LinearProgressIndicator(
+                                progress = { 0.40f },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(CircleShape),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            )
+                        }
+
+                        Spacer(Modifier.height(24.dp))
+
+                        // دکمه CTA برای تنظیم محدودیت جدید
+                        Button(
+                            onClick = { /* باز کردن صفحه تنظیم بودجه جدید */ },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = if (isPersian) "تنظیم محدودیت جدید" else "Set New Budget Limit",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }
@@ -290,8 +632,6 @@ fun HomeScreen(
                     "غذا", "Food" -> "🍔"
                     "سوخت", "Fuel" -> "⛽"
                     "حقوق", "Salary" -> "💼"
-                    "خرید", "Shopping" -> "🛒"
-                    "اینترنت", "Internet" -> "📞"
                     else -> "📌"
                 }
 
@@ -336,6 +676,42 @@ fun HomeScreen(
                         fontWeight = FontWeight.Bold,
                         color = if (transaction.amount >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                     )
+                }
+            }
+
+            // دکمه CTA در انتهای لیست تراکنش‌ها
+            item {
+                Spacer(Modifier.height(8.dp)) // فاصله کوچک بین آخرین تراکنش و دکمه
+
+                TextButton(
+                    onClick = {
+                        // اکشن ناوبری به صفحه تاریخچه کامل تراکنش‌ها
+                        onSeeAllTransactionsClick()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = if (isPersian) "مشاهده همه تراکنش‌ها" else "See All Transactions",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
 
@@ -661,7 +1037,5 @@ private fun getDummyNotifications(): List<NotificationItem> = listOf(
 private fun getDummyTransactions(): List<Transaction> = listOf(
     Transaction("1", "رستوران و غذا", "Restaurant & Food", -250000, "۱:۳۰ • امروز", "1:30 • Today", "غذا", "Food"),
     Transaction("2", "سوخت", "Fuel", -800000, "۱۸:۴۵ • دیروز", "18:45 • Yesterday", "سوخت", "Fuel"),
-    Transaction("3", "حقوق", "Salary", 25000000, "۹:۰۰ • ۲ روز پیش", "9:00 • 2 days ago", "حقوق", "Salary"),
-    Transaction("4", "خرید", "Shopping", -430000, "۱۶:۲۰ • ۳ روز پیش", "16:20 • 3 days ago", "خرید", "Shopping"),
-    Transaction("5", "اینترنت و تلفن", "Internet & Phone", -120000, "۱۱:۱۰ • ۳ روز پیش", "11:10 • 3 days ago", "اینترنت", "Internet")
+    Transaction("3", "حقوق", "Salary", 25000000, "۹:۰۰ • ۲ روز پیش", "9:00 • 2 days ago", "حقوق", "Salary")
 )

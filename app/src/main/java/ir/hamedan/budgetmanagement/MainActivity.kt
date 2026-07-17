@@ -136,7 +136,19 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxSize()
                     ) {
                         composable(BottomNavItem.Home.route) {
-                            HomeScreen(onThemeToggle = onThemeToggle) // ❌ حتماً FAB قبلی را از داخل لایه HomeScreen پاک کن
+                            HomeScreen(
+                                onThemeToggle = onThemeToggle,
+                                onSeeAllTransactionsClick = {
+                                    // 🚀 ناوبری هوشمند به صفحه تراکنش‌ها به همراه حفظ پشته ناوبری
+                                    appNavController.navigate(BottomNavItem.Transactions.route) {
+                                        popUpTo(appNavController.graph.startDestinationId) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            )
                         }
                         // 🚀 جایگزین کردن صفحه پیش‌فرض با صفحه تراکنش‌های جدید و لوکس
                         composable(BottomNavItem.Transactions.route) {

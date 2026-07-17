@@ -35,6 +35,7 @@ import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 // کلاس داده کاملاً دوزبانه برای تراکنش‌ها
@@ -438,7 +439,10 @@ private fun TransactionRow(
                 .background(Color.Transparent, rowShape)
                 .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = if (isPersian) Arrangement.Start else Arrangement.End
+            // تغییر فقط در این خط اعمال شد:
+            // در حالت انگلیسی (LTR) مقدار End دکمه‌ها را به سمت راست صفحه می‌برد.
+            // در حالت پارسی (RTL) مقدار End دکمه‌ها را به سمت چپ صفحه می‌برد.
+            horizontalArrangement = Arrangement.End
         ) {
             IconButton(
                 onClick = {

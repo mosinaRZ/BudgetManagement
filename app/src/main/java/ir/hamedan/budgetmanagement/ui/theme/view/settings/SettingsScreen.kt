@@ -27,7 +27,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ir.hamedan.budgetmanagement.item.AuroraBackground
@@ -70,286 +69,286 @@ fun SettingsScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // لایه اول (پایین‌ترین): پس‌زمینه افکت شفق قطبی
         AuroraBackground()
 
-        Column(modifier = Modifier.fillMaxSize()) {
-            // تاپ‌بار اختصاصی به همراه دکمه سرچ
-            SettingsTopBar(
-                isPersian = isPersian,
-                searchQuery = searchQuery,
-                isSearchExpanded = isSearchExpanded,
-                onSearchQueryChange = { searchQuery = it },
-                onSearchToggle = {
-                    isSearchExpanded = !isSearchExpanded
-                    if (!isSearchExpanded) searchQuery = ""
-                }
-            )
+        // لایه دوم (وسط): لیست محتوا و آیتم‌های تنظیمات
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
+            contentPadding = PaddingValues(top = 80.dp, bottom = 40.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                Spacer(modifier = Modifier.statusBarsPadding().height(5.dp))
+            }
 
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 24.dp),
-                contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // هماهنگ‌سازی کلیک آکاردئونی: با باز شدن هر آیتم، بقیه به کمک activeMenu بسته می‌شوند.
-
-                // ۱. زبان برنامه (کشویی)
-                if (matchesSearch(
-                        titleFa = "زبان برنامه", titleEn = "App Language",
-                        subtitleFa = "انتخاب زبان کاربری (فارسی / انگلیسی)", subtitleEn = "Choose UI language (Persian / English)"
-                    )) {
-                    item {
-                        SettingsAccordionItem(
-                            title = if (isPersian) "زبان برنامه" else "App Language",
-                            subtitle = if (isPersian) "انتخاب زبان کاربری (فارسی / انگلیسی)" else "Choose UI language (Persian / English)",
-                            icon = Icons.Default.Language,
-                            isExpanded = activeMenu == SettingsMenu.LANGUAGE,
-                            onClick = {
-                                activeMenu = if (activeMenu == SettingsMenu.LANGUAGE) SettingsMenu.NONE else SettingsMenu.LANGUAGE
-                            }
+            // ۱. زبان برنامه (کشویی)
+            if (matchesSearch(
+                    titleFa = "زبان برنامه", titleEn = "App Language",
+                    subtitleFa = "انتخاب زبان کاربری (فارسی / انگلیسی)", subtitleEn = "Choose UI language (Persian / English)"
+                )) {
+                item {
+                    SettingsAccordionItem(
+                        title = if (isPersian) "زبان برنامه" else "App Language",
+                        subtitle = if (isPersian) "انتخاب زبان کاربری (فارسی / انگلیسی)" else "Choose UI language (Persian / English)",
+                        icon = Icons.Default.Language,
+                        isExpanded = activeMenu == SettingsMenu.LANGUAGE,
+                        onClick = {
+                            activeMenu = if (activeMenu == SettingsMenu.LANGUAGE) SettingsMenu.NONE else SettingsMenu.LANGUAGE
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            LanguageOptionButton(
+                                title = "پارسی (FA)",
+                                isSelected = isPersian,
+                                modifier = Modifier.weight(1f)
                             ) {
-                                LanguageOptionButton(
-                                    title = "پارسی (FA)",
-                                    isSelected = isPersian,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    LocaleHelper.setLocale(context, "fa")
-                                    (context as? Activity)?.recreate()
-                                }
-                                LanguageOptionButton(
-                                    title = "English (EN)",
-                                    isSelected = !isPersian,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    LocaleHelper.setLocale(context, "en")
-                                    (context as? Activity)?.recreate()
-                                }
+                                LocaleHelper.setLocale(context, "fa")
+                                (context as? Activity)?.recreate()
+                            }
+                            LanguageOptionButton(
+                                title = "English (EN)",
+                                isSelected = !isPersian,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                LocaleHelper.setLocale(context, "en")
+                                (context as? Activity)?.recreate()
                             }
                         }
                     }
                 }
+            }
 
-                // ۲. واحد پولی (کشویی)
-                if (matchesSearch(
-                        titleFa = "واحد پولی", titleEn = "Currency",
-                        subtitleFa = "نمایش مبالغ بر اساس تومان یا ریال", subtitleEn = "Display amounts in Toman or Rial"
-                    )) {
-                    item {
-                        SettingsAccordionItem(
-                            title = if (isPersian) "واحد پولی" else "Currency",
-                            subtitle = if (isPersian) "نمایش مبالغ بر اساس تومان یا ریال" else "Display amounts in Toman or Rial",
-                            icon = Icons.Default.CurrencyExchange,
-                            isExpanded = activeMenu == SettingsMenu.CURRENCY,
-                            onClick = {
-                                activeMenu = if (activeMenu == SettingsMenu.CURRENCY) SettingsMenu.NONE else SettingsMenu.CURRENCY
-                            }
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                listOf(
-                                    if (isPersian) "تومان" else "IRT",
-                                    if (isPersian) "ریال" else "IRR"
-                                ).forEach { currency ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .clickable {
-                                                currentCurrency = currency
-                                                onCurrencyChanged(if (currency == "تومان" || currency == "IRT") "IRT" else "IRR")
-                                                activeMenu = SettingsMenu.NONE
-                                            }
-                                            .padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        RadioButton(
-                                            selected = currentCurrency == currency,
-                                            onClick = {
-                                                currentCurrency = currency
-                                                onCurrencyChanged(if (currency == "تومان" || currency == "IRT") "IRT" else "IRR")
-                                                activeMenu = SettingsMenu.NONE
-                                            }
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = currency,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
-                                }
-                            }
+            // ۲. واحد پولی (کشویی)
+            if (matchesSearch(
+                    titleFa = "واحد پولی", titleEn = "Currency",
+                    subtitleFa = "نمایش مبالغ بر اساس تومان یا ریال", subtitleEn = "Display amounts in Toman or Rial"
+                )) {
+                item {
+                    SettingsAccordionItem(
+                        title = if (isPersian) "واحد پولی" else "Currency",
+                        subtitle = if (isPersian) "نمایش مبالغ بر اساس تومان یا ریال" else "Display amounts in Toman or Rial",
+                        icon = Icons.Default.CurrencyExchange,
+                        isExpanded = activeMenu == SettingsMenu.CURRENCY,
+                        onClick = {
+                            activeMenu = if (activeMenu == SettingsMenu.CURRENCY) SettingsMenu.NONE else SettingsMenu.CURRENCY
                         }
-                    }
-                }
-
-                // ۳. مدیریت دسته‌بندی‌ها (صفحه مجزا - بدون کشویی)
-                if (matchesSearch(
-                        titleFa = "مدیریت دسته‌بندی‌ها", titleEn = "Manage Categories",
-                        subtitleFa = "ویرایش، حذف یا ایجاد دسته‌های خرید و فروش", subtitleEn = "Edit, delete, or create transaction categories"
-                    )) {
-                    item {
-                        SettingsSimpleItem(
-                            title = if (isPersian) "مدیریت دسته‌بندی‌ها" else "Manage Categories",
-                            subtitle = if (isPersian) "ویرایش، حذف یا ایجاد دسته‌های خرید و فروش" else "Edit, delete, or create transaction categories",
-                            icon = Icons.Default.Category,
-                            onClick = {
-                                activeMenu = SettingsMenu.NONE // بستن کشویی‌ها قبل تغییر صفحه
-                                onNavigateToCategories()
-                            }
-                        )
-                    }
-                }
-
-                // ۴. بخش امنیت (کشویی با سوییچ دوقلو)
-                if (matchesSearch(
-                        titleFa = "امنیت برنامه", titleEn = "App Security",
-                        subtitleFa = "تنظیم رمز ورود و ویژگی‌های بیومتریک", subtitleEn = "Configure passcode and biometric login"
-                    )) {
-                    item {
-                        SettingsAccordionItem(
-                            title = if (isPersian) "امنیت برنامه" else "App Security",
-                            subtitle = if (isPersian) "تنظیم رمز ورود و ویژگی‌های بیومتریک" else "Configure passcode and biometric login",
-                            icon = Icons.Default.Lock,
-                            isExpanded = activeMenu == SettingsMenu.SECURITY,
-                            onClick = {
-                                activeMenu = if (activeMenu == SettingsMenu.SECURITY) SettingsMenu.NONE else SettingsMenu.SECURITY
-                            }
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                SecuritySwitchRow(
-                                    title = if (isPersian) "فعال‌سازی گذرواژه" else "Enable Passcode",
-                                    checked = isPasswordEnabled,
-                                    onCheckedChange = { isPasswordEnabled = it }
-                                )
-                                SecuritySwitchRow(
-                                    title = if (isPersian) "ورود با اثر انگشت / چهره" else "Biometric Login",
-                                    checked = isBiometricEnabled,
-                                    onCheckedChange = { isBiometricEnabled = it }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // ۵. دریافت داده‌ها (کشویی با گزینه‌های دانلود فایل)
-                if (matchesSearch(
-                        titleFa = "دریافت اطلاعات و گزارش‌ها", titleEn = "Export Data & Reports",
-                        subtitleFa = "خروجی گرفتن از تراکنش‌ها در قالب PDF یا Excel", subtitleEn = "Export transactions to PDF or Excel formats"
-                    )) {
-                    item {
-                        SettingsAccordionItem(
-                            title = if (isPersian) "دریافت اطلاعات و گزارش‌ها" else "Export Data & Reports",
-                            subtitle = if (isPersian) "خروجی گرفتن از تراکنش‌ها در قالب PDF یا Excel" else "Export transactions to PDF or Excel formats",
-                            icon = Icons.Default.Download,
-                            isExpanded = activeMenu == SettingsMenu.EXPORT,
-                            onClick = {
-                                activeMenu = if (activeMenu == SettingsMenu.EXPORT) SettingsMenu.NONE else SettingsMenu.EXPORT
-                            }
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                ExportButton(
-                                    title = "Excel (XLSX)",
-                                    icon = Icons.Default.TableChart,
-                                    modifier = Modifier.weight(1f)
+                            listOf(
+                                if (isPersian) "تومان" else "IRT",
+                                if (isPersian) "ریال" else "IRR"
+                            ).forEach { currency ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable {
+                                            currentCurrency = currency
+                                            onCurrencyChanged(if (currency == "تومان" || currency == "IRT") "IRT" else "IRR")
+                                            activeMenu = SettingsMenu.NONE
+                                        }
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // منطق اکسپورت اکسل
-                                }
-                                ExportButton(
-                                    title = "PDF Document",
-                                    icon = Icons.Default.PictureAsPdf,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    // منطق اکسپورت پی‌دی‌اف
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // ۶. درباره ما (کشویی با لینک‌های ارتباطی داینامیک)
-                if (matchesSearch(
-                        titleFa = "درباره ما و پشتیبانی", titleEn = "About Us & Support",
-                        subtitleFa = "راه‌های ارتباطی، تلگرام، اینستاگرام و ایمیل", subtitleEn = "Contact channels, Telegram, Instagram, & Support"
-                    )) {
-                    item {
-                        SettingsAccordionItem(
-                            title = if (isPersian) "درباره ما و پشتیبانی" else "About Us & Support",
-                            subtitle = if (isPersian) "راه‌های ارتباطی، تلگرام، اینستاگرام و ایمیل" else "Contact channels, Telegram, Instagram, & Support",
-                            icon = Icons.Default.Info,
-                            isExpanded = activeMenu == SettingsMenu.ABOUT,
-                            onClick = {
-                                activeMenu = if (activeMenu == SettingsMenu.ABOUT) SettingsMenu.NONE else SettingsMenu.ABOUT
-                            }
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                SocialLinkRow(
-                                    title = if (isPersian) "کانال تلگرام" else "Telegram Channel",
-                                    icon = Icons.Default.Send,
-                                    color = Color(0xFF229ED9)
-                                ) {
-                                    openUrl(context, "https://t.me/your_channel")
-                                }
-                                SocialLinkRow(
-                                    title = if (isPersian) "صفحه اینستاگرام" else "Instagram Page",
-                                    icon = Icons.Default.CameraAlt,
-                                    color = Color(0xFFE1306C)
-                                ) {
-                                    openUrl(context, "https://instagram.com/your_profile")
-                                }
-                                SocialLinkRow(
-                                    title = if (isPersian) "پشتیبانی جیمیل" else "Gmail Support",
-                                    icon = Icons.Default.Email,
-                                    color = Color(0xFFD44638)
-                                ) {
-                                    val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
-                                        data = Uri.parse("mailto:support@yourdomain.com")
-                                    }
-                                    context.startActivity(Intent.createChooser(emailIntent, "Send Email"))
-                                }
-                                SocialLinkRow(
-                                    title = if (isPersian) "واتس‌اپ توسعه‌دهنده" else "WhatsApp Contact",
-                                    icon = Icons.Default.Phone,
-                                    color = Color(0xFF25D366)
-                                ) {
-                                    openUrl(context, "https://wa.me/989123456789")
+                                    RadioButton(
+                                        selected = currentCurrency == currency,
+                                        onClick = {
+                                            currentCurrency = currency
+                                            onCurrencyChanged(if (currency == "تومان" || currency == "IRT") "IRT" else "IRR")
+                                            activeMenu = SettingsMenu.NONE
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = currency,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
                                 }
                             }
                         }
                     }
                 }
             }
+
+            // ۳. مدیریت دسته‌بندی‌ها (صفحه مجزا - بدون کشویی)
+            if (matchesSearch(
+                    titleFa = "مدیریت دسته‌بندی‌ها", titleEn = "Manage Categories",
+                    subtitleFa = "ویرایش، حذف یا ایجاد دسته‌های خرید و فروش", subtitleEn = "Edit, delete, or create transaction categories"
+                )) {
+                item {
+                    SettingsSimpleItem(
+                        title = if (isPersian) "مدیریت دسته‌بندی‌ها" else "Manage Categories",
+                        subtitle = if (isPersian) "ویرایش، حذف یا ایجاد دسته‌های خرید و فروش" else "Edit, delete, or create transaction categories",
+                        icon = Icons.Default.Category,
+                        onClick = {
+                            activeMenu = SettingsMenu.NONE
+                            onNavigateToCategories()
+                        }
+                    )
+                }
+            }
+
+            // ۴. بخش امنیت (کشویی با سوییچ دوقلو)
+            if (matchesSearch(
+                    titleFa = "امنیت برنامه", titleEn = "App Security",
+                    subtitleFa = "تنظیم رمز ورود و ویژگی‌های بیومتریک", subtitleEn = "Configure passcode and biometric login"
+                )) {
+                item {
+                    SettingsAccordionItem(
+                        title = if (isPersian) "امنیت برنامه" else "App Security",
+                        subtitle = if (isPersian) "تنظیم رمز ورود و ویژگی‌های بیومتریک" else "Configure passcode and biometric login",
+                        icon = Icons.Default.Lock,
+                        isExpanded = activeMenu == SettingsMenu.SECURITY,
+                        onClick = {
+                            activeMenu = if (activeMenu == SettingsMenu.SECURITY) SettingsMenu.NONE else SettingsMenu.SECURITY
+                        }
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            SecuritySwitchRow(
+                                title = if (isPersian) "فعال‌سازی گذرواژه" else "Enable Passcode",
+                                checked = isPasswordEnabled,
+                                onCheckedChange = { isPasswordEnabled = it }
+                            )
+                            SecuritySwitchRow(
+                                title = if (isPersian) "ورود با اثر انگشت / چهره" else "Biometric Login",
+                                checked = isBiometricEnabled,
+                                onCheckedChange = { isBiometricEnabled = it }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ۵. دریافت داده‌ها (کشویی با گزینه‌های دانلود فایل)
+            if (matchesSearch(
+                    titleFa = "دریافت اطلاعات و گزارش‌ها", titleEn = "Export Data & Reports",
+                    subtitleFa = "خروجی گرفتن از تراکنش‌ها در قالب PDF یا Excel", subtitleEn = "Export transactions to PDF or Excel formats"
+                )) {
+                item {
+                    SettingsAccordionItem(
+                        title = if (isPersian) "دریافت اطلاعات و گزارش‌ها" else "Export Data & Reports",
+                        subtitle = if (isPersian) "خروجی گرفتن از تراکنش‌ها در قالب PDF یا Excel" else "Export transactions to PDF or Excel formats",
+                        icon = Icons.Default.Download,
+                        isExpanded = activeMenu == SettingsMenu.EXPORT,
+                        onClick = {
+                            activeMenu = if (activeMenu == SettingsMenu.EXPORT) SettingsMenu.NONE else SettingsMenu.EXPORT
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            ExportButton(
+                                title = "Excel (XLSX)",
+                                icon = Icons.Default.TableChart,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                // منطق اکسپورت اکسل
+                            }
+                            ExportButton(
+                                title = "PDF Document",
+                                icon = Icons.Default.PictureAsPdf,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                // منطق اکسپورت پی‌دی‌اف
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ۶. درباره ما (کشویی با لینک‌های ارتباطی داینامیک)
+            if (matchesSearch(
+                    titleFa = "درباره ما و پشتیبانی", titleEn = "About Us & Support",
+                    subtitleFa = "راه‌های ارتباطی، تلگرام، اینستاگرام و ایمیل", subtitleEn = "Contact channels, Telegram, Instagram, & Support"
+                )) {
+                item {
+                    SettingsAccordionItem(
+                        title = if (isPersian) "درباره ما و پشتیبانی" else "About Us & Support",
+                        subtitle = if (isPersian) "راه‌های ارتباطی، تلگرام، اینستاگرام و ایمیل" else "Contact channels, Telegram, Instagram, & Support",
+                        icon = Icons.Default.Info,
+                        isExpanded = activeMenu == SettingsMenu.ABOUT,
+                        onClick = {
+                            activeMenu = if (activeMenu == SettingsMenu.ABOUT) SettingsMenu.NONE else SettingsMenu.ABOUT
+                        }
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            SocialLinkRow(
+                                title = if (isPersian) "کانال تلگرام" else "Telegram Channel",
+                                icon = Icons.Default.Send,
+                                color = Color(0xFF229ED9)
+                            ) {
+                                openUrl(context, "https://t.me/your_channel")
+                            }
+                            SocialLinkRow(
+                                title = if (isPersian) "صفحه اینستاگرام" else "Instagram Page",
+                                icon = Icons.Default.CameraAlt,
+                                color = Color(0xFFE1306C)
+                            ) {
+                                openUrl(context, "https://instagram.com/your_profile")
+                            }
+                            SocialLinkRow(
+                                title = if (isPersian) "پشتیبانی جیمیل" else "Gmail Support",
+                                icon = Icons.Default.Email,
+                                color = Color(0xFFD44638)
+                            ) {
+                                val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
+                                    data = Uri.parse("mailto:support@yourdomain.com")
+                                }
+                                context.startActivity(Intent.createChooser(emailIntent, "Send Email"))
+                            }
+                            SocialLinkRow(
+                                title = if (isPersian) "واتس‌اپ توسعه‌دهنده" else "WhatsApp Contact",
+                                icon = Icons.Default.Phone,
+                                color = Color(0xFF25D366)
+                            ) {
+                                openUrl(context, "https://wa.me/989123456789")
+                            }
+                        }
+                    }
+                }
+            }
         }
+
+        // لایه سوم (بالاترین): تاپ‌بار جزیره‌ای شناور با کادر سرچ
+        // با قرار گرفتن در انتهای بلوک Box، این بخش لایه بالایی Z-Index را می‌گیرد و لمس آن مسدود نمی‌شود.
+        SettingsTopBar(
+            isPersian = isPersian,
+            searchQuery = searchQuery,
+            isSearchExpanded = isSearchExpanded,
+            onSearchQueryChange = { searchQuery = it },
+            onSearchToggle = {
+                isSearchExpanded = !isSearchExpanded
+                if (!isSearchExpanded) searchQuery = ""
+            }
+        )
     }
 }
 
-// کامپوننت پایه برای آیتم‌های منبسط شونده با انیمیشن روان ورتیکال کامپوز
 @Composable
 private fun SettingsAccordionItem(
     title: String,
@@ -412,7 +411,6 @@ private fun SettingsAccordionItem(
             )
         }
 
-        // پیاده‌سازی انیمیشن انقباض و انبساط کشویی شبیه آکاردئون با حفظ فلو پرفورمنس
         AnimatedVisibility(
             visible = isExpanded,
             enter = expandVertically() + fadeIn(),
@@ -425,7 +423,6 @@ private fun SettingsAccordionItem(
     }
 }
 
-// کامپوننت پایه برای آیتم‌های ساده تک کلیکی مثل هدایت به صفحه جدید
 @Composable
 private fun SettingsSimpleItem(
     title: String,
@@ -622,7 +619,6 @@ private fun SettingsTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // کادر مرکزی (نمایش پویای تایتل یا فیلد سرچ متناسب با کلیک روی ذره‌بین)
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -630,7 +626,7 @@ private fun SettingsTopBar(
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), barShape)
                     .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), barShape)
                     .clip(barShape)
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
                 if (isSearchExpanded) {
@@ -666,7 +662,6 @@ private fun SettingsTopBar(
                 }
             }
 
-            // دکمه سرچ
             Box(
                 modifier = Modifier
                     .size(56.dp)
@@ -687,7 +682,6 @@ private fun SettingsTopBar(
     }
 }
 
-// تابع کمکی جهت باز کردن امن آدرس‌های اینترنتی
 private fun openUrl(context: Context, url: String) {
     try {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
