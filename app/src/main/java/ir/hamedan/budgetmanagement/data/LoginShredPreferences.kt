@@ -3,12 +3,19 @@ package ir.hamedan.budgetmanagement.data
 import android.content.Context
 
 object SharedPreferences {
-    private fun getSharedPreferences(context: Context)=
-        context.getSharedPreferences("Test",Context.MODE_PRIVATE) // تعریف نام و سطح دسترسی
+    private const val PREF_NAME = "budget_management_prefs"
+    private const val KEY_BIOMETRIC_ENABLED = "biometric_enabled"
 
-    fun setIsLog(context: Context,isLog : Boolean)=
-        getSharedPreferences(context).edit().putBoolean("is_login",isLog)
+    private fun getPrefs(context: Context) =
+        context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
 
-    fun getIsLog(context: Context)=
-        getSharedPreferences(context).getBoolean("is_login",false)
+
+    // مدیریت وضعیت اثر انگشت (چک‌باکس تنظیمات)
+    fun setBiometricEnabled(context: Context, isEnabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_BIOMETRIC_ENABLED, isEnabled).apply()
+    }
+
+    fun getBiometricEnabled(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_BIOMETRIC_ENABLED, false)
+    }
 }

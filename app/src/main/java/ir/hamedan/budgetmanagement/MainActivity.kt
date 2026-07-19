@@ -1,10 +1,8 @@
 package ir.hamedan.budgetmanagement
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.Context
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -21,8 +19,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -32,25 +28,29 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity // اضافه شدن فرگمنت اکتیویتی برای بیومتریک
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import ir.hamedan.budgetmanagement.data.SharedPreferences.getIsLog
 import ir.hamedan.budgetmanagement.data.ThemePreferences
 import ir.hamedan.budgetmanagement.data.ThemePreferences.getThemeMode
 import ir.hamedan.budgetmanagement.data.ThemePreferences.saveThemeMode
 import ir.hamedan.budgetmanagement.item.BottomNavItem
 import ir.hamedan.budgetmanagement.item.CapsuleBottomNavigation
 import ir.hamedan.budgetmanagement.ui.theme.BudgetManagementTheme
+import ir.hamedan.budgetmanagement.ui.theme.view.AddScreen
+import ir.hamedan.budgetmanagement.ui.theme.view.AnalyticsScreen
 import ir.hamedan.budgetmanagement.ui.theme.view.HomeScreen
+import ir.hamedan.budgetmanagement.ui.theme.view.LoginScreen
 import ir.hamedan.budgetmanagement.ui.theme.view.SplashScreen
 import ir.hamedan.budgetmanagement.ui.theme.view.TransactionsScreen
-import ir.hamedan.budgetmanagement.ui.theme.view.settings.SettingsScreen
+import ir.hamedan.budgetmanagement.ui.theme.view.SettingsScreen
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 
 @Suppress("DEPRECATION")
-class MainActivity : ComponentActivity() {
+// 🚀 تغییر مهم: ارث‌بری از FragmentActivity برای جلوگیری از کرش اثر انگشت
+class MainActivity : FragmentActivity() {
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(LocaleHelper.onAttach(newBase))
@@ -94,33 +94,48 @@ class MainActivity : ComponentActivity() {
         modifier: Modifier = Modifier,
         onThemeToggle: () -> Unit = {}
     ) {
-        val context = LocalContext.current
-        val isLogin = getIsLog(context)
 
         val navController = rememberNavController()
 
-        // دریافت مسیر (Route) فعلی برای کنترل باتم‌بار کپسولی
-        val navBackStackEntry by navController.currentBackStackEntryAsState()
-        val currentRoute = navBackStackEntry?.destination?.route
-
         NavHost(
             navController = navController,
-            startDestination = "Splash",
+            startDestination = "Splash", // ابتدا اسپلش اسکرین بالا می‌آید
             modifier = modifier
         ) {
-            // ۱. صفحه اسپلش اسکرین (بدون نمایش باتم‌بار)
+            // ۱. صفحه اسپلش اسکرین
             composable("Splash") {
                 SplashScreen(
                     onAnimationFinished = {
-                        // هدایت به صفحه اصلی و پاک کردن کامل اسپلش از پشته ناوبری
-                        navController.navigate("MainStructure") {
+                        // هدایت به صفحه لاگین و پاک کردن اسپلش از پشته ناوبری
+                        navController.navigate("Login") {
                             popUpTo("Splash") { inclusive = true }
                         }
                     }
                 )
             }
 
-            // ۲. ساختار اصلی برنامه پس از ورود (شامل صفحات ناوبری زیر داک کپسولی)
+            // 🚀 ۲. صفحه لاگین هوشمند (اثر انگشت + فرم متنی)
+            composable("Login") {
+                LoginScreen(
+                    onLoginSuccess = {
+                        // هدایت به ساختار اصلی برنامه و پاک کردن صفحه لاگین برای عدم بازگشت مجدد
+                        navController.navigate("MainStructure") {
+                            popUpTo("Login") { inclusive = true }
+                        }
+                    }
+                )
+            }
+
+            // ۳. صفحه افزودن تراکنش جدید
+            composable("AddScreen?highlightId={highlightId}") { backStackEntry ->
+                val highlightId = backStackEntry.arguments?.getString("highlightId")
+                AddScreen(
+                    highlightId = highlightId, // پاس دادن آرگومان به کامپوننت
+                    onBackClick = { navController.navigate("MainStructure") }
+                )
+            }
+
+            // ۴. ساختار اصلی برنامه پس از لاگین موفق
             composable("MainStructure") {
                 val appNavController = rememberNavController()
                 val appBackStackEntry by appNavController.currentBackStackEntryAsState()
@@ -129,7 +144,7 @@ class MainActivity : ComponentActivity() {
                 Box(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    // ۱. محتوای صفحات برنامه (کل صفحه)
+                    // محتوای داخلی صفحات برنامه
                     NavHost(
                         navController = appNavController,
                         startDestination = BottomNavItem.Home.route,
@@ -139,7 +154,6 @@ class MainActivity : ComponentActivity() {
                             HomeScreen(
                                 onThemeToggle = onThemeToggle,
                                 onSeeAllTransactionsClick = {
-                                    // 🚀 ناوبری هوشمند به صفحه تراکنش‌ها به همراه حفظ پشته ناوبری
                                     appNavController.navigate(BottomNavItem.Transactions.route) {
                                         popUpTo(appNavController.graph.startDestinationId) {
                                             saveState = true
@@ -147,33 +161,41 @@ class MainActivity : ComponentActivity() {
                                         launchSingleTop = true
                                         restoreState = true
                                     }
+                                },
+                                onAddScreenClickDue = {
+                                    navController.navigate("AddScreen?highlightId=due")
+                                },
+                                onAddScreenClickLimit = {
+                                    navController.navigate("AddScreen?highlightId=limit")
+                                },
+                                onAddScreenClickPiggy = {
+                                    navController.navigate("AddScreen?highlightId=piggy")
                                 }
                             )
                         }
-                        // 🚀 جایگزین کردن صفحه پیش‌فرض با صفحه تراکنش‌های جدید و لوکس
                         composable(BottomNavItem.Transactions.route) {
-                            TransactionsScreen(
-                                onBackClick = {
-                                    // رفتن به صفحه خانه هنگام زدن دکمه بازگشت در تاپ‌بار
-                                    navController.navigate(BottomNavItem.Home.route) {
-                                        popUpTo(BottomNavItem.Home.route) { inclusive = false }
-                                    }
-                                },
-                                onFilterClick = {
-                                    // اینجا بعداً می‌توانی دیالوگ فیلتر یا باتم‌شیت دسته‌بندی‌ها را باز کنی
-                                }
-                            )
+                            TransactionsScreen()
                         }
                         composable(BottomNavItem.Analytics.route) {
-                            PlaceholderScreen(title = "آنالیز", titleEn = "Analytics")
+                            AnalyticsScreen()
                         }
                         composable(BottomNavItem.Settings.route) {
                             SettingsScreen(
+                                onThemeToggle = onThemeToggle,
+                                onAddScreenClick = {
+                                    // ارسال شناسه دکمه هدف (در اینجا category) به عنوان آرگومان
+                                    navController.navigate("AddScreen?highlightId=category")
+                                },
+                                onLoginClick = {
+                                    navController.navigate("Login") {
+                                        popUpTo("MainStructure") { inclusive = true }
+                                    }
+                                }
                             )
                         }
                     }
 
-                    // ۲. مجموعه داک پایینی (اصلاح شده برای جلوگیری از قاطی شدن با ناوبار سیستم)
+                    // مجموعه داک باتم‌بار و دکمه شناور پلاس (FAB)
                     val context = LocalContext.current
                     val isPersian = LocaleHelper.getLanguage(context) == "fa"
 
@@ -181,9 +203,7 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier
                             .fillMaxWidth()
                             .align(Alignment.BottomCenter)
-                            // 🚀 کلید حل مشکل: پدینگ خودکار ناوبار سیستم را اینجا اضافه می‌کنیم
                             .navigationBarsPadding()
-                            // حالا پدینگ‌های دلخواه خودمان را از اطراف و کف اعمال می‌کنیم
                             .padding(bottom = 5.dp, start = 16.dp, end = 16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -208,11 +228,12 @@ class MainActivity : ComponentActivity() {
 
                         val fabItem = @Composable {
                             FloatingActionButton(
-                                onClick = { /* اکشن دکمه پلاس */ },
+                                onClick = {
+                                    navController.navigate("AddScreen")
+                                },
                                 containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
                                 contentColor = MaterialTheme.colorScheme.onPrimary,
                                 shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
-                                // 📐 هماهنگ کردن دقیق ارتفاع FAB با ارتفاع جدید کپسول عمودی (حدوداً ۶۴ دی‌پی‌آی)
                                 modifier = Modifier.size(56.dp),
                                 elevation = FloatingActionButtonDefaults.elevation(0.dp)
                             ) {
@@ -235,22 +256,5 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-    }
-}
-
-// کامپوننت موقت برای صفحات در حال توسعه تا پروژه ارور ندهد
-@Composable
-fun PlaceholderScreen(title: String, titleEn: String) {
-    val context = LocalContext.current
-    val isPersian = LocaleHelper.getLanguage(context) == "fa"
-    androidx.compose.foundation.layout.Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = androidx.compose.ui.Alignment.Center
-    ) {
-        Text(
-            text = if (isPersian) title else titleEn,
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground
-        )
     }
 }

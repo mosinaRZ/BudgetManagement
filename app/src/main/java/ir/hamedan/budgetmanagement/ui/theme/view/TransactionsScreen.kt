@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,16 +62,17 @@ enum class TimeFilter(val titleFa: String, val titleEn: String) {
 
 @Composable
 fun TransactionsScreen(
-    onBackClick: () -> Unit = {},
     onFilterClick: () -> Unit = {},
     onEditTransaction: (TransactionItem) -> Unit = {},
     onDeleteTransaction: (TransactionItem) -> Unit = {}
 ) {
-    val context = LocalContext.current
     val isPersian = isPersianLocale()
     val coroutineScope = rememberCoroutineScope()
 
     val listState = rememberLazyListState()
+
+    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+    val keyboardVisible = imeBottom > 0
 
     // بهینه‌سازی دکمه بازگشت به بالا با derivedStateOf برای جلوگیری از Recomposition اضافه
     val showScrollToTopButton by remember {
@@ -203,7 +205,10 @@ fun TransactionsScreen(
                 .fillMaxSize()
                 .padding(horizontal = 24.dp),
             // تغییر Padding بالا برای باز شدن فضا جهت قرارگیری فیلترهای زمانی زیر TopBar
-            contentPadding = PaddingValues(top = 185.dp, bottom = 165.dp),
+            contentPadding = PaddingValues(
+                top = if (keyboardVisible) 310.dp else 170.dp,
+                bottom = 190.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             groupedTransactions.forEach { (dateHeader, items) ->

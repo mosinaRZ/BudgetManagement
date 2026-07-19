@@ -59,4 +59,5 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     implementation(libs.androidx.material.icons.extended)
     implementation("com.airbnb.android:lottie-compose:6.4.0")
+    implementation("androidx.biometric:biometric:1.2.0-alpha05")
 }

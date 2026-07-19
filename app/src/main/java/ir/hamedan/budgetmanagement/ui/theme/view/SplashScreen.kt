@@ -1,5 +1,8 @@
 package ir.hamedan.budgetmanagement.ui.theme.view
 
+import android.app.Activity
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,7 +14,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -69,6 +74,19 @@ fun SplashScreen(onAnimationFinished: () -> Unit) {
     LaunchedEffect(Unit) {
         delay(3000) // تغییر این مقدار زمان نمایش را کم و زیاد می‌کند (۳۰۰۰ یعنی ۳ ثانیه)
         onAnimationFinished()
+    }
+
+    // مدیریت خروج با دکمه بک
+    var lastBackPressTime by remember { mutableLongStateOf(0L) }
+    BackHandler {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastBackPressTime < 2500) {
+            (context as? Activity)?.finish()
+        } else {
+            lastBackPressTime = currentTime
+            val message = if (isPersian) "برای خروج، دوباره دکمه بازگشت را بزنید" else "Press back again to exit"
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
     }
 
     Box(

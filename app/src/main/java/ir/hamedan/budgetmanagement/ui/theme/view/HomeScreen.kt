@@ -77,13 +77,27 @@ data class Transaction(
     val categoryEn: String
 )
 
+// ساختار داده ساده برای موعد پرداخت
+data class DueItem(
+    val id: String,
+    val titleFa: String,
+    val titleEn: String,
+    val amount: Long,
+    val daysLeft: Int, // روزهای باقی‌مانده تا موعد
+    val type: String // "installment" (قسط), "salary" (حقوق), "bill" (قبض)
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onTransactionClick: (Transaction) -> Unit = {},
     onThemeToggle: () -> Unit = {},
-    onSeeAllTransactionsClick: () -> Unit = {}
-) {
+    onSeeAllTransactionsClick: () -> Unit = {},
+    onAddScreenClickDue: () -> Unit = {},
+    onAddScreenClickPiggy: () -> Unit = {},
+    onAddScreenClickLimit: () -> Unit = {}
+
+    ) {
     val context = LocalContext.current
     val currentLang = LocaleHelper.getLanguage(context)
     val isPersian = currentLang == "fa"
@@ -423,7 +437,7 @@ fun HomeScreen(
 
                         // دکمه دعوت به اقدام (CTA) برای ایجاد هدف جدید
                         Button(
-                            onClick = { /* باز کردن صفحه ساخت قلک */ },
+                            onClick = { onAddScreenClickPiggy() },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(48.dp),
@@ -584,7 +598,7 @@ fun HomeScreen(
 
                         // دکمه CTA برای تنظیم محدودیت جدید
                         Button(
-                            onClick = { /* باز کردن صفحه تنظیم بودجه جدید */ },
+                            onClick = { onAddScreenClickLimit() },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(48.dp),
@@ -605,7 +619,7 @@ fun HomeScreen(
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    text = if (isPersian) "تنظیم محدودیت جدید" else "Set New Budget Limit",
+                                    text = if (isPersian) "تنظیم محدودیت جدید" else "Set a New Budget Limit",
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -615,6 +629,146 @@ fun HomeScreen(
                 }
             }
 
+// ردیف موعد پرداخت‌ها (تایم‌لاین افقی داخل یک کادر واحد با تصویر پس‌زمینه هندسی و CTA)
+            item {
+                val dueItems = remember {
+                    listOf(
+                        DueItem("1", "قسط وام مسکن", "Housing Loan", 4500000, 2, "installment"),
+                        DueItem("2", "حقوق کارمندان", "Staff Salaries", 38000000, 5, "salary"),
+                        DueItem("3", "قبض سرور شرکت", "Server Bill", 1200000, 12, "bill")
+                    )
+                }
+
+                val sectionShape = RoundedCornerShape(24.dp)
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f), sectionShape)
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), sectionShape)
+                        .clip(sectionShape)
+                ) {
+                    // ۱. تصویر پس‌زمینه مینی‌مال (duebanner) که کل کانتینر بخش را پوشش می‌دهد
+                    Image(
+                        painter = painterResource(id = R.drawable.duebanner),
+                        contentDescription = null,
+                        modifier = Modifier.matchParentSize(),
+                        contentScale = ContentScale.Crop,
+                        alpha = 0.06f // شفافیت بسیار ملایم برای حفظ خوانایی کامل متن‌ها
+                    )
+
+                    // ۲. لایه محتوای متنی و لیست کارت‌ها
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        // هدر بخش به همراه CTA (دکمه مشاهده همه)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (isPersian) "موعد پرداخت‌های نزدیک" else "Upcoming Payments",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            TextButton(
+                                onClick = {
+                                    onAddScreenClickDue()
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text(
+                                    text = if (isPersian) "مشاهده همه ←" else "View All →",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        // لیست افقی اسکرول‌شونده از موعدها
+                        androidx.compose.foundation.lazy.LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(dueItems) { due ->
+                                val cardShape = RoundedCornerShape(16.dp)
+                                val isUrgent = due.daysLeft <= 3
+                                val statusColor = if (isUrgent) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                val icon = when (due.type) {
+                                    "installment" -> "🏦"
+                                    "salary" -> "💼"
+                                    else -> "🧾"
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .width(170.dp)
+                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f), cardShape)
+                                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), cardShape)
+                                        .clip(cardShape)
+                                        .clickable {
+                                            // اکشن کلیک روی هر کارت
+                                        }
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(12.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(text = icon, fontSize = MaterialTheme.typography.titleMedium.fontSize)
+
+                                            Box(
+                                                modifier = Modifier
+                                                    .background(statusColor.copy(alpha = 0.12f), CircleShape)
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (isPersian) "${due.daysLeft} روز" else "${due.daysLeft}d",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = statusColor,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(Modifier.height(12.dp))
+
+                                        Text(
+                                            text = if (isPersian) due.titleFa else due.titleEn,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+
+                                        Spacer(Modifier.height(2.dp))
+
+                                        Text(
+                                            text = "${numberFormatter.format(due.amount)} ${if (isPersian) "تومان" else "T"}",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             // عنوان لیست تراکنش‌ها
             item {
                 Text(
