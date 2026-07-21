@@ -1,4 +1,4 @@
-package ir.hamedan.budgetmanagement.ui.theme.view
+package ir.hamedan.budgetmanagement.ui.screens.auth
 
 import android.app.Activity
 import android.widget.Toast
@@ -16,8 +16,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -25,12 +25,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -39,10 +42,9 @@ import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
-import ir.hamedan.budgetmanagement.data.SharedPreferences
-import ir.hamedan.budgetmanagement.item.AuroraBackground
+import ir.hamedan.budgetmanagement.data.preferences.SharedPreferences
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
-import ir.hamedan.budgetmanagement.R
+import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -67,8 +69,8 @@ fun LoginScreen(
     val validUsername = "Cenna"
     val validPassword = "Sina2020@#$"
 
-    val passwordFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
-    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val passwordFocusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
 
     val showBiometricPrompt = {
         val activity = context as? FragmentActivity
@@ -171,10 +173,10 @@ fun LoginScreen(
                     shape = RoundedCornerShape(16.dp),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Text,
-                        imeAction = androidx.compose.ui.text.input.ImeAction.Next, // 👈 دکمه «بعدی» روی کیبورد
+                        imeAction = ImeAction.Next, // 👈 دکمه «بعدی» روی کیبورد
                         hintLocales = LocaleList(Locale("en"))
                     ),
-                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                    keyboardActions = KeyboardActions(
                         onNext = {
                             passwordFocusRequester.requestFocus() // 👈 انتقال فوکوس به فیلد رمز عبور
                         }
@@ -194,10 +196,10 @@ fun LoginScreen(
                     shape = RoundedCornerShape(16.dp),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Password,
-                        imeAction = androidx.compose.ui.text.input.ImeAction.Done, // 👈 دکمه «تأیید/ورود» روی کیبورد
+                        imeAction = ImeAction.Done, // 👈 دکمه «تأیید/ورود» روی کیبورد
                         hintLocales = LocaleList(Locale("en"))
                     ),
-                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                    keyboardActions = KeyboardActions(
                         onDone = {
                             focusManager.clearFocus() // بستن کیبورد
                             if (!isLoggingIn && username.isNotBlank() && password.isNotBlank()) {

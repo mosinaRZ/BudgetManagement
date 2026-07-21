@@ -1,9 +1,11 @@
-package ir.hamedan.budgetmanagement.ui.theme.view
+package ir.hamedan.budgetmanagement.ui.screens.settings
 
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
+import androidx.biometric.BiometricManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -39,14 +41,16 @@ import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import ir.hamedan.budgetmanagement.data.SharedPreferences // اضافه شدن شرد پرفرنسز
-import ir.hamedan.budgetmanagement.data.ThemePreferences
-import ir.hamedan.budgetmanagement.data.ThemePreferences.saveThemeMode
-import ir.hamedan.budgetmanagement.item.AuroraBackground
+import androidx.fragment.app.FragmentActivity
+import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
+import ir.hamedan.budgetmanagement.data.preferences.SharedPreferences
+import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
+import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.saveThemeMode
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
+import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.utils.BiometricPromptManager
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 
-// ۱. مدیریت وضعیت منوهای کشویی (فقط یک منو در لحظه باز می‌ماند)
 enum class SettingsMenu {
     LANGUAGE, CURRENCY, SECURITY, EXPORT, ABOUT, NONE
 }
@@ -54,35 +58,32 @@ enum class SettingsMenu {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    onCurrencyChanged: (String) -> Unit = {},  // تغییر واحد پولی ("IRT" یا "IRR")
+    onCurrencyChanged: (String) -> Unit = {},  // "IRT" یا "IRR"
     onLoginClick: () -> Unit = {},
     onAddScreenClick: () -> Unit = {},
     onThemeToggle: () -> Unit = {}
-    ) {
+) {
     val context = LocalContext.current
     val isPersian = isPersianLocale()
 
-    // وضعیت جستجو در تنظیمات
     var searchQuery by remember { mutableStateOf("") }
     var isSearchExpanded by remember { mutableStateOf(false) }
-
-    // وضعیت فعال بودن کدام منوی کشویی (بای‌دیفالت هیچ‌کدام باز نیستند)
     var activeMenu by remember { mutableStateOf(SettingsMenu.NONE) }
 
-    // 🚀 تغییر مهم: خواندن وضعیت اولیه اثر انگشت از حافظه
-    var isBiometricEnabled by remember {
+    var isBiometricEnabled by remember(context) {
         mutableStateOf(SharedPreferences.getBiometricEnabled(context))
     }
 
     var showChangePasswordDialog by remember { mutableStateOf(false) }
     var showThemeBottomSheet by remember { mutableStateOf(false) }
-    // خواندن مقدار اولیه تم از SharedPreferences و تبدیل آن به یک State قابله مشاهده در کامپوز
-    var themeMode by remember { mutableStateOf(ThemePreferences.getThemeMode(context)) }
+    var themeMode by remember(context) { mutableStateOf(ThemePreferences.getThemeMode(context)) }
     var showLogoutDialog by remember { mutableStateOf(false) }
 
-    var currentCurrency by remember { mutableStateOf(if (isPersian) "تومان" else "IRT") }
+    // واحد پولی ذخیره‌شده یا مقدار پیش‌فرض
+    var currentCurrencyCode by remember(context) {
+        mutableStateOf(CurrencySharedPreferences.getCurrency(context))
+    }
 
-    // تابع کمکی محلی برای بررسی مطابقت عنوان‌ها و توضیحات با عبارت سرچ شده
     fun matchesSearch(titleFa: String, titleEn: String, subtitleFa: String, subtitleEn: String): Boolean {
         if (searchQuery.isBlank()) return true
         val query = searchQuery.trim()
@@ -93,10 +94,8 @@ fun SettingsScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // لایه اول (پایین‌ترین): پس‌زمینه افکت شفق قطبی
         AuroraBackground()
 
-        // لایه دوم (وسط): لیست محتوا و آیتم‌های تنظیمات
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
             contentPadding = PaddingValues(top = 75.dp, bottom = 130.dp),
@@ -106,45 +105,33 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.statusBarsPadding().height(5.dp))
             }
 
-            // ۴. مدیریت تم و ظاهر برنامه (باز کردن باتم‌شیت)
-            if (matchesSearch(
-                    titleFa = "ظاهر برنامه", titleEn = "App Theme",
-                    subtitleFa = "تغییر حالت تاریک و روشن", subtitleEn = "Switch between Dark and Light mode"
-                )) {
+            // ظاهر برنامه
+            if (matchesSearch("ظاهر برنامه", "App Theme", "تغییر حالت تاریک و روشن", "Switch between Dark and Light mode")) {
                 item {
                     SettingsSimpleItem(
                         title = if (isPersian) "ظاهر برنامه" else "App Theme",
                         subtitle = if (isPersian) "تغییر حالت تاریک و روشن" else "Switch between Dark and Light mode",
-                        icon = Icons.Default.DarkMode, // حتماً این ایمپورت اضافه شود
-                        onClick = {
-                            showThemeBottomSheet = true
-                        }
+                        icon = Icons.Default.DarkMode,
+                        onClick = { showThemeBottomSheet = true }
                     )
                 }
             }
 
-            // ۱. زبان برنامه (کشویی)
-            if (matchesSearch(
-                    titleFa = "زبان برنامه", titleEn = "App Language",
-                    subtitleFa = "انتخاب زبان کاربری (فارسی / انگلیسی)", subtitleEn = "Choose UI language (Persian / English)"
-                )) {
+            // ۱. زبان برنامه
+            if (matchesSearch("زبان برنامه", "App Language", "انتخاب زبان کاربری (فارسی / انگلیسی)", "Choose UI language (Persian / English)")) {
                 item {
                     SettingsAccordionItem(
                         title = if (isPersian) "زبان برنامه" else "App Language",
                         subtitle = if (isPersian) "انتخاب زبان کاربری (فارسی / انگلیسی)" else "Choose UI language (Persian / English)",
                         icon = Icons.Default.Language,
                         isExpanded = activeMenu == SettingsMenu.LANGUAGE,
-                        onClick = {
-                            activeMenu = if (activeMenu == SettingsMenu.LANGUAGE) SettingsMenu.NONE else SettingsMenu.LANGUAGE
-                        }
+                        onClick = { activeMenu = if (activeMenu == SettingsMenu.LANGUAGE) SettingsMenu.NONE else SettingsMenu.LANGUAGE }
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            LanguageOptionButton(
+                            CurrencyOrLanguageOptionButton(
                                 title = "پارسی (FA)",
                                 isSelected = isPersian,
                                 modifier = Modifier.weight(1f)
@@ -152,7 +139,7 @@ fun SettingsScreen(
                                 LocaleHelper.setLocale(context, "fa")
                                 (context as? Activity)?.recreate()
                             }
-                            LanguageOptionButton(
+                            CurrencyOrLanguageOptionButton(
                                 title = "English (EN)",
                                 isSelected = !isPersian,
                                 modifier = Modifier.weight(1f)
@@ -165,96 +152,66 @@ fun SettingsScreen(
                 }
             }
 
-            // ۲. واحد پولی (کشویی)
-            if (matchesSearch(
-                    titleFa = "واحد پولی", titleEn = "Currency",
-                    subtitleFa = "نمایش مبالغ بر اساس تومان یا ریال", subtitleEn = "Display amounts in Toman or Rial"
-                )) {
+            // ۲. واحد پولی (استفاده از ۲ دکمه به جای RadioButton)
+            if (matchesSearch("واحد پولی", "Currency", "نمایش مبالغ بر اساس تومان یا ریال", "Display amounts in Toman or Rial")) {
                 item {
                     SettingsAccordionItem(
                         title = if (isPersian) "واحد پولی" else "Currency",
                         subtitle = if (isPersian) "نمایش مبالغ بر اساس تومان یا ریال" else "Display amounts in Toman or Rial",
                         icon = Icons.Default.CurrencyExchange,
                         isExpanded = activeMenu == SettingsMenu.CURRENCY,
-                        onClick = {
-                            activeMenu = if (activeMenu == SettingsMenu.CURRENCY) SettingsMenu.NONE else SettingsMenu.CURRENCY
-                        }
+                        onClick = { activeMenu = if (activeMenu == SettingsMenu.CURRENCY) SettingsMenu.NONE else SettingsMenu.CURRENCY }
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            listOf(
-                                if (isPersian) "تومان" else "IRT",
-                                if (isPersian) "ریال" else "IRR"
-                            ).forEach { currency ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .clickable {
-                                            currentCurrency = currency
-                                            onCurrencyChanged(if (currency == "تومان" || currency == "IRT") "IRT" else "IRR")
-                                            activeMenu = SettingsMenu.NONE
-                                        }
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(
-                                        selected = currentCurrency == currency,
-                                        onClick = {
-                                            currentCurrency = currency
-                                            onCurrencyChanged(if (currency == "تومان" || currency == "IRT") "IRT" else "IRR")
-                                            activeMenu = SettingsMenu.NONE
-                                        }
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = currency,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
+                            CurrencyOrLanguageOptionButton(
+                                title = if (isPersian) "تومان" else "Toman (IRT)",
+                                isSelected = currentCurrencyCode == "IRT",
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                currentCurrencyCode = "IRT"
+                                CurrencySharedPreferences.setCurrency(context, "IRT")
+                                onCurrencyChanged("IRT")
+                            }
+                            CurrencyOrLanguageOptionButton(
+                                title = if (isPersian) "ریال" else "Rial (IRR)",
+                                isSelected = currentCurrencyCode == "IRR",
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                currentCurrencyCode = "IRR"
+                                CurrencySharedPreferences.setCurrency(context, "IRR")
+                                onCurrencyChanged("IRR")
                             }
                         }
                     }
                 }
             }
 
-            // ۳. مدیریت دسته‌بندی‌ها (صفحه مجزا - بدون کشویی)
-            if (matchesSearch(
-                    titleFa = "مدیریت دسته‌بندی‌ها", titleEn = "Manage Categories",
-                    subtitleFa = "ویرایش، حذف یا ایجاد دسته‌های خرید و فروش", subtitleEn = "Edit, delete, or create transaction categories"
-                )) {
+            // ۳. مدیریت دسته‌بندی‌ها
+            if (matchesSearch("مدیریت دسته‌بندی‌ها", "Manage Categories", "ویرایش، حذف یا ایجاد دسته‌های خرید و فروش", "Edit, delete, or create transaction categories")) {
                 item {
                     SettingsSimpleItem(
                         title = if (isPersian) "مدیریت دسته‌بندی‌ها" else "Manage Categories",
                         subtitle = if (isPersian) "ویرایش، حذف یا ایجاد دسته‌های خرید و فروش" else "Edit, delete, or create transaction categories",
                         icon = Icons.Default.Category,
-                        onClick = {
-                            onAddScreenClick()
-                        }
+                        onClick = { onAddScreenClick() }
                     )
                 }
             }
 
-            // ۴. بخش امنیت (کشویی با سوییچ دوقلو، تغییر رمز و خروج)
-            if (matchesSearch(
-                    titleFa = "امنیت برنامه", titleEn = "App Security",
-                    subtitleFa = "تنظیم رمز ورود و ویژگی‌های بیومتریک", subtitleEn = "Configure passcode and biometric login"
-                )) {
+            // ۴. بخش امنیت (همراه با احراز هویت اثر انگشت برای سوییچ)
+            if (matchesSearch("امنیت برنامه", "App Security", "تنظیم رمز ورود و ویژگی‌های بیومتریک", "Configure passcode and biometric login")) {
                 item {
-                    // 🔍 بررسی وجود سخت‌افزار بیومتریک/اثر انگشت
                     val hasBiometricHardware = remember(context) {
-                        val biometricManager = androidx.biometric.BiometricManager.from(context)
+                        val biometricManager = BiometricManager.from(context)
                         val result = biometricManager.canAuthenticate(
-                            androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                                    androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
+                            BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                                    BiometricManager.Authenticators.BIOMETRIC_WEAK
                         )
-                        result != androidx.biometric.BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE &&
-                                result != androidx.biometric.BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE
+                        result != BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE &&
+                                result != BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE
                     }
 
                     SettingsAccordionItem(
@@ -262,42 +219,53 @@ fun SettingsScreen(
                         subtitle = if (isPersian) "تنظیم رمز ورود و ویژگی‌های بیومتریک" else "Configure passcode and biometric login",
                         icon = Icons.Default.Lock,
                         isExpanded = activeMenu == SettingsMenu.SECURITY,
-                        onClick = {
-                            activeMenu = if (activeMenu == SettingsMenu.SECURITY) SettingsMenu.NONE else SettingsMenu.SECURITY
-                        }
+                        onClick = { activeMenu = if (activeMenu == SettingsMenu.SECURITY) SettingsMenu.NONE else SettingsMenu.SECURITY }
                     ) {
                         Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // 🖐️ سوییچ اثر انگشت (فقط در صورت وجود سخت‌افزار نمایش داده می‌شود)
                             if (hasBiometricHardware) {
                                 SecuritySwitchRow(
                                     title = if (isPersian) "ورود با اثر انگشت" else "Biometric Login",
                                     icon = Icons.Default.Fingerprint,
                                     checked = isBiometricEnabled,
-                                    onCheckedChange = { checked ->
-                                        isBiometricEnabled = checked
-                                        SharedPreferences.setBiometricEnabled(context, checked)
+                                    onCheckedChange = { targetChecked ->
+                                        val activity = context as? FragmentActivity
+                                        if (activity != null) {
+                                            val promptTitle = if (targetChecked)
+                                                (if (isPersian) "فعالسازی اثر انگشت" else "Enable Biometric")
+                                            else
+                                                (if (isPersian) "غیرفعالسازی اثر انگشت" else "Disable Biometric")
+
+                                            BiometricPromptManager.showBiometricPrompt(
+                                                activity = activity,
+                                                title = promptTitle,
+                                                subtitle = if (isPersian) "لطفاً اثر انگشت خود را تأیید کنید" else "Please verify your fingerprint",
+                                                onSuccess = {
+                                                    isBiometricEnabled = targetChecked
+                                                    SharedPreferences.setBiometricEnabled(context, targetChecked)
+                                                },
+                                                onError = { err ->
+                                                    Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                                                }
+                                            )
+                                        }
                                     }
                                 )
                             }
 
-                            // 🔐 ردیف: تغییر رمز عبور برنامه
                             SecurityActionRow(
                                 title = if (isPersian) "تغییر رمز عبور برنامه" else "Change App Passcode",
                                 icon = Icons.Default.Password
                             ) {
-                                showChangePasswordDialog = true // پاپ‌آپ باز می‌شود
+                                showChangePasswordDialog = true
                             }
 
-                            // 🚪 ردیف: خروج از حساب کاربری (Logout)
                             SecurityActionRow(
                                 title = if (isPersian) "خروج از حساب کاربری" else "Log Out",
                                 icon = Icons.Default.Logout,
-                                iconTint = MaterialTheme.colorScheme.error, // رنگ قرمز برای هشدار خروج
+                                iconTint = MaterialTheme.colorScheme.error,
                                 titleColor = MaterialTheme.colorScheme.error
                             ) {
                                 showLogoutDialog = true
@@ -307,81 +275,59 @@ fun SettingsScreen(
                 }
             }
 
-            // ۵. دریافت داده‌ها (کشویی با گزینه‌های دانلود فایل)
-            if (matchesSearch(
-                    titleFa = "دریافت اطلاعات و گزارش‌ها", titleEn = "Export Data & Reports",
-                    subtitleFa = "خروجی گرفتن از تراکنش‌ها در قالب PDF یا Excel", subtitleEn = "Export transactions to PDF or Excel formats"
-                )) {
+            // ۵. دریافت داده‌ها
+            if (matchesSearch("دریافت اطلاعات و گزارش‌ها", "Export Data & Reports", "خروجی گرفتن از تراکنش‌ها در قالب PDF یا Excel", "Export transactions to PDF or Excel formats")) {
                 item {
                     SettingsAccordionItem(
                         title = if (isPersian) "دریافت اطلاعات و گزارش‌ها" else "Export Data & Reports",
                         subtitle = if (isPersian) "خروجی گرفتن از تراکنش‌ها در قالب PDF یا Excel" else "Export transactions to PDF or Excel formats",
                         icon = Icons.Default.Download,
                         isExpanded = activeMenu == SettingsMenu.EXPORT,
-                        onClick = {
-                            activeMenu = if (activeMenu == SettingsMenu.EXPORT) SettingsMenu.NONE else SettingsMenu.EXPORT
-                        }
+                        onClick = { activeMenu = if (activeMenu == SettingsMenu.EXPORT) SettingsMenu.NONE else SettingsMenu.EXPORT }
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             ExportButton(
                                 title = "Excel (XLSX)",
                                 icon = Icons.Default.TableChart,
                                 modifier = Modifier.weight(1f)
-                            ) {
-                                // منطق اکسپورت اکسل
-                            }
+                            ) {}
                             ExportButton(
                                 title = "PDF Document",
                                 icon = Icons.Default.PictureAsPdf,
                                 modifier = Modifier.weight(1f)
-                            ) {
-                                // منطق اکسپورت پی‌دی‌اف
-                            }
+                            ) {}
                         }
                     }
                 }
             }
 
-            // ۶. درباره ما (کشویی با لینک‌های ارتباطی داینامیک)
-            if (matchesSearch(
-                    titleFa = "درباره ما و پشتیبانی", titleEn = "About Us & Support",
-                    subtitleFa = "راه‌های ارتباطی، تلگرام، اینستاگرام و ایمیل", subtitleEn = "Contact channels, Telegram, Instagram, & Support"
-                )) {
+            // ۶. درباره ما
+            if (matchesSearch("درباره ما و پشتیبانی", "About Us & Support", "راه‌های ارتباطی، تلگرام، اینستاگرام و ایمیل", "Contact channels, Telegram, Instagram, & Support")) {
                 item {
                     SettingsAccordionItem(
                         title = if (isPersian) "درباره ما و پشتیبانی" else "About Us & Support",
                         subtitle = if (isPersian) "راه‌های ارتباطی، تلگرام، اینستاگرام و ایمیل" else "Contact channels, Telegram, Instagram, & Support",
                         icon = Icons.Default.Info,
                         isExpanded = activeMenu == SettingsMenu.ABOUT,
-                        onClick = {
-                            activeMenu = if (activeMenu == SettingsMenu.ABOUT) SettingsMenu.NONE else SettingsMenu.ABOUT
-                        }
+                        onClick = { activeMenu = if (activeMenu == SettingsMenu.ABOUT) SettingsMenu.NONE else SettingsMenu.ABOUT }
                     ) {
                         Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             SocialLinkRow(
                                 title = if (isPersian) "کانال تلگرام" else "Telegram Channel",
                                 icon = Icons.Default.Send,
                                 color = Color(0xFF229ED9)
-                            ) {
-                                openUrl(context, "https://t.me/your_channel")
-                            }
+                            ) { openUrl(context, "https://t.me/your_channel") }
                             SocialLinkRow(
                                 title = if (isPersian) "صفحه اینستاگرام" else "Instagram Page",
                                 icon = Icons.Default.CameraAlt,
                                 color = Color(0xFFE1306C)
-                            ) {
-                                openUrl(context, "https://instagram.com/your_profile")
-                            }
+                            ) { openUrl(context, "https://instagram.com/your_profile") }
                             SocialLinkRow(
                                 title = if (isPersian) "پشتیبانی جیمیل" else "Gmail Support",
                                 icon = Icons.Default.Email,
@@ -396,16 +342,13 @@ fun SettingsScreen(
                                 title = if (isPersian) "واتس‌اپ توسعه‌دهنده" else "WhatsApp Contact",
                                 icon = Icons.Default.Phone,
                                 color = Color(0xFF25D366)
-                            ) {
-                                openUrl(context, "https://wa.me/989123456789")
-                            }
+                            ) { openUrl(context, "https://wa.me/989123456789") }
                         }
                     }
                 }
             }
         }
 
-        // لایه سوم (بالاترین): تاپ‌بار جزیره‌ای شناور با کادر سرچ
         SettingsTopBar(
             isPersian = isPersian,
             searchQuery = searchQuery,
@@ -417,14 +360,11 @@ fun SettingsScreen(
             }
         )
 
-        // قرار دادن کامپوننت دیالوگ در انتهای اسکرین
         if (showLogoutDialog) {
             LogoutConfirmationDialog(
                 isPersian = isPersian,
                 onDismiss = { showLogoutDialog = false },
-                onConfirm = {
-                    onLoginClick()
-                }
+                onConfirm = { onLoginClick() }
             )
         }
 
@@ -432,9 +372,7 @@ fun SettingsScreen(
             ChangePasswordDialog(
                 isPersian = isPersian,
                 onDismiss = { showChangePasswordDialog = false },
-                onConfirm = { oldPassword, secureNewPassword ->
-
-                }
+                onConfirm = { oldPassword, secureNewPassword -> }
             )
         }
 
@@ -463,7 +401,6 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        // --- گزینه حالت روشن (Light Mode = 1) ---
                         val isLightSelected = themeMode == ThemePreferences.MODE_LIGHT
                         Box(
                             modifier = Modifier
@@ -522,7 +459,6 @@ fun SettingsScreen(
                             }
                         }
 
-                        // --- گزینه حالت تاریک (Dark Mode = 2) ---
                         val isDarkSelected = themeMode == ThemePreferences.MODE_DARK
                         Box(
                             modifier = Modifier
@@ -584,7 +520,42 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
             }
-        }    }
+        }
+    }
+}
+
+// دکمه مشترک دوگانه برای انتخاب واحد پولی و زبان
+@Composable
+private fun CurrencyOrLanguageOptionButton(
+    title: String,
+    isSelected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(12.dp)
+    Box(
+        modifier = modifier
+            .height(44.dp)
+            .clip(shape)
+            .background(
+                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                else Color.Transparent
+            )
+            .border(
+                width = 1.dp,
+                color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
+                shape = shape
+            )
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+        )
+    }
 }
 
 @Composable
@@ -719,42 +690,9 @@ private fun SettingsSimpleItem(
 }
 
 @Composable
-private fun LanguageOptionButton(
-    title: String,
-    isSelected: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    val shape = RoundedCornerShape(12.dp)
-    Box(
-        modifier = modifier
-            .height(44.dp)
-            .clip(shape)
-            .background(
-                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                else Color.Transparent
-            )
-            .border(
-                width = 1.dp,
-                color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
-                shape = shape
-            )
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-        )
-    }
-}
-
-@Composable
 private fun SecuritySwitchRow(
     title: String,
-    icon: ImageVector, // اضافه شدن پارامتر آیکون
+    icon: ImageVector,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
@@ -766,7 +704,6 @@ private fun SecuritySwitchRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        // ترکیب آیکون و متن در کنار هم
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -816,14 +753,14 @@ private fun SecurityActionRow(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                tint = iconTint,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = titleColor
             )
         }
         Icon(
@@ -900,7 +837,7 @@ fun LogoutConfirmationDialog(
 fun ChangePasswordDialog(
     isPersian: Boolean,
     onDismiss: () -> Unit,
-    onConfirm: (String, String) -> Unit // حالا رمز قبلی و جدید رو باهم می‌فرسته
+    onConfirm: (String, String) -> Unit
 ) {
     var currentPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
@@ -912,16 +849,13 @@ fun ChangePasswordDialog(
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // محاسبه معیارهای سنجش قدرت رمز عبور
     val hasMinLength = newPassword.length >= 8
     val hasUpperCase = newPassword.any { it.isUpperCase() }
     val hasDigit = newPassword.any { it.isDigit() }
     val hasSpecialChar = newPassword.any { !it.isLetterOrDigit() }
 
-    // تعداد معیارهای پاس شده (بین 0 تا 4)
     val strengthScore = listOf(hasMinLength, hasUpperCase, hasDigit, hasSpecialChar).count { it }
 
-    // تعیین رنگ و متن نوار قدرت بر اساس امتیاز
     val (strengthColor, strengthText) = remember(strengthScore, newPassword) {
         if (newPassword.isEmpty()) {
             Color.Transparent to ""
@@ -936,7 +870,6 @@ fun ChangePasswordDialog(
         }
     }
 
-    // اجبار کیبورد به زبان انگلیسی
     val englishKeyboardOptions = KeyboardOptions(
         keyboardType = KeyboardType.Password,
         hintLocales = LocaleList(Locale("en"))
@@ -972,7 +905,6 @@ fun ChangePasswordDialog(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
 
-                // ۱. فیلد رمز عبور فعلی
                 OutlinedTextField(
                     value = currentPassword,
                     onValueChange = {
@@ -995,7 +927,6 @@ fun ChangePasswordDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // ۲. فیلد رمز عبور جدید
                 OutlinedTextField(
                     value = newPassword,
                     onValueChange = {
@@ -1018,7 +949,6 @@ fun ChangePasswordDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // 📊 نوار میزان قدرتمند بودن گذرواژه (کامپوننت جدید)
                 if (newPassword.isNotEmpty()) {
                     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
                         Row(
@@ -1039,7 +969,6 @@ fun ChangePasswordDialog(
                             )
                         }
                         Spacer(modifier = Modifier.height(6.dp))
-                        // نوار پیشرفت افقی دگرگون شونده
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1057,7 +986,6 @@ fun ChangePasswordDialog(
                     }
                 }
 
-                // ۳. فیلد تایید رمز عبور جدید
                 OutlinedTextField(
                     value = confirmPassword,
                     onValueChange = {
@@ -1080,7 +1008,6 @@ fun ChangePasswordDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // نمایش پیام‌های خطا
                 AnimatedVisibility(visible = errorMessage != null) {
                     errorMessage?.let {
                         Text(
@@ -1098,7 +1025,7 @@ fun ChangePasswordDialog(
             Button(
                 onClick = {
                     val hasNonEnglish = listOf(currentPassword, newPassword, confirmPassword).any { text ->
-                        text.any { it.code > 127 } // بررسی ساده برای کاراکترهای غیر ASCII (مثل فارسی)
+                        text.any { it.code > 127 }
                     }
 
                     when {
@@ -1239,11 +1166,9 @@ private fun SettingsTopBar(
                             cursorColor = MaterialTheme.colorScheme.primary
                         ),
                         singleLine = true,
-                        // 🚀 اضافه کردن اکشن Search به کیبورد
                         keyboardOptions = KeyboardOptions(
                             imeAction = ImeAction.Search
                         ),
-                        // 🚀 بستن کیبورد هنگام لمس دکمه جستجوی کیبورد
                         keyboardActions = KeyboardActions(
                             onSearch = {
                                 focusManager.clearFocus()

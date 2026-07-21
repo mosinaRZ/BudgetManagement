@@ -33,19 +33,23 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import ir.hamedan.budgetmanagement.data.ThemePreferences
-import ir.hamedan.budgetmanagement.data.ThemePreferences.getThemeMode
-import ir.hamedan.budgetmanagement.data.ThemePreferences.saveThemeMode
-import ir.hamedan.budgetmanagement.item.BottomNavItem
-import ir.hamedan.budgetmanagement.item.CapsuleBottomNavigation
+import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
+import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.getThemeMode
+import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.saveThemeMode
+import ir.hamedan.budgetmanagement.ui.components.BottomNavItem
+import ir.hamedan.budgetmanagement.ui.components.CapsuleBottomNavigation
+import ir.hamedan.budgetmanagement.ui.screens.add.AddScreen
+import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsScreen
+import ir.hamedan.budgetmanagement.ui.screens.home.HomeScreen
+import ir.hamedan.budgetmanagement.ui.screens.auth.LoginScreen
+import ir.hamedan.budgetmanagement.ui.screens.categories.CategoriesScreen
+import ir.hamedan.budgetmanagement.ui.screens.goals.GoalsScreen
+import ir.hamedan.budgetmanagement.ui.screens.limits.LimitsScreen
+import ir.hamedan.budgetmanagement.ui.screens.splash.SplashScreen
+import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionsScreen
+import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsScreen
+import ir.hamedan.budgetmanagement.ui.screens.upcomings.UpcomingsScreen
 import ir.hamedan.budgetmanagement.ui.theme.BudgetManagementTheme
-import ir.hamedan.budgetmanagement.ui.theme.view.AddScreen
-import ir.hamedan.budgetmanagement.ui.theme.view.AnalyticsScreen
-import ir.hamedan.budgetmanagement.ui.theme.view.HomeScreen
-import ir.hamedan.budgetmanagement.ui.theme.view.LoginScreen
-import ir.hamedan.budgetmanagement.ui.theme.view.SplashScreen
-import ir.hamedan.budgetmanagement.ui.theme.view.TransactionsScreen
-import ir.hamedan.budgetmanagement.ui.theme.view.SettingsScreen
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 
 @Suppress("DEPRECATION")
@@ -131,8 +135,42 @@ class MainActivity : FragmentActivity() {
                 val highlightId = backStackEntry.arguments?.getString("highlightId")
                 AddScreen(
                     highlightId = highlightId, // پاس دادن آرگومان به کامپوننت
-                    onBackClick = { navController.navigate("MainStructure") }
+                    onBackClick = {
+                        navController.navigate("MainStructure")
+                    },
+                    onCategoriesClick = {
+                        navController.navigate("Categories")
+                    },
+                    onDueClick = {
+                        navController.navigate("Upcoming")
+                    },
+                    onGoalsClick = {
+                        navController.navigate("Goals")
+                    },
+                    onLimitsClick = {
+                        navController.navigate("Limits")
+                    }
                 )
+            }
+
+            composable("Categories") {
+                CategoriesScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+
+            composable("Limits") {
+                LimitsScreen()
+            }
+
+            composable("Upcoming") {
+                UpcomingsScreen()
+            }
+
+            composable("Goals") {
+                GoalsScreen()
             }
 
             // ۴. ساختار اصلی برنامه پس از لاگین موفق

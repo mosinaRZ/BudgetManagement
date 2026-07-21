@@ -1,4 +1,4 @@
-package ir.hamedan.budgetmanagement.ui.theme.view
+package ir.hamedan.budgetmanagement.ui.screens.splash
 
 import android.app.Activity
 import android.widget.Toast

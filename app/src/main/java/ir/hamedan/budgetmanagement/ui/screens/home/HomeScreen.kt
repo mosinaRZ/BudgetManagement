@@ -1,4 +1,4 @@
-package ir.hamedan.budgetmanagement.ui.theme.view
+package ir.hamedan.budgetmanagement.ui.screens.home
 
 import android.app.Activity
 import android.widget.Toast
@@ -11,11 +11,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Brightness6
@@ -39,7 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ir.hamedan.budgetmanagement.R
-import ir.hamedan.budgetmanagement.item.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.getFormattedEnglishDate
 import ir.hamedan.budgetmanagement.utils.getFormattedPersianDate
@@ -695,7 +695,7 @@ fun HomeScreen(
                         }
 
                         // لیست افقی اسکرول‌شونده از موعدها
-                        androidx.compose.foundation.lazy.LazyRow(
+                        LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {

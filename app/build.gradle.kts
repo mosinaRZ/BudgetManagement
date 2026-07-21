@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -60,4 +61,7 @@ dependencies {
     implementation(libs.androidx.material.icons.extended)
     implementation("com.airbnb.android:lottie-compose:6.4.0")
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 }

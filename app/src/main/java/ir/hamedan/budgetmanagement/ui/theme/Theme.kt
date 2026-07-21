@@ -8,7 +8,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
-import ir.hamedan.budgetmanagement.data.ThemePreferences
+import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
 
 @Composable
 fun BudgetManagementTheme(
