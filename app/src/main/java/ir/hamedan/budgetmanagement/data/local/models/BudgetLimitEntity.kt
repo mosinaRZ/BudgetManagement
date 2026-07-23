@@ -2,14 +2,14 @@ package ir.hamedan.budgetmanagement.data.local.models
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import java.util.UUID
 
 @Entity(tableName = "budget_limits")
 data class BudgetLimitEntity(
-    @PrimaryKey
-    val id: String = UUID.randomUUID().toString(),
-    val categoryName: String = "",   // دسته‌بندی مربوطه (مثلاً: خوراکی)
-    val maxLimit: Double = 0.0,      // سقف مجاز هزینه
-    val startDate: Long = 0L,
-    val endDate: Long = 0L
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val categoryName: String,
+    val maxLimit: Double,
+    val isActive: Boolean = true,
+    val startDate: Long = System.currentTimeMillis(),
+    val endDate: Long = System.currentTimeMillis() + (30L * 24 * 60 * 60 * 1000) // پیش‌فرض ۳۰ روز بعد
 )

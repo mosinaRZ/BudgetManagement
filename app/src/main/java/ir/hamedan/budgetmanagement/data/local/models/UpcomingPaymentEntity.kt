@@ -8,8 +8,9 @@ import java.util.UUID
 data class UpcomingPaymentEntity(
     @PrimaryKey
     val id: String = UUID.randomUUID().toString(),
-    val title: String = "",     // مثلاً: اجاره خانه / قسط وام
+    val title: String = "",
     val amount: Double = 0.0,
-    val dueDate: Long = 0L,     // تاریخ سررسید
-    val isPaid: Boolean = false // وضعیت پرداخت
+    val dueDate: Long = 0L,     // تاریخ دقیق سررسید بعدی (بر حسب میلی‌ثانیه)
+    val dueDay: Int = 1,        // روز سررسید در ماه (مثلاً ۲۶)
+    val isPaid: Boolean = false
 )

@@ -38,15 +38,24 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.R
+import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
+import ir.hamedan.budgetmanagement.data.local.models.UpcomingPaymentEntity
+import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.screens.payments.UpcomingPaymentViewModel
+import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
+import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsViewModel
+import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitViewModel
+import ir.hamedan.budgetmanagement.utils.DateUtils
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
-import ir.hamedan.budgetmanagement.utils.getFormattedEnglishDate
-import ir.hamedan.budgetmanagement.utils.getFormattedPersianDate
+import ir.hamedan.budgetmanagement.utils.StringMapper
 import java.text.NumberFormat
-import java.util.Locale
+import java.util.*
+import kotlin.math.abs
 
-// ساختار داده جدید مخصوص اعلان‌ها و پیام‌های سیستم
 data class NotificationItem(
     val id: String,
     val type: NotificationType,
@@ -60,49 +69,34 @@ data class NotificationItem(
 )
 
 enum class NotificationType {
-    SUCCESS,  // مثل ثبت جدید، موفقیت‌آمیز بودن تراکنش
-    ERROR,    // خطاها، اتمام بودجه، هشدارهای امنیتی
-    REWARD,   // جوایز، کمپین‌ها، تخفیف‌ها
-    SYSTEM    // اخبار، بروزرسانی‌ها، پیام‌های پشتیبانی
+    SUCCESS, ERROR, REWARD, SYSTEM
 }
 
-data class Transaction(
+data class HomeDueItem(
     val id: String,
     val title: String,
-    val titleEn: String,
-    val amount: Long,
-    val date: String,
-    val dateEn: String,
-    val category: String,
-    val categoryEn: String
-)
-
-// ساختار داده ساده برای موعد پرداخت
-data class DueItem(
-    val id: String,
-    val titleFa: String,
-    val titleEn: String,
-    val amount: Long,
-    val daysLeft: Int, // روزهای باقی‌مانده تا موعد
-    val type: String // "installment" (قسط), "salary" (حقوق), "bill" (قبض)
+    val amount: Double,
+    val daysLeft: Int,
+    val type: String
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onTransactionClick: (Transaction) -> Unit = {},
+    onTransactionClick: (TransactionEntity) -> Unit = {},
     onThemeToggle: () -> Unit = {},
     onSeeAllTransactionsClick: () -> Unit = {},
     onAddScreenClickDue: () -> Unit = {},
     onAddScreenClickPiggy: () -> Unit = {},
-    onAddScreenClickLimit: () -> Unit = {}
-
-    ) {
+    onAddScreenClickLimit: () -> Unit = {},
+    transactionViewModel: TransactionViewModel = viewModel(factory = TransactionViewModel.Factory(LocalContext.current)),
+    upcomingViewModel: UpcomingPaymentViewModel = viewModel(factory = UpcomingPaymentViewModel.Factory(LocalContext.current)),
+    goalsViewModel: SavingGoalsViewModel = viewModel(factory = SavingGoalsViewModel.Factory(LocalContext.current)),
+    budgetViewModel: BudgetLimitViewModel = viewModel(factory = BudgetLimitViewModel.Factory(LocalContext.current))
+) {
     val context = LocalContext.current
-    val currentLang = LocaleHelper.getLanguage(context)
-    val isPersian = currentLang == "fa"
+    val isPersian = LocaleHelper.getLanguage(context) == "fa"
 
-    // مدیریت خروج با دکمه بک
     var lastBackPressTime by remember { mutableLongStateOf(0L) }
     BackHandler {
         val currentTime = System.currentTimeMillis()
@@ -110,8 +104,7 @@ fun HomeScreen(
             (context as? Activity)?.finish()
         } else {
             lastBackPressTime = currentTime
-            val message = if (isPersian) "برای خروج، دوباره دکمه بازگشت را بزنید" else "Press back again to exit"
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, if (isPersian) "برای خروج، دوباره دکمه بازگشت را بزنید" else "Press back again to exit", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -119,49 +112,95 @@ fun HomeScreen(
         NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
     }
 
-    // 🔥 مدیریت وضعیت باتم شیت اعلان‌ها
-    var showBottomSheet by remember { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState(
-        skipPartiallyExpanded = false
-    )
+    val transactionsList by transactionViewModel.filteredTransactions.collectAsState()
+    val paymentsList by upcomingViewModel.payments.collectAsState()
+    val goalsList by goalsViewModel.savingGoals.collectAsState(initial = emptyList())
+    val limitsList by budgetViewModel.budgetLimitsWithSpent.collectAsState(initial = emptyList())
 
-    // داده‌های نمونه برای نوتیفیکیشن‌ها و پیام‌ها
-    val notifications = remember { getDummyNotifications() }
+    val currencyUnit by transactionViewModel.currencyUnit.collectAsState(initial = "IRT")
+
+    // ---------------------------------------------------------------------
+    // محاسبه دقیق و پویا: ابتدا و انتهای ماه جاری و ماه قبل
+    // ---------------------------------------------------------------------
+    val (currentMonthStart, currentMonthEnd, prevMonthStart, prevMonthEnd) = remember {
+        val calendar = Calendar.getInstance()
+
+        val startCur = (calendar.clone() as Calendar).apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+
+        val endCur = (calendar.clone() as Calendar).apply {
+            set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }
+
+        val startPrev = (startCur.clone() as Calendar).apply { add(Calendar.MONTH, -1) }
+        val endPrev = (startCur.clone() as Calendar).apply { add(Calendar.MILLISECOND, -1) }
+
+        Quadruple(startCur.timeInMillis, endCur.timeInMillis, startPrev.timeInMillis, endPrev.timeInMillis)
+    }
+
+    val periodTransactions = remember(transactionsList, currentMonthStart, currentMonthEnd) {
+        transactionsList.filter { it.timestamp in currentMonthStart..currentMonthEnd }
+    }
+
+    val prevPeriodTransactions = remember(transactionsList, prevMonthStart, prevMonthEnd) {
+        transactionsList.filter { it.timestamp in prevMonthStart..prevMonthEnd }
+    }
+
+    val totalIncome = periodTransactions.filter { it.type == "INCOME" }.sumOf { it.amount }
+    val totalExpense = periodTransactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }
+    val balance = totalIncome - totalExpense
+
+    val prevIncome = prevPeriodTransactions.filter { it.type == "INCOME" }.sumOf { it.amount }
+    val prevExpense = prevPeriodTransactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }
+    val prevBalance = prevIncome - prevExpense
+    val diffBalance = balance - prevBalance
+
+    val recentTransactions = remember(transactionsList) {
+        transactionsList.sortedByDescending { it.timestamp }.take(3)
+    }
+
+    val upcomingPayments = remember(paymentsList) {
+        paymentsList.filter { !it.isPaid }.sortedBy { it.dueDate }
+    }
+
+    val allGoals = remember(goalsList) { goalsList ?: emptyList() }
+    val allLimits = remember(limitsList) { limitsList }
+
+    var showBottomSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
 
     Box(modifier = Modifier.fillMaxSize()) {
         AuroraBackground()
 
-        // ۱. لیست محتوای اصلی هوم‌اسکرین
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            item {
-                Spacer(modifier = Modifier.statusBarsPadding().height(55.dp))
-            }
+            item { Spacer(modifier = Modifier.statusBarsPadding().height(55.dp)) }
 
-            // بخش خوش‌آمدگویی
-            item {
-                Column {
-                    Text(
-                        text = if (isPersian) "سلام، سینا 👋" else "Hi, Cenna 👋",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = if (isPersian) getFormattedPersianDate() else getFormattedEnglishDate(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // کارت موجودی اصلی
+            // ---------------------------------------------------------------------
+            // کارت بالانس اصلی
+            // ---------------------------------------------------------------------
             item {
                 val balanceShape = RoundedCornerShape(24.dp)
+
+                val periodLabel = if (isPersian) {
+                    "عملکرد ماه جاری (${DateUtils.formatTimestamp(currentMonthStart, true)} تا ${DateUtils.formatTimestamp(currentMonthEnd, true)})"
+                } else {
+                    "Current Month (${DateUtils.formatTimestamp(currentMonthStart, false)} - ${DateUtils.formatTimestamp(currentMonthEnd, false)})"
+                }
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -169,38 +208,71 @@ fun HomeScreen(
                         .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), balanceShape)
                         .clip(balanceShape)
                 ) {
-                    // ۱. تصویر پس‌زمینه (کاملاً ریسپانسیو و متناسب با ابعاد کانتینر)
                     Image(
-                        painter = painterResource(id = R.drawable.balancebanner), // آیدی عکس خود را جایگزین کنید
+                        painter = painterResource(id = R.drawable.balancebanner),
                         contentDescription = null,
-                        modifier = Modifier.matchParentSize(), // رندر دقیق به اندازه ابعاد نهایی باکس والد
-                        contentScale = ContentScale.Crop, // یا ContentScale.Inside اگر می‌خواهید عکس دفرمه نشود و کامل بیفتد
-                        alpha = 0.15f // میزان شفافیت عکس برای اینکه متن‌ها کاملاً خوانا باقی بمانند
+                        modifier = Modifier.matchParentSize(),
+                        contentScale = ContentScale.Crop,
+                        alpha = 0.15f
                     )
 
-                    // ۲. لایه محتوای متنی کارت
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(24.dp) // پدینگ به محتوا داده می‌شود نه به باکس والد
+                            .padding(20.dp)
                     ) {
                         Text(
-                            text = if (isPersian) "تراز این ماه" else "This Month Balance",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = periodLabel,
+                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                         )
-                        Spacer(Modifier.height(12.dp))
+
+                        Spacer(Modifier.height(8.dp))
+
+                        val displayBalance = if (currencyUnit == "IRR") (balance * 10).toLong() else balance.toLong()
+                        val currencyText = if (isPersian) {
+                            if (currencyUnit == "IRR") "ریال" else "تومان"
+                        } else {
+                            if (currencyUnit == "IRR") "Rial" else "Toman"
+                        }
+
+                        // محاسبه علامت منفی در صورت منفی بودن بالانس
+                        val formattedAmount = numberFormatter.format(abs(displayBalance))
+                        val sign = if (balance < 0) "-" else ""
+
                         Text(
-                            text = "${numberFormatter.format(12540000)} ${if (isPersian) "تومان" else "T"}",
-                            style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface
+                            text = "$sign$formattedAmount $currencyText",
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 28.sp
+                            ),
+                            color = if (balance >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                         )
-                        Spacer(Modifier.height(16.dp))
+
+                        Spacer(Modifier.height(12.dp))
+
+                        val diffDisplay = if (currencyUnit == "IRR") (abs(diffBalance) * 10).toLong() else abs(diffBalance).toLong()
+                        val isPositive = diffBalance >= 0
+
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("↑ 12%", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                             Text(
-                                text = if (isPersian) " نسبت به ماه قبل" else " vs last month",
-                                modifier = Modifier.padding(start = 6.dp),
+                                text = if (isPositive) "▲" else "▼",
+                                color = if (isPositive) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+
+                            val comparisonText = if (isPersian) {
+                                val state = if (isPositive) "افزایش" else "کاهش"
+                                " $state ${numberFormatter.format(diffDisplay)} $currencyText نسبت به ماه قبل"
+                            } else {
+                                val state = if (isPositive) "Increased by" else "Decreased by"
+                                " $state ${numberFormatter.format(diffDisplay)} $currencyText vs last month"
+                            }
+
+                            Text(
+                                text = comparisonText,
+                                modifier = Modifier.padding(start = 4.dp),
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -208,17 +280,20 @@ fun HomeScreen(
                 }
             }
 
-            // ردیف کارت‌های خلاصه (درآمد و هزینه با بنرهای اختصاصی جدید)
+            // ---------------------------------------------------------------------
+            // خلاصه درآمد و هزینه
+            // ---------------------------------------------------------------------
             item {
                 val summaryCardShape = RoundedCornerShape(20.dp)
+                val income = totalIncome
+                val expense = totalExpense
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(IntrinsicSize.Max), // هماهنگ شدن خودکار ارتفاع هر دو کارت با یکدیگر
+                        .height(IntrinsicSize.Max),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // ۱. کارت درآمد این ماه
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -227,16 +302,13 @@ fun HomeScreen(
                             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), summaryCardShape)
                             .clip(summaryCardShape)
                     ) {
-                        // بنر پس‌زمینه درآمد (طراحی مینی‌مال صعودی)
                         Image(
-                            painter = painterResource(id = R.drawable.incomebanner), // آیدی عکس درآمد را اینجا جایگزین کنید
+                            painter = painterResource(id = R.drawable.incomebanner),
                             contentDescription = null,
                             modifier = Modifier.matchParentSize(),
                             contentScale = ContentScale.Crop,
                             alpha = 0.12f
                         )
-
-                        // محتوای متنی کارت درآمد
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -250,18 +322,17 @@ fun HomeScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(Modifier.height(8.dp))
+                            val displayIncome = if (currencyUnit == "IRR") (income * 10).toLong() else income.toLong()
+                            val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")
                             Text(
-                                text = "${numberFormatter.format(25800000)}${if (isPersian) " تومان" else " T"}",
+                                text = "${numberFormatter.format(displayIncome)} $currencyText",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
 
-                    // ۲. کارت هزینه این ماه
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -270,16 +341,13 @@ fun HomeScreen(
                             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), summaryCardShape)
                             .clip(summaryCardShape)
                     ) {
-                        // بنر پس‌زمینه هزینه (طراحی مینی‌مال نزولی)
                         Image(
-                            painter = painterResource(id = R.drawable.expensebanner), // آیدی عکس هزینه را اینجا جایگزین کنید
+                            painter = painterResource(id = R.drawable.expensebanner),
                             contentDescription = null,
                             modifier = Modifier.matchParentSize(),
                             contentScale = ContentScale.Crop,
                             alpha = 0.12f
                         )
-
-                        // محتوای متنی کارت هزینه
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -293,24 +361,24 @@ fun HomeScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(Modifier.height(8.dp))
+                            val displayExpense = if (currencyUnit == "IRR") (expense * 10).toLong() else expense.toLong()
+                            val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")
                             Text(
-                                text = "${numberFormatter.format(13260000)}${if (isPersian) " تومان" else " T"}",
+                                text = "${numberFormatter.format(displayExpense)} $currencyText",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.error,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
                 }
             }
 
-            // بخش قلک پس‌انداز هوشمند
-// بخش قلک پس‌انداز هوشمند با دو هدف مالی و بنر پس‌زمینه
+            // ---------------------------------------------------------------------
+            // بخش قلک‌های پس‌انداز
+            // ---------------------------------------------------------------------
             item {
                 val piggyShape = RoundedCornerShape(24.dp)
-
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -318,32 +386,26 @@ fun HomeScreen(
                         .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), piggyShape)
                         .clip(piggyShape)
                 ) {
-                    // ۱. بنر پس‌زمینه قلک (کاملاً ریسپانسیو و متناسب با ابعاد کل کارت)
                     Image(
-                        painter = painterResource(id = R.drawable.goalbanner), // آیدی عکس قلک جدید را اینجا جایگزین کنید
+                        painter = painterResource(id = R.drawable.goalbanner),
                         contentDescription = null,
                         modifier = Modifier.matchParentSize(),
                         contentScale = ContentScale.Crop,
-                        alpha = 0.12f // آلفای ملایم جهت جلوگیری از شلوغ شدن پس‌زمینه و حفظ خوانایی مبالغ
+                        alpha = 0.12f
                     )
 
-                    // ۲. لایه محتوای کارت
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(20.dp)
                     ) {
-                        // هدر کارت: عنوان و آیکون
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "🎯",
-                                    fontSize = MaterialTheme.typography.titleLarge.fontSize
-                                )
+                                Text(text = "🎯", fontSize = MaterialTheme.typography.titleLarge.fontSize)
                                 Spacer(Modifier.width(8.dp))
                                 Column {
                                     Text(
@@ -363,99 +425,52 @@ fun HomeScreen(
 
                         Spacer(Modifier.height(20.dp))
 
-                        // هدف اول: خرید لپ‌تاپ
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = if (isPersian) "خرید لپ‌تاپ (۶۵٪ پر شده)" else "Buy Laptop (65% filled)",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    text = "${numberFormatter.format(13000000)} / ${numberFormatter.format(20000000)} ${if (isPersian) "تومان" else "T"}",
-                                    style = MaterialTheme.typography.labelMedium,
+                        allGoals.forEach { goal ->
+                            val progress = if (goal.targetAmount > 0) (goal.currentAmount / goal.targetAmount).toFloat() else 0f
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${goal.icon} ${goal.title}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    val curr = if (currencyUnit == "IRR") 10 else 1
+                                    Text(
+                                        text = "${numberFormatter.format((goal.currentAmount * curr).toLong())} / ${numberFormatter.format((goal.targetAmount * curr).toLong())} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                LinearProgressIndicator(
+                                    progress = { progress.coerceIn(0f, 1f) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(8.dp)
+                                        .clip(CircleShape),
                                     color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
+                                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
                                 )
                             }
-
-                            Spacer(Modifier.height(8.dp))
-
-                            LinearProgressIndicator(
-                                progress = { 0.65f },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp)
-                                    .clip(CircleShape),
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                            )
+                            Spacer(Modifier.height(16.dp))
                         }
 
-                        Spacer(Modifier.height(16.dp))
-
-                        // هدف دوم: خرید ماشین (نوار جدید اضافه شده)
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = if (isPersian) "خرید ماشین (۱۵٪ پر شده)" else "Buy Car (15% filled)",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    text = "${numberFormatter.format(75000000)} / ${numberFormatter.format(500000000)} ${if (isPersian) "تومان" else "T"}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Spacer(Modifier.height(8.dp))
-
-                            LinearProgressIndicator(
-                                progress = { 0.15f },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp)
-                                    .clip(CircleShape),
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                            )
-                        }
-
-                        Spacer(Modifier.height(24.dp))
-
-                        // دکمه دعوت به اقدام (CTA) برای ایجاد هدف جدید
                         Button(
-                            onClick = { onAddScreenClickPiggy() },
+                            onClick = onAddScreenClickPiggy,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(48.dp),
                             shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
-                            )
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
                                 Text(
                                     text = if (isPersian) "ساخت یک قلک جدید" else "Create a New Goal",
@@ -468,10 +483,11 @@ fun HomeScreen(
                 }
             }
 
-            // بخش محدودیت خرج‌کرد (بودجه‌بندی دسته‌بندی‌ها)
+            // ---------------------------------------------------------------------
+            // بخش محدودیت‌های خرج‌کرد
+            // ---------------------------------------------------------------------
             item {
                 val budgetShape = RoundedCornerShape(24.dp)
-
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -479,32 +495,26 @@ fun HomeScreen(
                         .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), budgetShape)
                         .clip(budgetShape)
                 ) {
-                    // ۱. بنر پس‌زمینه بخش محدودیت (طراحی مینیمال متناسب با پرامپت بعدی)
                     Image(
-                        painter = painterResource(id = R.drawable.limitbanner), // آیدی عکس را اینجا جایگزین کنید
+                        painter = painterResource(id = R.drawable.limitbanner),
                         contentDescription = null,
                         modifier = Modifier.matchParentSize(),
                         contentScale = ContentScale.Crop,
                         alpha = 0.12f
                     )
 
-                    // ۲. لایه محتوای کارت
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(20.dp)
                     ) {
-                        // هدر کارت
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "⚠️",
-                                    fontSize = MaterialTheme.typography.titleLarge.fontSize
-                                )
+                                Text(text = "⚠️", fontSize = MaterialTheme.typography.titleLarge.fontSize)
                                 Spacer(Modifier.width(8.dp))
                                 Column {
                                     Text(
@@ -524,99 +534,46 @@ fun HomeScreen(
 
                         Spacer(Modifier.height(20.dp))
 
-                        // دسته اول: کافه و رستوران (نزدیک به اتمام بودجه - ۸۵٪)
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = if (isPersian) "☕ کافه و رستوران (۸۵٪)" else "☕ Cafe & Restaurant (85%)",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    text = "${numberFormatter.format(3400000)} / ${numberFormatter.format(4000000)} ${if (isPersian) "تومان" else "T"}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.error, // رنگ ارور برای هشدار نزدیک شدن به سقف
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Spacer(Modifier.height(8.dp))
-
-                            LinearProgressIndicator(
-                                progress = { 0.85f },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp)
-                                    .clip(CircleShape),
-                                color = MaterialTheme.colorScheme.error, // تغییر رنگ نوار به نشانه هشدار
-                                trackColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
-                            )
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-
-                        // دسته دوم: سوخت و خودرو (وضعیت نرمال - ۴۰٪)
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = if (isPersian) "🚗 سوخت و خودرو (۴۰٪)" else "🚗 Fuel & Car (40%)",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    text = "${numberFormatter.format(2000000)} / ${numberFormatter.format(5000000)} ${if (isPersian) "تومان" else "T"}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
+                        allLimits.forEach { limit ->
+                            val progress = if (limit.entity.maxLimit > 0) (limit.currentSpent / limit.entity.maxLimit).toFloat() else 0f
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${limit.categoryEmoji} ${StringMapper.getCategoryName(limit.entity.categoryName, isPersian)} (${(progress * 100).toInt()}%)",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    val curr = if (currencyUnit == "IRR") 10 else 1
+                                    Text(
+                                        text = "${numberFormatter.format((limit.currentSpent * curr).toLong())} / ${numberFormatter.format((limit.entity.maxLimit * curr).toLong())} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (progress > 0.8f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                LinearProgressIndicator(
+                                    progress = { progress.coerceIn(0f, 1f) },
+                                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                                    color = if (progress > 0.8f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                    trackColor = (if (progress > 0.8f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary).copy(alpha = 0.1f)
                                 )
                             }
-
-                            Spacer(Modifier.height(8.dp))
-
-                            LinearProgressIndicator(
-                                progress = { 0.40f },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp)
-                                    .clip(CircleShape),
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                            )
+                            Spacer(Modifier.height(16.dp))
                         }
 
-                        Spacer(Modifier.height(24.dp))
-
-                        // دکمه CTA برای تنظیم محدودیت جدید
                         Button(
-                            onClick = { onAddScreenClickLimit() },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
-                            )
+                            onClick = onAddScreenClickLimit,
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            shape = RoundedCornerShape(16.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
                                 Text(
                                     text = if (isPersian) "تنظیم محدودیت جدید" else "Set a New Budget Limit",
@@ -629,72 +586,64 @@ fun HomeScreen(
                 }
             }
 
-// ردیف موعد پرداخت‌ها (تایم‌لاین افقی داخل یک کادر واحد با تصویر پس‌زمینه هندسی و CTA)
+            // ---------------------------------------------------------------------
+            // بخش موعد سررسید (طراحی کلی هماهنگ + نمایش داخلی به صورت LazyRow و بدون ProgressBar)
+            // ---------------------------------------------------------------------
             item {
-                val dueItems = remember {
-                    listOf(
-                        DueItem("1", "قسط وام مسکن", "Housing Loan", 4500000, 2, "installment"),
-                        DueItem("2", "حقوق کارمندان", "Staff Salaries", 38000000, 5, "salary"),
-                        DueItem("3", "قبض سرور شرکت", "Server Bill", 1200000, 12, "bill")
-                    )
+                val dueItems = upcomingPayments.map { payment ->
+                    val daysLeft = ((payment.dueDate - System.currentTimeMillis()) / (24 * 60 * 60 * 1000)).toInt().coerceAtLeast(0)
+                    HomeDueItem(payment.id, payment.title, payment.amount, daysLeft, "installment")
                 }
 
-                val sectionShape = RoundedCornerShape(24.dp)
+                val dueShape = RoundedCornerShape(24.dp)
 
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f), sectionShape)
-                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), sectionShape)
-                        .clip(sectionShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), dueShape)
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), dueShape)
+                        .clip(dueShape)
                 ) {
-                    // ۱. تصویر پس‌زمینه مینی‌مال (duebanner) که کل کانتینر بخش را پوشش می‌دهد
                     Image(
                         painter = painterResource(id = R.drawable.duebanner),
                         contentDescription = null,
                         modifier = Modifier.matchParentSize(),
                         contentScale = ContentScale.Crop,
-                        alpha = 0.06f // شفافیت بسیار ملایم برای حفظ خوانایی کامل متن‌ها
+                        alpha = 0.12f
                     )
 
-                    // ۲. لایه محتوای متنی و لیست کارت‌ها
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp)
+                            .padding(20.dp)
                     ) {
-                        // هدر بخش به همراه CTA (دکمه مشاهده همه)
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(
-                                text = if (isPersian) "موعد پرداخت‌های نزدیک" else "Upcoming Payments",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onBackground,
-                                fontWeight = FontWeight.Bold
-                            )
-
-                            TextButton(
-                                onClick = {
-                                    onAddScreenClickDue()
-                                },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                modifier = Modifier.height(32.dp)
-                            ) {
-                                Text(
-                                    text = if (isPersian) "مشاهده همه ←" else "View All →",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(text = "📅", fontSize = MaterialTheme.typography.titleLarge.fontSize)
+                                Spacer(Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = if (isPersian) "موعد پرداخت‌های نزدیک" else "Upcoming Payments",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = if (isPersian) "مدیریت اقساط و قبوض سررسید" else "Manage upcoming bills & installments",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
 
-                        // لیست افقی اسکرول‌شونده از موعدها
+                        Spacer(Modifier.height(20.dp))
+
+                        // نمایش به صورت LazyRow و بدون استفاده از ProgressBar
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -703,11 +652,7 @@ fun HomeScreen(
                                 val cardShape = RoundedCornerShape(16.dp)
                                 val isUrgent = due.daysLeft <= 3
                                 val statusColor = if (isUrgent) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                                val icon = when (due.type) {
-                                    "installment" -> "🏦"
-                                    "salary" -> "💼"
-                                    else -> "🧾"
-                                }
+                                val icon = "🏦"
 
                                 Box(
                                     modifier = Modifier
@@ -715,13 +660,9 @@ fun HomeScreen(
                                         .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f), cardShape)
                                         .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), cardShape)
                                         .clip(cardShape)
-                                        .clickable {
-                                            // اکشن کلیک روی هر کارت
-                                        }
+                                        .clickable { }
                                 ) {
-                                    Column(
-                                        modifier = Modifier.padding(12.dp)
-                                    ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -746,7 +687,7 @@ fun HomeScreen(
                                         Spacer(Modifier.height(12.dp))
 
                                         Text(
-                                            text = if (isPersian) due.titleFa else due.titleEn,
+                                            text = due.title,
                                             style = MaterialTheme.typography.bodyMedium,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurface,
@@ -756,8 +697,9 @@ fun HomeScreen(
 
                                         Spacer(Modifier.height(2.dp))
 
+                                        val curr = if (currencyUnit == "IRR") 10 else 1
                                         Text(
-                                            text = "${numberFormatter.format(due.amount)} ${if (isPersian) "تومان" else "T"}",
+                                            text = "${numberFormatter.format((due.amount * curr).toLong())} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}",
                                             style = MaterialTheme.typography.labelLarge,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             fontWeight = FontWeight.Medium
@@ -766,105 +708,115 @@ fun HomeScreen(
                                 }
                             }
                         }
+
+                        Spacer(Modifier.height(20.dp))
+
+                        Button(
+                            onClick = onAddScreenClickDue,
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = if (isPersian) "ساخت موعد پرداخت جدید" else "Create New Payment",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 }
             }
-            // عنوان لیست تراکنش‌ها
-            item {
-                Text(
-                    text = if (isPersian) "آخرین تراکنش‌ها" else "Recent Transactions",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-            }
 
-            // لیست تراکنش‌ها
-            items(getDummyTransactions(), key = { it.id }) { transaction ->
-                val emoji = when (transaction.category) {
-                    "غذا", "Food" -> "🍔"
-                    "سوخت", "Fuel" -> "⛽"
-                    "حقوق", "Salary" -> "💼"
-                    else -> "📌"
+            // ---------------------------------------------------------------------
+            // بخش آخرین تراکنش‌ها (عدم نمایش در صورت خالی بودن)
+            // ---------------------------------------------------------------------
+            if (recentTransactions.isNotEmpty()) {
+                item {
+                    Text(
+                        text = if (isPersian) "آخرین تراکنش‌ها" else "Recent Transactions",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
                 }
 
-                val rowShape = RoundedCornerShape(20.dp)
+                items(recentTransactions, key = { it.id }) { transaction ->
+                    val emoji = getCategoryEmoji(transaction.category)
+                    val isExpense = transaction.type == "EXPENSE"
+                    val displayAmount = if (currencyUnit == "IRR") (transaction.amount * 10).toLong() else transaction.amount.toLong()
+                    val rowShape = RoundedCornerShape(20.dp)
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), rowShape)
-                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), rowShape)
-                        .clip(rowShape)
-                        .clickable { onTransactionClick(transaction) }
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier.size(44.dp),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), rowShape)
+                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), rowShape)
+                            .clip(rowShape)
+                            .clickable { onTransactionClick(transaction) }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(text = emoji, fontSize = MaterialTheme.typography.headlineMedium.fontSize)
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
+                        Box(
+                            modifier = Modifier.size(44.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = emoji, fontSize = MaterialTheme.typography.headlineMedium.fontSize)
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = transaction.title.ifEmpty { transaction.category },
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = DateUtils.formatTimestamp(transaction.timestamp, isPersian),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            )
+                        }
                         Text(
-                            text = if (isPersian) transaction.title else transaction.titleEn,
+                            text = "${if (isExpense) "-" else "+"}${numberFormatter.format(abs(displayAmount))} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = if (isPersian) transaction.date else transaction.dateEn,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            color = if (isExpense) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                         )
                     }
-                    Text(
-                        text = "${numberFormatter.format(transaction.amount)} ${if (isPersian) "تومان" else "T"}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (transaction.amount >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                    )
                 }
-            }
 
-            // دکمه CTA در انتهای لیست تراکنش‌ها
-            item {
-                Spacer(Modifier.height(8.dp)) // فاصله کوچک بین آخرین تراکنش و دکمه
-
-                TextButton(
-                    onClick = {
-                        // اکشن ناوبری به صفحه تاریخچه کامل تراکنش‌ها
-                        onSeeAllTransactionsClick()
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(
+                        onClick = onSeeAllTransactionsClick,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
-                        Text(
-                            text = if (isPersian) "مشاهده همه تراکنش‌ها" else "See All Transactions",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = if (isPersian) "مشاهده همه تراکنش‌ها" else "See All Transactions",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -872,7 +824,9 @@ fun HomeScreen(
             item { Spacer(modifier = Modifier.height(110.dp)) }
         }
 
-        // ۲. تاپ‌بار جزیره‌ای سه تیکه شناور
+        // ---------------------------------------------------------------------
+        // هدر بالای صفحه
+        // ---------------------------------------------------------------------
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -890,7 +844,6 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // تیکه چپ: تغییر تم
                 Box(
                     modifier = Modifier
                         .size(56.dp)
@@ -908,7 +861,6 @@ fun HomeScreen(
                     }
                 }
 
-                // تیکه وسط: عنوان
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -923,13 +875,10 @@ fun HomeScreen(
                         text = if (isPersian) "مدیریت هزینه‌ها" else "Expense Manager",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        fontWeight = FontWeight.Bold
                     )
                 }
 
-                // تیکه راست: زنگوله اعلان‌ها (باز کردن باتم‌شیت شناور فوقِ معلق)
                 Box(
                     modifier = Modifier
                         .size(56.dp)
@@ -949,78 +898,32 @@ fun HomeScreen(
             }
         }
 
-        // ==========================================
-        // 🌟 پیاده‌سازی باتم‌شیت کاملاً معلق و مستقل (خالی از کف و طرفین)
-        // ==========================================
+        // ---------------------------------------------------------------------
+        // Bottom Sheet اعلان‌ها
+        // ---------------------------------------------------------------------
         if (showBottomSheet) {
-            val density = LocalDensity.current
-            val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-            val screenHeightPx = with(density) { screenHeight.toPx() }
-
-            // مانیتور کردن افست لحظه‌ای شیت
-            val rawOffset = try { sheetState.requireOffset() } catch (_: Exception) { screenHeightPx / 2f }
-            val expansionProgress = (1f - (rawOffset / screenHeightPx)).coerceIn(0f, 1f)
-
-            // اگر به سقف یا خیلی بالا رفت، لبه‌های گرد و فواصل حذف شوند
-            val isFullyExpanded = expansionProgress > 0.82f
-
-            // فواصل نرم از اطراف و پایین (Bottom Padding اضافه شد تا از کف زمین معلق بماند)
-            val animatedPaddingHorizontal by animateDpAsState(
-                targetValue = if (isFullyExpanded) 0.dp else 16.dp,
-                label = "PaddingHorizontal"
-            )
-            val animatedPaddingBottom by animateDpAsState(
-                targetValue = if (isFullyExpanded) 0.dp else 36.dp, // ۳۶ دی‌پی فاصله از پایین صفحه برای تعلیق کامل
-                label = "PaddingBottom"
-            )
-            val animatedCornerRadius by animateIntAsState(
-                targetValue = if (isFullyExpanded) 0 else 32,
-                label = "CornerRadius"
-            )
-
             ModalBottomSheet(
                 onDismissRequest = { showBottomSheet = false },
                 sheetState = sheetState,
-                // کانتینر اصلی را کاملاً شفاف می‌کنیم تا استایل شناور خود را بکشیم
                 containerColor = Color.Transparent,
                 scrimColor = Color.Black.copy(alpha = 0.4f),
                 dragHandle = null
-                // 💡 پارامتر windowInsets برای سازگاری کامل با همه نسخه‌های Material 3 حذف شد
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(
-                            start = animatedPaddingHorizontal,
-                            end = animatedPaddingHorizontal,
-                            bottom = animatedPaddingBottom
-                        )
+                        .padding(horizontal = 16.dp, vertical = 36.dp)
                         .background(
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.96f),
-                            shape = RoundedCornerShape(
-                                topStart = animatedCornerRadius.dp,
-                                topEnd = animatedCornerRadius.dp,
-                                bottomStart = if (isFullyExpanded) 0.dp else animatedCornerRadius.dp,
-                                bottomEnd = if (isFullyExpanded) 0.dp else animatedCornerRadius.dp
-                            )
+                            shape = RoundedCornerShape(32.dp)
                         )
                         .border(
-                            width = if (isFullyExpanded) 0.dp else 1.dp,
+                            width = 1.dp,
                             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                            shape = RoundedCornerShape(
-                                topStart = animatedCornerRadius.dp,
-                                topEnd = animatedCornerRadius.dp,
-                                bottomStart = if (isFullyExpanded) 0.dp else animatedCornerRadius.dp,
-                                bottomEnd = if (isFullyExpanded) 0.dp else animatedCornerRadius.dp
-                            )
+                            shape = RoundedCornerShape(32.dp)
                         )
-                        // 🚀 پدینگ‌ها سیستم‌بار و دکمه‌های ناوبری به صورت خودکار و ایمن اینجا مدیریت می‌شوند
-                        .statusBarsPadding()
-                        .navigationBarsPadding()
                 ) {
                     Column(modifier = Modifier.fillMaxSize()) {
-
-                        // درگ هندل مینیمال
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1037,7 +940,6 @@ fun HomeScreen(
                             )
                         }
 
-                        // هدر بخش پیام‌ها
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1065,7 +967,6 @@ fun HomeScreen(
                             }
                         }
 
-                        // لیست نوتیفیکیشن‌ها و اخبار
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -1073,9 +974,8 @@ fun HomeScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)
                         ) {
-                            items(notifications, key = { it.id }) { item ->
+                            items(getDummyNotifications(), key = { it.id }) { item ->
                                 val itemShape = RoundedCornerShape(18.dp)
-
                                 val (icon, iconColor, bgColor) = when (item.type) {
                                     NotificationType.SUCCESS -> Triple(Icons.Default.CheckCircle, Color(0xFF4CAF50), Color(0xFF4CAF50).copy(alpha = 0.08f))
                                     NotificationType.ERROR -> Triple(Icons.Default.Error, Color(0xFFE53935), Color(0xFFE53935).copy(alpha = 0.08f))
@@ -1144,52 +1044,28 @@ fun HomeScreen(
     }
 }
 
-// تولید داده‌های دوزبانه فیلتر شده و تست شده برای نوتیفیکیشن‌ها
-private fun getDummyNotifications(): List<NotificationItem> = listOf(
-    NotificationItem(
-        id = "n1",
-        type = NotificationType.SUCCESS,
-        titleFa = "ثبت تراکنش موفقیت‌آمیز",
-        titleEn = "Transaction Registered",
-        descFa = "تراکنش مربوط به خرید اینترنت با موفقیت در پایگاه داده ذخیره و ترازنامه ماهانه شما به‌روزرسانی شد.",
-        descEn = "Your internet purchase transaction has been successfully recorded and the monthly balance updated.",
-        timeFa = "۱۰ دقیقه پیش",
-        timeEn = "10m ago"
-    ),
-    NotificationItem(
-        id = "n2",
-        type = NotificationType.REWARD,
-        titleFa = "جایزه چالش پس‌انداز ماهانه 🏆",
-        titleEn = "Savings Challenge Reward 🏆",
-        descFa = "تبریک! به دلیل ثبت منظم هزینه‌ها و رعایت سقف مجاز، از طرف پشتیبانی مرکزی کد تخفیف اختصاصی خرید از دیجی‌کالا دریافت کردید.",
-        descEn = "Congratulations! For regular expense tracking, you have received an exclusive shopping discount code.",
-        timeFa = "۱ ساعت پیش",
-        timeEn = "1h ago"
-    ),
-    NotificationItem(
-        id = "n3",
-        type = NotificationType.ERROR,
-        titleFa = "هشدار عبور از سقف بودجه!",
-        titleEn = "Budget Threshold Alert!",
-        descFa = "هزینه‌های مربوط به دسته بندی «رستوران و غذا» به ۸۵٪ سقف تعیین شده رسیده است. لطفا تراکنش‌های بعدی خود را مدیریت کنید.",
-        descEn = "Your expenses in \"Food & Dining\" category have reached 85% of your defined monthly limit.",
-        timeFa = "دیروز",
-        timeEn = "Yesterday"
-    ),
-    NotificationItem(
-        id = "n4",
-        type = NotificationType.SYSTEM,
-        titleFa = "بروزرسانی نسخه جدید برنامه‌ریزی مالی",
-        titleEn = "New Feature Release",
-        descFa = "نسخه جدید هسته مدیریت هوشمند بودجه منتشر شد. اکنون می‌توانید ویجت‌های شیشه‌ای اختصاصی به صفحه اصلی گوشی اضافه کنید.",
-        descEn = "Version 2.4 is live. You can now add beautiful glassmorphism widgets directly to your phone's home screen.",
-        timeFa = "۲ روز پیش",
-        timeEn = "2 days ago"
-    )
+private data class Quadruple<A, B, C, D>(
+    val first: A,
+    val second: B,
+    val third: C,
+    val fourth: D
 )
 
-private fun getDummyTransactions(): List<Transaction> = listOf(
-    Transaction("1", "رستوران و غذا", "Restaurant & Food", -250000, "۱:۳۰ • امروز", "1:30 • Today", "غذا", "Food"),
-    Transaction("2", "سوخت", "Fuel", -800000, "۱۸:۴۵ • دیروز", "18:45 • Yesterday", "سوخت", "Fuel"),
-    Transaction("3", "حقوق", "Salary", 25000000, "۹:۰۰ • ۲ روز پیش", "9:00 • 2 days ago", "حقوق", "Salary")
+private fun getCategoryEmoji(category: String): String {
+    return when (category.uppercase()) {
+        "FOOD", "RESTAURANT" -> "🍔"
+        "TRANSPORT", "CAR" -> "⛽"
+        "SHOPPING" -> "🛍️"
+        "BILL" -> "📄"
+        "SALARY" -> "💰"
+        "INVESTMENT" -> "📈"
+        else -> "📌"
+    }
+}
+
+private fun getDummyNotifications(): List<NotificationItem> = listOf(
+    NotificationItem("n1", NotificationType.SUCCESS, "ثبت تراکنش موفقیت‌آمیز", "Transaction Registered", "تراکنش مربوط به خرید اینترنت با موفقیت در پایگاه داده ذخیره شد.", "Your internet purchase transaction has been successfully recorded.", "۱۰ دقیقه پیش", "10m ago"),
+    NotificationItem("n2", NotificationType.REWARD, "جایزه چالش پس‌انداز ماهانه 🏆", "Savings Challenge Reward 🏆", "تبریک! کد تخفیف اختصاصی دریافت کردید.", "Congratulations! You received an exclusive discount code.", "۱ ساعت پیش", "1h ago"),
+    NotificationItem("n3", NotificationType.ERROR, "هشدار عبور از سقف بودجه!", "Budget Threshold Alert!", "هزینه‌های رستوران به ۸۵٪ سقف رسیده است.", "Your Food expenses reached 85% of the limit.", "دیروز", "Yesterday"),
+    NotificationItem("n4", NotificationType.SYSTEM, "بروزرسانی نسخه جدید", "New Feature Release", "نسخه جدید برنامه منتشر شد.", "Version 2.4 is live.", "۲ روز پیش", "2 days ago")
 )

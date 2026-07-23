@@ -48,26 +48,26 @@ class CategoryRepository(
         return transactionDao.getTransactionCountForCategory(categoryTitle)
     }
 
-    // حذف دسته‌بندی و انتقال هوشمند تراکنش‌های آن به "دسته‌بندی نشده"
+    // حذف دسته‌بندی و انتقال تراکنش‌ها به کلید انگلیسی "UNCATEGORIZED" در دیتابیس
     suspend fun deleteCategoryWithReassignment(category: CategoryEntity) {
-        val defaultTitle = "دسته‌بندی نشده"
+        val defaultKey = "UNCATEGORIZED"
 
-        // ۱. بررسی یا ایجاد دسته‌بندی پیش‌فرض
-        var uncategorized = categoryDao.getCategoryByTitle(defaultTitle)
+        // ۱. بررسی یا ایجاد دسته‌بندی پیش‌فرض با کلید انگلیسی
+        var uncategorized = categoryDao.getCategoryByTitle(defaultKey)
         if (uncategorized == null) {
             categoryDao.insert(
                 CategoryEntity(
-                    title = defaultTitle,
+                    title = defaultKey,
                     iconEmoji = "📦",
                     isExpense = category.isExpense
                 )
             )
         }
 
-        // ۲. انتقال تراکنش‌ها به دسته‌بندی جدید
+        // ۲. انتقال تراکنش‌ها به دسته‌بندی جدید با کلید انگلیسی
         transactionDao.reassignCategoryForTransactions(
             oldCategoryTitle = category.title,
-            newCategoryTitle = defaultTitle
+            newCategoryTitle = defaultKey
         )
 
         // ۳. حذف دسته‌بندی اصلی

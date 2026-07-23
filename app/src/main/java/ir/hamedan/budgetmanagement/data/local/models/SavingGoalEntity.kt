@@ -6,11 +6,9 @@ import java.util.UUID
 
 @Entity(tableName = "saving_goals")
 data class SavingGoalEntity(
-    @PrimaryKey
-    val id: String = UUID.randomUUID().toString(),
-    val title: String = "",          // مثلاً: خرید لپ‌تاپ
-    val targetAmount: Double = 0.0,  // مبلغ هدف
-    val currentAmount: Double = 0.0, // مبلغ ذخیره‌شده تا کنون
-    val colorHex: String = "#FF6200EE",
-    val targetDate: Long? = null
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val title: String,
+    val targetAmount: Double,
+    val currentAmount: Double = 0.0,
+    val icon: String = "🎯" // 🔥 اضافه شدن پشتیبانی از ایموجی
 )

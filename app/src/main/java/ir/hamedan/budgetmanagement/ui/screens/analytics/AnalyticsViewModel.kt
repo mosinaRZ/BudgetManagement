@@ -6,56 +6,123 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
+import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
+import ir.hamedan.budgetmanagement.ui.screens.transactions.TimeFilter
 import kotlinx.coroutines.flow.*
+import java.util.Calendar
 import kotlin.math.abs
 
 class AnalyticsViewModel(
     private val repository: TransactionRepository
 ) : ViewModel() {
 
-    // محاسبه زنده آمار و نمودارها بر اساس تراکنش‌های Room
-    // نکته: چون Room مستقیماً Flow<List<TransactionEntity>> برمی‌گردونه، دیگه result.list لازم نیست
-    val uiState: StateFlow<AnalyticsUiState> = repository.getAllTransactions()
-        .map { transactions ->
+    val selectedTimeFilter = MutableStateFlow(TimeFilter.MONTHLY)
 
-            // ۱. محاسبه مجموع کل
-            val totalIncome = transactions.filter { it.type == "INCOME" }.sumOf { it.amount }
-            val totalExpense = transactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }
+    val uiState: StateFlow<AnalyticsUiState> = combine(
+        repository.getAllTransactions(),
+        selectedTimeFilter
+    ) { allTransactions, timeFilter ->
 
-            // ۲. گروه‌بندی هزینه‌ها بر اساس دسته‌بندی برای نمودار دایره‌ای
-            val categoryExpenses = transactions
-                .filter { it.type == "EXPENSE" }
-                .groupBy { it.category }
-                .map { (category, list) ->
-                    val sum = list.sumOf { it.amount }
-                    val percent = if (totalExpense > 0) (sum / totalExpense * 100).toFloat() else 0f
-                    CategoryExpenseModel(
-                        categoryName = category,
-                        totalAmount = sum,
-                        percentage = percent,
-                        color = generateColorForCategory(category) // تابع کمکی برای رنگ
-                    )
-                }
+        val hasAnyTransaction = allTransactions.isNotEmpty()
 
-            AnalyticsUiState(
-                isLoading = false,
-                totalIncome = totalIncome,
-                totalExpense = totalExpense,
-                balance = totalIncome - totalExpense,
-                categoryExpenses = categoryExpenses
-            )
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = AnalyticsUiState(isLoading = true)
+        // ۱. فیلتر کردن تراکنش‌ها بر اساس زمان انتخابی
+        val filteredTransactions = filterTransactionsByTime(allTransactions, timeFilter)
+
+        // ۲. محاسبه مجموع درآمد و هزینه دوره
+        val totalIncome = filteredTransactions.filter { it.type == "INCOME" }.sumOf { it.amount }
+        val expensesList = filteredTransactions.filter { it.type == "EXPENSE" }
+        val totalExpense = expensesList.sumOf { it.amount }
+        val balance = totalIncome - totalExpense
+
+        // ۳. تفکیک هزینه‌ها بر اساس دسته‌بندی برای نمودار دایره‌ای
+        val categoryExpenses = expensesList
+            .groupBy { it.category }
+            .map { (category, list) ->
+                val sum = list.sumOf { it.amount }
+                val percent = if (totalExpense > 0) (sum / totalExpense * 100).toFloat() else 0f
+                CategoryExpenseModel(
+                    categoryName = category,
+                    totalAmount = sum,
+                    percentage = percent,
+                    color = generateColorForCategory(category)
+                )
+            }
+            .sortedByDescending { it.totalAmount }
+
+        // ۴. فیلتر سنگین‌ترین هزینه‌ها (فقط هزینه‌هایی که از میانگین خرج‌کرد دوره بیشتر باشند)
+        val averageExpense = if (expensesList.isNotEmpty()) totalExpense / expensesList.size else 0.0
+        val topExpenseEntities = expensesList
+            .filter { it.amount > averageExpense } // فقط هزینه‌های بالاتر از میانگین
+            .sortedByDescending { it.amount }
+            .take(5)
+
+        // ۵. محاسبه نقاط نمودار روند تغییرات (Balance Trend Points)
+        val trendPoints = calculateTrendPoints(filteredTransactions)
+
+        AnalyticsUiState(
+            isLoading = false,
+            hasAnyTransactionInDb = hasAnyTransaction,
+            totalIncome = totalIncome,
+            totalExpense = totalExpense,
+            balance = balance,
+            categoryExpenses = categoryExpenses,
+            topExpenses = topExpenseEntities,
+            averageExpense = averageExpense,
+            trendPoints = trendPoints,
+            selectedPeriod = timeFilter.name
         )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = AnalyticsUiState(isLoading = true)
+    )
 
-    // 🎯 Factory جدید — قبلاً چون RealmDatabase یک آبجکت گلوبال بدون Context بود لازم نبود،
-    // ولی Room.databaseBuilder به Context نیاز داره، پس این ویومدل هم مثل AddViewModel یک Factory می‌خواد.
-    // هرجا که این ویومدل رو با viewModel() می‌سازی (مثلاً AnalyticsScreen.kt که هنوز برام نفرستادی)،
-    // باید به AnalyticsViewModel.Factory(LocalContext.current) تغییرش بدی.
+    fun onTimeFilterChanged(filter: TimeFilter) {
+        selectedTimeFilter.value = filter
+    }
+
+    private fun filterTransactionsByTime(
+        transactions: List<TransactionEntity>,
+        filter: TimeFilter
+    ): List<TransactionEntity> {
+        if (filter == TimeFilter.ALL) return transactions
+
+        val now = Calendar.getInstance()
+        return transactions.filter { tx ->
+            val txCal = Calendar.getInstance().apply { timeInMillis = tx.timestamp }
+            when (filter) {
+                TimeFilter.DAILY -> {
+                    txCal.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
+                            txCal.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)
+                }
+                TimeFilter.WEEKLY -> {
+                    txCal.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
+                            txCal.get(Calendar.WEEK_OF_YEAR) == now.get(Calendar.WEEK_OF_YEAR)
+                }
+                TimeFilter.MONTHLY -> {
+                    txCal.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
+                            txCal.get(Calendar.MONTH) == now.get(Calendar.MONTH)
+                }
+                TimeFilter.ALL -> true
+            }
+        }
+    }
+
+    private fun calculateTrendPoints(transactions: List<TransactionEntity>): List<Float> {
+        if (transactions.isEmpty()) return listOf(0f)
+        val sorted = transactions.sortedBy { it.timestamp }
+        var runningBalance = 0.0
+        val points = mutableListOf<Float>()
+
+        sorted.forEach { tx ->
+            if (tx.type == "INCOME") runningBalance += tx.amount
+            else runningBalance -= tx.amount
+            points.add(runningBalance.toFloat())
+        }
+        return if (points.size < 2) listOf(points.firstOrNull() ?: 0f, points.firstOrNull() ?: 0f) else points
+    }
+
     class Factory(private val context: Context) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -67,26 +134,13 @@ class AnalyticsViewModel(
     }
 }
 
-
-// تابع تولید رنگ یکتا و ثابت بر اساس نام دسته‌بندی
 private fun generateColorForCategory(categoryName: String): Color {
-    // لیست پالت رنگ‌های جذاب و استاندارد برای UI
     val colors = listOf(
-        Color(0xFF6750A4), // بنفش
-        Color(0xFF0288D1), // آبی
-        Color(0xFF388E3C), // سبز
-        Color(0xFFF57C00), // نارنجی
-        Color(0xFFD32F2F), // قرمز
-        Color(0xFF7B1FA2), // ارغوانی
-        Color(0xFF00796B), // سبز کله‌غازی
-        Color(0xFFC2185B), // صورتی پررنگ
-        Color(0xFFE64A19), // نارنجی تیره
-        Color(0xFF512DA8)  // نیلی
+        Color(0xFF6750A4), Color(0xFF0288D1), Color(0xFF388E3C),
+        Color(0xFFF57C00), Color(0xFFD32F2F), Color(0xFF7B1FA2),
+        Color(0xFF00796B), Color(0xFFC2185B), Color(0xFFE64A19), Color(0xFF512DA8)
     )
-
     if (categoryName.isEmpty()) return colors[0]
-
-    // نگاشت هش کدِ اسم دسته‌بندی به یکی از رنگ‌های پالت بالا برای ثابت ماندن رنگ در اجراهای بعدی
     val index = abs(categoryName.hashCode()) % colors.size
     return colors[index]
 }

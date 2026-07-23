@@ -17,13 +17,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,14 +39,12 @@ import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.animateLottieCompositionAsState
 import com.airbnb.lottie.compose.rememberLottieComposition
 import ir.hamedan.budgetmanagement.R
+import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.text.DecimalFormat
-import java.text.DecimalFormatSymbols
-import java.util.Locale
 
 data class AddOptionItem(
     val id: String,
@@ -53,21 +56,39 @@ data class AddOptionItem(
     val route: String
 )
 
-// تابع کمکی جهت فرمت‌دهی ۳ رقم ۳ رقم
-fun formatAmountWithCommas(rawInput: String): String {
-    val cleanString = rawInput.replace(",", "").replace(" ", "")
-    if (cleanString.isEmpty()) return ""
+// -----------------------------------------------------------------------------
+// VisualTransformation دقیقاً مشابه فایل BudgetLimitScreen
+// -----------------------------------------------------------------------------
+class ThousandsSeparatorTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val originalText = text.text
+        if (originalText.isEmpty()) {
+            return TransformedText(text, OffsetMapping.Identity)
+        }
 
-    val parts = cleanString.split(".")
-    val numberPart = parts[0].toLongOrNull() ?: return ""
+        val formattedText = StringBuilder()
+        for (i in originalText.indices) {
+            formattedText.append(originalText[i])
+            if ((originalText.length - 1 - i) % 3 == 0 && i != originalText.length - 1) {
+                formattedText.append(",")
+            }
+        }
 
-    val formatter = DecimalFormat("#,###", DecimalFormatSymbols(Locale.US))
-    val formattedNumber = formatter.format(numberPart)
+        val numberOffsetTranslator = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int {
+                if (offset <= 0) return 0
+                val commasBefore = (offset - 1) / 3
+                return (offset + commasBefore).coerceAtMost(formattedText.length)
+            }
 
-    return if (parts.size > 1) {
-        "$formattedNumber.${parts[1]}"
-    } else {
-        formattedNumber
+            override fun transformedToOriginal(offset: Int): Int {
+                if (offset <= 0) return 0
+                val commasBefore = offset / 4
+                return (offset - commasBefore).coerceAtMost(originalText.length)
+            }
+        }
+
+        return TransformedText(AnnotatedString(formattedText.toString()), numberOffsetTranslator)
     }
 }
 
@@ -86,12 +107,15 @@ fun AddScreen(
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }
     val scope = rememberCoroutineScope()
 
+    val currencyUnit by CurrencySharedPreferences.currencyFlow.collectAsState()
     val categoriesList by viewModel.categories.collectAsState()
 
-    var isAnimationActive by remember { mutableStateOf(highlightId != null) }
-
+    var isAnimationActive by remember { mutableStateOf(false) }
+    var consumedHighlightId by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(highlightId) {
-        if (highlightId != null) {
+        if (highlightId != null && highlightId != consumedHighlightId) {
+            consumedHighlightId = highlightId
+            isAnimationActive = true
             delay(4700)
             isAnimationActive = false
         }
@@ -102,10 +126,12 @@ fun AddScreen(
 
     // فیلدهای فرم
     var transactionTitle by remember { mutableStateOf("") }
-    var transactionAmount by remember { mutableStateOf("") }
+    var transactionAmount by remember { mutableStateOf("") } // فقط ارقام ذخیره می‌شوند
     var selectedCategoryKey by remember { mutableStateOf("") }
     var isExpense by remember { mutableStateOf(true) }
     var transactionNote by remember { mutableStateOf("") }
+
+    val maxDigitsLength = 12 // حداکثر ۱۲ رقم برای مبلغ
 
     // یافتن دسته‌بندی انتخاب‌شده برای استخراج ایموجی
     val selectedCategoryObj = categoriesList.find { it.title == selectedCategoryKey }
@@ -136,7 +162,7 @@ fun AddScreen(
                 Icons.Default.Category, "مدیریت دسته‌ها", "Manage categories", "add_category"
             ),
             AddOptionItem(
-                "limit", "مدیریت محدودیت‌ها", "Manage Limits",
+                "limit", "مدیریت محدودیت‌های مالی", "Manage Budget Limits",
                 Icons.Default.Warning, "تعیین یا ویرایش سقف بودجه", "Set or edit budget ceilings", "add_limit"
             ),
             AddOptionItem(
@@ -300,7 +326,20 @@ fun AddScreen(
                 onDismissRequest = { showTransactionBottomSheet = false },
                 sheetState = sheetState,
                 containerColor = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+                scrimColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f),
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                dragHandle = {
+                    Box(
+                        modifier = Modifier
+                            .padding(vertical = 12.dp)
+                            .width(48.dp)
+                            .height(4.dp)
+                            .background(
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                RoundedCornerShape(2.dp)
+                            )
+                    )
+                }
             ) {
                 Column(
                     modifier = Modifier
@@ -318,11 +357,19 @@ fun AddScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // نوع تراکنش (با تغییر نوع، انتخاب دسته‌بندی قبلی ریست می‌شود)
+                    // انتخاب نوع تراکنش (هزینه / درآمد)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                RoundedCornerShape(16.dp)
+                            )
+                            .border(
+                                1.dp,
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                                RoundedCornerShape(16.dp)
+                            )
                             .padding(4.dp)
                     ) {
                         Button(
@@ -335,9 +382,9 @@ fun AddScreen(
                                 containerColor = if (isExpense) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surfaceVariant,
                                 contentColor = if (isExpense) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurfaceVariant
                             ),
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            Text(if (isPersian) "هزینه" else "Expense")
+                            Text(if (isPersian) "هزینه" else "Expense", fontWeight = FontWeight.Bold)
                         }
 
                         Button(
@@ -350,71 +397,84 @@ fun AddScreen(
                                 containerColor = if (!isExpense) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                                 contentColor = if (!isExpense) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                             ),
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            Text(if (isPersian) "درآمد" else "Income")
+                            Text(if (isPersian) "درآمد" else "Income", fontWeight = FontWeight.Bold)
                         }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // عنوان
+                    // فیلد عنوان (محدود به ۴۰ کاراکتر)
                     OutlinedTextField(
                         value = transactionTitle,
-                        onValueChange = {
-                            transactionTitle = it
-                            if (titleError) titleError = false
+                        onValueChange = { input ->
+                            if (input.length <= 40) {
+                                transactionTitle = input
+                                if (titleError) titleError = false
+                            }
                         },
                         label = { Text(if (isPersian) "عنوان تراکنش" else "Title") },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         singleLine = true,
                         isError = titleError,
                         supportingText = {
-                            if (titleError) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
                                 Text(
-                                    text = if (isPersian) "عنوان تراکنش نمی‌تواند خالی باشد" else "Title cannot be empty",
+                                    text = if (titleError) (if (isPersian) "عنوان تراکنش نمی‌تواند خالی باشد" else "Title cannot be empty") else "",
                                     color = MaterialTheme.colorScheme.error
+                                )
+                                Text(
+                                    text = "${transactionTitle.length}/40",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    // مبلغ با جداسازی ۳ رقم ۳ رقم
+                    // فیلد مبلغ همراه با VisualTransformation تفکیک ۳ رقمی
+                    val amountLabel = if (isPersian) {
+                        if (currencyUnit == "IRR") "مبلغ (ریال)" else "مبلغ (تومان)"
+                    } else {
+                        if (currencyUnit == "IRR") "Amount (Rial)" else "Amount (Toman)"
+                    }
+
                     OutlinedTextField(
                         value = transactionAmount,
                         onValueChange = { input ->
-                            var filtered = input.filter { it.isDigit() || it == '.' }
-                            val dotCount = filtered.count { it == '.' }
-                            if (dotCount > 1) {
-                                val firstDotIndex = filtered.indexOf('.')
-                                filtered = filtered.substring(0, firstDotIndex + 1) +
-                                        filtered.substring(firstDotIndex + 1).replace(".", "")
+                            val digitsOnly = input.filter { it.isDigit() }
+                            if (digitsOnly.length <= maxDigitsLength) {
+                                transactionAmount = digitsOnly
+                                if (amountError) amountError = false
                             }
-                            transactionAmount = formatAmountWithCommas(filtered)
-                            if (amountError) amountError = false
                         },
-                        label = { Text(if (isPersian) "مبلغ" else "Amount") },
+                        label = { Text(amountLabel) },
+                        singleLine = true,
+                        visualTransformation = ThousandsSeparatorTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
                         isError = amountError,
                         supportingText = {
                             if (amountError) {
                                 Text(
-                                    text = if (isPersian) "مبلغ معتبر وارد کنید" else "Enter a valid amount",
+                                    text = if (isPersian) "مبلغ معتبر (بزرگتر از ۰) وارد کنید" else "Enter a valid amount (> 0)",
                                     color = MaterialTheme.colorScheme.error
                                 )
                             }
                         }
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    // منوی کشویی انتخاب دسته‌بندی همراه با ایموجی
+                    // منوی کشویی انتخاب دسته‌بندی
                     ExposedDropdownMenuBox(
                         expanded = isCategoryDropdownExpanded,
                         onExpandedChange = { isCategoryDropdownExpanded = !isCategoryDropdownExpanded }
@@ -434,13 +494,15 @@ fun AddScreen(
                                 }
                             },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isCategoryDropdownExpanded) },
-                            modifier = Modifier.menuAnchor().fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
                             isError = categoryError,
                             supportingText = {
                                 if (categoryError) {
                                     Text(
-                                        text = if (isPersian) "یک دسته‌بندی انتخاب کنید" else "Please select a category",
+                                        text = if (isPersian) "لطفاً یک دسته‌بندی انتخاب کنید" else "Please select a category",
                                         color = MaterialTheme.colorScheme.error
                                     )
                                 }
@@ -450,9 +512,10 @@ fun AddScreen(
                         ExposedDropdownMenu(
                             expanded = isCategoryDropdownExpanded,
                             onDismissRequest = { isCategoryDropdownExpanded = false },
-                            modifier = Modifier.heightIn(max = 320.dp)
+                            modifier = Modifier
+                                .heightIn(max = 280.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
                         ) {
-                            // فیلتر دسته‌بندی‌ها متناسب با هزینه‌ای یا درآمدی بودن
                             val filteredCategories = categoriesList.filter { it.isExpense == isExpense }
 
                             if (filteredCategories.isEmpty()) {
@@ -492,10 +555,9 @@ fun AddScreen(
                                 }
                             }
 
-                            // 👇 این بخش CTA به انتهای لیست اضافه می‌شود 👇
                             HorizontalDivider(
                                 modifier = Modifier.padding(horizontal = 8.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                             )
 
                             DropdownMenuItem(
@@ -506,7 +568,7 @@ fun AddScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Settings,
-                                            contentDescription = "Manage Categories",
+                                            contentDescription = null,
                                             tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(20.dp)
                                         )
@@ -520,69 +582,82 @@ fun AddScreen(
                                 },
                                 onClick = {
                                     isCategoryDropdownExpanded = false
-                                    showTransactionBottomSheet = false // بستن باتم‌شیت فعلی
-                                    onCategoriesClick() // هدایت به صفحه مدیریت دسته‌بندی‌ها
+                                    showTransactionBottomSheet = false
+                                    onCategoriesClick()
                                 },
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp))
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+                            )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    // فیلد یادداشت
+                    // فیلد یادداشت (محدود به ۱۲۰ کاراکتر)
                     OutlinedTextField(
                         value = transactionNote,
-                        onValueChange = { transactionNote = it },
+                        onValueChange = { input ->
+                            if (input.length <= 120) {
+                                transactionNote = input
+                            }
+                        },
                         label = { Text(if (isPersian) "یادداشت (اختیاری)" else "Note (Optional)") },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        maxLines = 3
+                        shape = RoundedCornerShape(14.dp),
+                        maxLines = 3,
+                        supportingText = {
+                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                                Text(
+                                    text = "${transactionNote.length}/120",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     )
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
                     // دکمه ذخیره
                     Button(
                         onClick = {
-                            val cleanAmountString = transactionAmount.replace(",", "")
-                            val amount = cleanAmountString.toDoubleOrNull() ?: 0.0
+                            val parsedAmount = transactionAmount.toDoubleOrNull() ?: 0.0
+                            val amount = if (currencyUnit == "IRR") parsedAmount / 10.0 else parsedAmount
 
                             titleError = transactionTitle.isBlank()
-                            amountError = amount <= 0.0
+                            amountError = parsedAmount <= 0.0
                             categoryError = selectedCategoryKey.isBlank()
 
                             val isFormValid = !titleError && !amountError && !categoryError
 
                             if (isFormValid) {
                                 viewModel.addTransaction(
-                                    title = transactionTitle,
+                                    title = transactionTitle.trim(),
                                     amount = amount,
                                     categoryKey = selectedCategoryKey,
                                     isExpense = isExpense,
-                                    note = transactionNote
+                                    note = transactionNote.trim()
                                 )
 
                                 showSuccessAnimation = true
                                 scope.launch {
-                                    delay(4500)
+                                    delay(4000)
                                     showSuccessAnimation = false
                                     sheetState.hide()
                                     showTransactionBottomSheet = false
 
+                                    // ریست فیلدها
                                     transactionTitle = ""
                                     transactionAmount = ""
                                     selectedCategoryKey = ""
                                     transactionNote = ""
                                     isExpense = true
-
-                                    onBackClick()
                                 }
                             }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(52.dp),
-                        shape = RoundedCornerShape(12.dp)
+                            .height(54.dp),
+                        shape = RoundedCornerShape(14.dp)
                     ) {
                         Text(
                             text = if (isPersian) "ذخیره تراکنش" else "Save Transaction",

@@ -5,9 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
-import ir.hamedan.budgetmanagement.data.local.dao.CategoryDao
-import ir.hamedan.budgetmanagement.data.local.dao.TransactionDao
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
+import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,20 +14,20 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class CategoriesViewModel(
-    private val categoryDao: CategoryDao,
-    private val transactionDao: TransactionDao
+    private val categoryRepository: CategoryRepository
 ) : ViewModel() {
 
-    val categories: StateFlow<List<CategoryEntity>> = categoryDao.getAllCategories()
+    // 🔥 تغییر به List<CategoryEntity>? و initialValue = null جهت جلوگیری از فلش زدن کارت CTA
+    val categories: StateFlow<List<CategoryEntity>?> = categoryRepository.getAllCategories()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
+            initialValue = null
         )
 
     fun addCategory(title: String, iconEmoji: String, isExpense: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
-            categoryDao.insert(
+            categoryRepository.insertCategory(
                 CategoryEntity(
                     title = title,
                     iconEmoji = iconEmoji,
@@ -40,51 +39,17 @@ class CategoriesViewModel(
 
     fun updateCategory(category: CategoryEntity, newTitle: String, newEmoji: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            val updated = category.copy(
-                title = newTitle,
-                iconEmoji = newEmoji
-            )
-
-            // در صورت تغییر عنوان دسته‌بندی، تراکنش‌های قبلی هم بروزرسانی می‌شوند
-            if (category.title != newTitle) {
-                transactionDao.reassignCategoryForTransactions(
-                    oldCategoryTitle = category.title,
-                    newCategoryTitle = newTitle
-                )
-            }
-
-            categoryDao.update(updated)
+            categoryRepository.updateCategory(category, newTitle, newEmoji)
         }
     }
 
     suspend fun getTransactionCount(categoryTitle: String): Int {
-        return transactionDao.getTransactionCountForCategory(categoryTitle)
+        return categoryRepository.getTransactionCount(categoryTitle)
     }
 
     fun deleteCategoryWithReassignment(category: CategoryEntity) {
         viewModelScope.launch(Dispatchers.IO) {
-            val defaultTitle = "دسته‌بندی نشده"
-
-            // ایجاد دسته‌بندی پیش‌فرض در صورت عدم وجود
-            var uncategorized = categoryDao.getCategoryByTitle(defaultTitle)
-            if (uncategorized == null) {
-                categoryDao.insert(
-                    CategoryEntity(
-                        title = defaultTitle,
-                        iconEmoji = "📦",
-                        isExpense = category.isExpense
-                    )
-                )
-            }
-
-            // انتقال تراکنش‌ها
-            transactionDao.reassignCategoryForTransactions(
-                oldCategoryTitle = category.title,
-                newCategoryTitle = defaultTitle
-            )
-
-            // حذف دسته‌بندی
-            categoryDao.delete(category)
+            categoryRepository.deleteCategoryWithReassignment(category)
         }
     }
 
@@ -93,10 +58,11 @@ class CategoriesViewModel(
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(CategoriesViewModel::class.java)) {
                 val db = AppDatabase.getInstance(context)
-                return CategoriesViewModel(
+                val categoryRepository = CategoryRepository(
                     categoryDao = db.categoryDao(),
                     transactionDao = db.transactionDao()
-                ) as T
+                )
+                return CategoriesViewModel(categoryRepository) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class")
         }

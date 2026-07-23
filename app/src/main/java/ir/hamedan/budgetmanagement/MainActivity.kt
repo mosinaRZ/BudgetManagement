@@ -33,6 +33,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.getThemeMode
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.saveThemeMode
@@ -42,13 +43,13 @@ import ir.hamedan.budgetmanagement.ui.screens.add.AddScreen
 import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsScreen
 import ir.hamedan.budgetmanagement.ui.screens.home.HomeScreen
 import ir.hamedan.budgetmanagement.ui.screens.auth.LoginScreen
+import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitScreen
 import ir.hamedan.budgetmanagement.ui.screens.categories.CategoriesScreen
-import ir.hamedan.budgetmanagement.ui.screens.goals.GoalsScreen
-import ir.hamedan.budgetmanagement.ui.screens.limits.LimitsScreen
+import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsScreen
+import ir.hamedan.budgetmanagement.ui.screens.payments.UpcomingPaymentsScreen
 import ir.hamedan.budgetmanagement.ui.screens.splash.SplashScreen
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionsScreen
 import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsScreen
-import ir.hamedan.budgetmanagement.ui.screens.upcomings.UpcomingsScreen
 import ir.hamedan.budgetmanagement.ui.theme.BudgetManagementTheme
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 
@@ -63,6 +64,9 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // مقداردهی اولیه واحد پول
+        CurrencySharedPreferences.init(applicationContext)
 
         setContent {
             val context = LocalContext.current
@@ -133,8 +137,9 @@ class MainActivity : FragmentActivity() {
             // ۳. صفحه افزودن تراکنش جدید
             composable("AddScreen?highlightId={highlightId}") { backStackEntry ->
                 val highlightId = backStackEntry.arguments?.getString("highlightId")
+
                 AddScreen(
-                    highlightId = highlightId, // پاس دادن آرگومان به کامپوننت
+                    highlightId = highlightId,
                     onBackClick = {
                         navController.navigate("MainStructure")
                     },
@@ -162,15 +167,27 @@ class MainActivity : FragmentActivity() {
             }
 
             composable("Limits") {
-                LimitsScreen()
+                BudgetLimitScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    }
+                )
             }
 
             composable("Upcoming") {
-                UpcomingsScreen()
+                UpcomingPaymentsScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    }
+                )
             }
 
             composable("Goals") {
-                GoalsScreen()
+                SavingGoalsScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    }
+                )
             }
 
             // ۴. ساختار اصلی برنامه پس از لاگین موفق

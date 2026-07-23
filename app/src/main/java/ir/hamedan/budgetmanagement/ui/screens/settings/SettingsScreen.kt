@@ -233,21 +233,11 @@ fun SettingsScreen(
                                     onCheckedChange = { targetChecked ->
                                         val activity = context as? FragmentActivity
                                         if (activity != null) {
-                                            val promptTitle = if (targetChecked)
-                                                (if (isPersian) "فعالسازی اثر انگشت" else "Enable Biometric")
-                                            else
-                                                (if (isPersian) "غیرفعالسازی اثر انگشت" else "Disable Biometric")
-
                                             BiometricPromptManager.showBiometricPrompt(
                                                 activity = activity,
-                                                title = promptTitle,
-                                                subtitle = if (isPersian) "لطفاً اثر انگشت خود را تأیید کنید" else "Please verify your fingerprint",
                                                 onSuccess = {
                                                     isBiometricEnabled = targetChecked
                                                     SharedPreferences.setBiometricEnabled(context, targetChecked)
-                                                },
-                                                onError = { err ->
-                                                    Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
                                                 }
                                             )
                                         }
@@ -849,6 +839,8 @@ fun ChangePasswordDialog(
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    val maxPasswordLength = 32
+
     val hasMinLength = newPassword.length >= 8
     val hasUpperCase = newPassword.any { it.isUpperCase() }
     val hasDigit = newPassword.any { it.isDigit() }
@@ -900,16 +892,18 @@ fun ChangePasswordDialog(
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Text(
-                    text = if (isPersian) "رمزهای ورود فقط باید شامل کاراکترهای انگلیسی باشند." else "Passcodes must contain English characters only.",
+                    text = if (isPersian) "رمزهای ورود فقط باید شامل کاراکترهای انگلیسی (حداکثر $maxPasswordLength کاراکتر) باشند." else "Passcodes must contain English characters only (max $maxPasswordLength chars).",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
 
                 OutlinedTextField(
                     value = currentPassword,
-                    onValueChange = {
-                        currentPassword = it
-                        errorMessage = null
+                    onValueChange = { input ->
+                        if (input.length <= maxPasswordLength && input.all { it.code <= 127 }) {
+                            currentPassword = input
+                            errorMessage = null
+                        }
                     },
                     label = { Text(if (isPersian) "رمز عبور فعلی" else "Current Passcode") },
                     singleLine = true,
@@ -929,9 +923,11 @@ fun ChangePasswordDialog(
 
                 OutlinedTextField(
                     value = newPassword,
-                    onValueChange = {
-                        newPassword = it
-                        errorMessage = null
+                    onValueChange = { input ->
+                        if (input.length <= maxPasswordLength && input.all { it.code <= 127 }) {
+                            newPassword = input
+                            errorMessage = null
+                        }
                     },
                     label = { Text(if (isPersian) "رمز عبور جدید" else "New Passcode") },
                     singleLine = true,
@@ -988,9 +984,11 @@ fun ChangePasswordDialog(
 
                 OutlinedTextField(
                     value = confirmPassword,
-                    onValueChange = {
-                        confirmPassword = it
-                        errorMessage = null
+                    onValueChange = { input ->
+                        if (input.length <= maxPasswordLength && input.all { it.code <= 127 }) {
+                            confirmPassword = input
+                            errorMessage = null
+                        }
                     },
                     label = { Text(if (isPersian) "تایید رمز عبور جدید" else "Confirm New Passcode") },
                     singleLine = true,

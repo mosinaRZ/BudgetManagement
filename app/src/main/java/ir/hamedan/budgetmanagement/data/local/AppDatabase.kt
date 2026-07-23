@@ -4,8 +4,11 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import ir.hamedan.budgetmanagement.data.local.dao.BudgetLimitDao
 import ir.hamedan.budgetmanagement.data.local.dao.CategoryDao
+import ir.hamedan.budgetmanagement.data.local.dao.SavingGoalDao
 import ir.hamedan.budgetmanagement.data.local.dao.TransactionDao
+import ir.hamedan.budgetmanagement.data.local.dao.UpcomingPaymentDao
 import ir.hamedan.budgetmanagement.data.local.models.BudgetLimitEntity
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
@@ -29,14 +32,9 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun transactionDao(): TransactionDao
     abstract fun categoryDao(): CategoryDao
-
-    // TODO: وقتی بقیه‌ی Repository ها (User, UserSettings, SavingGoal, BudgetLimit, UpcomingPayment)
-    // رو فرستادی، DAO های مربوطه ساخته و اینجا اضافه می‌شن:
-    // abstract fun userDao(): UserDao
-    // abstract fun userSettingsDao(): UserSettingsDao
-    // abstract fun savingGoalDao(): SavingGoalDao
-    // abstract fun budgetLimitDao(): BudgetLimitDao
-    // abstract fun upcomingPaymentDao(): UpcomingPaymentDao
+    abstract fun savingGoalDao(): SavingGoalDao
+    abstract fun budgetLimitDao(): BudgetLimitDao
+    abstract fun upcomingPaymentDao(): UpcomingPaymentDao
 
     companion object {
         @Volatile

@@ -13,7 +13,6 @@ import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -29,7 +28,8 @@ enum class TimeFilter(val titleFa: String, val titleEn: String) {
 enum class TransactionTypeFilter(val titleFa: String, val titleEn: String) {
     ALL("همه", "All"),
     INCOME("واریزی (درآمد)", "Income"),
-    EXPENSE("برداشتی (هزینه)", "Expense")
+    EXPENSE("برداشتی (هزینه)", "Expense"),
+    UNCATEGORIZED("دسته‌بندی نشده", "Uncategorized")
 }
 
 enum class SortOrder(val titleFa: String, val titleEn: String) {
@@ -50,13 +50,11 @@ data class FilterState(
 
 class TransactionViewModel(
     private val transactionRepository: TransactionRepository,
-    private val categoryRepository: CategoryRepository,
-    private val initialCurrency: String = "IRT"
+    private val categoryRepository: CategoryRepository
 ) : ViewModel() {
 
-    // وضعیت واحد پول برنامه (IRT یا IRR)
-    private val _currencyUnit = MutableStateFlow(initialCurrency)
-    val currencyUnit: StateFlow<String> = _currencyUnit.asStateFlow()
+    // وضعیت واحد پول برنامه (IRT یا IRR) به صورت واکنش‌گرا (Real-time) مستقیم از SharedPreferences
+    val currencyUnit: StateFlow<String> = CurrencySharedPreferences.currencyFlow
 
     // دریافت دسته‌بندی‌های هزینه‌ای (isExpense = true)
     val expenseCategories: StateFlow<List<CategoryEntity>> = categoryRepository.getCategoriesByExpenseStatus(isExpense = true)
@@ -83,11 +81,17 @@ class TransactionViewModel(
         filterState
     ) { transactions, query, filter ->
         var list = transactions.filter { transaction ->
-            // ۱. فیلتر نوع تراکنش
+            // ۱. فیلتر نوع تراکنش / دسته‌بندی نشده
             val matchesType = when (filter.typeFilter) {
                 TransactionTypeFilter.ALL -> true
                 TransactionTypeFilter.INCOME -> transaction.type == "INCOME"
                 TransactionTypeFilter.EXPENSE -> transaction.type == "EXPENSE"
+                TransactionTypeFilter.UNCATEGORIZED -> {
+                    val category = transaction.category.trim()
+                    category.equals("UNCATEGORIZED", ignoreCase = true) ||
+                            category == "دسته‌بندی نشده" ||
+                            category == "دسته بندی نشده"
+                }
             }
 
             // ۲. فیلتر زمانی
@@ -119,10 +123,6 @@ class TransactionViewModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
     )
-
-    fun refreshCurrency(context: Context) {
-        _currencyUnit.value = CurrencySharedPreferences.getCurrency(context)
-    }
 
     fun onSearchQueryChanged(newQuery: String) {
         searchQuery.value = newQuery
@@ -197,14 +197,12 @@ class TransactionViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             val database = AppDatabase.getInstance(context)
-            val currentCurrency = CurrencySharedPreferences.getCurrency(context)
             return TransactionViewModel(
                 transactionRepository = TransactionRepository(database.transactionDao()),
                 categoryRepository = CategoryRepository(
                     categoryDao = database.categoryDao(),
                     transactionDao = database.transactionDao()
-                ),
-                initialCurrency = currentCurrency
+                )
             ) as T
         }
     }
