@@ -49,11 +49,14 @@ class CategoryRepository(
     }
 
     // حذف دسته‌بندی و انتقال تراکنش‌ها به کلید انگلیسی "UNCATEGORIZED" در دیتابیس
-    suspend fun deleteCategoryWithReassignment(category: CategoryEntity) {
+    suspend fun deleteCategoryWithReassignment(category: CategoryEntity): Int {
         val defaultKey = "UNCATEGORIZED"
 
-        // ۱. بررسی یا ایجاد دسته‌بندی پیش‌فرض با کلید انگلیسی
-        var uncategorized = categoryDao.getCategoryByTitle(defaultKey)
+        // ۱. تعداد تراکنش‌های متصل را قبل از هر کاری بگیر
+        val affectedCount = transactionDao.getTransactionCountForCategory(category.title)
+
+        // ۲. بررسی یا ایجاد دسته‌بندی پیش‌فرض
+        val uncategorized = categoryDao.getCategoryByTitle(defaultKey)
         if (uncategorized == null) {
             categoryDao.insert(
                 CategoryEntity(
@@ -64,13 +67,17 @@ class CategoryRepository(
             )
         }
 
-        // ۲. انتقال تراکنش‌ها به دسته‌بندی جدید با کلید انگلیسی
-        transactionDao.reassignCategoryForTransactions(
-            oldCategoryTitle = category.title,
-            newCategoryTitle = defaultKey
-        )
+        // ۳. انتقال تراکنش‌ها
+        if (affectedCount > 0) {
+            transactionDao.reassignCategoryForTransactions(
+                oldCategoryTitle = category.title,
+                newCategoryTitle = defaultKey
+            )
+        }
 
-        // ۳. حذف دسته‌بندی اصلی
+        // ۴. حذف دسته‌بندی اصلی
         categoryDao.delete(category)
+
+        return affectedCount
     }
 }

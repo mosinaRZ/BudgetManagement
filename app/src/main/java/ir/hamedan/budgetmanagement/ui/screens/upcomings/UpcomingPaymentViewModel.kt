@@ -1,27 +1,23 @@
-package ir.hamedan.budgetmanagement.ui.screens.payments
+package ir.hamedan.budgetmanagement.ui.screens.upcomings
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
-import ir.hamedan.budgetmanagement.data.local.models.NotificationEntity
 import ir.hamedan.budgetmanagement.data.local.models.UpcomingPaymentEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
-import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import ir.hamedan.budgetmanagement.data.repository.UpcomingPaymentRepository
-import ir.hamedan.budgetmanagement.utils.AppNotificationManager
+import ir.hamedan.budgetmanagement.utils.NotificationHelper
 import ir.hamedan.budgetmanagement.utils.PaymentDateUtils
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.util.concurrent.TimeUnit
 
 class UpcomingPaymentViewModel(
-    private val context: Context,
     private val repository: UpcomingPaymentRepository,
-    private val notificationRepository: NotificationRepository
+    private val context: Context
 ) : ViewModel() {
 
     val payments: StateFlow<List<UpcomingPaymentEntity>> = repository.allPayments
@@ -33,31 +29,32 @@ class UpcomingPaymentViewModel(
 
     val currencyUnit: StateFlow<String> = CurrencySharedPreferences.currencyFlow
 
-    init {
-        checkUpcomingDueDates()
-    }
-
     fun addOrUpdatePayment(payment: UpcomingPaymentEntity) {
         viewModelScope.launch {
+            val isEdit = payments.value.any { it.id == payment.id }
             repository.insertOrUpdatePayment(payment)
 
-            val titleFa = "موعد سررسید"
-            val titleEn = "Upcoming Payment"
-            val descFa = "اطلاعات موعد سررسید «${payment.title}» ثبت/ویرایش شد."
-            val descEn = "Upcoming payment \"${payment.title}\" was saved."
+            val type = if (isEdit) "WARNING" else "SUCCESS"
+            val titleFa = if (isEdit) "ویرایش پرداخت آتی" else "ثبت پرداخت آتی جدید"
+            val titleEn = if (isEdit) "Upcoming Payment Updated" else "New Upcoming Payment Added"
+            val descFa = if (isEdit)
+                "پرداخت آتی «${payment.title}» به‌روزرسانی شد."
+            else
+                "پرداخت آتی «${payment.title}» با مبلغ ${payment.amount} ثبت شد."
+            val descEn = if (isEdit)
+                "Upcoming payment \"${payment.title}\" was updated."
+            else
+                "Upcoming payment \"${payment.title}\" added with amount ${payment.amount}."
 
-            notificationRepository.addNotification(
-                NotificationEntity(
-                    type = "INFO",
-                    titleFa = titleFa,
-                    titleEn = titleEn,
-                    descFa = descFa,
-                    descEn = descEn,
-                    tag = "DUE_SAVE_${payment.id}"
-                )
+            NotificationHelper.send(
+                context = context,
+                type = type,
+                titleFa = titleFa,
+                titleEn = titleEn,
+                descFa = descFa,
+                descEn = descEn,
+                tag = "UPCOMING_SAVE_${payment.id}_${System.currentTimeMillis()}"
             )
-            AppNotificationManager.sendPushIfAllowed(context, titleFa, titleEn, descFa, descEn)
-            checkUpcomingDueDates()
         }
     }
 
@@ -66,6 +63,7 @@ class UpcomingPaymentViewModel(
             val newStatus = !payment.isPaid
             var newDueDate = payment.dueDate
 
+            // اگر وضعیت به "پرداخت شده" تغییر کرد، تاریخ سررسید ۱ ماه به جلو منتقل می‌شود
             if (newStatus) {
                 newDueDate = PaymentDateUtils.getNextMonthDueDate(payment.dueDate, payment.dueDay)
             }
@@ -75,61 +73,38 @@ class UpcomingPaymentViewModel(
                 dueDate = newDueDate
             )
             repository.insertOrUpdatePayment(updatedPayment)
-        }
-    }
 
-    fun deletePayment(payment: UpcomingPaymentEntity) {
-        viewModelScope.launch {
-            repository.deletePayment(payment.id)
+            val statusFa = if (newStatus) "پرداخت شده" else "پرداخت نشده"
+            val statusEn = if (newStatus) "paid" else "unpaid"
 
-            val titleFa = "حذف موعد سررسید"
-            val titleEn = "Upcoming Payment Deleted"
-            val descFa = "موعد سررسید «${payment.title}» حذف شد."
-            val descEn = "Upcoming payment \"${payment.title}\" was deleted."
-
-            notificationRepository.addNotification(
-                NotificationEntity(
-                    type = "WARNING",
-                    titleFa = titleFa,
-                    titleEn = titleEn,
-                    descFa = descFa,
-                    descEn = descEn,
-                    tag = "DUE_DEL_${payment.id}"
-                )
+            NotificationHelper.send(
+                context = context,
+                type = if (newStatus) "SUCCESS" else "WARNING",
+                titleFa = "تغییر وضعیت پرداخت آتی",
+                titleEn = "Upcoming Payment Status Changed",
+                descFa = "وضعیت پرداخت «${payment.title}» به «$statusFa» تغییر یافت.",
+                descEn = "Status of payment \"${payment.title}\" changed to $statusEn.",
+                tag = "UPCOMING_STATUS_${payment.id}_${System.currentTimeMillis()}"
             )
-            AppNotificationManager.sendPushIfAllowed(context, titleFa, titleEn, descFa, descEn)
         }
     }
 
-    private fun checkUpcomingDueDates() {
+    fun deletePayment(id: String) {
         viewModelScope.launch {
-            val list = payments.value
-            val now = System.currentTimeMillis()
+            val targetPayment = payments.value.find { it.id.toString() == id }
+            repository.deletePayment(id)
 
-            list.filter { !it.isPaid }.forEach { payment ->
-                val diffMillis = payment.dueDate - now
-                val daysLeft = TimeUnit.MILLISECONDS.toDays(diffMillis).toInt()
+            val title = targetPayment?.title ?: "پرداخت آتی"
 
-                if (daysLeft in listOf(1, 3, 7)) {
-                    val tag = "DUE_ALERT_${payment.id}_DAYS_$daysLeft"
-                    val titleFa = "یادآوری موعد سررسید"
-                    val titleEn = "Payment Reminder"
-                    val descFa = "تنها $daysLeft روز تا موعد سررسید «${payment.title}» باقی مانده است."
-                    val descEn = "Only $daysLeft days left until \"${payment.title}\" payment due."
-
-                    notificationRepository.addNotification(
-                        NotificationEntity(
-                            type = "WARNING",
-                            titleFa = titleFa,
-                            titleEn = titleEn,
-                            descFa = descFa,
-                            descEn = descEn,
-                            tag = tag
-                        )
-                    )
-                    AppNotificationManager.sendPushIfAllowed(context, titleFa, titleEn, descFa, descEn)
-                }
-            }
+            NotificationHelper.send(
+                context = context,
+                type = "ERROR",
+                titleFa = "حذف پرداخت آتی",
+                titleEn = "Upcoming Payment Deleted",
+                descFa = "پرداخت «$title» با موفقیت حذف شد.",
+                descEn = "Payment \"$title\" was successfully deleted.",
+                tag = "UPCOMING_DELETE_${id}_${System.currentTimeMillis()}"
+            )
         }
     }
 
@@ -137,10 +112,11 @@ class UpcomingPaymentViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             val db = AppDatabase.getInstance(context)
+            // ساخت نمونه ریپازیتوری و تزریق آن به ViewModel
+            val repo = UpcomingPaymentRepository(db.upcomingPaymentDao())
             return UpcomingPaymentViewModel(
-                context = context,
-                repository = UpcomingPaymentRepository(db.upcomingPaymentDao()),
-                notificationRepository = NotificationRepository(db.notificationDao())
+                repository = repo,
+                context = context.applicationContext
             ) as T
         }
     }

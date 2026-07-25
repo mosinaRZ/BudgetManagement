@@ -1,4 +1,4 @@
-package ir.hamedan.budgetmanagement.ui.screens.notifications
+package ir.hamedan.budgetmanagement.ui.screens.notification
 
 import android.content.Context
 import androidx.lifecycle.ViewModel

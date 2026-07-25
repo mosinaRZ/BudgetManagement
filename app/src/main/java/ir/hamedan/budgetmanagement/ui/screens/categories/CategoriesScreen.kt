@@ -33,18 +33,20 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
 
 @Composable
 fun CategoriesScreen(
     onBackClick: () -> Unit = {},
-    viewModel: CategoriesViewModel = viewModel(factory = CategoriesViewModel.Factory(LocalContext.current))
+    categoryViewModel: CategoriesViewModel = viewModel(factory = CategoriesViewModel.Factory(LocalContext.current)),
+    transactionViewModel: TransactionViewModel = viewModel(factory = TransactionViewModel.Factory(LocalContext.current))
 ) {
     val context = LocalContext.current
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }
 
-    val categoriesState by viewModel.categories.collectAsState()
+    val categoriesState by categoryViewModel.categories.collectAsState()
 
     var selectedTabState by remember { mutableIntStateOf(0) }
     val isExpenseTab = selectedTabState == 0
@@ -274,9 +276,9 @@ fun CategoriesScreen(
                 },
                 onConfirm = { title, emoji ->
                     if (categoryToEdit != null) {
-                        viewModel.updateCategory(categoryToEdit!!, title, emoji)
+                        categoryViewModel.updateCategory(categoryToEdit!!, title, emoji)
                     } else {
-                        viewModel.addCategory(title, emoji, isExpenseTab)
+                        categoryViewModel.addCategory(title, emoji, isExpenseTab)
                     }
                     showAddDialog = false
                     categoryToEdit = null
@@ -289,7 +291,7 @@ fun CategoriesScreen(
             var transactionCount by remember { mutableIntStateOf(0) }
 
             LaunchedEffect(category.title) {
-                transactionCount = viewModel.getTransactionCount(category.title)
+                transactionCount = categoryViewModel.getTransactionCount(category.title)
             }
 
             val categoryName = StringMapper.getCategoryName(category.title, isPersian)
@@ -374,7 +376,7 @@ fun CategoriesScreen(
 
                             Button(
                                 onClick = {
-                                    viewModel.deleteCategoryWithReassignment(category)
+                                    transactionViewModel.deleteCategoryAndMigrateTransactions(category)
                                     categoryToDelete = null
                                 },
                                 modifier = Modifier

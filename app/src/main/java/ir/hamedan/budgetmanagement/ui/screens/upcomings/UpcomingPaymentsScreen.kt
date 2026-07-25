@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -25,7 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -42,6 +42,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.data.local.models.UpcomingPaymentEntity
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.screens.upcomings.UpcomingPaymentViewModel
 import ir.hamedan.budgetmanagement.utils.DateUtils
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.PaymentDateUtils
@@ -555,51 +556,100 @@ fun AddOrEditPaymentDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // جایگزینی اسلایدر با ExposedDropdownMenuBox برای انتخاب دقیق روز
-                ExposedDropdownMenuBox(
-                    expanded = expandedDayMenu,
-                    onExpandedChange = { expandedDayMenu = !expandedDayMenu }
+// ----------------- اسپینر انتخاب روز -----------------
+                val dayListState = rememberLazyListState(
+                    initialFirstVisibleItemIndex = (selectedDay - 1).coerceAtLeast(0)
+                )
+
+// وقتی کاربر اسکرول کرد، روز وسط را انتخاب کن
+                LaunchedEffect(dayListState.isScrollInProgress) {
+                    if (!dayListState.isScrollInProgress) {
+                        val centerIndex = dayListState.firstVisibleItemIndex +
+                                if (dayListState.firstVisibleItemScrollOffset > 30) 1 else 0
+                        val newDay = (centerIndex + 1).coerceIn(1, 31)
+                        if (newDay != selectedDay) {
+                            selectedDay = newDay
+                        }
+                    }
+                }
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    OutlinedTextField(
-                        value = if (isPersian) "روز $selectedDay هر ماه" else "Day $selectedDay of month",
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text(if (isPersian) "روز سررسید" else "Due Day") },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Event,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDayMenu) },
+                    Text(
+                        text = if (isPersian) "روز سررسید" else "Due Day",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
-                            .menuAnchor()
-                            .fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
                     )
 
-                    ExposedDropdownMenu(
-                        expanded = expandedDayMenu,
-                        onDismissRequest = { expandedDayMenu = false },
+                    Box(
                         modifier = Modifier
-                            .heightIn(max = 240.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        (1..31).forEach { day ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = if (isPersian) "روز $day ماه" else "Day $day",
-                                        fontWeight = if (day == selectedDay) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (day == selectedDay) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                    )
-                                },
-                                onClick = {
-                                    selectedDay = day
-                                    expandedDayMenu = false
-                                }
+                            .fillMaxWidth()
+                            .height(140.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                RoundedCornerShape(16.dp)
                             )
+                            .border(
+                                1.dp,
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                                RoundedCornerShape(16.dp)
+                            )
+                            .clip(RoundedCornerShape(16.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // خطوط راهنمای بالا و پایین
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .align(Alignment.TopCenter)
+                                .padding(top = 46.dp)
+                                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 46.dp)
+                                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                        )
+
+                        LazyColumn(
+                            state = dayListState,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(140.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            contentPadding = PaddingValues(vertical = 46.dp)
+                        ) {
+                            items(31) { index ->
+                                val day = index + 1
+                                val isSelected = day == selectedDay
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (isPersian) "روز $day" else "Day $day",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected)
+                                            MaterialTheme.colorScheme.primary
+                                        else
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                        fontSize = if (isSelected) 20.sp else 16.sp
+                                    )
+                                }
+                            }
                         }
                     }
                 }

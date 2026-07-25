@@ -7,7 +7,7 @@ object NotificationPreferences {
     private const val PREF_NAME = "notification_prefs"
     private const val KEY_MODE = "notification_mode"
 
-    const val MODE_BOTH = "BOTH"      // درون‌برنامه‌ای + سیستم
+    const val MODE_BOTH = "BOTH"      // درون‌برنامه‌ای + سیستمی (پیش‌فرض)
     const val MODE_IN_APP = "IN_APP"  // فقط درون‌برنامه‌ای
 
     private fun getPrefs(context: Context): SharedPreferences {

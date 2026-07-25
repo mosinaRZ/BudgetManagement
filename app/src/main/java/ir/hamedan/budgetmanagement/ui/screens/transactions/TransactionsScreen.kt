@@ -37,6 +37,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
@@ -54,6 +55,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionsScreen(
+    onAddTransactionClick: () -> Unit = {},
     viewModel: TransactionViewModel = viewModel(factory = TransactionViewModel.Factory(LocalContext.current))
 ) {
     val isPersian = isPersianLocale()
@@ -92,15 +94,50 @@ fun TransactionsScreen(
         AuroraBackground()
 
         if (transactionsList.isEmpty()) {
+            val emptyCardShape = RoundedCornerShape(24.dp)
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 170.dp, start = 24.dp, end = 24.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), emptyCardShape)
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), emptyCardShape)
+                    .padding(32.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = if (isPersian) "تراکنشی یافت نشد" else "No transactions found",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(text = "💸", fontSize = 56.sp)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = if (isPersian) "هنوز هیچ تراکنشی ثبت نشده!" else "No Transactions Yet!",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (isPersian) "برای مدیریت دقیق‌تر هزینه‌ها و درآمدها، اولین تراکنش خود را همین حالا ثبت کنید."
+                        else "Start tracking your finances by adding your very first transaction.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Button(
+                        onClick = { onAddTransactionClick() }, // تابع مربوط به باز کردن دیالوگ/صفحه ثبت تراکنش جدید
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isPersian) "ثبت اولین تراکنش" else "Add First Transaction",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
         } else {
             LazyColumn(

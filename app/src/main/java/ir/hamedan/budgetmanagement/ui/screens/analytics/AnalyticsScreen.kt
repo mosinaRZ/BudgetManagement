@@ -43,7 +43,7 @@ import java.util.Locale
 
 @Composable
 fun AnalyticsScreen(
-    onNavigateToAddTransaction: () -> Unit = {},
+    onAddScreenClick: () -> Unit = {},
     analyticsViewModel: AnalyticsViewModel = viewModel(
         factory = AnalyticsViewModel.Factory(LocalContext.current)
     )
@@ -68,7 +68,7 @@ fun AnalyticsScreen(
             // حالت ۱: کلاً هیچ تراکنشی در برنامه ثبت نشده است (بدون دکمه‌های فیلتر)
             EmptyAnalyticsView(
                 isPersian = isPersian,
-                onAddTransactionClick = onNavigateToAddTransaction
+                onAddTransactionClick = onAddScreenClick
             )
         } else {
             // حالت ۲: تراکنش وجود دارد (نمایش محتوا)

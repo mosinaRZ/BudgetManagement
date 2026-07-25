@@ -55,6 +55,7 @@ import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsScreen
 import ir.hamedan.budgetmanagement.ui.theme.BudgetManagementTheme
 import ir.hamedan.budgetmanagement.utils.AppNotificationManager
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
+import ir.hamedan.budgetmanagement.utils.NotificationHelper
 
 @Suppress("DEPRECATION")
 // 🚀 تغییر مهم: ارث‌بری از FragmentActivity برای جلوگیری از کرش اثر انگشت
@@ -73,9 +74,23 @@ class MainActivity : FragmentActivity() {
 
         AppNotificationManager.createChannel(applicationContext)
 
-// درخواست مجوز notification در اندروید 13 به بالا
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+        }
+
+// اعلان خوش‌آمدگویی (فقط یک‌بار)
+        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("welcome_shown", false)) {
+            NotificationHelper.send(
+                context = applicationContext,
+                type = "SYSTEM",
+                titleFa = "خوش آمدید!",
+                titleEn = "Welcome!",
+                descFa = "به برنامه مدیریت بودجه سیدنا خوش آمدید. امیدواریم تجربه خوبی داشته باشید.",
+                descEn = "Welcome to Cidna Budget Management. We hope you have a great experience.",
+                tag = "WELCOME"
+            )
+            prefs.edit().putBoolean("welcome_shown", true).apply()
         }
 
         setContent {
@@ -239,10 +254,18 @@ class MainActivity : FragmentActivity() {
                             )
                         }
                         composable(BottomNavItem.Transactions.route) {
-                            TransactionsScreen()
+                            TransactionsScreen(
+                                onAddTransactionClick = {
+                                    navController.navigate("AddScreen")
+                                }
+                            )
                         }
                         composable(BottomNavItem.Analytics.route) {
-                            AnalyticsScreen()
+                            AnalyticsScreen(
+                                onAddScreenClick = {
+                                    navController.navigate("AddScreen")
+                                }
+                            )
                         }
                         composable(BottomNavItem.Settings.route) {
                             SettingsScreen(

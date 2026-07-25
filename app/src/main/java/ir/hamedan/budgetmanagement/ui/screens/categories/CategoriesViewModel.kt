@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
+import ir.hamedan.budgetmanagement.utils.NotificationHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -14,7 +15,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class CategoriesViewModel(
-    private val categoryRepository: CategoryRepository
+    private val categoryRepository: CategoryRepository,
+    private val context: Context
 ) : ViewModel() {
 
     // 🔥 تغییر به List<CategoryEntity>? و initialValue = null جهت جلوگیری از فلش زدن کارت CTA
@@ -34,23 +36,40 @@ class CategoriesViewModel(
                     isExpense = isExpense
                 )
             )
+
+            val typeTextFa = if (isExpense) "هزینه" else "درآمد"
+            val typeTextEn = if (isExpense) "expense" else "income"
+
+            NotificationHelper.send(
+                context = context,
+                type = "SUCCESS",
+                titleFa = "دسته‌بندی جدید ثبت شد",
+                titleEn = "New Category Added",
+                descFa = "دسته‌بندی «$title» به عنوان $typeTextFa اضافه شد.",
+                descEn = "Category \"$title\" was added as $typeTextEn.",
+                tag = "CATEGORY_ADD_${title}_${System.currentTimeMillis()}"
+            )
         }
     }
 
     fun updateCategory(category: CategoryEntity, newTitle: String, newEmoji: String) {
         viewModelScope.launch(Dispatchers.IO) {
             categoryRepository.updateCategory(category, newTitle, newEmoji)
+
+            NotificationHelper.send(
+                context = context,
+                type = "WARNING",
+                titleFa = "ویرایش دسته‌بندی",
+                titleEn = "Category Updated",
+                descFa = "دسته‌بندی «${category.title}» به «$newTitle» تغییر یافت.",
+                descEn = "Category \"${category.title}\" was updated to \"$newTitle\".",
+                tag = "CATEGORY_UPDATE_${newTitle}_${System.currentTimeMillis()}"
+            )
         }
     }
 
     suspend fun getTransactionCount(categoryTitle: String): Int {
         return categoryRepository.getTransactionCount(categoryTitle)
-    }
-
-    fun deleteCategoryWithReassignment(category: CategoryEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
-            categoryRepository.deleteCategoryWithReassignment(category)
-        }
     }
 
     class Factory(private val context: Context) : ViewModelProvider.Factory {
@@ -62,7 +81,10 @@ class CategoriesViewModel(
                     categoryDao = db.categoryDao(),
                     transactionDao = db.transactionDao()
                 )
-                return CategoriesViewModel(categoryRepository) as T
+                return CategoriesViewModel(
+                    categoryRepository = categoryRepository,
+                    context = context.applicationContext
+                ) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class")
         }

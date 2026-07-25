@@ -13,6 +13,7 @@ import ir.hamedan.budgetmanagement.data.repository.BudgetLimitRepository
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
+import ir.hamedan.budgetmanagement.utils.NotificationHelper
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -36,7 +37,8 @@ class BudgetLimitViewModel(
     private val budgetLimitRepository: BudgetLimitRepository,
     private val categoryRepository: CategoryRepository,
     private val transactionRepository: TransactionRepository,
-    private val notificationRepository: NotificationRepository
+    private val notificationRepository: NotificationRepository,
+    private val context: Context
 ) : ViewModel() {
 
     val currencyUnit: StateFlow<String> = CurrencySharedPreferences.currencyFlow
@@ -75,15 +77,14 @@ class BudgetLimitViewModel(
                 if (percentUsed >= threshold) {
                     val tag = "BUDGET_${threshold.toInt()}_${limit.categoryName}"
                     viewModelScope.launch {
-                        notificationRepository.addNotification(
-                            NotificationEntity(
-                                type = if (threshold >= 100.0) "ERROR" else "WARNING",
-                                titleFa = "هشدار محدودیت بودجه",
-                                titleEn = "Budget Limit Alert",
-                                descFa = "دسته «${limit.categoryName}» به ${threshold.toInt()}٪ سقف رسید.",
-                                descEn = "${limit.categoryName} reached ${threshold.toInt()}% of budget.",
-                                tag = tag   // جلوگیری از تکرار
-                            )
+                        NotificationHelper.send(
+                            context = context,
+                            type = if (threshold >= 100.0) "ERROR" else "WARNING",
+                            titleFa = "هشدار محدودیت بودجه",
+                            titleEn = "Budget Limit Alert",
+                            descFa = "دسته «${limit.categoryName}» به ${threshold.toInt()}٪ سقف رسید.",
+                            descEn = "${limit.categoryName} reached ${threshold.toInt()}% of budget.",
+                            tag = tag
                         )
                     }
                 }
@@ -124,6 +125,16 @@ class BudgetLimitViewModel(
                 endDate = adjustedEndDate
             )
             budgetLimitRepository.saveLimit(limit)
+
+            NotificationHelper.send(
+                context = context,
+                type = "SUCCESS",
+                titleFa = "محدودیت مالی جدید ثبت شد",
+                titleEn = "New Budget Limit Added",
+                descFa = "محدودیت مالی جدید برای دسته بندی «${limit.categoryName}» ثبت شد.",
+                descEn = "New budget limit added for category ${limit.categoryName}.",
+                tag = "BUDGET_${limit.categoryName}_${System.currentTimeMillis()}"
+            )
         }
     }
 
@@ -133,13 +144,39 @@ class BudgetLimitViewModel(
             currentItem?.let {
                 val updatedLimit = it.copy(isActive = isActive)
                 budgetLimitRepository.saveLimit(updatedLimit)
+
+                val statusFa = if (isActive) "فعال" else "غیرفعال"
+                val statusEn = if (isActive) "enabled" else "disabled"
+
+                NotificationHelper.send(
+                    context = context,
+                    type = "WARNING",
+                    titleFa = "تغییر وضعیت محدودیت بودجه",
+                    titleEn = "Budget Limit Status Updated",
+                    descFa = "محدودیت مالی دسته‌بندی «${it.categoryName}» $statusFa شد.",
+                    descEn = "Budget limit for category ${it.categoryName} was $statusEn.",
+                    tag = "BUDGET_STATUS_${it.categoryName}_${System.currentTimeMillis()}"
+                )
             }
         }
     }
 
     fun deleteBudgetLimit(id: Long) {
         viewModelScope.launch {
+            val currentItem = budgetLimitsWithSpent.value.find { it.entity.id == id }?.entity
             budgetLimitRepository.deleteLimit(id.toString())
+
+            currentItem?.let {
+                NotificationHelper.send(
+                    context = context,
+                    type = "ERROR",
+                    titleFa = "حذف محدودیت بودجه",
+                    titleEn = "Budget Limit Deleted",
+                    descFa = "محدودیت مالی دسته‌بندی «${it.categoryName}» حذف شد.",
+                    descEn = "Budget limit for category ${it.categoryName} was deleted.",
+                    tag = "BUDGET_DELETE_${it.categoryName}_${System.currentTimeMillis()}"
+                )
+            }
         }
     }
 
@@ -151,7 +188,8 @@ class BudgetLimitViewModel(
                 budgetLimitRepository = BudgetLimitRepository(db.budgetLimitDao()),
                 categoryRepository = CategoryRepository(db.categoryDao(), db.transactionDao()),
                 transactionRepository = TransactionRepository(db.transactionDao()),
-                notificationRepository = NotificationRepository(db.notificationDao())
+                notificationRepository = NotificationRepository(db.notificationDao()),
+                context = context.applicationContext
             ) as T
         }
     }

@@ -51,6 +51,7 @@ import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.utils.BiometricPromptManager
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
+import ir.hamedan.budgetmanagement.utils.NotificationHelper
 
 enum class SettingsMenu {
     LANGUAGE, CURRENCY, SECURITY, EXPORT, ABOUT, NOTIFICATION, NONE
@@ -175,6 +176,16 @@ fun SettingsScreen(
                                 currentCurrencyCode = "IRT"
                                 CurrencySharedPreferences.setCurrency(context, "IRT")
                                 onCurrencyChanged("IRT")
+
+                                NotificationHelper.send(
+                                    context,
+                                    type = "SYSTEM",
+                                    titleFa = "تنظیمات به‌روزرسانی شد",
+                                    titleEn = "Settings Updated",
+                                    descFa = "واحد پولی برنامه با موفقیت تغییر کرد.",
+                                    descEn = "Currency have been updated successfully.",
+                                    tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
+                                )
                             }
                             CurrencyOrLanguageOptionButton(
                                 title = if (isPersian) "ریال" else "Rial (IRR)",
@@ -184,6 +195,16 @@ fun SettingsScreen(
                                 currentCurrencyCode = "IRR"
                                 CurrencySharedPreferences.setCurrency(context, "IRR")
                                 onCurrencyChanged("IRR")
+
+                                NotificationHelper.send(
+                                    context,
+                                    type = "SYSTEM",
+                                    titleFa = "تنظیمات به‌روزرسانی شد",
+                                    titleEn = "Settings Updated",
+                                    descFa = "واحد پولی برنامه با موفقیت تغییر کرد.",
+                                    descEn = "Currency have been updated successfully.",
+                                    tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
+                                )
                             }
                         }
                     }
@@ -213,19 +234,39 @@ fun SettingsScreen(
                         ) {
                             CurrencyOrLanguageOptionButton(
                                 title = if (isPersian) "فقط درون برنامه‌ای" else "In-App Only",
-                                isSelected = notifMode == "IN_APP",
+                                isSelected = notifMode == NotificationPreferences.MODE_IN_APP,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                notifMode = "IN_APP"
-                                NotificationPreferences.setMode(context, "IN_APP")
+                                notifMode = NotificationPreferences.MODE_IN_APP
+                                NotificationPreferences.setMode(context, NotificationPreferences.MODE_IN_APP)
+
+                                NotificationHelper.send(
+                                    context,
+                                    type = "SYSTEM",
+                                    titleFa = "تنظیمات به‌روزرسانی شد",
+                                    titleEn = "Settings Updated",
+                                    descFa = "نحوه ارسال اعلان برنامه با موفقیت تغییر کرد.",
+                                    descEn = "Way of sending notification have been updated successfully.",
+                                    tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
+                                )
                             }
                             CurrencyOrLanguageOptionButton(
-                                title = if (isPersian) "درون برنامه + سیستمی" else "In-App + System Push",
-                                isSelected = notifMode == "ALL",
+                                title = if (isPersian) "درون برنامه + سیستمی" else "In-App + System",
+                                isSelected = notifMode == NotificationPreferences.MODE_BOTH,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                notifMode = "ALL"
-                                NotificationPreferences.setMode(context, "ALL")
+                                notifMode = NotificationPreferences.MODE_BOTH
+                                NotificationPreferences.setMode(context, NotificationPreferences.MODE_BOTH)
+
+                                NotificationHelper.send(
+                                    context,
+                                    type = "SYSTEM",
+                                    titleFa = "تنظیمات به‌روزرسانی شد",
+                                    titleEn = "Settings Updated",
+                                    descFa = "نحوه ارسال اعلان برنامه با موفقیت تغییر کرد.",
+                                    descEn = "Way of sending notification have been updated successfully.",
+                                    tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
+                                )
                             }
                         }
                     }
@@ -281,6 +322,16 @@ fun SettingsScreen(
                                                 onSuccess = {
                                                     isBiometricEnabled = targetChecked
                                                     SharedPreferences.setBiometricEnabled(context, targetChecked)
+
+                                                    NotificationHelper.send(
+                                                        context,
+                                                        type = "SYSTEM",
+                                                        titleFa = "تنظیمات به‌روزرسانی شد",
+                                                        titleEn = "Settings Updated",
+                                                        descFa = "تنظیمات بیومتریک برنامه با موفقیت تغییر کرد.",
+                                                        descEn = "Biometric login have been updated successfully.",
+                                                        tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
+                                                    )
                                                 }
                                             )
                                         }
@@ -405,7 +456,17 @@ fun SettingsScreen(
             ChangePasswordDialog(
                 isPersian = isPersian,
                 onDismiss = { showChangePasswordDialog = false },
-                onConfirm = { oldPassword, secureNewPassword -> }
+                onConfirm = { oldPassword, secureNewPassword ->
+                    NotificationHelper.send(
+                        context,
+                        type = "SYSTEM",
+                        titleFa = "تنظیمات به‌روزرسانی شد",
+                        titleEn = "Settings Updated",
+                        descFa = "گذرواژه با موفقیت تغییر کرد.",
+                        descEn = "Password have been updated successfully.",
+                        tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
+                    )
+                }
             )
         }
 

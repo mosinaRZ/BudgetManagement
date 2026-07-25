@@ -9,6 +9,7 @@ import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
+import ir.hamedan.budgetmanagement.utils.NotificationHelper
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -17,7 +18,8 @@ import kotlinx.coroutines.launch
 
 class AddViewModel(
     private val transactionRepository: TransactionRepository,
-    private val categoryRepository: CategoryRepository
+    private val categoryRepository: CategoryRepository,
+    private val context: Context
 ) : ViewModel() {
 
     init {
@@ -55,6 +57,16 @@ class AddViewModel(
                 note = note
             )
             transactionRepository.insertTransaction(newTransaction)
+
+            NotificationHelper.send(
+                context = context,
+                type = "SUCCESS",
+                titleFa = "تراکنش ثبت شد",
+                titleEn = "Transaction Added",
+                descFa = "تراکنش «${newTransaction.title}» با موفقیت ثبت شد.",
+                descEn = "The transaction «${newTransaction.title}» has been added successfully.",
+                tag = "TRANSACTION_ADDED_${newTransaction.id}"
+            )
         }
     }
 
@@ -67,7 +79,8 @@ class AddViewModel(
                 categoryRepository = CategoryRepository(
                     categoryDao = database.categoryDao(),
                     transactionDao = database.transactionDao()
-                )
+                ),
+                context = context.applicationContext
             ) as T
         }
     }

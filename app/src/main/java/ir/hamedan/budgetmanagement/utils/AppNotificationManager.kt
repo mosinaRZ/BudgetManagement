@@ -32,7 +32,7 @@ object AppNotificationManager {
 
     fun sendPushIfAllowed(context: Context, titleFa: String, titleEn: String, bodyFa: String, bodyEn: String) {
         // اگر کاربر فقط in-app انتخاب کرده، push نفرست
-        if (NotificationPreferences.getMode(context) == "IN_APP") return
+        if (NotificationPreferences.getMode(context) == NotificationPreferences.MODE_IN_APP) return
 
         val isPersian = LocaleHelper.getLanguage(context) == "fa"
         val title = if (isPersian) titleFa else titleEn
@@ -44,7 +44,8 @@ object AppNotificationManager {
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.appicon)   // آیکون اعلان — ادامه راهنما
+            .setSmallIcon(R.drawable.notificationicon)   // آیکون اعلان — ادامه راهنما
+            .setColor(ContextCompat.getColor(context, R.color.primary))
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)

@@ -6,13 +6,12 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
-import ir.hamedan.budgetmanagement.data.local.models.NotificationEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
-import ir.hamedan.budgetmanagement.utils.AppNotificationManager
+import ir.hamedan.budgetmanagement.utils.NotificationHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -156,49 +155,22 @@ class TransactionViewModel(
         filterState.value = FilterState()
     }
 
-    fun addTransaction(transaction: TransactionEntity) {
+    fun deleteTransaction(transactionId: String) {
         viewModelScope.launch {
-            transactionRepository.insertTransaction(transaction)
+            val targetTx = filteredTransactions.value.find { it.id.toString() == transactionId }
+            transactionRepository.deleteTransactionById(transactionId)
 
-            val titleFa = "ثبت تراکنش"
-            val titleEn = "Transaction Added"
-            val descFa = "تراکنش «${transaction.title}» با موفقیت ثبت شد."
-            val descEn = "Transaction \"${transaction.title}\" was added successfully."
+            val txTitle = targetTx?.title ?: "تراکنش"
 
-            notificationRepository.addNotification(
-                NotificationEntity(
-                    type = "SUCCESS",
-                    titleFa = titleFa,
-                    titleEn = titleEn,
-                    descFa = descFa,
-                    descEn = descEn,
-                    tag = "TX_ADD_${System.currentTimeMillis()}"
-                )
+            NotificationHelper.send(
+                context = context,
+                type = "ERROR",
+                titleFa = "حذف تراکنش",
+                titleEn = "Transaction Deleted",
+                descFa = "تراکنش «$txTitle» با موفقیت حذف شد.",
+                descEn = "Transaction \"$txTitle\" was successfully deleted.",
+                tag = "TX_DELETE_${transactionId}_${System.currentTimeMillis()}"
             )
-            AppNotificationManager.sendPushIfAllowed(context, titleFa, titleEn, descFa, descEn)
-        }
-    }
-
-    fun deleteTransaction(transaction: TransactionEntity) {
-        viewModelScope.launch {
-            transactionRepository.deleteTransactionById(transaction.id)
-
-            val titleFa = "حذف تراکنش"
-            val titleEn = "Transaction Deleted"
-            val descFa = "تراکنش «${transaction.title}» حذف شد."
-            val descEn = "Transaction \"${transaction.title}\" was deleted."
-
-            notificationRepository.addNotification(
-                NotificationEntity(
-                    type = "WARNING",
-                    titleFa = titleFa,
-                    titleEn = titleEn,
-                    descFa = descFa,
-                    descEn = descEn,
-                    tag = "TX_DEL_${System.currentTimeMillis()}"
-                )
-            )
-            AppNotificationManager.sendPushIfAllowed(context, titleFa, titleEn, descFa, descEn)
         }
     }
 
@@ -206,45 +178,32 @@ class TransactionViewModel(
         viewModelScope.launch {
             transactionRepository.insertTransaction(transaction)
 
-            val titleFa = "ویرایش تراکنش"
-            val titleEn = "Transaction Updated"
-            val descFa = "تراکنش «${transaction.title}» به روزرسانی شد."
-            val descEn = "Transaction \"${transaction.title}\" was updated."
-
-            notificationRepository.addNotification(
-                NotificationEntity(
-                    type = "INFO",
-                    titleFa = titleFa,
-                    titleEn = titleEn,
-                    descFa = descFa,
-                    descEn = descEn,
-                    tag = "TX_EDIT_${System.currentTimeMillis()}"
-                )
+            NotificationHelper.send(
+                context = context,
+                type = "WARNING",
+                titleFa = "ویرایش تراکنش",
+                titleEn = "Transaction Updated",
+                descFa = "تراکنش «${transaction.title}» به‌روزرسانی شد.",
+                descEn = "Transaction \"${transaction.title}\" was updated.",
+                tag = "TX_EDIT_${transaction.id}_${System.currentTimeMillis()}"
             )
-            AppNotificationManager.sendPushIfAllowed(context, titleFa, titleEn, descFa, descEn)
         }
     }
 
-    fun deleteCategoryAndMigrateTransactions(categoryId: String, categoryName: String) {
+    fun deleteCategoryAndMigrateTransactions(category: CategoryEntity) {
         viewModelScope.launch {
-            val affectedCount = categoryRepository.deleteCategoryAndMigrateTransactions(categoryId, categoryName)
-            if (affectedCount > 0) {
-                val titleFa = "تغییر دسته‌بندی تراکنش‌ها"
-                val titleEn = "Transactions Category Changed"
-                val descFa = "تعداد $affectedCount تراکنش از دسته «$categoryName» به دسته‌بندی نشده منتقل شدند."
-                val descEn = "$affectedCount transactions from \"$categoryName\" were moved to Uncategorized."
+            val affectedCount = categoryRepository.deleteCategoryWithReassignment(category)
 
-                notificationRepository.addNotification(
-                    NotificationEntity(
-                        type = "INFO",
-                        titleFa = titleFa,
-                        titleEn = titleEn,
-                        descFa = descFa,
-                        descEn = descEn,
-                        tag = "CAT_DEL_${System.currentTimeMillis()}"
-                    )
+            if (affectedCount > 0) {
+                NotificationHelper.send(
+                    context = context,
+                    type = "WARNING",
+                    titleFa = "تغییر دسته‌بندی تراکنش‌ها",
+                    titleEn = "Transactions Category Changed",
+                    descFa = "تعداد $affectedCount تراکنش از دسته «${category.title}» به «دسته‌بندی نشده» منتقل شدند.",
+                    descEn = "$affectedCount transactions from \"${category.title}\" were moved to Uncategorized.",
+                    tag = "CAT_DEL_${category.id}_${System.currentTimeMillis()}"
                 )
-                AppNotificationManager.sendPushIfAllowed(context, titleFa, titleEn, descFa, descEn)
             }
         }
     }
