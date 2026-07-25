@@ -6,11 +6,13 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import ir.hamedan.budgetmanagement.data.local.dao.BudgetLimitDao
 import ir.hamedan.budgetmanagement.data.local.dao.CategoryDao
+import ir.hamedan.budgetmanagement.data.local.dao.NotificationDao
 import ir.hamedan.budgetmanagement.data.local.dao.SavingGoalDao
 import ir.hamedan.budgetmanagement.data.local.dao.TransactionDao
 import ir.hamedan.budgetmanagement.data.local.dao.UpcomingPaymentDao
 import ir.hamedan.budgetmanagement.data.local.models.BudgetLimitEntity
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
+import ir.hamedan.budgetmanagement.data.local.models.NotificationEntity
 import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.local.models.UpcomingPaymentEntity
@@ -23,7 +25,8 @@ import ir.hamedan.budgetmanagement.data.local.models.UserEntity
         CategoryEntity::class,
         SavingGoalEntity::class,
         BudgetLimitEntity::class,
-        UpcomingPaymentEntity::class
+        UpcomingPaymentEntity::class,
+        NotificationEntity::class
     ],
     version = 1,
     exportSchema = false
@@ -35,6 +38,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun savingGoalDao(): SavingGoalDao
     abstract fun budgetLimitDao(): BudgetLimitDao
     abstract fun upcomingPaymentDao(): UpcomingPaymentDao
+    abstract fun notificationDao(): NotificationDao
 
     companion object {
         @Volatile

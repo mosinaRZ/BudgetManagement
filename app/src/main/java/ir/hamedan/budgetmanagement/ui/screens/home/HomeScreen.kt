@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.R
+import ir.hamedan.budgetmanagement.data.local.models.NotificationEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.local.models.UpcomingPaymentEntity
 import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
@@ -49,6 +50,7 @@ import ir.hamedan.budgetmanagement.ui.screens.payments.UpcomingPaymentViewModel
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
 import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsViewModel
 import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitViewModel
+import ir.hamedan.budgetmanagement.ui.screens.notifications.NotificationViewModel
 import ir.hamedan.budgetmanagement.utils.DateUtils
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
@@ -92,7 +94,10 @@ fun HomeScreen(
     transactionViewModel: TransactionViewModel = viewModel(factory = TransactionViewModel.Factory(LocalContext.current)),
     upcomingViewModel: UpcomingPaymentViewModel = viewModel(factory = UpcomingPaymentViewModel.Factory(LocalContext.current)),
     goalsViewModel: SavingGoalsViewModel = viewModel(factory = SavingGoalsViewModel.Factory(LocalContext.current)),
-    budgetViewModel: BudgetLimitViewModel = viewModel(factory = BudgetLimitViewModel.Factory(LocalContext.current))
+    budgetViewModel: BudgetLimitViewModel = viewModel(factory = BudgetLimitViewModel.Factory(LocalContext.current)),
+    notificationViewModel: NotificationViewModel = viewModel(
+        factory = NotificationViewModel.Factory(LocalContext.current)
+    )
 ) {
     val context = LocalContext.current
     val isPersian = LocaleHelper.getLanguage(context) == "fa"
@@ -118,6 +123,29 @@ fun HomeScreen(
     val limitsList by budgetViewModel.budgetLimitsWithSpent.collectAsState(initial = emptyList())
 
     val currencyUnit by transactionViewModel.currencyUnit.collectAsState(initial = "IRT")
+
+    val notifications by notificationViewModel.notifications.collectAsState()
+    val unreadCount by notificationViewModel.unreadCount.collectAsState()
+
+    // بعد از گرفتن paymentsList
+    LaunchedEffect(paymentsList) {
+        val now = System.currentTimeMillis()
+        paymentsList.filter { !it.isPaid }.forEach { payment ->
+            val daysLeft = ((payment.dueDate - now) / (1000 * 60 * 60 * 24)).toInt()
+            if (daysLeft in listOf(1, 3, 7)) {
+                notificationViewModel.addNotification(
+                    NotificationEntity(
+                        type = "WARNING",
+                        titleFa = "یادآوری سررسید",
+                        titleEn = "Payment Due Reminder",
+                        descFa = "${payment.title} تا $daysLeft روز دیگر سررسید دارد.",
+                        descEn = "${payment.title} is due in $daysLeft day(s).",
+                        tag = "DUE_${payment.id}_${daysLeft}"
+                    )
+                )
+            }
+        }
+    }
 
     // ---------------------------------------------------------------------
     // محاسبه دقیق و پویا: ابتدا و انتهای ماه جاری و ماه قبل
@@ -155,14 +183,16 @@ fun HomeScreen(
         transactionsList.filter { it.timestamp in prevMonthStart..prevMonthEnd }
     }
 
+    // تراز کلی حساب (بدون هیچ فیلتر زمانی) - مجموع تمام تراکنش‌ها
+    val totalAllIncome = transactionsList.filter { it.type == "INCOME" }.sumOf { it.amount }
+    val totalAllExpense = transactionsList.filter { it.type == "EXPENSE" }.sumOf { it.amount }
+    val totalBalance = totalAllIncome - totalAllExpense
+
     val totalIncome = periodTransactions.filter { it.type == "INCOME" }.sumOf { it.amount }
     val totalExpense = periodTransactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }
-    val balance = totalIncome - totalExpense
 
     val prevIncome = prevPeriodTransactions.filter { it.type == "INCOME" }.sumOf { it.amount }
     val prevExpense = prevPeriodTransactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }
-    val prevBalance = prevIncome - prevExpense
-    val diffBalance = balance - prevBalance
 
     val recentTransactions = remember(transactionsList) {
         transactionsList.sortedByDescending { it.timestamp }.take(3)
@@ -190,15 +220,15 @@ fun HomeScreen(
             item { Spacer(modifier = Modifier.statusBarsPadding().height(55.dp)) }
 
             // ---------------------------------------------------------------------
-            // کارت بالانس اصلی
+            // کارت بالانس اصلی (تراز کلی حساب)
             // ---------------------------------------------------------------------
             item {
                 val balanceShape = RoundedCornerShape(24.dp)
 
                 val periodLabel = if (isPersian) {
-                    "عملکرد ماه جاری (${DateUtils.formatTimestamp(currentMonthStart, true)} تا ${DateUtils.formatTimestamp(currentMonthEnd, true)})"
+                    "تراز کلی حساب"
                 } else {
-                    "Current Month (${DateUtils.formatTimestamp(currentMonthStart, false)} - ${DateUtils.formatTimestamp(currentMonthEnd, false)})"
+                    "Total Account Balance"
                 }
 
                 Box(
@@ -227,9 +257,9 @@ fun HomeScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                         )
 
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(24.dp))
 
-                        val displayBalance = if (currencyUnit == "IRR") (balance * 10).toLong() else balance.toLong()
+                        val displayBalance = if (currencyUnit == "IRR") (totalBalance * 10).toLong() else totalBalance.toLong()
                         val currencyText = if (isPersian) {
                             if (currencyUnit == "IRR") "ریال" else "تومان"
                         } else {
@@ -238,7 +268,7 @@ fun HomeScreen(
 
                         // محاسبه علامت منفی در صورت منفی بودن بالانس
                         val formattedAmount = numberFormatter.format(abs(displayBalance))
-                        val sign = if (balance < 0) "-" else ""
+                        val sign = if (totalBalance < 0) "-" else ""
 
                         Text(
                             text = "$sign$formattedAmount $currencyText",
@@ -246,36 +276,8 @@ fun HomeScreen(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 28.sp
                             ),
-                            color = if (balance >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                            color = if (totalBalance >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                         )
-
-                        Spacer(Modifier.height(12.dp))
-
-                        val diffDisplay = if (currencyUnit == "IRR") (abs(diffBalance) * 10).toLong() else abs(diffBalance).toLong()
-                        val isPositive = diffBalance >= 0
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = if (isPositive) "▲" else "▼",
-                                color = if (isPositive) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.labelSmall
-                            )
-
-                            val comparisonText = if (isPersian) {
-                                val state = if (isPositive) "افزایش" else "کاهش"
-                                " $state ${numberFormatter.format(diffDisplay)} $currencyText نسبت به ماه قبل"
-                            } else {
-                                val state = if (isPositive) "Increased by" else "Decreased by"
-                                " $state ${numberFormatter.format(diffDisplay)} $currencyText vs last month"
-                            }
-
-                            Text(
-                                text = comparisonText,
-                                modifier = Modifier.padding(start = 4.dp),
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
                     }
                 }
             }
@@ -587,7 +589,7 @@ fun HomeScreen(
             }
 
             // ---------------------------------------------------------------------
-            // بخش موعد سررسید (طراحی کلی هماهنگ + نمایش داخلی به صورت LazyRow و بدون ProgressBar)
+            // بخش موعد سررسید
             // ---------------------------------------------------------------------
             item {
                 val dueItems = upcomingPayments.map { payment ->
@@ -643,7 +645,6 @@ fun HomeScreen(
 
                         Spacer(Modifier.height(20.dp))
 
-                        // نمایش به صورت LazyRow و بدون استفاده از ProgressBar
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -731,7 +732,7 @@ fun HomeScreen(
             }
 
             // ---------------------------------------------------------------------
-            // بخش آخرین تراکنش‌ها (عدم نمایش در صورت خالی بودن)
+            // بخش آخرین تراکنش‌ها
             // ---------------------------------------------------------------------
             if (recentTransactions.isNotEmpty()) {
                 item {
@@ -894,6 +895,25 @@ fun HomeScreen(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+
+                    // Badge تعداد پیام‌های خوانده نشده
+                    if (unreadCount > 0) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(6.dp)
+                                .size(18.dp)
+                                .background(MaterialTheme.colorScheme.error, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (unreadCount > 9) "9+" else unreadCount.toString(),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -959,7 +979,7 @@ fun HomeScreen(
                                     .padding(horizontal = 10.dp, vertical = 4.dp)
                             ) {
                                 Text(
-                                    text = if (isPersian) "۴ پیام جدید" else "4 New",
+                                    text = if (isPersian) "${unreadCount} پیام جدید" else "$unreadCount New",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold
@@ -974,40 +994,26 @@ fun HomeScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)
                         ) {
-                            items(getDummyNotifications(), key = { it.id }) { item ->
+                            items(notifications, key = { it.id }) { item ->
+                                val notifEntity = item
                                 val itemShape = RoundedCornerShape(18.dp)
-                                val (icon, iconColor, bgColor) = when (item.type) {
-                                    NotificationType.SUCCESS -> Triple(Icons.Default.CheckCircle, Color(0xFF4CAF50), Color(0xFF4CAF50).copy(alpha = 0.08f))
-                                    NotificationType.ERROR -> Triple(Icons.Default.Error, Color(0xFFE53935), Color(0xFFE53935).copy(alpha = 0.08f))
-                                    NotificationType.REWARD -> Triple(Icons.Default.CardGiftcard, Color(0xFFFFB300), Color(0xFFFFB300).copy(alpha = 0.08f))
-                                    NotificationType.SYSTEM -> Triple(Icons.Default.Info, Color(0xFF1E88E5), Color(0xFF1E88E5).copy(alpha = 0.08f))
-                                }
 
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f), itemShape)
+                                        .clickable { notificationViewModel.markAsRead(notifEntity.id) }
+                                        .background(
+                                            if (!notifEntity.isRead)
+                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
+                                            else
+                                                MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                                            itemShape
+                                        )
                                         .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), itemShape)
                                         .clip(itemShape)
                                         .padding(14.dp),
                                     verticalAlignment = Alignment.Top
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .background(bgColor, CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = icon,
-                                            contentDescription = null,
-                                            tint = iconColor,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-
-                                    Spacer(Modifier.width(12.dp))
-
                                     Column(modifier = Modifier.weight(1f)) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
@@ -1019,11 +1025,6 @@ fun HomeScreen(
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Text(
-                                                text = if (isPersian) item.timeFa else item.timeEn,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                                             )
                                         }
                                         Spacer(Modifier.height(4.dp))

@@ -1,7 +1,9 @@
 package ir.hamedan.budgetmanagement
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -51,6 +53,7 @@ import ir.hamedan.budgetmanagement.ui.screens.splash.SplashScreen
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionsScreen
 import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsScreen
 import ir.hamedan.budgetmanagement.ui.theme.BudgetManagementTheme
+import ir.hamedan.budgetmanagement.utils.AppNotificationManager
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 
 @Suppress("DEPRECATION")
@@ -67,6 +70,13 @@ class MainActivity : FragmentActivity() {
 
         // مقداردهی اولیه واحد پول
         CurrencySharedPreferences.init(applicationContext)
+
+        AppNotificationManager.createChannel(applicationContext)
+
+// درخواست مجوز notification در اندروید 13 به بالا
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+        }
 
         setContent {
             val context = LocalContext.current

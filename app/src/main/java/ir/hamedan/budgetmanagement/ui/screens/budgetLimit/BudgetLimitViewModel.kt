@@ -7,9 +7,11 @@ import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.BudgetLimitEntity
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
+import ir.hamedan.budgetmanagement.data.local.models.NotificationEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.data.repository.BudgetLimitRepository
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
+import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -33,7 +35,8 @@ data class BudgetLimitUiModel(
 class BudgetLimitViewModel(
     private val budgetLimitRepository: BudgetLimitRepository,
     private val categoryRepository: CategoryRepository,
-    private val transactionRepository: TransactionRepository
+    private val transactionRepository: TransactionRepository,
+    private val notificationRepository: NotificationRepository
 ) : ViewModel() {
 
     val currencyUnit: StateFlow<String> = CurrencySharedPreferences.currencyFlow
@@ -63,6 +66,27 @@ class BudgetLimitViewModel(
                     .sumOf { it.amount }
             } else {
                 0.0
+            }
+
+            // بعد از محاسبه spent برای هر limit:
+            val percentUsed = if (limit.maxLimit > 0) (spent / limit.maxLimit * 100) else 0.0
+
+            listOf(50.0, 80.0, 100.0).forEach { threshold ->
+                if (percentUsed >= threshold) {
+                    val tag = "BUDGET_${threshold.toInt()}_${limit.categoryName}"
+                    viewModelScope.launch {
+                        notificationRepository.addNotification(
+                            NotificationEntity(
+                                type = if (threshold >= 100.0) "ERROR" else "WARNING",
+                                titleFa = "هشدار محدودیت بودجه",
+                                titleEn = "Budget Limit Alert",
+                                descFa = "دسته «${limit.categoryName}» به ${threshold.toInt()}٪ سقف رسید.",
+                                descEn = "${limit.categoryName} reached ${threshold.toInt()}% of budget.",
+                                tag = tag   // جلوگیری از تکرار
+                            )
+                        )
+                    }
+                }
             }
 
             val emoji = categories.find { it.title == limit.categoryName }?.iconEmoji ?: "💰"
@@ -126,7 +150,8 @@ class BudgetLimitViewModel(
             return BudgetLimitViewModel(
                 budgetLimitRepository = BudgetLimitRepository(db.budgetLimitDao()),
                 categoryRepository = CategoryRepository(db.categoryDao(), db.transactionDao()),
-                transactionRepository = TransactionRepository(db.transactionDao())
+                transactionRepository = TransactionRepository(db.transactionDao()),
+                notificationRepository = NotificationRepository(db.notificationDao())
             ) as T
         }
     }

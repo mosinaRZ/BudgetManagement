@@ -6,10 +6,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
+import ir.hamedan.budgetmanagement.data.local.models.NotificationEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
+import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
+import ir.hamedan.budgetmanagement.utils.AppNotificationManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -49,14 +52,14 @@ data class FilterState(
 )
 
 class TransactionViewModel(
+    private val context: Context,
     private val transactionRepository: TransactionRepository,
-    private val categoryRepository: CategoryRepository
+    private val categoryRepository: CategoryRepository,
+    private val notificationRepository: NotificationRepository
 ) : ViewModel() {
 
-    // وضعیت واحد پول برنامه (IRT یا IRR) به صورت واکنش‌گرا (Real-time) مستقیم از SharedPreferences
     val currencyUnit: StateFlow<String> = CurrencySharedPreferences.currencyFlow
 
-    // دریافت دسته‌بندی‌های هزینه‌ای (isExpense = true)
     val expenseCategories: StateFlow<List<CategoryEntity>> = categoryRepository.getCategoriesByExpenseStatus(isExpense = true)
         .stateIn(
             scope = viewModelScope,
@@ -64,7 +67,6 @@ class TransactionViewModel(
             initialValue = emptyList()
         )
 
-    // دریافت دسته‌بندی‌های درآمدی (isExpense = false)
     val incomeCategories: StateFlow<List<CategoryEntity>> = categoryRepository.getCategoriesByExpenseStatus(isExpense = false)
         .stateIn(
             scope = viewModelScope,
@@ -81,7 +83,6 @@ class TransactionViewModel(
         filterState
     ) { transactions, query, filter ->
         var list = transactions.filter { transaction ->
-            // ۱. فیلتر نوع تراکنش / دسته‌بندی نشده
             val matchesType = when (filter.typeFilter) {
                 TransactionTypeFilter.ALL -> true
                 TransactionTypeFilter.INCOME -> transaction.type == "INCOME"
@@ -94,14 +95,12 @@ class TransactionViewModel(
                 }
             }
 
-            // ۲. فیلتر زمانی
             val matchesTime = if (filter.startDate != null && filter.endDate != null) {
                 transaction.timestamp in filter.startDate..filter.endDate
             } else {
                 isWithinTimeFilter(transaction.timestamp, filter.timeFilter)
             }
 
-            // ۳. جستجوی متنی روی تراکنش‌های فیلتر شده
             val matchesSearch = query.isBlank() ||
                     transaction.title.contains(query, ignoreCase = true) ||
                     transaction.category.contains(query, ignoreCase = true)
@@ -109,7 +108,6 @@ class TransactionViewModel(
             matchesType && matchesTime && matchesSearch
         }
 
-        // ۴. مرتب‌سازی
         list = when (filter.sortOrder) {
             SortOrder.NEWEST -> list.sortedByDescending { it.timestamp }
             SortOrder.OLDEST -> list.sortedBy { it.timestamp }
@@ -158,15 +156,96 @@ class TransactionViewModel(
         filterState.value = FilterState()
     }
 
-    fun deleteTransaction(id: String) {
+    fun addTransaction(transaction: TransactionEntity) {
         viewModelScope.launch {
-            transactionRepository.deleteTransactionById(id)
+            transactionRepository.insertTransaction(transaction)
+
+            val titleFa = "ثبت تراکنش"
+            val titleEn = "Transaction Added"
+            val descFa = "تراکنش «${transaction.title}» با موفقیت ثبت شد."
+            val descEn = "Transaction \"${transaction.title}\" was added successfully."
+
+            notificationRepository.addNotification(
+                NotificationEntity(
+                    type = "SUCCESS",
+                    titleFa = titleFa,
+                    titleEn = titleEn,
+                    descFa = descFa,
+                    descEn = descEn,
+                    tag = "TX_ADD_${System.currentTimeMillis()}"
+                )
+            )
+            AppNotificationManager.sendPushIfAllowed(context, titleFa, titleEn, descFa, descEn)
+        }
+    }
+
+    fun deleteTransaction(transaction: TransactionEntity) {
+        viewModelScope.launch {
+            transactionRepository.deleteTransactionById(transaction.id)
+
+            val titleFa = "حذف تراکنش"
+            val titleEn = "Transaction Deleted"
+            val descFa = "تراکنش «${transaction.title}» حذف شد."
+            val descEn = "Transaction \"${transaction.title}\" was deleted."
+
+            notificationRepository.addNotification(
+                NotificationEntity(
+                    type = "WARNING",
+                    titleFa = titleFa,
+                    titleEn = titleEn,
+                    descFa = descFa,
+                    descEn = descEn,
+                    tag = "TX_DEL_${System.currentTimeMillis()}"
+                )
+            )
+            AppNotificationManager.sendPushIfAllowed(context, titleFa, titleEn, descFa, descEn)
         }
     }
 
     fun updateTransaction(transaction: TransactionEntity) {
         viewModelScope.launch {
             transactionRepository.insertTransaction(transaction)
+
+            val titleFa = "ویرایش تراکنش"
+            val titleEn = "Transaction Updated"
+            val descFa = "تراکنش «${transaction.title}» به روزرسانی شد."
+            val descEn = "Transaction \"${transaction.title}\" was updated."
+
+            notificationRepository.addNotification(
+                NotificationEntity(
+                    type = "INFO",
+                    titleFa = titleFa,
+                    titleEn = titleEn,
+                    descFa = descFa,
+                    descEn = descEn,
+                    tag = "TX_EDIT_${System.currentTimeMillis()}"
+                )
+            )
+            AppNotificationManager.sendPushIfAllowed(context, titleFa, titleEn, descFa, descEn)
+        }
+    }
+
+    fun deleteCategoryAndMigrateTransactions(categoryId: String, categoryName: String) {
+        viewModelScope.launch {
+            val affectedCount = categoryRepository.deleteCategoryAndMigrateTransactions(categoryId, categoryName)
+            if (affectedCount > 0) {
+                val titleFa = "تغییر دسته‌بندی تراکنش‌ها"
+                val titleEn = "Transactions Category Changed"
+                val descFa = "تعداد $affectedCount تراکنش از دسته «$categoryName» به دسته‌بندی نشده منتقل شدند."
+                val descEn = "$affectedCount transactions from \"$categoryName\" were moved to Uncategorized."
+
+                notificationRepository.addNotification(
+                    NotificationEntity(
+                        type = "INFO",
+                        titleFa = titleFa,
+                        titleEn = titleEn,
+                        descFa = descFa,
+                        descEn = descEn,
+                        tag = "CAT_DEL_${System.currentTimeMillis()}"
+                    )
+                )
+                AppNotificationManager.sendPushIfAllowed(context, titleFa, titleEn, descFa, descEn)
+            }
         }
     }
 
@@ -198,11 +277,13 @@ class TransactionViewModel(
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             val database = AppDatabase.getInstance(context)
             return TransactionViewModel(
+                context = context,
                 transactionRepository = TransactionRepository(database.transactionDao()),
                 categoryRepository = CategoryRepository(
                     categoryDao = database.categoryDao(),
                     transactionDao = database.transactionDao()
-                )
+                ),
+                notificationRepository = NotificationRepository(database.notificationDao())
             ) as T
         }
     }

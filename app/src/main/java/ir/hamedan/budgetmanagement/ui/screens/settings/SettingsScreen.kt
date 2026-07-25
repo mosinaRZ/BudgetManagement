@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
+import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
 import ir.hamedan.budgetmanagement.data.preferences.SharedPreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.saveThemeMode
@@ -52,7 +53,7 @@ import ir.hamedan.budgetmanagement.utils.BiometricPromptManager
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 
 enum class SettingsMenu {
-    LANGUAGE, CURRENCY, SECURITY, EXPORT, ABOUT, NONE
+    LANGUAGE, CURRENCY, SECURITY, EXPORT, ABOUT, NOTIFICATION, NONE
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -183,6 +184,48 @@ fun SettingsScreen(
                                 currentCurrencyCode = "IRR"
                                 CurrencySharedPreferences.setCurrency(context, "IRR")
                                 onCurrencyChanged("IRR")
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ۰. تنظیمات اعلان‌ها
+            if (matchesSearch("تنظیمات اعلان‌ها", "Notification Settings",
+                    "کنترل نحوه دریافت اعلان‌های برنامه", "Control how you receive app notifications")) {
+                item {
+                    var notifMode by remember {
+                        mutableStateOf(NotificationPreferences.getMode(context))
+                    }
+
+                    SettingsAccordionItem(
+                        title = if (isPersian) "تنظیمات اعلان‌ها" else "Notification Settings",
+                        subtitle = if (isPersian) "کنترل نحوه دریافت اعلان‌های برنامه"
+                        else "Control how you receive app notifications",
+                        icon = Icons.Default.Notifications,
+                        isExpanded = activeMenu == SettingsMenu.NOTIFICATION,
+                        onClick = { activeMenu = if (activeMenu == SettingsMenu.NOTIFICATION)
+                            SettingsMenu.NONE else SettingsMenu.NOTIFICATION }
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CurrencyOrLanguageOptionButton(
+                                title = if (isPersian) "فقط درون برنامه‌ای" else "In-App Only",
+                                isSelected = notifMode == "IN_APP",
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                notifMode = "IN_APP"
+                                NotificationPreferences.setMode(context, "IN_APP")
+                            }
+                            CurrencyOrLanguageOptionButton(
+                                title = if (isPersian) "درون برنامه + سیستمی" else "In-App + System Push",
+                                isSelected = notifMode == "ALL",
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                notifMode = "ALL"
+                                NotificationPreferences.setMode(context, "ALL")
                             }
                         }
                     }
