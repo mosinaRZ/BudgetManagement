@@ -1,6 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.add
 
 import android.content.Context
+import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -9,6 +10,7 @@ import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
+import ir.hamedan.budgetmanagement.ui.components.BalanceWidget
 import ir.hamedan.budgetmanagement.utils.NotificationHelper
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -57,6 +59,8 @@ class AddViewModel(
                 note = note
             )
             transactionRepository.insertTransaction(newTransaction)
+
+            BalanceWidget().updateAll(context)
 
             NotificationHelper.send(
                 context = context,

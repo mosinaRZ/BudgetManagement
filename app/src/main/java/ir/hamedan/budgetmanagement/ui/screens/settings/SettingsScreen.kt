@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.widget.Toast
 import androidx.biometric.BiometricManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -14,6 +13,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -47,11 +47,15 @@ import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
 import ir.hamedan.budgetmanagement.data.preferences.SharedPreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.saveThemeMode
+import ir.hamedan.budgetmanagement.utils.ExportManager
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.utils.BiometricPromptManager
+import ir.hamedan.budgetmanagement.utils.ExportFormat
+import ir.hamedan.budgetmanagement.utils.ExportPeriod
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.NotificationHelper
+import kotlinx.coroutines.launch
 
 enum class SettingsMenu {
     LANGUAGE, CURRENCY, SECURITY, EXPORT, ABOUT, NOTIFICATION, NONE
@@ -81,10 +85,21 @@ fun SettingsScreen(
     var themeMode by remember(context) { mutableStateOf(ThemePreferences.getThemeMode(context)) }
     var showLogoutDialog by remember { mutableStateOf(false) }
 
+    // به‌روزرسانی مقدار تم در بدو باز شدن باتم‌شیت
+    LaunchedEffect(showThemeBottomSheet) {
+        if (showThemeBottomSheet) {
+            themeMode = ThemePreferences.getThemeMode(context)
+        }
+    }
+
     // واحد پولی ذخیره‌شده یا مقدار پیش‌فرض
     var currentCurrencyCode by remember(context) {
         mutableStateOf(CurrencySharedPreferences.getCurrency(context))
     }
+
+    var showExportSheet by remember { mutableStateOf(false) }
+    var exportFormat by remember { mutableStateOf<ExportFormat?>(null) } // PDF یا XLSX
+    val exportScope = rememberCoroutineScope()
 
     fun matchesSearch(titleFa: String, titleEn: String, subtitleFa: String, subtitleEn: String): Boolean {
         if (searchQuery.isBlank()) return true
@@ -377,23 +392,29 @@ fun SettingsScreen(
                                 title = "Excel (XLSX)",
                                 icon = Icons.Default.TableChart,
                                 modifier = Modifier.weight(1f)
-                            ) {}
+                            ) {
+                                exportFormat = ExportFormat.XLSX
+                                showExportSheet = true
+                            }
                             ExportButton(
                                 title = "PDF Document",
                                 icon = Icons.Default.PictureAsPdf,
                                 modifier = Modifier.weight(1f)
-                            ) {}
+                            ) {
+                                exportFormat = ExportFormat.PDF
+                                showExportSheet = true
+                            }
                         }
                     }
                 }
             }
 
             // ۶. درباره ما
-            if (matchesSearch("درباره ما و پشتیبانی", "About Us & Support", "راه‌های ارتباطی، تلگرام، اینستاگرام و ایمیل", "Contact channels, Telegram, Instagram, & Support")) {
+            if (matchesSearch("درباره ما و پشتیبانی", "About Us & Support", "راه‌های ارتباطی،واتس‌اپ و ایمیل", "Contact channels, Gmail, WhatsApp & Support")) {
                 item {
                     SettingsAccordionItem(
                         title = if (isPersian) "درباره ما و پشتیبانی" else "About Us & Support",
-                        subtitle = if (isPersian) "راه‌های ارتباطی، تلگرام، اینستاگرام و ایمیل" else "Contact channels, Telegram, Instagram, & Support",
+                        subtitle = if (isPersian) "راه‌های ارتباطی،واتس‌اپ و ایمیل" else "Contact channels, Gmail, WhatsApp & Support",
                         icon = Icons.Default.Info,
                         isExpanded = activeMenu == SettingsMenu.ABOUT,
                         onClick = { activeMenu = if (activeMenu == SettingsMenu.ABOUT) SettingsMenu.NONE else SettingsMenu.ABOUT }
@@ -403,30 +424,30 @@ fun SettingsScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             SocialLinkRow(
-                                title = if (isPersian) "کانال تلگرام" else "Telegram Channel",
-                                icon = Icons.Default.Send,
-                                color = Color(0xFF229ED9)
-                            ) { openUrl(context, "https://t.me/your_channel") }
-                            SocialLinkRow(
-                                title = if (isPersian) "صفحه اینستاگرام" else "Instagram Page",
-                                icon = Icons.Default.CameraAlt,
-                                color = Color(0xFFE1306C)
-                            ) { openUrl(context, "https://instagram.com/your_profile") }
-                            SocialLinkRow(
                                 title = if (isPersian) "پشتیبانی جیمیل" else "Gmail Support",
                                 icon = Icons.Default.Email,
                                 color = Color(0xFFD44638)
                             ) {
-                                val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
-                                    data = Uri.parse("mailto:support@yourdomain.com")
+                                val email = "cidna.app@gmail.com"
+                                val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                    data = Uri.parse("mailto:$email")
+                                    setPackage("com.google.android.gm")
                                 }
-                                context.startActivity(Intent.createChooser(emailIntent, "Send Email"))
+
+                                try {
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    val fallbackIntent = Intent(Intent.ACTION_SENDTO).apply {
+                                        data = Uri.parse("mailto:$email")
+                                    }
+                                    context.startActivity(Intent.createChooser(fallbackIntent, if (isPersian) "ارسال ایمیل" else "Send Email"))
+                                }
                             }
                             SocialLinkRow(
                                 title = if (isPersian) "واتس‌اپ توسعه‌دهنده" else "WhatsApp Contact",
                                 icon = Icons.Default.Phone,
                                 color = Color(0xFF25D366)
-                            ) { openUrl(context, "https://wa.me/989123456789") }
+                            ) { openUrl(context, "https://wa.me/989180500841") }
                         }
                     }
                 }
@@ -470,6 +491,64 @@ fun SettingsScreen(
             )
         }
 
+        if (showExportSheet && exportFormat != null) {
+            ModalBottomSheet(
+                onDismissRequest = { showExportSheet = false },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 24.dp, vertical = 16.dp)
+                ) {
+                    Text(
+                        text = if (isPersian) "بازه زمانی گزارش را انتخاب کنید" else "Select report period",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    ExportPeriod.entries.forEach { period ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .clickable {
+                                    showExportSheet = false
+                                    exportScope.launch {
+                                        ExportManager.export(
+                                            context = context,
+                                            format = exportFormat!!,
+                                            period = period,
+                                            isPersian = isPersian
+                                        )
+                                    }
+                                }
+                                .padding(vertical = 14.dp, horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CalendarMonth,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = if (isPersian) period.titleFa else period.titleEn,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                    }
+                }
+            }
+        }
+
         if (showThemeBottomSheet) {
             ModalBottomSheet(
                 onDismissRequest = { showThemeBottomSheet = false },
@@ -495,7 +574,15 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        val isLightSelected = themeMode == ThemePreferences.MODE_LIGHT
+                        // محاسبه حالت تم فعلی (در نظر گرفتن تم سیستم در صورت استفاده از MODE_SYSTEM)
+                        val systemInDark = isSystemInDarkTheme()
+                        val currentActiveMode = if (themeMode == ThemePreferences.MODE_SYSTEM) {
+                            if (systemInDark) ThemePreferences.MODE_DARK else ThemePreferences.MODE_LIGHT
+                        } else {
+                            themeMode
+                        }
+
+                        val isLightSelected = currentActiveMode == ThemePreferences.MODE_LIGHT
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -553,7 +640,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        val isDarkSelected = themeMode == ThemePreferences.MODE_DARK
+                        val isDarkSelected = currentActiveMode == ThemePreferences.MODE_DARK
                         Box(
                             modifier = Modifier
                                 .weight(1f)

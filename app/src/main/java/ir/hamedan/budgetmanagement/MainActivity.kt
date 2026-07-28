@@ -74,9 +74,14 @@ class MainActivity : FragmentActivity() {
 
         AppNotificationManager.createChannel(applicationContext)
 
+        val permissionsToRequest = mutableListOf(
+            Manifest.permission.RECEIVE_SMS,
+            Manifest.permission.READ_SMS
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+            permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
         }
+        requestPermissions(permissionsToRequest.toTypedArray(), 1001)
 
 // اعلان خوش‌آمدگویی (فقط یک‌بار)
         val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)

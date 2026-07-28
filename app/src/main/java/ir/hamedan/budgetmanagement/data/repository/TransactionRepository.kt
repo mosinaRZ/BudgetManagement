@@ -30,4 +30,13 @@ class TransactionRepository(private val transactionDao: TransactionDao) {
     suspend fun reassignCategoryForTransactions(oldCategoryTitle: String, newCategoryTitle: String) {
         transactionDao.reassignCategoryForTransactions(oldCategoryTitle, newCategoryTitle)
     }
+
+    // TransactionRepository.kt
+    suspend fun getTransactionsBetween(start: Long, end: Long): List<TransactionEntity> {
+        return transactionDao.getTransactionsBetween(start, end)
+    }
+
+    suspend fun getBalanceBefore(beforeDate: Long): Double {
+        return transactionDao.getBalanceBefore(beforeDate)
+    }
 }

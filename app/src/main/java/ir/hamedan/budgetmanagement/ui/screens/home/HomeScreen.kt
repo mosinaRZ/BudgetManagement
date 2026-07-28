@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.Notifications
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -91,6 +93,9 @@ fun HomeScreen(
     upcomingViewModel: UpcomingPaymentViewModel = viewModel(factory = UpcomingPaymentViewModel.Factory(LocalContext.current)),
     goalsViewModel: SavingGoalsViewModel = viewModel(factory = SavingGoalsViewModel.Factory(LocalContext.current)),
     budgetViewModel: BudgetLimitViewModel = viewModel(factory = BudgetLimitViewModel.Factory(LocalContext.current)),
+    pendingViewModel: PendingTransactionViewModel = viewModel(
+        factory = PendingTransactionViewModel.Factory(LocalContext.current)
+    ),
     notificationViewModel: NotificationViewModel = viewModel(
         factory = NotificationViewModel.Factory(LocalContext.current)
     )
@@ -109,6 +114,11 @@ fun HomeScreen(
         }
     }
 
+    val pendingTransactions by pendingViewModel.pendingTransactions.collectAsState()
+    val pendingCount by pendingViewModel.pendingCount.collectAsState()
+
+    var showPendingSheet by remember { mutableStateOf(false) }
+
     val numberFormatter = remember(isPersian) {
         NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
     }
@@ -122,6 +132,8 @@ fun HomeScreen(
 
     val notifications by notificationViewModel.notifications.collectAsState()
     val unreadCount by notificationViewModel.unreadCount.collectAsState()
+
+    val categories by transactionViewModel.expenseCategories.collectAsState()
 
     // بعد از گرفتن paymentsList
     LaunchedEffect(paymentsList) {
@@ -898,11 +910,46 @@ fun HomeScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (isPersian) "مدیریت هزینه‌ها" else "Expense Manager",
+                        text = if (isPersian) "سیدنا" else "Cidna",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold
                     )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), RoundedCornerShape(24.dp))
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), RoundedCornerShape(24.dp))
+                        .clip(RoundedCornerShape(24.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    IconButton(onClick = { showPendingSheet = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Message, // آیکون پیامک
+                            contentDescription = if (isPersian) "تراکنش‌های در انتظار" else "Pending Transactions",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    if (pendingCount > 0) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(6.dp)
+                                .size(18.dp)
+                                .background(MaterialTheme.colorScheme.primary, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (pendingCount > 9) "9+" else pendingCount.toString(),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
 
                 Box(
@@ -1174,7 +1221,31 @@ fun HomeScreen(
                     }
                 }
             }
-        }    }
+        }
+
+        if (showPendingSheet) {
+            PendingTransactionsBottomSheet(
+                pendingList = pendingTransactions,
+                categories = categories,
+                isPersian = isPersian,
+                currencyUnit = currencyUnit,
+                onDismiss = { showPendingSheet = false },
+                onConfirmFinal = { pending, title, amount, category, isExpense, note ->
+                    pendingViewModel.confirmTransaction(
+                        pending = pending,
+                        title = title,
+                        amount = amount,
+                        category = category,
+                        isExpense = isExpense,
+                        note = note
+                    )
+                },
+                onIgnore = { pending ->
+                    pendingViewModel.ignoreTransaction(pending)
+                }
+            )
+        }
+    }
 }
 
 private data class Quadruple<A, B, C, D>(
