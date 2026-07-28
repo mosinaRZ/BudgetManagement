@@ -155,6 +155,10 @@ fun SettingsScreen(
                             ) {
                                 LocaleHelper.setLocale(context, "fa")
                                 (context as? Activity)?.recreate()
+
+                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                    ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
+                                }
                             }
                             CurrencyOrLanguageOptionButton(
                                 title = "English (EN)",
@@ -163,6 +167,10 @@ fun SettingsScreen(
                             ) {
                                 LocaleHelper.setLocale(context, "en")
                                 (context as? Activity)?.recreate()
+
+                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                    ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
+                                }
                             }
                         }
                     }
@@ -192,6 +200,10 @@ fun SettingsScreen(
                                 CurrencySharedPreferences.setCurrency(context, "IRT")
                                 onCurrencyChanged("IRT")
 
+                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                    ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
+                                }
+
                                 NotificationHelper.send(
                                     context,
                                     type = "SYSTEM",
@@ -210,6 +222,10 @@ fun SettingsScreen(
                                 currentCurrencyCode = "IRR"
                                 CurrencySharedPreferences.setCurrency(context, "IRR")
                                 onCurrencyChanged("IRR")
+
+                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                    ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
+                                }
 
                                 NotificationHelper.send(
                                     context,
@@ -602,6 +618,10 @@ fun SettingsScreen(
                                         themeMode = ThemePreferences.MODE_LIGHT
                                         saveThemeMode(context, ThemePreferences.MODE_LIGHT)
                                         onThemeToggle()
+
+                                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                            ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
+                                        }
                                     }
                                 }
                                 .padding(16.dp)
@@ -628,6 +648,10 @@ fun SettingsScreen(
                                                 themeMode = ThemePreferences.MODE_LIGHT
                                                 saveThemeMode(context, ThemePreferences.MODE_LIGHT)
                                                 onThemeToggle()
+
+                                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                                    ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
+                                                }
                                             }
                                         }
                                     )
@@ -660,6 +684,10 @@ fun SettingsScreen(
                                         themeMode = ThemePreferences.MODE_DARK
                                         saveThemeMode(context, ThemePreferences.MODE_DARK)
                                         onThemeToggle()
+
+                                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                            ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
+                                        }
                                     }
                                 }
                                 .padding(16.dp)
@@ -686,6 +714,10 @@ fun SettingsScreen(
                                                 themeMode = ThemePreferences.MODE_DARK
                                                 saveThemeMode(context, ThemePreferences.MODE_DARK)
                                                 onThemeToggle()
+
+                                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                                    ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
+                                                }
                                             }
                                         }
                                     )

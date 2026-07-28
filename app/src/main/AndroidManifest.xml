@@ -63,7 +63,7 @@
 
             <meta-data
                 android:name="android.appwidget.provider"
-                android:value="@xml/balance_widget_info" />
+                android:resource="@xml/balance_widget_info" />
         </receiver>
     </application>
 

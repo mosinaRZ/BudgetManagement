@@ -1,6 +1,9 @@
 package ir.hamedan.budgetmanagement.ui.screens.home
 
 import android.app.Activity
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
@@ -26,6 +29,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,11 +43,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.local.models.NotificationEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.BalanceWidgetReceiver
 import ir.hamedan.budgetmanagement.ui.screens.upcomings.UpcomingPaymentViewModel
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
 import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsViewModel
@@ -134,6 +142,37 @@ fun HomeScreen(
     val unreadCount by notificationViewModel.unreadCount.collectAsState()
 
     val categories by transactionViewModel.expenseCategories.collectAsState()
+
+    // چک کردن وضعیت ویجت (قابل آپدیت)
+    var isWidgetAdded by remember {
+        mutableStateOf(
+            run {
+                val appWidgetManager = AppWidgetManager.getInstance(context)
+                val widgetIds = appWidgetManager.getAppWidgetIds(
+                    ComponentName(context, BalanceWidgetReceiver::class.java)
+                )
+                widgetIds.isNotEmpty()
+            }
+        )
+    }
+
+// هر بار که صفحه resume می‌شود دوباره چک می‌کنیم (بعد از پین کردن ویجت)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val appWidgetManager = AppWidgetManager.getInstance(context)
+                val widgetIds = appWidgetManager.getAppWidgetIds(
+                    ComponentName(context, BalanceWidgetReceiver::class.java)
+                )
+                isWidgetAdded = widgetIds.isNotEmpty()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     // بعد از گرفتن paymentsList
     LaunchedEffect(paymentsList) {
@@ -235,8 +274,14 @@ fun HomeScreen(
                 .padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            item { Spacer(modifier = Modifier.statusBarsPadding().height(55.dp)) }
-
+            item {
+                // اگر CTA هست ارتفاع بیشتر می‌دهیم تا محتوا زیر CTA نره
+                Spacer(
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .height(if (isWidgetAdded) 55.dp else 115.dp)
+                )
+            }
             // ---------------------------------------------------------------------
             // کارت بالانس اصلی (تراز کلی حساب)
             // ---------------------------------------------------------------------
@@ -986,6 +1031,79 @@ fun HomeScreen(
                             )
                         }
                     }
+                }
+            }
+        }
+
+        // ---------------------------------------------------------------------
+// CTA اضافه کردن ویجت (فقط وقتی ویجت اضافه نشده باشد)
+// ---------------------------------------------------------------------
+        if (!isWidgetAdded) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 72.dp)
+                    .padding(horizontal = 24.dp)
+            ) {
+                val capsuleShape = RoundedCornerShape(50)
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
+                            shape = capsuleShape
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                            shape = capsuleShape
+                        )
+                        .clip(capsuleShape)
+                        .clickable {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                val appWidgetManager = AppWidgetManager.getInstance(context)
+                                val provider = ComponentName(context, BalanceWidgetReceiver::class.java)
+
+                                if (appWidgetManager.isRequestPinAppWidgetSupported) {
+                                    appWidgetManager.requestPinAppWidget(provider, null, null)
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        if (isPersian) "لطفاً از منوی ویجت‌ها، ویجت سیدنا را اضافه کنید"
+                                        else "Please add Cidna widget from the widget menu",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    if (isPersian) "لطفاً از منوی ویجت‌ها، ویجت سیدنا را اضافه کنید"
+                                    else "Please add Cidna widget from the widget menu",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Widgets,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = if (isPersian) "ویجت موجودی را اضافه کنید" else "Add Balance Widget",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 }
             }
         }

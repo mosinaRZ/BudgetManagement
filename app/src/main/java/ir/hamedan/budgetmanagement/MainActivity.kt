@@ -56,6 +56,7 @@ import ir.hamedan.budgetmanagement.ui.theme.BudgetManagementTheme
 import ir.hamedan.budgetmanagement.utils.AppNotificationManager
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.NotificationHelper
+import kotlinx.coroutines.launch
 
 @Suppress("DEPRECATION")
 // 🚀 تغییر مهم: ارث‌بری از FragmentActivity برای جلوگیری از کرش اثر انگشت
@@ -120,6 +121,10 @@ class MainActivity : FragmentActivity() {
 
                         themeMode = newMode
                         saveThemeMode(context, newMode)
+
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                            ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
+                        }
                     }
                 )
             }
