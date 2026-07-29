@@ -430,7 +430,7 @@ fun SettingsScreen(
                 item {
                     SettingsAccordionItem(
                         title = if (isPersian) "درباره ما و پشتیبانی" else "About Us & Support",
-                        subtitle = if (isPersian) "راه‌های ارتباطی،واتس‌اپ و ایمیل" else "Contact channels, Gmail, WhatsApp & Support",
+                        subtitle = if (isPersian) "راه‌های ارتباطی، واتس‌اپ و ایمیل" else "Contact channels, Gmail, WhatsApp & Support",
                         icon = Icons.Default.Info,
                         isExpanded = activeMenu == SettingsMenu.ABOUT,
                         onClick = { activeMenu = if (activeMenu == SettingsMenu.ABOUT) SettingsMenu.NONE else SettingsMenu.ABOUT }
