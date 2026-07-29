@@ -1,4 +1,4 @@
-package ir.hamedan.budgetmanagement.ui.screens.payments
+package ir.hamedan.budgetmanagement.ui.screens.upcomings
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -17,7 +17,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.*
@@ -42,7 +41,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.data.local.models.UpcomingPaymentEntity
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
-import ir.hamedan.budgetmanagement.ui.screens.upcomings.UpcomingPaymentViewModel
 import ir.hamedan.budgetmanagement.utils.DateUtils
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.PaymentDateUtils
@@ -578,7 +576,7 @@ fun AddOrEditPaymentDialog(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = if (isPersian) "روز سررسید" else "Due Day",
+                        text = if (isPersian) "روز سررسید (میلادی)" else "Due Day (Gregorian)",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier

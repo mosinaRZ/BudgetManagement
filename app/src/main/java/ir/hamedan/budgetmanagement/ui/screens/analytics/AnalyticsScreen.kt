@@ -20,10 +20,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -374,6 +376,7 @@ private fun BalanceTrendChartCard(
 ) {
     val cardShape = RoundedCornerShape(24.dp)
     val lineColor = MaterialTheme.colorScheme.primary
+    val averageColor = MaterialTheme.colorScheme.tertiary
 
     Box(
         modifier = Modifier
@@ -397,75 +400,158 @@ private fun BalanceTrendChartCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp)
+            // محورها و نمودار
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                if (dataPoints.isEmpty()) return@Canvas
+                // برچسب محور Y (مبلغ)
+                Text(
+                    text = if (isPersian) "مبلغ" else "Amount",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .rotate(-90f)
+                        .padding(end = 4.dp)
+                )
 
-                val width = size.width
-                val height = size.height
-                val maxVal = (dataPoints.maxOrNull() ?: 1f).let { if (it == 0f) 1f else it } * 1.15f
-                val minVal = (dataPoints.minOrNull() ?: 0f) * 0.85f
+                Column(modifier = Modifier.weight(1f)) {
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                    ) {
+                        if (dataPoints.isEmpty()) return@Canvas
 
-                val distanceX = if (dataPoints.size > 1) width / (dataPoints.size - 1) else width
+                        val width = size.width
+                        val height = size.height
+                        val maxVal = (dataPoints.maxOrNull() ?: 1f).let { if (it == 0f) 1f else it } * 1.15f
+                        val minVal = (dataPoints.minOrNull() ?: 0f).let { if (it > 0f) it * 0.85f else it * 1.15f }
 
-                val strokePath = Path()
-                val fillPath = Path()
+                        val distanceX = if (dataPoints.size > 1) width / (dataPoints.size - 1) else width
 
-                dataPoints.forEachIndexed { index, value ->
-                    val x = index * distanceX
-                    val normalizedY = if (maxVal != minVal) (value - minVal) / (maxVal - minVal) else 0.5f
-                    val y = height - (normalizedY * height)
+                        // محاسبه میانگین
+                        val average = dataPoints.average().toFloat()
+                        val avgNormalizedY = if (maxVal != minVal) {
+                            (average - minVal) / (maxVal - minVal)
+                        } else {
+                            0.5f
+                        }
+                        val avgY = height - (avgNormalizedY * height)
 
-                    if (index == 0) {
-                        strokePath.moveTo(x, y)
-                        fillPath.moveTo(x, height)
-                        fillPath.lineTo(x, y)
-                    } else {
-                        val prevX = (index - 1) * distanceX
-                        val prevNormalizedY = if (maxVal != minVal) (dataPoints[index - 1] - minVal) / (maxVal - minVal) else 0.5f
-                        val prevY = height - (prevNormalizedY * height)
-
-                        val controlX1 = prevX + distanceX / 2f
-                        val controlX2 = x - distanceX / 2f
-
-                        strokePath.cubicTo(controlX1, prevY, controlX2, y, x, y)
-                        fillPath.cubicTo(controlX1, prevY, controlX2, y, x, y)
-                    }
-
-                    if (index == dataPoints.size - 1) {
-                        fillPath.lineTo(x, height)
-                        fillPath.close()
-                    }
-                }
-
-                drawPath(
-                    path = fillPath,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            lineColor.copy(alpha = 0.35f),
-                            lineColor.copy(alpha = 0.0f)
+                        // رسم خط چین میانگین
+                        val dashPathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                        drawLine(
+                            color = averageColor.copy(alpha = 0.85f),
+                            start = Offset(0f, avgY),
+                            end = Offset(width, avgY),
+                            strokeWidth = 2.dp.toPx(),
+                            pathEffect = dashPathEffect
                         )
+
+                        val strokePath = Path()
+                        val fillPath = Path()
+
+                        dataPoints.forEachIndexed { index, value ->
+                            val x = index * distanceX
+                            val normalizedY = if (maxVal != minVal) {
+                                (value - minVal) / (maxVal - minVal)
+                            } else {
+                                0.5f
+                            }
+                            val y = height - (normalizedY * height)
+
+                            if (index == 0) {
+                                strokePath.moveTo(x, y)
+                                fillPath.moveTo(x, height)
+                                fillPath.lineTo(x, y)
+                            } else {
+                                val prevX = (index - 1) * distanceX
+                                val prevNormalizedY = if (maxVal != minVal) {
+                                    (dataPoints[index - 1] - minVal) / (maxVal - minVal)
+                                } else {
+                                    0.5f
+                                }
+                                val prevY = height - (prevNormalizedY * height)
+
+                                val controlX1 = prevX + distanceX / 2f
+                                val controlX2 = x - distanceX / 2f
+
+                                strokePath.cubicTo(controlX1, prevY, controlX2, y, x, y)
+                                fillPath.cubicTo(controlX1, prevY, controlX2, y, x, y)
+                            }
+
+                            if (index == dataPoints.size - 1) {
+                                fillPath.lineTo(x, height)
+                                fillPath.close()
+                            }
+                        }
+
+                        drawPath(
+                            path = fillPath,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    lineColor.copy(alpha = 0.35f),
+                                    lineColor.copy(alpha = 0.0f)
+                                )
+                            )
+                        )
+
+                        drawPath(
+                            path = strokePath,
+                            color = lineColor,
+                            style = Stroke(width = 3.dp.toPx())
+                        )
+
+                        dataPoints.forEachIndexed { index, value ->
+                            val x = index * distanceX
+                            val normalizedY = if (maxVal != minVal) {
+                                (value - minVal) / (maxVal - minVal)
+                            } else {
+                                0.5f
+                            }
+                            val y = height - (normalizedY * height)
+
+                            drawCircle(color = lineColor, radius = 4.dp.toPx(), center = Offset(x, y))
+                            drawCircle(color = Color.White, radius = 2.dp.toPx(), center = Offset(x, y))
+                        }
+                    }
+
+                    // برچسب محور X (زمان)
+                    Text(
+                        text = if (isPersian) "زمان" else "Time",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .padding(top = 6.dp)
                     )
-                )
+                }
+            }
 
-                drawPath(
-                    path = strokePath,
-                    color = lineColor,
-                    style = Stroke(width = 3.dp.toPx())
-                )
-
-                dataPoints.forEachIndexed { index, value ->
-                    val x = index * distanceX
-                    val normalizedY = if (maxVal != minVal) (value - minVal) / (maxVal - minVal) else 0.5f
-                    val y = height - (normalizedY * height)
-
-                    drawCircle(color = lineColor, radius = 4.dp.toPx(), center = Offset(x, y))
-                    drawCircle(color = Color.White, radius = 2.dp.toPx(), center = Offset(x, y))
+            // راهنمای خط میانگین
+            if (dataPoints.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Canvas(modifier = Modifier.size(20.dp, 2.dp)) {
+                        drawLine(
+                            color = averageColor.copy(alpha = 0.85f),
+                            start = Offset(0f, size.height / 2),
+                            end = Offset(size.width, size.height / 2),
+                            strokeWidth = 2.dp.toPx(),
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
+                        )
+                    }
+                    Text(
+                        text = if (isPersian) "میانگین" else "Average",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }

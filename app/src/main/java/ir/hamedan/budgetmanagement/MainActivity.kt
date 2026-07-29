@@ -48,7 +48,7 @@ import ir.hamedan.budgetmanagement.ui.screens.auth.LoginScreen
 import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitScreen
 import ir.hamedan.budgetmanagement.ui.screens.categories.CategoriesScreen
 import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsScreen
-import ir.hamedan.budgetmanagement.ui.screens.payments.UpcomingPaymentsScreen
+import ir.hamedan.budgetmanagement.ui.screens.upcomings.UpcomingPaymentsScreen
 import ir.hamedan.budgetmanagement.ui.screens.splash.SplashScreen
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionsScreen
 import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsScreen

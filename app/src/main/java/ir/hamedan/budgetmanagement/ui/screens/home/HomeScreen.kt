@@ -211,45 +211,10 @@ fun HomeScreen(
         }
     }
 
-    // ---------------------------------------------------------------------
-    // محاسبه دقیق و پویا: ابتدا و انتهای ماه جاری و ماه قبل
-    // ---------------------------------------------------------------------
-    val (currentMonthStart, currentMonthEnd, prevMonthStart, prevMonthEnd) = remember {
-        val calendar = Calendar.getInstance()
-
-        val startCur = (calendar.clone() as Calendar).apply {
-            set(Calendar.DAY_OF_MONTH, 1)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-
-        val endCur = (calendar.clone() as Calendar).apply {
-            set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
-            set(Calendar.HOUR_OF_DAY, 23)
-            set(Calendar.MINUTE, 59)
-            set(Calendar.SECOND, 59)
-            set(Calendar.MILLISECOND, 999)
-        }
-
-        val startPrev = (startCur.clone() as Calendar).apply { add(Calendar.MONTH, -1) }
-        val endPrev = (startCur.clone() as Calendar).apply { add(Calendar.MILLISECOND, -1) }
-
-        Quadruple(startCur.timeInMillis, endCur.timeInMillis, startPrev.timeInMillis, endPrev.timeInMillis)
-    }
-
-    val periodTransactions = remember(transactionsList, currentMonthStart, currentMonthEnd) {
-        transactionsList.filter { it.timestamp in currentMonthStart..currentMonthEnd }
-    }
-
     // تراز کلی حساب (بدون هیچ فیلتر زمانی) - مجموع تمام تراکنش‌ها
     val totalAllIncome = transactionsList.filter { it.type == "INCOME" }.sumOf { it.amount }
     val totalAllExpense = transactionsList.filter { it.type == "EXPENSE" }.sumOf { it.amount }
     val totalBalance = totalAllIncome - totalAllExpense
-
-    val totalIncome = periodTransactions.filter { it.type == "INCOME" }.sumOf { it.amount }
-    val totalExpense = periodTransactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }
 
     val recentTransactions = remember(transactionsList) {
         transactionsList.sortedByDescending { it.timestamp }.take(3)
@@ -279,7 +244,7 @@ fun HomeScreen(
                 Spacer(
                     modifier = Modifier
                         .statusBarsPadding()
-                        .height(if (isWidgetAdded) 55.dp else 115.dp)
+                        .height(if (isWidgetAdded) 55.dp else 110.dp)
                 )
             }
             // ---------------------------------------------------------------------
@@ -345,13 +310,13 @@ fun HomeScreen(
                 }
             }
 
-            // ---------------------------------------------------------------------
-            // خلاصه درآمد و هزینه
-            // ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// خلاصه درآمد و هزینه
+// ---------------------------------------------------------------------
             item {
                 val summaryCardShape = RoundedCornerShape(20.dp)
-                val income = totalIncome
-                val expense = totalExpense
+                val income = totalAllIncome
+                val expense = totalAllExpense
 
                 Row(
                     modifier = Modifier
@@ -382,7 +347,7 @@ fun HomeScreen(
                             verticalArrangement = Arrangement.Center
                         ) {
                             Text(
-                                text = if (isPersian) "درآمد این ماه" else "Income",
+                                text = if (isPersian) "درآمد" else "Income",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -421,7 +386,7 @@ fun HomeScreen(
                             verticalArrangement = Arrangement.Center
                         ) {
                             Text(
-                                text = if (isPersian) "هزینه این ماه" else "Expense",
+                                text = if (isPersian) "هزینه" else "Expense",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -439,9 +404,9 @@ fun HomeScreen(
                 }
             }
 
-            // ---------------------------------------------------------------------
-            // بخش قلک‌های پس‌انداز
-            // ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// بخش قلک‌های پس‌انداز
+// ---------------------------------------------------------------------
             item {
                 val piggyShape = RoundedCornerShape(24.dp)
                 Box(
@@ -499,7 +464,7 @@ fun HomeScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "${goal.icon} ${goal.title}",
+                                        text = "${goal.icon} ${goal.title} (${(progress * 100).toInt()}%)",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontWeight = FontWeight.Medium
@@ -548,9 +513,9 @@ fun HomeScreen(
                 }
             }
 
-            // ---------------------------------------------------------------------
-            // بخش محدودیت‌های خرج‌کرد
-            // ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// بخش محدودیت‌های خرج‌کرد
+// ---------------------------------------------------------------------
             item {
                 val budgetShape = RoundedCornerShape(24.dp)
                 Box(

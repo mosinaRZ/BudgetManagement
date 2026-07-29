@@ -310,10 +310,24 @@ private fun PendingConfirmDialog(
     var selectedCategoryKey by remember { mutableStateOf(pending.suggestedCategory) }
     var isCategoryDropdownExpanded by remember { mutableStateOf(false) }
 
-    // جستجوی دسته‌بندی فارغ از بزرگ/کوچک بودن حروف کلید (جهت سازگاری کامل با StringMapper)
+    // وضعیت کلیک روی دکمه ثبت (برای کنترل زمان نمایش ارورها)
+    var isSubmitted by remember { mutableStateOf(false) }
+
+    // جستجوی دسته‌بندی
     val selectedCategoryObj = categories.find { it.title.equals(selectedCategoryKey, ignoreCase = true) }
 
     val maxDigitsLength = 12
+
+    // بررسی صحت فیلدها
+    val isTitleValid = title.trim().isNotEmpty()
+    val parsedAmount = amountText.toDoubleOrNull() ?: 0.0
+    val isAmountValid = amountText.isNotEmpty() && parsedAmount > 0
+    val isCategoryValid = selectedCategoryKey.isNotEmpty()
+
+    // نمایش خطاها فقط پس از تلاش کاربر برای ثبت فرم
+    val showTitleError = isSubmitted && !isTitleValid
+    val showAmountError = isSubmitted && !isAmountValid
+    val showCategoryError = isSubmitted && !isCategoryValid
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -379,7 +393,7 @@ private fun PendingConfirmDialog(
                             .background(if (isExpense) MaterialTheme.colorScheme.error.copy(alpha = 0.85f) else Color.Transparent)
                             .clickable {
                                 isExpense = true
-                                selectedCategoryKey = "UNCATEGORIZED"
+                                selectedCategoryKey = ""
                             },
                         contentAlignment = Alignment.Center
                     ) {
@@ -399,7 +413,7 @@ private fun PendingConfirmDialog(
                             .background(if (!isExpense) MaterialTheme.colorScheme.primary.copy(alpha = 0.85f) else Color.Transparent)
                             .clickable {
                                 isExpense = false
-                                selectedCategoryKey = "UNCATEGORIZED"
+                                selectedCategoryKey = ""
                             },
                         contentAlignment = Alignment.Center
                     ) {
@@ -420,12 +434,25 @@ private fun PendingConfirmDialog(
                             title = input
                         }
                     },
-                    label = { Text(if (isPersian) "عنوان تراکنش" else "Title") },
+                    label = { Text(if (isPersian) "عنوان تراکنش *" else "Title *") },
+                    isError = showTitleError,
                     singleLine = true,
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth(),
                     supportingText = {
-                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            if (showTitleError) {
+                                Text(
+                                    text = if (isPersian) "عنوان نمی‌تواند خالی باشد" else "Title is required",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            } else {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
                             Text(
                                 text = "${title.length}/40",
                                 style = MaterialTheme.typography.labelSmall,
@@ -446,25 +473,42 @@ private fun PendingConfirmDialog(
                     },
                     label = {
                         val unit = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else currencyUnit
-                        Text("${if (isPersian) "مبلغ" else "Amount"} ($unit)")
+                        Text("${if (isPersian) "مبلغ *" else "Amount *"} ($unit)")
                     },
+                    isError = showAmountError,
                     singleLine = true,
                     visualTransformation = ThousandsSeparatorTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    supportingText = if (showAmountError) {
+                        {
+                            Text(
+                                text = if (isPersian) "مبلغ معتبری وارد کنید" else "Enter a valid amount",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    } else null
                 )
 
-                // منوی کشویی انتخاب دسته‌بندی متصل به StringMapper
+                // منوی کشویی انتخاب دسته‌بندی
                 ExposedDropdownMenuBox(
                     expanded = isCategoryDropdownExpanded,
                     onExpandedChange = { isCategoryDropdownExpanded = !isCategoryDropdownExpanded }
                 ) {
+                    val categoryDisplayText = if (selectedCategoryKey.isEmpty()) {
+                        if (isPersian) "لطفاً دسته‌بندی را انتخاب کنید" else "Select a category"
+                    } else {
+                        StringMapper.getCategoryName(selectedCategoryKey, isPersian)
+                    }
+
                     OutlinedTextField(
-                        value = StringMapper.getCategoryName(selectedCategoryKey, isPersian),
+                        value = categoryDisplayText,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text(if (isPersian) "انتخاب دسته‌بندی" else "Select Category") },
+                        isError = showCategoryError,
+                        label = { Text(if (isPersian) "دسته‌بندی *" else "Category *") },
                         leadingIcon = {
                             if (selectedCategoryObj != null) {
                                 Text(
@@ -478,7 +522,16 @@ private fun PendingConfirmDialog(
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .menuAnchor()
+                            .menuAnchor(),
+                        supportingText = if (showCategoryError) {
+                            {
+                                Text(
+                                    text = if (isPersian) "انتخاب دسته‌بندی الزامی است" else "Category is required",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        } else null
                     )
 
                     ExposedDropdownMenu(
@@ -527,7 +580,7 @@ private fun PendingConfirmDialog(
                     }
                 }
 
-                // یادداشت
+                // یادداشت (اختیاری - بدون اعتبارسنجی)
                 OutlinedTextField(
                     value = noteText,
                     onValueChange = { input ->
@@ -565,9 +618,13 @@ private fun PendingConfirmDialog(
 
                     Button(
                         onClick = {
-                            val parsedAmount = amountText.toDoubleOrNull() ?: 0.0
-                            val finalAmount = if (currencyUnit == "IRR") parsedAmount / 10 else parsedAmount
-                            onConfirmFinal(title, finalAmount, selectedCategoryKey, isExpense, noteText.trim())
+                            isSubmitted = true // کلیک کاربر روی تایید ثبت شد
+
+                            // اگر همه فیلدها معتبر باشند ثبت نهایی انجام می‌شود
+                            if (isTitleValid && isAmountValid && isCategoryValid) {
+                                val finalAmount = if (currencyUnit == "IRR") parsedAmount / 10 else parsedAmount
+                                onConfirmFinal(title.trim(), finalAmount, selectedCategoryKey, isExpense, noteText.trim())
+                            }
                         },
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.weight(1f)

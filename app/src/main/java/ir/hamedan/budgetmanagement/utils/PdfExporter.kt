@@ -66,6 +66,7 @@ object PdfExporter {
 
             y = drawTableHeader(canvas, isPersian, y)
 
+            val tableStartY = y
             val rowsThisPage = if (pageNumber == 1) rowsFirstPage else rowsOtherPages
             var drawnOnThisPage = 0
             while (rowIndex < totalRows && drawnOnThisPage < rowsThisPage) {
@@ -73,6 +74,11 @@ object PdfExporter {
                 y += ROW_HEIGHT
                 rowIndex++
                 drawnOnThisPage++
+            }
+
+            // رسم خطوط جدول (افقی و عمودی)
+            if (drawnOnThisPage > 0) {
+                drawTableBorders(canvas, tableStartY, drawnOnThisPage)
             }
 
             drawFooter(canvas, pageNumber, totalPages, isPersian)
@@ -206,6 +212,46 @@ object PdfExporter {
             val cellCenterX = x + widths[i] / 2f
             drawCenteredText(canvas, cell, cellCenterX, y + 18f, cellPaint)
             x += widths[i]
+        }
+    }
+
+    /** رسم خطوط افقی و عمودی جدول برای خوانایی بهتر */
+    private fun drawTableBorders(canvas: Canvas, tableStartY: Float, rowCount: Int) {
+        val borderPaint = Paint().apply {
+            color = Color.parseColor("#BDBDBD")
+            strokeWidth = 0.8f
+            style = Paint.Style.STROKE
+            isAntiAlias = true
+        }
+        val outerPaint = Paint().apply {
+            color = Color.parseColor("#757575")
+            strokeWidth = 1.2f
+            style = Paint.Style.STROKE
+            isAntiAlias = true
+        }
+
+        val tableTop = tableStartY - 4f - TABLE_HEADER_HEIGHT
+        val tableBottom = tableStartY + rowCount * ROW_HEIGHT
+        val left = MARGIN
+        val right = PAGE_WIDTH - MARGIN
+
+        // کادر بیرونی جدول
+        canvas.drawRect(left, tableTop, right, tableBottom, outerPaint)
+
+        // خطوط افقی بین ردیف‌ها
+        for (i in 0..rowCount) {
+            val y = tableStartY + i * ROW_HEIGHT
+            canvas.drawLine(left, y, right, y, borderPaint)
+        }
+        // خط بالای هدر (قبلاً با پس‌زمینه سبز پوشیده شده)
+        canvas.drawLine(left, tableTop, right, tableTop, outerPaint)
+
+        // خطوط عمودی ستون‌ها
+        val widths = columnWidths()
+        var x = left
+        for (i in 0 until widths.size - 1) {
+            x += widths[i]
+            canvas.drawLine(x, tableTop, x, tableBottom, borderPaint)
         }
     }
 
