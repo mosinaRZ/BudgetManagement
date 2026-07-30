@@ -21,7 +21,11 @@ object SmsParser {
     )
 
     fun isLikelyBankSms(body: String): Boolean {
-        return bankSmsIndicators.any { body.contains(it) }
+        val normalized = normalizeText(body)
+
+        // باید حداقل دو نشانگر بانکی داشته باشد تا احتمال پیامک عادی کمتر شود
+        val matchCount = bankSmsIndicators.count { normalized.contains(it) }
+        return matchCount >= 2
     }
 
     private fun normalizeText(input: String): String {
