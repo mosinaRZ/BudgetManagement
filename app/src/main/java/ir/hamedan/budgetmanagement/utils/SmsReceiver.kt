@@ -1,9 +1,12 @@
 package ir.hamedan.budgetmanagement.utils
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.provider.Telephony
+import androidx.core.content.ContextCompat
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.PendingTransactionEntity
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
@@ -18,8 +21,14 @@ class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
 
+        // فقط وقتی پرمیشن واقعاً داده شده باشد ادامه بده
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS)
+            != PackageManager.PERMISSION_GRANTED) {
+            return
+        }
+
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
-        if (messages.isNullOrEmpty()) return
+        if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
 
         val sender = messages[0].originatingAddress ?: ""
         val fullBody = messages.joinToString(separator = "") { it.messageBody ?: "" }
