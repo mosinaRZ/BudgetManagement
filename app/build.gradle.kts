@@ -17,19 +17,30 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // فیلدهای سفارشی BuildConfig
+        buildConfigField("String", "APP_NAME", "\"Budget Management\"")
+        buildConfigField("String", "BASE_URL", "\"https://api.example.com/\"")   // برای آینده (بک‌اند Go)
     }
 
     buildTypes {
+        debug {
+            isMinifyEnabled = false
+            buildConfigField("String", "BASE_URL", "\"https://dev-api.example.com/\"")
+            buildConfigField("Boolean", "ENABLE_LOGS", "true")
+        }
         release {
             isMinifyEnabled = true
-            isShrinkResources = true          // منابع استفاده نشده را هم حذف می‌کند
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            buildConfigField("String", "BASE_URL", "\"https://api.example.com/\"")
+            buildConfigField("Boolean", "ENABLE_LOGS", "false")
         }
     }
     compileOptions {
@@ -38,6 +49,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
