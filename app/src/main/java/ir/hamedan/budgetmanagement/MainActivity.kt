@@ -46,6 +46,7 @@ import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.saveThemeMo
 import ir.hamedan.budgetmanagement.ui.components.BottomNavItem
 import ir.hamedan.budgetmanagement.ui.components.CapsuleBottomNavigation
 import ir.hamedan.budgetmanagement.ui.navigation.AppRoute
+import ir.hamedan.budgetmanagement.ui.navigation.MainTabRoute
 import ir.hamedan.budgetmanagement.ui.screens.add.AddScreen
 import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsScreen
 import ir.hamedan.budgetmanagement.ui.screens.home.HomeScreen
@@ -245,25 +246,23 @@ class MainActivity : FragmentActivity() {
             }
 
             // ۴. ساختار اصلی برنامه پس از لاگین موفق
-            composable("MainStructure") {
+            composable<AppRoute.MainStructure> {
                 val appNavController = rememberNavController()
                 val appBackStackEntry by appNavController.currentBackStackEntryAsState()
                 val appCurrentRoute = appBackStackEntry?.destination?.route
 
-                Box(
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    // محتوای داخلی صفحات برنامه
+                Box(modifier = Modifier.fillMaxSize()) {
+
                     NavHost(
                         navController = appNavController,
-                        startDestination = BottomNavItem.Home.route,
+                        startDestination = MainTabRoute.Home,
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        composable(BottomNavItem.Home.route) {
+                        composable<MainTabRoute.Home> {
                             HomeScreen(
                                 onThemeToggle = onThemeToggle,
                                 onSeeAllTransactionsClick = {
-                                    appNavController.navigate(BottomNavItem.Transactions.route) {
+                                    appNavController.navigate(MainTabRoute.Transactions) {
                                         popUpTo(appNavController.graph.startDestinationId) {
                                             saveState = true
                                         }
@@ -272,47 +271,49 @@ class MainActivity : FragmentActivity() {
                                     }
                                 },
                                 onAddScreenClickDue = {
-                                    navController.navigate("AddScreen?highlightId=due")
+                                    navController.navigate(AppRoute.AddScreen(highlightId = "due"))
                                 },
                                 onAddScreenClickLimit = {
-                                    navController.navigate("AddScreen?highlightId=limit")
+                                    navController.navigate(AppRoute.AddScreen(highlightId = "limit"))
                                 },
                                 onAddScreenClickPiggy = {
-                                    navController.navigate("AddScreen?highlightId=piggy")
+                                    navController.navigate(AppRoute.AddScreen(highlightId = "piggy"))
                                 }
                             )
                         }
-                        composable(BottomNavItem.Transactions.route) {
+
+                        composable<MainTabRoute.Transactions> {
                             TransactionsScreen(
                                 onAddTransactionClick = {
-                                    navController.navigate("AddScreen")
+                                    navController.navigate(AppRoute.AddScreen())
                                 }
                             )
                         }
-                        composable(BottomNavItem.Analytics.route) {
+
+                        composable<MainTabRoute.Analytics> {
                             AnalyticsScreen(
                                 onAddScreenClick = {
-                                    navController.navigate("AddScreen")
+                                    navController.navigate(AppRoute.AddScreen())
                                 }
                             )
                         }
-                        composable(BottomNavItem.Settings.route) {
+
+                        composable<MainTabRoute.Settings> {
                             SettingsScreen(
                                 onThemeToggle = onThemeToggle,
                                 onAddScreenClick = {
-                                    // ارسال شناسه دکمه هدف (در اینجا category) به عنوان آرگومان
-                                    navController.navigate("AddScreen?highlightId=category")
+                                    navController.navigate(AppRoute.AddScreen(highlightId = "category"))
                                 },
                                 onLoginClick = {
-                                    navController.navigate("Login") {
-                                        popUpTo("MainStructure") { inclusive = true }
+                                    navController.navigate(AppRoute.Login) {
+                                        popUpTo(AppRoute.MainStructure) { inclusive = true }
                                     }
                                 }
                             )
                         }
                     }
 
-                    // مجموعه داک باتم‌بار و دکمه شناور پلاس (FAB)
+                    // ===== Bottom Bar + FAB =====
                     val context = LocalContext.current
                     val isPersian = LocaleHelper.getLanguage(context) == "fa"
 
@@ -325,12 +326,13 @@ class MainActivity : FragmentActivity() {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-
                         val bottomBarItem = @Composable {
                             Box(modifier = Modifier.weight(1f)) {
                                 CapsuleBottomNavigation(
                                     currentRoute = appCurrentRoute,
                                     onItemSelected = { selectedItem ->
+                                        // فعلاً هنوز از BottomNavItem قدیمی استفاده می‌کنیم
+                                        // در مرحله بعد آن را هم Type-safe می‌کنیم
                                         appNavController.navigate(selectedItem.route) {
                                             popUpTo(appNavController.graph.startDestinationId) {
                                                 saveState = true
@@ -346,7 +348,7 @@ class MainActivity : FragmentActivity() {
                         val fabItem = @Composable {
                             FloatingActionButton(
                                 onClick = {
-                                    navController.navigate("AddScreen")
+                                    navController.navigate(AppRoute.AddScreen())
                                 },
                                 containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
                                 contentColor = MaterialTheme.colorScheme.onPrimary,
