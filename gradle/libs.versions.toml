@@ -16,6 +16,7 @@ lottie = "6.4.0"
 biometric = "1.1.0"          # به جای alpha از نسخه پایدار استفاده می‌کنیم
 fastexcel = "0.17.0"
 glance = "1.1.1"             # نسخه کمی جدیدتر و پایدارتر
+serialization = "1.8.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -43,8 +44,10 @@ androidx-biometric = { group = "androidx.biometric", name = "biometric", version
 fastexcel = { group = "org.dhatim", name = "fastexcel", version.ref = "fastexcel" }
 androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
 androidx-glance-material3 = { group = "androidx.glance", name = "glance-material3", version.ref = "glance" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

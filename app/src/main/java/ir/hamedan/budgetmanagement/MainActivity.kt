@@ -38,12 +38,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.getThemeMode
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.saveThemeMode
 import ir.hamedan.budgetmanagement.ui.components.BottomNavItem
 import ir.hamedan.budgetmanagement.ui.components.CapsuleBottomNavigation
+import ir.hamedan.budgetmanagement.ui.navigation.AppRoute
 import ir.hamedan.budgetmanagement.ui.screens.add.AddScreen
 import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsScreen
 import ir.hamedan.budgetmanagement.ui.screens.home.HomeScreen
@@ -166,86 +168,79 @@ class MainActivity : FragmentActivity() {
 
         NavHost(
             navController = navController,
-            startDestination = "Splash", // ابتدا اسپلش اسکرین بالا می‌آید
+            startDestination = AppRoute.Splash,
             modifier = modifier
         ) {
             // ۱. صفحه اسپلش اسکرین
-            composable("Splash") {
+            composable<AppRoute.Splash> {
                 SplashScreen(
                     onAnimationFinished = {
-                        // هدایت به صفحه لاگین و پاک کردن اسپلش از پشته ناوبری
-                        navController.navigate("Login") {
-                            popUpTo("Splash") { inclusive = true }
+                        navController.navigate(AppRoute.Login) {
+                            popUpTo(AppRoute.Splash) { inclusive = true }
                         }
                     }
                 )
             }
 
             // 🚀 ۲. صفحه لاگین هوشمند (اثر انگشت + فرم متنی)
-            composable("Login") {
+            composable<AppRoute.Login> {
                 LoginScreen(
                     onLoginSuccess = {
-                        // هدایت به ساختار اصلی برنامه و پاک کردن صفحه لاگین برای عدم بازگشت مجدد
-                        navController.navigate("MainStructure") {
-                            popUpTo("Login") { inclusive = true }
+                        navController.navigate(AppRoute.MainStructure) {
+                            popUpTo(AppRoute.Login) { inclusive = true }
                         }
                     }
                 )
             }
 
             // ۳. صفحه افزودن تراکنش جدید
-            composable("AddScreen?highlightId={highlightId}") { backStackEntry ->
-                val highlightId = backStackEntry.arguments?.getString("highlightId")
+            composable<AppRoute.AddScreen> { backStackEntry ->
+                val route = backStackEntry.toRoute<AppRoute.AddScreen>()
 
                 AddScreen(
-                    highlightId = highlightId,
+                    highlightId = route.highlightId,
                     onBackClick = {
-                        navController.navigate("MainStructure")
+                        navController.navigate(AppRoute.MainStructure) {
+                            popUpTo(AppRoute.MainStructure) { inclusive = false }
+                            launchSingleTop = true
+                        }
                     },
                     onCategoriesClick = {
-                        navController.navigate("Categories")
+                        navController.navigate(AppRoute.Categories)
                     },
                     onDueClick = {
-                        navController.navigate("Upcoming")
+                        navController.navigate(AppRoute.Upcoming)
                     },
                     onGoalsClick = {
-                        navController.navigate("Goals")
+                        navController.navigate(AppRoute.Goals)
                     },
                     onLimitsClick = {
-                        navController.navigate("Limits")
+                        navController.navigate(AppRoute.Limits)
                     }
                 )
             }
 
-            composable("Categories") {
+            composable<AppRoute.Categories> {
                 CategoriesScreen(
-                    onBackClick = {
-                        navController.popBackStack()
-                    }
+                    onBackClick = { navController.popBackStack() }
                 )
             }
 
-            composable("Limits") {
+            composable<AppRoute.Limits> {
                 BudgetLimitScreen(
-                    onBackClick = {
-                        navController.popBackStack()
-                    }
+                    onBackClick = { navController.popBackStack() }
                 )
             }
 
-            composable("Upcoming") {
+            composable<AppRoute.Upcoming> {
                 UpcomingPaymentsScreen(
-                    onBackClick = {
-                        navController.popBackStack()
-                    }
+                    onBackClick = { navController.popBackStack() }
                 )
             }
 
-            composable("Goals") {
+            composable<AppRoute.Goals> {
                 SavingGoalsScreen(
-                    onBackClick = {
-                        navController.popBackStack()
-                    }
+                    onBackClick = { navController.popBackStack() }
                 )
             }
 
