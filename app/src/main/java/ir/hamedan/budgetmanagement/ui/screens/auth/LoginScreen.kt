@@ -209,7 +209,7 @@ fun LoginScreen(
                                 errorMessage = null
 
                                 scope.launch {
-                                    delay(1500)
+                                    delay(800)
                                     if (username.trim() == validUsername && password == validPassword) {
                                         isLoggingIn = false
                                         onLoginSuccess()
@@ -246,7 +246,7 @@ fun LoginScreen(
                         errorMessage = null
 
                         scope.launch {
-                            delay(1500) // مکث کوتاه برای نمایش انیمیشن درخشش شیمر دکمه
+                            delay(800) // مکث کوتاه برای نمایش انیمیشن درخشش شیمر دکمه
 
                             if (username.trim() == validUsername && password == validPassword) {
                                 isLoggingIn = false

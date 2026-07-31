@@ -116,7 +116,7 @@ fun AddScreen(
         if (highlightId != null && highlightId != consumedHighlightId) {
             consumedHighlightId = highlightId
             isAnimationActive = true
-            delay(4700)
+            delay(3200)
             isAnimationActive = false
         }
     }
