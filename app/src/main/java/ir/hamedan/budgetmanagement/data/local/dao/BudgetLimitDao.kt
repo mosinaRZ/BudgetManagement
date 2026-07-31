@@ -16,5 +16,5 @@ interface BudgetLimitDao {
     suspend fun delete(limit: BudgetLimitEntity)
 
     @Query("DELETE FROM budget_limits WHERE id = :id")
-    suspend fun deleteById(id: String)
+    suspend fun deleteById(id: Long)
 }

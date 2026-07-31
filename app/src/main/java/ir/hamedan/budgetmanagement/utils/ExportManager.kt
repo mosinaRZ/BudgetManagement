@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
+import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
@@ -14,8 +15,9 @@ enum class ExportFormat { PDF, XLSX }
 
 object ExportManager {
 
-    suspend fun export(context: Context, format: ExportFormat, period: ExportPeriod, isPersian: Boolean) {        val db = AppDatabase.getInstance(context)
-        val repo = TransactionRepository(db.transactionDao())
+    suspend fun export(context: Context, format: ExportFormat, period: ExportPeriod, isPersian: Boolean) {
+        val app = context.applicationContext as BudgetApp
+        val repo = app.container.transactionRepository
 
         val range = ExportPeriodCalculator.resolve(period)
         val transactions = repo.getTransactionsBetween(range.startMillis, range.endMillis)

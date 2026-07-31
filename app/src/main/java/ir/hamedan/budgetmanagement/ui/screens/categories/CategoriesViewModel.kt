@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
@@ -76,13 +77,9 @@ class CategoriesViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(CategoriesViewModel::class.java)) {
-                val db = AppDatabase.getInstance(context)
-                val categoryRepository = CategoryRepository(
-                    categoryDao = db.categoryDao(),
-                    transactionDao = db.transactionDao()
-                )
+                val app = context.applicationContext as BudgetApp
                 return CategoriesViewModel(
-                    categoryRepository = categoryRepository,
+                    categoryRepository = app.container.categoryRepository,
                     context = context.applicationContext
                 ) as T
             }

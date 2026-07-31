@@ -1,6 +1,7 @@
 package ir.hamedan.budgetmanagement.utils
 
 import android.content.Context
+import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.NotificationEntity
 import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
@@ -22,8 +23,8 @@ object NotificationHelper {
         descEn: String,
         tag: String = ""
     ) {
-        val db = AppDatabase.getInstance(context.applicationContext)
-        val repository = NotificationRepository(db.notificationDao())
+        val app = context.applicationContext as BudgetApp
+        val repository = app.container.notificationRepository
 
         val entity = NotificationEntity(
             type = type,

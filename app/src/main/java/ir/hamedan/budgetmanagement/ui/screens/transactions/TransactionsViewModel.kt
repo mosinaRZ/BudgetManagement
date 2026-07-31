@@ -5,6 +5,7 @@ import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
@@ -240,15 +241,12 @@ class TransactionViewModel(
     class Factory(private val context: Context) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            val database = AppDatabase.getInstance(context)
+            val app = context.applicationContext as BudgetApp
             return TransactionViewModel(
                 context = context,
-                transactionRepository = TransactionRepository(database.transactionDao()),
-                categoryRepository = CategoryRepository(
-                    categoryDao = database.categoryDao(),
-                    transactionDao = database.transactionDao()
-                ),
-                notificationRepository = NotificationRepository(database.notificationDao())
+                transactionRepository = app.container.transactionRepository,
+                categoryRepository = app.container.categoryRepository,
+                notificationRepository = app.container.notificationRepository
             ) as T
         }
     }

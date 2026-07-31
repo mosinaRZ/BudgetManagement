@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.BudgetLimitEntity
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
@@ -164,7 +165,7 @@ class BudgetLimitViewModel(
     fun deleteBudgetLimit(id: Long) {
         viewModelScope.launch {
             val currentItem = budgetLimitsWithSpent.value.find { it.entity.id == id }?.entity
-            budgetLimitRepository.deleteLimit(id.toString())
+            budgetLimitRepository.deleteLimit(id)
 
             currentItem?.let {
                 NotificationHelper.send(
@@ -183,12 +184,12 @@ class BudgetLimitViewModel(
     class Factory(private val context: Context) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            val db = AppDatabase.getInstance(context)
+            val app = context.applicationContext as BudgetApp
             return BudgetLimitViewModel(
-                budgetLimitRepository = BudgetLimitRepository(db.budgetLimitDao()),
-                categoryRepository = CategoryRepository(db.categoryDao(), db.transactionDao()),
-                transactionRepository = TransactionRepository(db.transactionDao()),
-                notificationRepository = NotificationRepository(db.notificationDao()),
+                budgetLimitRepository = app.container.budgetLimitRepository,
+                categoryRepository = app.container.categoryRepository,
+                transactionRepository = app.container.transactionRepository,
+                notificationRepository = app.container.notificationRepository,
                 context = context.applicationContext
             ) as T
         }

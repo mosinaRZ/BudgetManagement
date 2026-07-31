@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Telephony
 import androidx.core.content.ContextCompat
+import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.PendingTransactionEntity
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
@@ -43,9 +44,9 @@ class SmsReceiver : BroadcastReceiver() {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val db = AppDatabase.getInstance(appContext)
-                val pendingRepository = PendingTransactionRepository(db.pendingTransactionDao())
-                val categoryRepository = CategoryRepository(db.categoryDao(), db.transactionDao())
+                val app = appContext.applicationContext as BudgetApp
+                val pendingRepository = app.container.pendingTransactionRepository
+                val categoryRepository = app.container.categoryRepository
 
                 val parseResult = SmsParser.parse(fullBody, smsTimestamp)
 

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.UpcomingPaymentEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
@@ -111,11 +112,9 @@ class UpcomingPaymentViewModel(
     class Factory(private val context: Context) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            val db = AppDatabase.getInstance(context)
-            // ساخت نمونه ریپازیتوری و تزریق آن به ViewModel
-            val repo = UpcomingPaymentRepository(db.upcomingPaymentDao())
+            val app = context.applicationContext as BudgetApp
             return UpcomingPaymentViewModel(
-                repository = repo,
+                repository = app.container.upcomingPaymentRepository,
                 context = context.applicationContext
             ) as T
         }

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
 import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepository
@@ -154,10 +155,9 @@ class SavingGoalsViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(SavingGoalsViewModel::class.java)) {
-                val db = AppDatabase.getInstance(context)
-                val repository = SavingGoalRepository(db.savingGoalDao())
+                val app = context.applicationContext as BudgetApp
                 return SavingGoalsViewModel(
-                    repository = repository,
+                    repository = app.container.savingGoalRepository,
                     context = context.applicationContext
                 ) as T
             }

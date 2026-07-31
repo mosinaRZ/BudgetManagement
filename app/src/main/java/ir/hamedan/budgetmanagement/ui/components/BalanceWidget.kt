@@ -27,6 +27,7 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.MainActivity
 import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
@@ -42,8 +43,8 @@ class BalanceWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         CurrencySharedPreferences.init(context.applicationContext)
 
-        val db = AppDatabase.getInstance(context)
-        val transactionDao = db.transactionDao()
+        val app = context.applicationContext as BudgetApp
+        val transactionRepository = app.container.transactionRepository
 
         val isPersian = LocaleHelper.getLanguage(context) == "fa"
         val themeMode = ThemePreferences.getThemeMode(context)
@@ -58,7 +59,7 @@ class BalanceWidget : GlanceAppWidget() {
         provideContent {
             val colors = if (isDark) AppDarkColors else AppLightColors
 
-            val transactions by transactionDao.getAllTransactions().collectAsState(initial = emptyList())
+            val transactions by transactionRepository.getAllTransactions().collectAsState(initial = emptyList())
             val currencyUnit by CurrencySharedPreferences.currencyFlow.collectAsState(initial = "IRT")
 
             val totalIncome = transactions.filter { it.type == "INCOME" }.sumOf { it.amount }

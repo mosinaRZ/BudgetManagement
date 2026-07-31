@@ -12,7 +12,7 @@ class BudgetLimitRepository(private val budgetLimitDao: BudgetLimitDao) {
         budgetLimitDao.insertOrUpdate(limit)
     }
 
-    suspend fun deleteLimit(id: String) {
+    suspend fun deleteLimit(id: Long) {
         budgetLimitDao.deleteById(id)
     }
 }
