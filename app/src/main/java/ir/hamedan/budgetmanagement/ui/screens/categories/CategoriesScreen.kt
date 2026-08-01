@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.categories
 
+import ir.hamedan.budgetmanagement.di.appViewModel
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable

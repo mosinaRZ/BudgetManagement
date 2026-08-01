@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.home
 
+import ir.hamedan.budgetmanagement.di.appViewModel
+
 import android.app.Activity
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName

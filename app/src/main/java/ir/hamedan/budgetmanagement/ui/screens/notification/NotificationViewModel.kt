@@ -2,9 +2,7 @@ package ir.hamedan.budgetmanagement.ui.screens.notification
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.NotificationEntity
 import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
@@ -42,15 +40,5 @@ class NotificationViewModel(
     fun markAsRead(id: String) = viewModelScope.launch { repository.markAsRead(id) }
 
     fun markAllAsRead() = viewModelScope.launch { repository.markAllAsRead() }
-
-    class Factory(private val context: Context) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            val app = context.applicationContext as BudgetApp
-            return NotificationViewModel(
-                app.container.notificationRepository,
-                context.applicationContext
-            ) as T
-        }
     }
 }

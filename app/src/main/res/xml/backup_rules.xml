@@ -1,16 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <!-- Database -->
+    <!-- هیچ دیتابیس یا SharedPreferences حساسی را بک‌آپ نگیر -->
     <exclude domain="database" path="budget_management_db" />
     <exclude domain="database" path="budget_management_db-shm" />
     <exclude domain="database" path="budget_management_db-wal" />
-
-    <!-- Preferences (all of them for safety) -->
-    <exclude domain="sharedpref" path="budget_secure_prefs.xml" />
-    <exclude domain="sharedpref" path="budget_currency_prefs.xml" />
-    <exclude domain="sharedpref" path="budget_theme_prefs.xml" />
-    <exclude domain="sharedpref" path="notification_prefs.xml" />
-    <exclude domain="sharedpref" path="budget_management_prefs.xml" />
-    <exclude domain="sharedpref" path="app_prefs.xml" />
     <exclude domain="sharedpref" path="settings.xml" />
+    <exclude domain="sharedpref" path="app_prefs.xml" />
 </full-backup-content>

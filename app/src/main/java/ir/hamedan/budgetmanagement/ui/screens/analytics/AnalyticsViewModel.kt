@@ -3,9 +3,7 @@ package ir.hamedan.budgetmanagement.ui.screens.analytics
 import android.content.Context
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
@@ -123,15 +121,6 @@ class AnalyticsViewModel(
         }
         return if (points.size < 2) listOf(points.firstOrNull() ?: 0f, points.firstOrNull() ?: 0f) else points
     }
-
-    class Factory(private val context: Context) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            val app = context.applicationContext as BudgetApp
-            return AnalyticsViewModel(
-                repository = app.container.transactionRepository
-            ) as T
-        }
     }
 }
 

@@ -2,9 +2,7 @@ package ir.hamedan.budgetmanagement.ui.screens.categories
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
@@ -72,17 +70,6 @@ class CategoriesViewModel(
     suspend fun getTransactionCount(categoryTitle: String): Int {
         return categoryRepository.getTransactionCount(categoryTitle)
     }
-
-    class Factory(private val context: Context) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass.isAssignableFrom(CategoriesViewModel::class.java)) {
-                val app = context.applicationContext as BudgetApp
-                return CategoriesViewModel(
-                    categoryRepository = app.container.categoryRepository,
-                    context = context.applicationContext
-                ) as T
-            }
             throw IllegalArgumentException("Unknown ViewModel class")
         }
     }

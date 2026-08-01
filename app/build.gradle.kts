@@ -72,6 +72,7 @@ dependencies {
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.lottie.compose)
     implementation(libs.androidx.biometric)
+    implementation(libs.androidx.security.crypto)
     implementation(libs.fastexcel)
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.glance.material3)

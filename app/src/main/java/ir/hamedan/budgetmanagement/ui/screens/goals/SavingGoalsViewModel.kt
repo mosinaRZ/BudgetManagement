@@ -2,9 +2,7 @@ package ir.hamedan.budgetmanagement.ui.screens.goals
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
 import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepository
@@ -150,17 +148,6 @@ class SavingGoalsViewModel(
             )
         }
     }
-
-    class Factory(private val context: Context) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass.isAssignableFrom(SavingGoalsViewModel::class.java)) {
-                val app = context.applicationContext as BudgetApp
-                return SavingGoalsViewModel(
-                    repository = app.container.savingGoalRepository,
-                    context = context.applicationContext
-                ) as T
-            }
             throw IllegalArgumentException("Unknown ViewModel class")
         }
     }

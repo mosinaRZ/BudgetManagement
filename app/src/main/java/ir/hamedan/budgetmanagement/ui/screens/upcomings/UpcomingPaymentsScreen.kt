@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.upcomings
 
+import ir.hamedan.budgetmanagement.di.appViewModel
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
