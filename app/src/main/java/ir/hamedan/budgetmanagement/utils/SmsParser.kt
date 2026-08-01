@@ -128,16 +128,19 @@ object SmsParser {
         val sb = StringBuilder(input.length)
 
         for (c in input) {
-            // Skip common bidi / invisible marks
-            if (c == '\u200E' || c == '\u200F' || c == '\u202A' || c == '\u202B' || c == '\u202C') {
-                continue
-            }
-            val faIdx = fa.indexOf(c)
-            val arIdx = ar.indexOf(c)
-            when {
-                faIdx != -1 -> sb.append(faIdx)
-                arIdx != -1 -> sb.append(arIdx)
-                else -> sb.append(c)
+            if (c == '\u200E' || c == '\u200F' || c == '\u202A' || c == '\u202B' || c == '\u202C') continue
+
+            when (c) {
+                '٬', '，' -> sb.append(',') // thousands separators → comma
+                else -> {
+                    val faIdx = fa.indexOf(c)
+                    val arIdx = ar.indexOf(c)
+                    when {
+                        faIdx != -1 -> sb.append(faIdx)
+                        arIdx != -1 -> sb.append(arIdx)
+                        else -> sb.append(c)
+                    }
+                }
             }
         }
         return sb.toString()

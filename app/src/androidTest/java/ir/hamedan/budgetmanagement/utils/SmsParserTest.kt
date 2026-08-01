@@ -1,7 +1,6 @@
-package ir.hamedan.budgetmanagement.utils.tests
+package ir.hamedan.budgetmanagement.utils
 
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
-import ir.hamedan.budgetmanagement.utils.SmsParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
