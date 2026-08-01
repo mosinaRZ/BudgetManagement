@@ -41,4 +41,3 @@ class NotificationViewModel(
 
     fun markAllAsRead() = viewModelScope.launch { repository.markAllAsRead() }
     }
-}

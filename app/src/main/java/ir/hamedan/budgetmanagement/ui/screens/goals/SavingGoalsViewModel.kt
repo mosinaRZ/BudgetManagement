@@ -148,7 +148,4 @@ class SavingGoalsViewModel(
             )
         }
     }
-            throw IllegalArgumentException("Unknown ViewModel class")
-        }
-    }
 }

@@ -60,19 +60,21 @@ class TransactionViewModel(
 
     val currencyUnit: StateFlow<String> = CurrencySharedPreferences.currencyFlow
 
-    val expenseCategories: StateFlow<List<CategoryEntity>> = categoryRepository.getCategoriesByExpenseStatus(isExpense = true)
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    val expenseCategories: StateFlow<List<CategoryEntity>> =
+        categoryRepository.getCategoriesByExpenseStatus(isExpense = true)
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyList()
+            )
 
-    val incomeCategories: StateFlow<List<CategoryEntity>> = categoryRepository.getCategoriesByExpenseStatus(isExpense = false)
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    val incomeCategories: StateFlow<List<CategoryEntity>> =
+        categoryRepository.getCategoriesByExpenseStatus(isExpense = false)
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyList()
+            )
 
     val searchQuery = MutableStateFlow("")
     val filterState = MutableStateFlow(FilterState())
@@ -224,16 +226,18 @@ class TransactionViewModel(
                 txCalendar.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
                         txCalendar.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)
             }
+
             TimeFilter.WEEKLY -> {
                 txCalendar.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
                         txCalendar.get(Calendar.WEEK_OF_YEAR) == now.get(Calendar.WEEK_OF_YEAR)
             }
+
             TimeFilter.MONTHLY -> {
                 txCalendar.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
                         txCalendar.get(Calendar.MONTH) == now.get(Calendar.MONTH)
             }
+
             TimeFilter.ALL -> true
         }
-    }
     }
 }

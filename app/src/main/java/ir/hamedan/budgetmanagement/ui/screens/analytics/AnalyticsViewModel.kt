@@ -121,7 +121,6 @@ class AnalyticsViewModel(
         }
         return if (points.size < 2) listOf(points.firstOrNull() ?: 0f, points.firstOrNull() ?: 0f) else points
     }
-    }
 }
 
 private fun generateColorForCategory(categoryName: String): Color {

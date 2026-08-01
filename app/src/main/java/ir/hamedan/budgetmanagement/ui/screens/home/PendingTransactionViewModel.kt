@@ -75,5 +75,4 @@ class PendingTransactionViewModel(
     fun ignoreTransaction(pending: PendingTransactionEntity) {
         viewModelScope.launch { pendingRepository.ignore(pending.id) }
     }
-    }
 }
