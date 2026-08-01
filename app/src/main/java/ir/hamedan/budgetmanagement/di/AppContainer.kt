@@ -3,18 +3,23 @@ package ir.hamedan.budgetmanagement.di
 import android.content.Context
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.repository.BudgetLimitRepository
+import ir.hamedan.budgetmanagement.data.repository.BudgetLimitRepositoryImpl
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
+import ir.hamedan.budgetmanagement.data.repository.CategoryRepositoryImpl
 import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
+import ir.hamedan.budgetmanagement.data.repository.NotificationRepositoryImpl
 import ir.hamedan.budgetmanagement.data.repository.PendingTransactionRepository
+import ir.hamedan.budgetmanagement.data.repository.PendingTransactionRepositoryImpl
 import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepository
+import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepositoryImpl
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
+import ir.hamedan.budgetmanagement.data.repository.TransactionRepositoryImpl
 import ir.hamedan.budgetmanagement.data.repository.UpcomingPaymentRepository
+import ir.hamedan.budgetmanagement.data.repository.UpcomingPaymentRepositoryImpl
 
 /**
  * Simple manual DI container.
- * Holds all repositories. ViewModels are created via [AppViewModelFactory].
- *
- * Later this can be replaced by Hilt / Koin when moving to full Clean Architecture.
+ * Exposes repository interfaces; implementations are created here.
  */
 class AppContainer(context: Context) {
 
@@ -22,35 +27,34 @@ class AppContainer(context: Context) {
 
     private val database = AppDatabase.getInstance(appContext)
 
-    val transactionRepository by lazy {
-        TransactionRepository(database.transactionDao())
+    val transactionRepository: TransactionRepository by lazy {
+        TransactionRepositoryImpl(database.transactionDao())
     }
 
-    val categoryRepository by lazy {
-        CategoryRepository(database.categoryDao(), database.transactionDao())
+    val categoryRepository: CategoryRepository by lazy {
+        CategoryRepositoryImpl(database.categoryDao(), database.transactionDao())
     }
 
-    val savingGoalRepository by lazy {
-        SavingGoalRepository(database.savingGoalDao())
+    val savingGoalRepository: SavingGoalRepository by lazy {
+        SavingGoalRepositoryImpl(database.savingGoalDao())
     }
 
-    val budgetLimitRepository by lazy {
-        BudgetLimitRepository(database.budgetLimitDao())
+    val budgetLimitRepository: BudgetLimitRepository by lazy {
+        BudgetLimitRepositoryImpl(database.budgetLimitDao())
     }
 
-    val upcomingPaymentRepository by lazy {
-        UpcomingPaymentRepository(database.upcomingPaymentDao())
+    val upcomingPaymentRepository: UpcomingPaymentRepository by lazy {
+        UpcomingPaymentRepositoryImpl(database.upcomingPaymentDao())
     }
 
-    val notificationRepository by lazy {
-        NotificationRepository(database.notificationDao())
+    val notificationRepository: NotificationRepository by lazy {
+        NotificationRepositoryImpl(database.notificationDao())
     }
 
-    val pendingTransactionRepository by lazy {
-        PendingTransactionRepository(database.pendingTransactionDao())
+    val pendingTransactionRepository: PendingTransactionRepository by lazy {
+        PendingTransactionRepositoryImpl(database.pendingTransactionDao())
     }
 
-    /** Convenience factory for Compose / Activities */
     fun viewModelFactory(): AppViewModelFactory {
         return AppViewModelFactory(this, appContext)
     }
