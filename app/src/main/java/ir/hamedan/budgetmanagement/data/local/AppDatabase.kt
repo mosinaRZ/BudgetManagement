@@ -51,16 +51,23 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
-        // =========================================================
-        //  Migrationها اینجا تعریف می‌شوند
-        //  مثال برای نسخه‌های بعدی:
-        //
-        //  private val MIGRATION_1_2 = object : Migration(1, 2) {
-        //      override fun migrate(db: SupportSQLiteDatabase) {
-        //          db.execSQL("ALTER TABLE transactions ADD COLUMN new_column TEXT NOT NULL DEFAULT ''")
-        //      }
-        //  }
-        // =========================================================
+        /**
+         * Register every Migration here when bumping [version].
+         * Example for a future v2:
+         *
+         * private val MIGRATION_1_2 = object : Migration(1, 2) {
+         *     override fun migrate(db: SupportSQLiteDatabase) {
+         *         db.execSQL(
+         *             "ALTER TABLE transactions ADD COLUMN note2 TEXT NOT NULL DEFAULT ''"
+         *         )
+         *     }
+         * }
+         *
+         * Then add it to ALL_MIGRATIONS below.
+         */
+        private val ALL_MIGRATIONS: Array<Migration> = arrayOf(
+            // MIGRATION_1_2,
+        )
 
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -74,16 +81,20 @@ abstract class AppDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 "budget_management_db"
             )
-                // .addMigrations(MIGRATION_1_2, MIGRATION_2_3, ...)
+                .addMigrations(*ALL_MIGRATIONS)
                 .apply {
-                    // فقط در حالت Debug اجازه پاک شدن دیتابیس را بده
-                    // در Release اگر Migration نوشته نشود، برنامه کرش می‌کند
-                    // تا داده‌های کاربر به اشتباه پاک نشوند.
+                    // Debug only: wipe DB if schema changed without a Migration.
+                    // Release: crash instead of wiping user data.
                     if (BuildConfig.DEBUG) {
-                        fallbackToDestructiveMigration()
+                        fallbackToDestructiveMigration(dropAllTables = true)
                     }
                 }
                 .build()
+        }
+
+        /** For tests only — resets singleton between test runs. */
+        fun clearInstance() {
+            INSTANCE = null
         }
     }
 }
