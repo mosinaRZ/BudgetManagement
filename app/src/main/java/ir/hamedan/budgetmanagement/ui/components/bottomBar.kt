@@ -1,5 +1,6 @@
 package ir.hamedan.budgetmanagement.ui.components
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -7,49 +8,50 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.CompareArrows
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.ui.navigation.MainTabRoute
-import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
 
 data class BottomNavItem(
     val route: MainTabRoute,
     val icon: ImageVector,
-    val labelFa: String,
-    val labelEn: String
+    @StringRes val labelRes: Int
 )
 
 val bottomNavItems = listOf(
     BottomNavItem(
         route = MainTabRoute.Home,
         icon = Icons.Default.Home,
-        labelFa = "خانه",
-        labelEn = "Home"
+        labelRes = R.string.nav_home
     ),
     BottomNavItem(
         route = MainTabRoute.Transactions,
         icon = Icons.Default.CompareArrows,
-        labelFa = "تراکنش‌ها",
-        labelEn = "Transactions"
+        labelRes = R.string.nav_transactions
     ),
     BottomNavItem(
         route = MainTabRoute.Analytics,
         icon = Icons.Default.BarChart,
-        labelFa = "آنالیز",
-        labelEn = "Analytics"
+        labelRes = R.string.nav_analytics
     ),
     BottomNavItem(
         route = MainTabRoute.Settings,
         icon = Icons.Default.Settings,
-        labelFa = "تنظیمات",
-        labelEn = "Settings"
+        labelRes = R.string.nav_settings
     )
 )
 
@@ -58,7 +60,6 @@ fun CapsuleBottomNavigation(
     currentRoute: String?,
     onItemSelected: (BottomNavItem) -> Unit
 ) {
-    val isPersian = isPersianLocale()
     val shape = RoundedCornerShape(24.dp)
 
     Box(
@@ -81,7 +82,6 @@ fun CapsuleBottomNavigation(
                 NavigationBarItemCustom(
                     item = item,
                     isSelected = isSelected,
-                    isPersian = isPersian,
                     onClick = { onItemSelected(item) }
                 )
             }
@@ -93,7 +93,6 @@ fun CapsuleBottomNavigation(
 private fun NavigationBarItemCustom(
     item: BottomNavItem,
     isSelected: Boolean,
-    isPersian: Boolean,
     onClick: () -> Unit
 ) {
     val contentColor by animateColorAsState(
@@ -114,13 +113,13 @@ private fun NavigationBarItemCustom(
     ) {
         Icon(
             imageVector = item.icon,
-            contentDescription = null,
+            contentDescription = stringResource(item.labelRes),
             tint = contentColor,
             modifier = Modifier.size(24.dp)
         )
 
         Text(
-            text = if (isPersian) item.labelFa else item.labelEn,
+            text = stringResource(item.labelRes),
             style = MaterialTheme.typography.labelSmall,
             color = contentColor,
             maxLines = 1

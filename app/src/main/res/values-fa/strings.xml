@@ -1,4 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">سیدنا</string>
+
+    <!-- Common actions -->
+    <string name="action_cancel">انصراف</string>
+    <string name="action_save">ذخیره</string>
+    <string name="action_delete">حذف</string>
+    <string name="action_edit">ویرایش</string>
+    <string name="action_add">افزودن</string>
+    <string name="action_confirm">تأیید</string>
+    <string name="action_close">بستن</string>
+    <string name="action_back">بازگشت</string>
+    <string name="action_see_all">مشاهده همه</string>
+
+    <!-- Bottom navigation -->
+    <string name="nav_home">خانه</string>
+    <string name="nav_transactions">تراکنش‌ها</string>
+    <string name="nav_analytics">آنالیز</string>
+    <string name="nav_settings">تنظیمات</string>
+
+    <!-- Transaction types -->
+    <string name="type_expense">هزینه</string>
+    <string name="type_income">درآمد</string>
+    <string name="type_all">همه</string>
+
+    <!-- Balance / money -->
+    <string name="balance_total">تراز کلی حساب</string>
+    <string name="currency_toman">تومان</string>
+    <string name="currency_rial">ریال</string>
+
+    <!-- Categories -->
+    <string name="category_food">خوراکی و رستوران</string>
+    <string name="category_transport">حمل و نقل</string>
+    <string name="category_shopping">خرید</string>
+    <string name="category_bill">قبوض و اجاره</string>
+    <string name="category_salary">حقوق و درآمد</string>
+    <string name="category_investment">سرمایه‌گذاری</string>
+    <string name="category_uncategorized">دسته‌بندی نشده</string>
+
+    <!-- Add screen -->
+    <string name="add_manage_title">مدیریت و افزودن آیتم‌ها</string>
+    <string name="add_manage_subtitle">یکی از گزینه‌های زیر را انتخاب کنید</string>
+    <string name="add_new_transaction">ثبت تراکنش جدید</string>
+    <string name="add_transaction_title_label">عنوان تراکنش</string>
+
+    <!-- Common empty / status -->
+    <string name="empty_list">هنوز چیزی اینجا نیست</string>
+    <string name="loading">در حال بارگذاری…</string>
+    <string name="error_generic">مشکلی پیش آمد</string>
+
+    <string name="press_back_again_to_exit">برای خروج، دوباره دکمه بازگشت را بزنید</string>
 </resources>
