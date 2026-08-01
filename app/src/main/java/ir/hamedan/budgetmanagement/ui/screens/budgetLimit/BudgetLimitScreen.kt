@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.budget
 
+import ir.hamedan.budgetmanagement.di.appViewModel
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -89,7 +91,7 @@ class ThousandsSeparatorTransformation : VisualTransformation {
 @Composable
 fun BudgetLimitScreen(
     onBackClick: () -> Unit = {},
-    viewModel: BudgetLimitViewModel = viewModel(factory = BudgetLimitViewModel.Factory(LocalContext.current))
+    viewModel: BudgetLimitViewModel = appViewModel()
 ) {
     val context = LocalContext.current
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }

@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.goals
 
+import ir.hamedan.budgetmanagement.di.appViewModel
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -107,7 +109,7 @@ class CurrencyAmountInputVisualTransformation : VisualTransformation {
 @Composable
 fun SavingGoalsScreen(
     onBackClick: () -> Unit = {},
-    viewModel: SavingGoalsViewModel = viewModel(factory = SavingGoalsViewModel.Factory(LocalContext.current))
+    viewModel: SavingGoalsViewModel = appViewModel()
 ) {
     val context = LocalContext.current
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }

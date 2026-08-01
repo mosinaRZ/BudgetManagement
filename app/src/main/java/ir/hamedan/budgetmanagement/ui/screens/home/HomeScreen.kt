@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.home
 
+import ir.hamedan.budgetmanagement.di.appViewModel
+
 import android.app.Activity
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
@@ -97,16 +99,12 @@ fun HomeScreen(
     onAddScreenClickDue: () -> Unit = {},
     onAddScreenClickPiggy: () -> Unit = {},
     onAddScreenClickLimit: () -> Unit = {},
-    transactionViewModel: TransactionViewModel = viewModel(factory = TransactionViewModel.Factory(LocalContext.current)),
-    upcomingViewModel: UpcomingPaymentViewModel = viewModel(factory = UpcomingPaymentViewModel.Factory(LocalContext.current)),
-    goalsViewModel: SavingGoalsViewModel = viewModel(factory = SavingGoalsViewModel.Factory(LocalContext.current)),
-    budgetViewModel: BudgetLimitViewModel = viewModel(factory = BudgetLimitViewModel.Factory(LocalContext.current)),
-    pendingViewModel: PendingTransactionViewModel = viewModel(
-        factory = PendingTransactionViewModel.Factory(LocalContext.current)
-    ),
-    notificationViewModel: NotificationViewModel = viewModel(
-        factory = NotificationViewModel.Factory(LocalContext.current)
-    )
+    transactionViewModel: TransactionViewModel = appViewModel(),
+    upcomingViewModel: UpcomingPaymentViewModel = appViewModel(),
+    goalsViewModel: SavingGoalsViewModel = appViewModel(),
+    budgetViewModel: BudgetLimitViewModel = appViewModel(),
+    pendingViewModel: PendingTransactionViewModel = appViewModel(),
+    notificationViewModel: NotificationViewModel = appViewModel()
 ) {
     val context = LocalContext.current
     val isPersian = LocaleHelper.getLanguage(context) == "fa"

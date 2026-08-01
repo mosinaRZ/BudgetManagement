@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.analytics
 
+import ir.hamedan.budgetmanagement.di.appViewModel
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -46,9 +48,7 @@ import java.util.Locale
 @Composable
 fun AnalyticsScreen(
     onAddScreenClick: () -> Unit = {},
-    analyticsViewModel: AnalyticsViewModel = viewModel(
-        factory = AnalyticsViewModel.Factory(LocalContext.current)
-    )
+    analyticsViewModel: AnalyticsViewModel = appViewModel()
 ) {
     val context = LocalContext.current
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }

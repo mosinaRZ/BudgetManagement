@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.categories
 
+import ir.hamedan.budgetmanagement.di.appViewModel
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -40,8 +42,8 @@ import ir.hamedan.budgetmanagement.utils.StringMapper
 @Composable
 fun CategoriesScreen(
     onBackClick: () -> Unit = {},
-    categoryViewModel: CategoriesViewModel = viewModel(factory = CategoriesViewModel.Factory(LocalContext.current)),
-    transactionViewModel: TransactionViewModel = viewModel(factory = TransactionViewModel.Factory(LocalContext.current))
+    categoryViewModel: CategoriesViewModel = appViewModel(),
+    transactionViewModel: TransactionViewModel = appViewModel()
 ) {
     val context = LocalContext.current
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }

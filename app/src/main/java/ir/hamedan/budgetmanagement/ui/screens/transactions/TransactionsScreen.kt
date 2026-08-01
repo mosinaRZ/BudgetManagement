@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.transactions
 
+import ir.hamedan.budgetmanagement.di.appViewModel
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -56,7 +58,7 @@ import java.util.Locale
 @Composable
 fun TransactionsScreen(
     onAddTransactionClick: () -> Unit = {},
-    viewModel: TransactionViewModel = viewModel(factory = TransactionViewModel.Factory(LocalContext.current))
+    viewModel: TransactionViewModel = appViewModel()
 ) {
     val isPersian = isPersianLocale()
     val coroutineScope = rememberCoroutineScope()

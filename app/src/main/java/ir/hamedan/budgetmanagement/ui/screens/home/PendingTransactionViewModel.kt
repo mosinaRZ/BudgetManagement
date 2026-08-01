@@ -2,9 +2,7 @@ package ir.hamedan.budgetmanagement.ui.screens.home
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.PendingTransactionEntity
@@ -77,17 +75,5 @@ class PendingTransactionViewModel(
     fun ignoreTransaction(pending: PendingTransactionEntity) {
         viewModelScope.launch { pendingRepository.ignore(pending.id) }
     }
-
-    class Factory(private val context: Context) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            val app = context.applicationContext as BudgetApp
-            return PendingTransactionViewModel(
-                context = context.applicationContext,
-                pendingRepository = app.container.pendingTransactionRepository,
-                transactionRepository = app.container.transactionRepository,
-                categoryRepository = app.container.categoryRepository
-            ) as T
-        }
     }
 }

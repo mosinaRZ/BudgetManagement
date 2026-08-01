@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.add
 
+import ir.hamedan.budgetmanagement.di.appViewModel
+
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -101,7 +103,7 @@ fun AddScreen(
     onCategoriesClick: () -> Unit = {},
     onLimitsClick: () -> Unit = {},
     onDueClick: () -> Unit = {},
-    viewModel: AddViewModel = viewModel(factory = AddViewModel.Factory(LocalContext.current))
+    viewModel: AddViewModel = appViewModel()
 ) {
     val context = LocalContext.current
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }

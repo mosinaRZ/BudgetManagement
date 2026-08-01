@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.upcomings
 
+import ir.hamedan.budgetmanagement.di.appViewModel
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -86,7 +88,7 @@ class ThousandsSeparatorTransformation : VisualTransformation {
 @Composable
 fun UpcomingPaymentsScreen(
     onBackClick: () -> Unit = {},
-    viewModel: UpcomingPaymentViewModel = viewModel(factory = UpcomingPaymentViewModel.Factory(LocalContext.current))
+    viewModel: UpcomingPaymentViewModel = appViewModel()
 ) {
     val context = LocalContext.current
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }
