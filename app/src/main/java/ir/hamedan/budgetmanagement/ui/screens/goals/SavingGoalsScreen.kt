@@ -45,6 +45,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
+import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import java.text.NumberFormat
@@ -107,7 +108,7 @@ class CurrencyAmountInputVisualTransformation : VisualTransformation {
 @Composable
 fun SavingGoalsScreen(
     onBackClick: () -> Unit = {},
-    viewModel: SavingGoalsViewModel = viewModel(factory = SavingGoalsViewModel.Factory(LocalContext.current))
+    viewModel: SavingGoalsViewModel = appViewModel()
 ) {
     val context = LocalContext.current
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }

@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
+import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
 import ir.hamedan.budgetmanagement.utils.DateUtils
@@ -56,7 +57,7 @@ import java.util.Locale
 @Composable
 fun TransactionsScreen(
     onAddTransactionClick: () -> Unit = {},
-    viewModel: TransactionViewModel = viewModel(factory = TransactionViewModel.Factory(LocalContext.current))
+    viewModel: TransactionViewModel = appViewModel()
 ) {
     val isPersian = isPersianLocale()
     val coroutineScope = rememberCoroutineScope()

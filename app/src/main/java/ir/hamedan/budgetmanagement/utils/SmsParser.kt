@@ -5,46 +5,46 @@ import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 data class SmsParseResult(
     val amount: Double,
     val isAmountDetected: Boolean,
-    val type: String,          // EXPENSE یا INCOME
+    val type: String,          // "INCOME" or "EXPENSE"
     val isTypeDetected: Boolean,
     val suggestedTitle: String,
-    val timestamp: Long        // اضافه شدن زمان دریافت پیامک به میلی‌ثانیه
+    val timestamp: Long
 )
 
+/**
+ * Heuristic parser for Iranian bank SMS messages.
+ * Not 100% accurate — results are stored as PendingTransaction for user review.
+ */
 object SmsParser {
 
-    private val incomeKeywords = listOf("واریز", "واریزی", "بستانکار", "افزایش موجودی")
-    private val expenseKeywords = listOf("برداشت", "خرید", "برداشتی", "بدهکار", "کسر", "پرداخت", "انتقال به")
+    private val incomeKeywords = listOf(
+        "واریز", "واریزی", "بستانکار", "افزایش موجودی"
+    )
+
+    private val expenseKeywords = listOf(
+        "برداشت", "خرید", "برداشتی", "بدهکار", "کسر", "پرداخت", "انتقال به"
+    )
 
     private val bankSmsIndicators = listOf(
-        "مانده", "موجودی", "کارت", "حساب", "واریز", "برداشت", "خرید", "تراکنش", "کد رهگیری", "ساتنا", "پایا"
+        "مانده", "موجودی", "کارت", "حساب", "واریز", "برداشت",
+        "خرید", "تراکنش", "کد رهگیری", "ساتنا", "پایا"
     )
+
+    // Amounts that look like phone numbers (10 digits) or card-like (12 digits) are ignored
+    private val ignoredDigitLengths = setOf(10, 12)
+
+    private val keywordAmountRegex = Regex(
+        """(?:برداشت|خرید|واریز|بستانکار|بدهکار|مبلغ)\s*[:\s]*[-+]?\s*([\d,]{3,})""",
+        RegexOption.IGNORE_CASE
+    )
+
+    private val numberRegex = Regex("""[\d,]{3,}""")
 
     fun isLikelyBankSms(body: String): Boolean {
         val normalized = normalizeText(body)
-
-        // باید حداقل دو نشانگر بانکی داشته باشد تا احتمال پیامک عادی کمتر شود
         val matchCount = bankSmsIndicators.count { normalized.contains(it) }
+        // Require at least 2 bank-related keywords to reduce false positives
         return matchCount >= 2
-    }
-
-    private fun normalizeText(input: String): String {
-        val fa = "۰۱۲۳۴۵۶۷۸۹"
-        val ar = "٠١٢٣٤٥٦٧٨٩"
-        val sb = StringBuilder()
-
-        for (c in input) {
-            if (c == '\u200E' || c == '\u200F' || c == '\u202A' || c == '\u202B' || c == '\u202C') continue
-
-            val faIdx = fa.indexOf(c)
-            val arIdx = ar.indexOf(c)
-            when {
-                faIdx != -1 -> sb.append(faIdx)
-                arIdx != -1 -> sb.append(arIdx)
-                else -> sb.append(c)
-            }
-        }
-        return sb.toString()
     }
 
     fun parse(body: String, timestamp: Long = System.currentTimeMillis()): SmsParseResult {
@@ -57,42 +57,22 @@ object SmsParser {
         val isIncome = incomeKeywords.any { normalized.contains(it) }
         val isExpense = expenseKeywords.any { normalized.contains(it) }
 
-        val type: String = when {
+        val type = when {
             isIncome && !isExpense -> "INCOME"
             isExpense && !isIncome -> "EXPENSE"
             else -> "EXPENSE"
         }
         val isTypeDetected = isIncome || isExpense
 
-        var detectedAmount = 0.0
-
-        val keywordAmountRegex = Regex(
-            """(?:برداشت|خرید|واریز|بستانکار|بدهکار|مبلغ)\s*[:\s]*[-+]?\s*([\d,]{3,})""",
-            RegexOption.IGNORE_CASE
-        )
-        val keywordMatch = keywordAmountRegex.find(normalized)
-
-        if (keywordMatch != null) {
-            val rawNum = keywordMatch.groupValues[1].replace(",", "")
-            detectedAmount = rawNum.toDoubleOrNull() ?: 0.0
-        }
+        var detectedAmount = extractAmountNearKeywords(normalized)
 
         if (detectedAmount == 0.0) {
-            val parts = normalized.split(Regex("""موجودی|مانده"""))
-            val transactionPart = parts.firstOrNull() ?: normalized
-
-            val numberRegex = Regex("""[\d,]{3,}""")
-            val candidates = numberRegex.findAll(transactionPart)
-                .map { it.value.replace(",", "") }
-                .mapNotNull { it.toDoubleOrNull() }
-                .filter { it > 0 && it.toLong().toString().length != 10 && it.toLong().toString().length != 12 }
-                .toList()
-
-            detectedAmount = candidates.firstOrNull() ?: 0.0
+            detectedAmount = extractAmountFallback(normalized)
         }
 
         val isAmountDetected = detectedAmount > 0.0
 
+        // Many banks still show amounts in Rial; convert to Toman when only "ریال" is present
         if (isAmountDetected && normalized.contains("ریال") && !normalized.contains("تومان")) {
             detectedAmount /= 10.0
         }
@@ -114,6 +94,52 @@ object SmsParser {
     }
 
     fun suggestCategory(body: String, categories: List<CategoryEntity>): String {
-        return categories.firstOrNull { body.contains(it.title, ignoreCase = true) }?.title ?: ""
+        return categories
+            .firstOrNull { body.contains(it.title, ignoreCase = true) }
+            ?.title
+            .orEmpty()
+    }
+
+    // --- private helpers ---
+
+    private fun extractAmountNearKeywords(text: String): Double {
+        val match = keywordAmountRegex.find(text) ?: return 0.0
+        val raw = match.groupValues[1].replace(",", "")
+        return raw.toDoubleOrNull() ?: 0.0
+    }
+
+    private fun extractAmountFallback(text: String): Double {
+        // Prefer the part before balance keywords (موجودی / مانده)
+        val transactionPart = text.split(Regex("""موجودی|مانده""")).firstOrNull() ?: text
+
+        return numberRegex.findAll(transactionPart)
+            .map { it.value.replace(",", "") }
+            .mapNotNull { it.toDoubleOrNull() }
+            .filter { amount ->
+                amount > 0 && amount.toLong().toString().length !in ignoredDigitLengths
+            }
+            .firstOrNull() ?: 0.0
+    }
+
+    /** Convert Persian/Arabic digits to Latin and strip bidi marks */
+    private fun normalizeText(input: String): String {
+        val fa = "۰۱۲۳۴۵۶۷۸۹"
+        val ar = "٠١٢٣٤٥٦٧٨٩"
+        val sb = StringBuilder(input.length)
+
+        for (c in input) {
+            // Skip common bidi / invisible marks
+            if (c == '\u200E' || c == '\u200F' || c == '\u202A' || c == '\u202B' || c == '\u202C') {
+                continue
+            }
+            val faIdx = fa.indexOf(c)
+            val arIdx = ar.indexOf(c)
+            when {
+                faIdx != -1 -> sb.append(faIdx)
+                arIdx != -1 -> sb.append(arIdx)
+                else -> sb.append(c)
+            }
+        }
+        return sb.toString()
     }
 }

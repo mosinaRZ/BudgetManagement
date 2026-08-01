@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
+import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TimeFilter
 import ir.hamedan.budgetmanagement.utils.DateUtils
@@ -46,9 +47,7 @@ import java.util.Locale
 @Composable
 fun AnalyticsScreen(
     onAddScreenClick: () -> Unit = {},
-    analyticsViewModel: AnalyticsViewModel = viewModel(
-        factory = AnalyticsViewModel.Factory(LocalContext.current)
-    )
+    analyticsViewModel: AnalyticsViewModel = appViewModel()
 ) {
     val context = LocalContext.current
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }

@@ -1,4 +1,4 @@
-package ir.hamedan.budgetmanagement.ui.screens.budget
+package ir.hamedan.budgetmanagement.ui.screens.budgetLimit
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -43,7 +43,10 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
+import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitUiModel
+import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitViewModel
 import ir.hamedan.budgetmanagement.utils.DateUtils
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
@@ -89,7 +92,7 @@ class ThousandsSeparatorTransformation : VisualTransformation {
 @Composable
 fun BudgetLimitScreen(
     onBackClick: () -> Unit = {},
-    viewModel: BudgetLimitViewModel = viewModel(factory = BudgetLimitViewModel.Factory(LocalContext.current))
+    viewModel: BudgetLimitViewModel = appViewModel()
 ) {
     val context = LocalContext.current
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }

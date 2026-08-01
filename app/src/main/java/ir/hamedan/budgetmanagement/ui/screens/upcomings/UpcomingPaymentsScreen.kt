@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.data.local.models.UpcomingPaymentEntity
+import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.utils.DateUtils
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
@@ -86,7 +87,7 @@ class ThousandsSeparatorTransformation : VisualTransformation {
 @Composable
 fun UpcomingPaymentsScreen(
     onBackClick: () -> Unit = {},
-    viewModel: UpcomingPaymentViewModel = viewModel(factory = UpcomingPaymentViewModel.Factory(LocalContext.current))
+    viewModel: UpcomingPaymentViewModel = appViewModel()
 ) {
     val context = LocalContext.current
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }

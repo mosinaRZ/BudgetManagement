@@ -40,6 +40,7 @@ import com.airbnb.lottie.compose.animateLottieCompositionAsState
 import com.airbnb.lottie.compose.rememberLottieComposition
 import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
+import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
@@ -101,7 +102,7 @@ fun AddScreen(
     onCategoriesClick: () -> Unit = {},
     onLimitsClick: () -> Unit = {},
     onDueClick: () -> Unit = {},
-    viewModel: AddViewModel = viewModel(factory = AddViewModel.Factory(LocalContext.current))
+    viewModel: AddViewModel = appViewModel()
 ) {
     val context = LocalContext.current
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }

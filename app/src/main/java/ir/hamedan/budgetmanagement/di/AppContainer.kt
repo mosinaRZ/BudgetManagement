@@ -10,9 +10,17 @@ import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.data.repository.UpcomingPaymentRepository
 
+/**
+ * Simple manual DI container.
+ * Holds all repositories. ViewModels are created via [AppViewModelFactory].
+ *
+ * Later this can be replaced by Hilt / Koin when moving to full Clean Architecture.
+ */
 class AppContainer(context: Context) {
 
-    private val database = AppDatabase.getInstance(context)
+    val appContext: Context = context.applicationContext
+
+    private val database = AppDatabase.getInstance(appContext)
 
     val transactionRepository by lazy {
         TransactionRepository(database.transactionDao())
@@ -40,5 +48,10 @@ class AppContainer(context: Context) {
 
     val pendingTransactionRepository by lazy {
         PendingTransactionRepository(database.pendingTransactionDao())
+    }
+
+    /** Convenience factory for Compose / Activities */
+    fun viewModelFactory(): AppViewModelFactory {
+        return AppViewModelFactory(this, appContext)
     }
 }

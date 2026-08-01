@@ -50,6 +50,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.local.models.NotificationEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
+import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.BalanceWidgetReceiver
 import ir.hamedan.budgetmanagement.ui.screens.upcomings.UpcomingPaymentViewModel
@@ -97,16 +98,12 @@ fun HomeScreen(
     onAddScreenClickDue: () -> Unit = {},
     onAddScreenClickPiggy: () -> Unit = {},
     onAddScreenClickLimit: () -> Unit = {},
-    transactionViewModel: TransactionViewModel = viewModel(factory = TransactionViewModel.Factory(LocalContext.current)),
-    upcomingViewModel: UpcomingPaymentViewModel = viewModel(factory = UpcomingPaymentViewModel.Factory(LocalContext.current)),
-    goalsViewModel: SavingGoalsViewModel = viewModel(factory = SavingGoalsViewModel.Factory(LocalContext.current)),
-    budgetViewModel: BudgetLimitViewModel = viewModel(factory = BudgetLimitViewModel.Factory(LocalContext.current)),
-    pendingViewModel: PendingTransactionViewModel = viewModel(
-        factory = PendingTransactionViewModel.Factory(LocalContext.current)
-    ),
-    notificationViewModel: NotificationViewModel = viewModel(
-        factory = NotificationViewModel.Factory(LocalContext.current)
-    )
+    transactionViewModel: TransactionViewModel = appViewModel(),
+    upcomingViewModel: UpcomingPaymentViewModel = appViewModel(),
+    goalsViewModel: SavingGoalsViewModel = appViewModel(),
+    budgetViewModel: BudgetLimitViewModel = appViewModel(),
+    pendingViewModel: PendingTransactionViewModel = appViewModel(),
+    notificationViewModel: NotificationViewModel = appViewModel()
 ) {
     val context = LocalContext.current
     val isPersian = LocaleHelper.getLanguage(context) == "fa"

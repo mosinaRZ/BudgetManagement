@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
+import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
@@ -40,8 +41,8 @@ import ir.hamedan.budgetmanagement.utils.StringMapper
 @Composable
 fun CategoriesScreen(
     onBackClick: () -> Unit = {},
-    categoryViewModel: CategoriesViewModel = viewModel(factory = CategoriesViewModel.Factory(LocalContext.current)),
-    transactionViewModel: TransactionViewModel = viewModel(factory = TransactionViewModel.Factory(LocalContext.current))
+    categoryViewModel: CategoriesViewModel = appViewModel(),
+    transactionViewModel: TransactionViewModel = appViewModel()
 ) {
     val context = LocalContext.current
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }

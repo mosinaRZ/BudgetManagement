@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 object CurrencySharedPreferences {
-    private const val PREF_NAME = "budget_management_prefs"
+    private const val PREF_NAME = "budget_currency_prefs"
     private const val KEY_CURRENCY = "app_currency"
 
     private val _currencyFlow = MutableStateFlow("IRT")

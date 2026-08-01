@@ -43,7 +43,6 @@ import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.getThemeMode
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.saveThemeMode
-import ir.hamedan.budgetmanagement.ui.components.BottomNavItem
 import ir.hamedan.budgetmanagement.ui.components.CapsuleBottomNavigation
 import ir.hamedan.budgetmanagement.ui.navigation.AppRoute
 import ir.hamedan.budgetmanagement.ui.navigation.MainTabRoute
@@ -51,7 +50,7 @@ import ir.hamedan.budgetmanagement.ui.screens.add.AddScreen
 import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsScreen
 import ir.hamedan.budgetmanagement.ui.screens.home.HomeScreen
 import ir.hamedan.budgetmanagement.ui.screens.auth.LoginScreen
-import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitScreen
+import ir.hamedan.budgetmanagement.ui.screens.budgetLimit.BudgetLimitScreen
 import ir.hamedan.budgetmanagement.ui.screens.categories.CategoriesScreen
 import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsScreen
 import ir.hamedan.budgetmanagement.ui.screens.upcomings.UpcomingPaymentsScreen
