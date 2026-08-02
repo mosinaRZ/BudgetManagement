@@ -192,4 +192,87 @@ class TransactionViewModelTest {
         assertThat(state.sortOrder).isEqualTo(SortOrder.NEWEST)
         assertThat(state.isCustomFilterActive).isFalse()
     }
+
+    @Test
+    fun filterByUncategorized_returnsOnlyUncategorized() = runTest {
+        // sampleTransactions از قبل UNCATEGORIZED دارد
+        viewModel.applyCustomFilter(
+            timeFilter = TimeFilter.ALL,
+            typeFilter = TransactionTypeFilter.UNCATEGORIZED,
+            sortOrder = SortOrder.NEWEST,
+            startDate = null,
+            endDate = null
+        )
+        advanceUntilIdle()
+
+        val result = collectLastFiltered()
+        assertThat(result).hasSize(1)
+        assertThat(result[0].category).isEqualTo("UNCATEGORIZED")
+    }
+
+    @Test
+    fun sortByOldest_worksCorrectly() = runTest {
+        viewModel.applyCustomFilter(
+            timeFilter = TimeFilter.ALL,
+            typeFilter = TransactionTypeFilter.ALL,
+            sortOrder = SortOrder.OLDEST,
+            startDate = null,
+            endDate = null
+        )
+        advanceUntilIdle()
+
+        val result = collectLastFiltered()
+        assertThat(result).isNotEmpty()
+        assertThat(result.first().timestamp).isLessThan(result.last().timestamp)
+    }
+
+    @Test
+    fun sortByLowestAmount_worksCorrectly() = runTest {
+        viewModel.applyCustomFilter(
+            timeFilter = TimeFilter.ALL,
+            typeFilter = TransactionTypeFilter.ALL,
+            sortOrder = SortOrder.LOWEST_AMOUNT,
+            startDate = null,
+            endDate = null
+        )
+        advanceUntilIdle()
+
+        val result = collectLastFiltered()
+        assertThat(result).isNotEmpty()
+        assertThat(result.first().amount).isEqualTo(20_000.0)
+        assertThat(result.last().amount).isEqualTo(50_000_000.0)
+    }
+
+    @Test
+    fun customDateRange_filtersCorrectly() = runTest {
+        viewModel.applyCustomFilter(
+            timeFilter = TimeFilter.ALL,
+            typeFilter = TransactionTypeFilter.ALL,
+            sortOrder = SortOrder.NEWEST,
+            startDate = 1_700_050_000_000L,
+            endDate = 1_700_150_000_000L
+        )
+        advanceUntilIdle()
+
+        val result = collectLastFiltered()
+        // tx با timestampهای 1_700_050 و 1_700_100 باید باشند
+        assertThat(result.map { it.id }).containsAtLeast("2", "4")
+        assertThat(result.none { it.id == "1" }).isTrue() // 1_700_200 خارج بازه
+    }
+
+    @Test
+    fun updateTransaction_callsInsertTransaction() = runTest {
+        coEvery { transactionRepository.insertTransaction(any()) } just Runs
+        collectLastFiltered()
+
+        val updated = sampleTransactions[0].copy(title = "ناهار ویرایش‌شده", amount = 200_000.0)
+        viewModel.updateTransaction(updated)
+        advanceUntilIdle()
+
+        coVerify {
+            transactionRepository.insertTransaction(
+                match { it.title == "ناهار ویرایش‌شده" && it.amount == 200_000.0 }
+            )
+        }
+    }
 }
