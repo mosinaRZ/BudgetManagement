@@ -80,6 +80,70 @@ class AnalyticsViewModelTest {
     }
 
     @Test
+    fun balance_isIncomeMinusExpense() = runTest {
+        transactionsFlow.value = listOf(
+            TransactionEntity(id = "1", title = "i", amount = 1000.0, type = "INCOME", category = "SALARY", timestamp = nowMillis()),
+            TransactionEntity(id = "2", title = "e", amount = 400.0, type = "EXPENSE", category = "FOOD", timestamp = nowMillis())
+        )
+        viewModel.onTimeFilterChanged(TimeFilter.ALL)
+        val state = collectLastUiState()
+        assertThat(state.totalIncome).isEqualTo(1000.0)
+        assertThat(state.totalExpense).isEqualTo(400.0)
+        assertThat(state.balance).isEqualTo(600.0)
+    }
+
+    @Test
+    fun emptyDatabase_trendPoints_isSingleZero() = runTest {
+        transactionsFlow.value = emptyList()
+        viewModel.onTimeFilterChanged(TimeFilter.ALL)
+        val state = collectLastUiState()
+        assertThat(state.totalIncome).isEqualTo(0.0)
+        assertThat(state.totalExpense).isEqualTo(0.0)
+        assertThat(state.balance).isEqualTo(0.0)
+        assertThat(state.trendPoints).containsExactly(0f)
+    }
+
+    @Test
+    fun singleTransaction_trendPoints_duplicatedForChart() = runTest {
+        transactionsFlow.value = listOf(
+            TransactionEntity(id = "1", title = "i", amount = 500.0, type = "INCOME", category = "SALARY", timestamp = 1000L)
+        )
+        viewModel.onTimeFilterChanged(TimeFilter.ALL)
+        val state = collectLastUiState()
+        // calculateTrendPoints: size < 2 → [p, p]
+        assertThat(state.trendPoints).containsExactly(500f, 500f).inOrder()
+    }
+
+    @Test
+    fun categoryPercentage_sumsToAbout100_whenMultipleCategories() = runTest {
+        transactionsFlow.value = listOf(
+            TransactionEntity(id = "1", title = "a", amount = 75.0, type = "EXPENSE", category = "FOOD", timestamp = nowMillis()),
+            TransactionEntity(id = "2", title = "b", amount = 25.0, type = "EXPENSE", category = "TRANSPORT", timestamp = nowMillis())
+        )
+        viewModel.onTimeFilterChanged(TimeFilter.ALL)
+        val state = collectLastUiState()
+        val sumPct = state.categoryExpenses.sumOf { it.percentage.toDouble() }
+        assertThat(sumPct).isWithin(0.2).of(100.0)
+    }
+
+    @Test
+    fun monthlyFilter_excludesTransactionsFromPreviousMonth() = runTest {
+        val cal = Calendar.getInstance()
+        cal.set(Calendar.DAY_OF_MONTH, 15)
+        val thisMonth = cal.timeInMillis
+        cal.add(Calendar.MONTH, -1)
+        val lastMonth = cal.timeInMillis
+
+        transactionsFlow.value = listOf(
+            TransactionEntity(id = "old", title = "o", amount = 999.0, type = "EXPENSE", category = "FOOD", timestamp = lastMonth),
+            TransactionEntity(id = "new", title = "n", amount = 10.0, type = "EXPENSE", category = "FOOD", timestamp = thisMonth)
+        )
+        viewModel.onTimeFilterChanged(TimeFilter.MONTHLY)
+        val state = collectLastUiState()
+        assertThat(state.totalExpense).isEqualTo(10.0)
+    }
+
+    @Test
     fun calculatesIncomeExpenseAndBalance_correctly() = runTest {
         transactionsFlow.value = listOf(
             TransactionEntity(id = "1", amount = 10_000_000.0, type = "INCOME", category = "SALARY", timestamp = nowMillis()),

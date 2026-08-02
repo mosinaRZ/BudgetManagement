@@ -142,6 +142,115 @@ class TransactionRepositoryTest {
     }
 
     @Test
+    fun getBalanceBefore_excludesTransactionAtExactBoundary() = runTest {
+        // Query: timestamp < :beforeDate  → خود مرز شمرده نمی‌شود
+        val boundary = 1_700_100_000_000L
+
+        repository.insertTransaction(
+            TransactionEntity(
+                id = "at-boundary",
+                title = "x",
+                amount = 500_000.0,
+                type = "INCOME",
+                category = "SALARY",
+                timestamp = boundary
+            )
+        )
+        repository.insertTransaction(
+            TransactionEntity(
+                id = "before",
+                title = "y",
+                amount = 100_000.0,
+                type = "INCOME",
+                category = "SALARY",
+                timestamp = boundary - 1
+            )
+        )
+
+        assertThat(repository.getBalanceBefore(boundary)).isEqualTo(100_000.0)
+    }
+
+    @Test
+    fun getBalanceBefore_onlyExpenses_returnsNegative() = runTest {
+        val before = 1_700_200_000_000L
+        repository.insertTransaction(
+            TransactionEntity(
+                id = "e1",
+                title = "e",
+                amount = 40_000.0,
+                type = "EXPENSE",
+                category = "FOOD",
+                timestamp = 1_700_000_000_000L
+            )
+        )
+        repository.insertTransaction(
+            TransactionEntity(
+                id = "e2",
+                title = "e2",
+                amount = 10_000.0,
+                type = "EXPENSE",
+                category = "FOOD",
+                timestamp = 1_700_100_000_000L
+            )
+        )
+
+        assertThat(repository.getBalanceBefore(before)).isEqualTo(-50_000.0)
+    }
+
+    @Test
+    fun getTransactionsBetween_isInclusiveOnBothEnds() = runTest {
+        val start = 1_700_000_000_000L
+        val end = 1_700_100_000_000L
+
+        repository.insertTransaction(
+            TransactionEntity(id = "s", title = "s", amount = 1.0, type = "EXPENSE", category = "FOOD", timestamp = start)
+        )
+        repository.insertTransaction(
+            TransactionEntity(id = "e", title = "e", amount = 2.0, type = "EXPENSE", category = "FOOD", timestamp = end)
+        )
+        repository.insertTransaction(
+            TransactionEntity(id = "after", title = "a", amount = 3.0, type = "EXPENSE", category = "FOOD", timestamp = end + 1)
+        )
+        repository.insertTransaction(
+            TransactionEntity(id = "before", title = "b", amount = 4.0, type = "EXPENSE", category = "FOOD", timestamp = start - 1)
+        )
+
+        val between = repository.getTransactionsBetween(start, end)
+        assertThat(between.map { it.id }).containsExactly("s", "e").inOrder()
+    }
+
+    @Test
+    fun getTransactionsBetween_emptyRange_returnsEmpty() = runTest {
+        repository.insertTransaction(
+            TransactionEntity(
+                id = "1",
+                title = "x",
+                amount = 10.0,
+                type = "INCOME",
+                category = "SALARY",
+                timestamp = 1_700_000_000_000L
+            )
+        )
+        val result = repository.getTransactionsBetween(1_800_000_000_000L, 1_900_000_000_000L)
+        assertThat(result).isEmpty()
+    }
+
+    @Test
+    fun getBalanceBefore_farInPast_returnsZero() = runTest {
+        repository.insertTransaction(
+            TransactionEntity(
+                id = "1",
+                title = "x",
+                amount = 999.0,
+                type = "INCOME",
+                category = "SALARY",
+                timestamp = 1_700_000_000_000L
+            )
+        )
+        assertThat(repository.getBalanceBefore(1_000_000_000_000L)).isEqualTo(0.0)
+    }
+
+    @Test
     fun getBalanceBefore_calculatesCorrectly() = runTest {
         val before = 1_700_150_000_000L
 

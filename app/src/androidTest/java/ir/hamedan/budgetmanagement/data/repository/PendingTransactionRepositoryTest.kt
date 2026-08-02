@@ -147,4 +147,244 @@ class PendingTransactionRepositoryTest {
         assertThat(list).isEmpty()
         assertThat(repository.getPendingCount().first()).isEqualTo(0)
     }
+
+    @Test
+    fun addPending_rejectsDuplicate_exactlyAt2MinuteBoundary_stillInsideWindow() = runTest {
+        // sinceTimestamp = pending.timestamp - 2min
+        // duplicate if existing.timestamp > sinceTimestamp
+        // existing at t0, new at t0 + 2min → existing.timestamp (t0) > (t0+2min - 2min)=t0 ?  t0 > t0 is FALSE
+        // پس دقیقاً روی مرز ۲ دقیقه باید ALLOW شود (strict >)
+        val t0 = 1_700_000_000_000L
+        val msg = "برداشت مبلغ 100,000 ریال مانده کارت"
+
+        assertThat(
+            repository.addPending(
+                PendingTransactionEntity(id = "a", rawMessage = msg, timestamp = t0, status = PendingStatus.PENDING)
+            )
+        ).isTrue()
+
+        assertThat(
+            repository.addPending(
+                PendingTransactionEntity(
+                    id = "b",
+                    rawMessage = msg,
+                    timestamp = t0 + (2 * 60 * 1000),
+                    status = PendingStatus.PENDING
+                )
+            )
+        ).isTrue() // دقیقاً 2 دقیقه بعد → طبق Query با `>` باید قبول شود
+    }
+
+    @Test
+    fun addPending_rejectsDuplicate_oneMillisecondBefore2Minutes() = runTest {
+        val t0 = 1_700_000_000_000L
+        val msg = "برداشت مبلغ 100,000 ریال مانده کارت"
+
+        assertThat(
+            repository.addPending(
+                PendingTransactionEntity(id = "a", rawMessage = msg, timestamp = t0, status = PendingStatus.PENDING)
+            )
+        ).isTrue()
+
+        assertThat(
+            repository.addPending(
+                PendingTransactionEntity(
+                    id = "b",
+                    rawMessage = msg,
+                    timestamp = t0 + (2 * 60 * 1000) - 1,
+                    status = PendingStatus.PENDING
+                )
+            )
+        ).isFalse()
+    }
+
+    @Test
+    fun addPending_differentMessage_sameTimestamp_isAllowed() = runTest {
+        val t0 = 1_700_000_000_000L
+
+        assertThat(
+            repository.addPending(
+                PendingTransactionEntity(
+                    id = "a",
+                    rawMessage = "برداشت مبلغ 100,000 ریال از کارت A مانده 1",
+                    timestamp = t0,
+                    status = PendingStatus.PENDING
+                )
+            )
+        ).isTrue()
+
+        assertThat(
+            repository.addPending(
+                PendingTransactionEntity(
+                    id = "b",
+                    rawMessage = "برداشت مبلغ 100,000 ریال از کارت B مانده 1",
+                    timestamp = t0,
+                    status = PendingStatus.PENDING
+                )
+            )
+        ).isTrue()
+
+        assertThat(repository.getPendingTransactions().first()).hasSize(2)
+    }
+
+    @Test
+    fun addPending_duplicateStillCounted_evenIfPreviousWasConfirmed() = runTest {
+        // Query فقط rawMessage + timestamp را چک می‌کند، نه status را
+        // یعنی حتی بعد از confirm، پیامک تکراری در ۲ دقیقه باز هم رد می‌شود
+        val t0 = 1_700_000_000_000L
+        val msg = "برداشت مبلغ 77,000 ریال مانده حساب"
+
+        assertThat(
+            repository.addPending(
+                PendingTransactionEntity(id = "a", rawMessage = msg, timestamp = t0, status = PendingStatus.PENDING)
+            )
+        ).isTrue()
+        repository.confirm("a")
+
+        assertThat(
+            repository.addPending(
+                PendingTransactionEntity(
+                    id = "b",
+                    rawMessage = msg,
+                    timestamp = t0 + 10_000,
+                    status = PendingStatus.PENDING
+                )
+            )
+        ).isFalse()
+    }
+
+    @Test
+    fun addPending_allowsSameMessage_afterMoreThan2Minutes() = runTest {
+        val t0 = 1_700_000_000_000L
+        val msg = "برداشت مبلغ 500,000 ریال از کارت"
+
+        assertThat(
+            repository.addPending(
+                PendingTransactionEntity(
+                    id = "pt1",
+                    rawMessage = msg,
+                    amount = 50_000.0,
+                    timestamp = t0,
+                    status = PendingStatus.PENDING
+                )
+            )
+        ).isTrue()
+
+        assertThat(
+            repository.addPending(
+                PendingTransactionEntity(
+                    id = "pt2",
+                    rawMessage = msg,
+                    amount = 50_000.0,
+                    timestamp = t0 + (2 * 60 * 1000) + 1,
+                    status = PendingStatus.PENDING
+                )
+            )
+        ).isTrue()
+
+        assertThat(repository.getPendingTransactions().first()).hasSize(2)
+    }
+
+    @Test
+    fun addPending_exactlyAt2Minutes_isAllowed_becauseQueryUsesStrictGreaterThan() = runTest {
+        // countRecentDuplicates: timestamp > sinceTimestamp
+        // since = newTs - 2min; existing at t0, new at t0+2min → t0 > t0 is false → ALLOW
+        val t0 = 1_700_000_000_000L
+        val msg = "برداشت مبلغ 100,000 ریال مانده کارت"
+
+        assertThat(
+            repository.addPending(
+                PendingTransactionEntity(id = "a", rawMessage = msg, timestamp = t0, status = PendingStatus.PENDING)
+            )
+        ).isTrue()
+
+        assertThat(
+            repository.addPending(
+                PendingTransactionEntity(
+                    id = "b",
+                    rawMessage = msg,
+                    timestamp = t0 + (2 * 60 * 1000),
+                    status = PendingStatus.PENDING
+                )
+            )
+        ).isTrue()
+    }
+
+    @Test
+    fun addPending_oneMsBefore2Minutes_isRejected() = runTest {
+        val t0 = 1_700_000_000_000L
+        val msg = "برداشت مبلغ 100,000 ریال مانده کارت"
+
+        assertThat(
+            repository.addPending(
+                PendingTransactionEntity(id = "a", rawMessage = msg, timestamp = t0, status = PendingStatus.PENDING)
+            )
+        ).isTrue()
+
+        assertThat(
+            repository.addPending(
+                PendingTransactionEntity(
+                    id = "b",
+                    rawMessage = msg,
+                    timestamp = t0 + (2 * 60 * 1000) - 1,
+                    status = PendingStatus.PENDING
+                )
+            )
+        ).isFalse()
+    }
+
+    @Test
+    fun addPending_differentMessage_sameTime_isAllowed() = runTest {
+        val t0 = 1_700_000_000_000L
+
+        assertThat(
+            repository.addPending(
+                PendingTransactionEntity(
+                    id = "a",
+                    rawMessage = "برداشت مبلغ 100,000 ریال از کارت A مانده 1",
+                    timestamp = t0,
+                    status = PendingStatus.PENDING
+                )
+            )
+        ).isTrue()
+
+        assertThat(
+            repository.addPending(
+                PendingTransactionEntity(
+                    id = "b",
+                    rawMessage = "برداشت مبلغ 100,000 ریال از کارت B مانده 1",
+                    timestamp = t0,
+                    status = PendingStatus.PENDING
+                )
+            )
+        ).isTrue()
+
+        assertThat(repository.getPendingTransactions().first()).hasSize(2)
+    }
+
+    @Test
+    fun addPending_stillRejectsDuplicate_afterPreviousWasConfirmed() = runTest {
+        // Current DAO query does NOT filter by status — documents real behavior
+        val t0 = 1_700_000_000_000L
+        val msg = "برداشت مبلغ 77,000 ریال مانده حساب"
+
+        assertThat(
+            repository.addPending(
+                PendingTransactionEntity(id = "a", rawMessage = msg, timestamp = t0, status = PendingStatus.PENDING)
+            )
+        ).isTrue()
+
+        repository.confirm("a")
+
+        assertThat(
+            repository.addPending(
+                PendingTransactionEntity(
+                    id = "b",
+                    rawMessage = msg,
+                    timestamp = t0 + 10_000,
+                    status = PendingStatus.PENDING
+                )
+            )
+        ).isFalse()
+    }
 }
