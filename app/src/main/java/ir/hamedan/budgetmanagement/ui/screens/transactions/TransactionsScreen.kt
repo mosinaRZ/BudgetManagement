@@ -93,87 +93,117 @@ fun TransactionsScreen(
         }
     }
 
+    val isTrulyEmpty = transactionsList.isEmpty() &&
+            searchQuery.isBlank() &&
+            !filterState.isCustomFilterActive &&
+            filterState.timeFilter == TimeFilter.ALL
+
+    val noSearchResults = searchQuery.isNotBlank() && transactionsList.isEmpty()
+
     Box(modifier = Modifier.fillMaxSize()) {
         AuroraBackground()
 
-        if (transactionsList.isEmpty()) {
-            val emptyCardShape = RoundedCornerShape(24.dp)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 170.dp, start = 24.dp, end = 24.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), emptyCardShape)
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), emptyCardShape)
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+        when {
+            isTrulyEmpty -> {
+                val emptyCardShape = RoundedCornerShape(24.dp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 170.dp, start = 24.dp, end = 24.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), emptyCardShape)
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), emptyCardShape)
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(text = "💸", fontSize = 56.sp)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = if (isPersian) "هنوز هیچ تراکنشی ثبت نشده!" else "No Transactions Yet!",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = if (isPersian) "برای مدیریت دقیق‌تر هزینه‌ها و درآمدها، اولین تراکنش خود را همین حالا ثبت کنید."
-                        else "Start tracking your finances by adding your very first transaction.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Button(
-                        onClick = { onAddTransactionClick() }, // تابع مربوط به باز کردن دیالوگ/صفحه ثبت تراکنش جدید
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = "💸", fontSize = 56.sp)
+                        Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = if (isPersian) "ثبت اولین تراکنش" else "Add First Transaction",
-                            fontWeight = FontWeight.Bold
+                            text = if (isPersian) "هنوز هیچ تراکنشی ثبت نشده!" else "No Transactions Yet!",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = if (isPersian) "برای مدیریت دقیق‌تر هزینه‌ها و درآمدها، اولین تراکنش خود را همین حالا ثبت کنید."
+                            else "Start tracking your finances by adding your very first transaction.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Button(
+                            onClick = { onAddTransactionClick() }, // تابع مربوط به باز کردن دیالوگ/صفحه ثبت تراکنش جدید
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isPersian) "ثبت اولین تراکنش" else "Add First Transaction",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
-        } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 24.dp),
-                contentPadding = PaddingValues(
-                    top = if (keyboardVisible) 310.dp else 170.dp,
-                    bottom = 190.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                groupedTransactions.forEach { (dateHeader, items) ->
-                    item(key = dateHeader) {
-                        Text(
-                            text = dateHeader,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
 
-                    items(items, key = { it.id }) { transaction ->
-                        TransactionRow(
-                            transaction = transaction,
-                            isPersian = isPersian,
-                            currencyUnit = currencyUnit,
-                            numberFormatter = numberFormatter,
-                            onEdit = { transactionToEdit = transaction },
-                            onDelete = { transactionToDelete = transaction }
-                        )
+            noSearchResults -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = 170.dp, start = 24.dp, end = 24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (isPersian)
+                            "برای «$searchQuery» چیزی یافت نشد"
+                        else
+                            "Nothing found for \"$searchQuery\"",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
+            else -> {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 24.dp),
+                    contentPadding = PaddingValues(
+                        top = if (keyboardVisible) 310.dp else 170.dp,
+                        bottom = 190.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    groupedTransactions.forEach { (dateHeader, items) ->
+                        item(key = dateHeader) {
+                            Text(
+                                text = dateHeader,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+
+                        items(items, key = { it.id }) { transaction ->
+                            TransactionRow(
+                                transaction = transaction,
+                                isPersian = isPersian,
+                                currencyUnit = currencyUnit,
+                                numberFormatter = numberFormatter,
+                                onEdit = { transactionToEdit = transaction },
+                                onDelete = { transactionToDelete = transaction }
+                            )
+                        }
                     }
                 }
             }
@@ -189,124 +219,147 @@ fun TransactionsScreen(
             TransactionsTopBar(
                 isPersian = isPersian,
                 isFilterActive = filterState.isCustomFilterActive,
+                showFilterButton = !isTrulyEmpty,
                 onFilterClick = { showFilterSheet = true }
             )
 
-            if (filterState.isCustomFilterActive) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 4.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    FilterChip(
-                        selected = true,
-                        onClick = { viewModel.clearFilter() },
-                        label = {
-                            Text(
-                                if (isPersian) "حذف فیلترها ✕" else "Clear Filters ✕",
-                                fontWeight = FontWeight.Bold
+            if (!isTrulyEmpty) {
+                if (filterState.isCustomFilterActive) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        FilterChip(
+                            selected = true,
+                            onClick = { viewModel.clearFilter() },
+                            label = {
+                                Text(
+                                    if (isPersian) "حذف فیلترها ✕" else "Clear Filters ✕",
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.errorContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onErrorContainer
                             )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.errorContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onErrorContainer
                         )
+                    }
+                } else {
+                    TimeFilterSelector(
+                        selectedFilter = filterState.timeFilter,
+                        isPersian = isPersian,
+                        onFilterSelected = { viewModel.setQuickTimeFilter(it) }
                     )
                 }
-            } else {
-                TimeFilterSelector(
-                    selectedFilter = filterState.timeFilter,
-                    isPersian = isPersian,
-                    onFilterSelected = { viewModel.setQuickTimeFilter(it) }
-                )
             }
         }
 
         // سرچ و دکمه بازگشت به بالا
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 80.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            AnimatedVisibility(
-                visible = showScrollToTopButton,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f), CircleShape)
-                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), CircleShape)
-                        .clip(CircleShape)
-                        .clickable {
-                            coroutineScope.launch {
-                                listState.animateScrollToItem(0)
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowUp,
-                        contentDescription = if (isPersian) "برگشت به بالا" else "Scroll to Top",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-
-            val searchShape = RoundedCornerShape(20.dp)
-            TextField(
-                value = searchQuery,
-                onValueChange = { viewModel.onSearchQueryChanged(it) },
+        if (!isTrulyEmpty) {
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), searchShape)
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), searchShape),
-                placeholder = {
-                    Text(
-                        text = if (isPersian) "جستجو در لیست .." else "Search in list ..",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        textAlign = if (isPersian) TextAlign.Right else TextAlign.Left,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = if (isPersian) "پاک کردن" else "Clear",
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 80.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                AnimatedVisibility(
+                    visible = showScrollToTopButton,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
+                                CircleShape
                             )
-                        }
+                            .border(
+                                1.dp,
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                                CircleShape
+                            )
+                            .clip(CircleShape)
+                            .clickable {
+                                coroutineScope.launch {
+                                    listState.animateScrollToItem(0)
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowUp,
+                            contentDescription = if (isPersian) "برگشت به بالا" else "Scroll to Top",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
                     }
-                },
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent,
-                    cursorColor = MaterialTheme.colorScheme.primary
-                ),
-                singleLine = true,
-                shape = searchShape
-            )
+                }
+
+                val searchShape = RoundedCornerShape(20.dp)
+                TextField(
+                    value = searchQuery,
+                    onValueChange = { newValue ->
+                        if (newValue.length <= 40) {
+                            viewModel.onSearchQueryChanged(newValue)
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .background(
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                            searchShape
+                        )
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                            searchShape
+                        ),
+                    placeholder = {
+                        Text(
+                            text = if (isPersian) "جستجو در لیست .." else "Search in list ..",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            textAlign = if (isPersian) TextAlign.Right else TextAlign.Left,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = if (isPersian) "پاک کردن" else "Clear",
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+                    },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent,
+                        cursorColor = MaterialTheme.colorScheme.primary
+                    ),
+                    singleLine = true,
+                    shape = searchShape
+                )
+            }
         }
 
         // ۱. باتم شیت شناور فیلترینگ
@@ -1136,7 +1189,8 @@ private fun TransactionRow(
 private fun TransactionsTopBar(
     isPersian: Boolean,
     isFilterActive: Boolean,
-    onFilterClick: () -> Unit
+    onFilterClick: () -> Unit,
+    showFilterButton: Boolean = true,
 ) {
     val smallShape = RoundedCornerShape(24.dp)
     val centerShape = RoundedCornerShape(24.dp)
@@ -1173,25 +1227,27 @@ private fun TransactionsTopBar(
                 )
             }
 
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .background(
-                        if (isFilterActive) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
-                        smallShape
-                    )
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), smallShape)
-                    .clip(smallShape),
-                contentAlignment = Alignment.Center
-            ) {
-                IconButton(onClick = onFilterClick) {
-                    Icon(
-                        imageVector = Icons.Default.FilterList,
-                        contentDescription = if (isPersian) "فیلتر" else "Filter",
-                        tint = if (isFilterActive) MaterialTheme.colorScheme.onPrimaryContainer
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+            if (showFilterButton) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(
+                            if (isFilterActive) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
+                            smallShape
+                        )
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), smallShape)
+                        .clip(smallShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    IconButton(onClick = onFilterClick) {
+                        Icon(
+                            imageVector = Icons.Default.FilterList,
+                            contentDescription = if (isPersian) "فیلتر" else "Filter",
+                            tint = if (isFilterActive) MaterialTheme.colorScheme.onPrimaryContainer
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }

@@ -133,7 +133,7 @@ private fun NavigationBarItemCustom(
         Text(
             text = itemLabel,
             style = MaterialTheme.typography.labelSmall,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            fontWeight = FontWeight.Normal,
             color = contentColor,
             maxLines = 1
         )

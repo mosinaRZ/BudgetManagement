@@ -61,6 +61,24 @@ enum class SettingsMenu {
     LANGUAGE, CURRENCY, SECURITY, EXPORT, ABOUT, NOTIFICATION, NONE
 }
 
+private data class SettingsSearchItem(
+    val titleFa: String,
+    val titleEn: String,
+    val subtitleFa: String,
+    val subtitleEn: String
+)
+
+private val ALL_SETTINGS_ITEMS = listOf(
+    SettingsSearchItem("ظاهر برنامه", "App Theme", "تغییر حالت تاریک و روشن", "Switch between Dark and Light mode"),
+    SettingsSearchItem("زبان برنامه", "App Language", "انتخاب زبان کاربری (فارسی / انگلیسی)", "Choose UI language (Persian / English)"),
+    SettingsSearchItem("واحد پولی", "Currency", "نمایش مبالغ بر اساس تومان یا ریال", "Display amounts in Toman or Rial"),
+    SettingsSearchItem("تنظیمات اعلان‌ها", "Notification Settings", "کنترل نحوه دریافت اعلان‌های برنامه", "Control how you receive app notifications"),
+    SettingsSearchItem("مدیریت دسته‌بندی‌ها", "Manage Categories", "ویرایش، حذف یا ایجاد دسته‌های خرید و فروش", "Edit, delete, or create transaction categories"),
+    SettingsSearchItem("امنیت برنامه", "App Security", "تنظیم رمز ورود و ویژگی‌های بیومتریک", "Configure passcode and biometric login"),
+    SettingsSearchItem("دریافت اطلاعات و گزارش‌ها", "Export Data & Reports", "خروجی گرفتن از تراکنش‌ها در قالب PDF یا Excel", "Export transactions to PDF or Excel formats"),
+    SettingsSearchItem("درباره ما و پشتیبانی", "About Us & Support", "راه‌های ارتباطی، واتس‌اپ و ایمیل", "Contact channels, Gmail, WhatsApp & Support")
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -110,6 +128,18 @@ fun SettingsScreen(
                 targetSubtitle.contains(query, ignoreCase = true)
     }
 
+    // آیا هیچ آیتمی با جستجوی فعلی مطابقت دارد؟
+    val hasAnyMatch = remember(searchQuery, isPersian) {
+        if (searchQuery.isBlank()) true
+        else ALL_SETTINGS_ITEMS.any { item ->
+            matchesSearch(item.titleFa, item.titleEn, item.subtitleFa, item.subtitleEn)
+        }
+    }
+
+    val suggestion = remember(searchQuery, isPersian, hasAnyMatch) {
+        if (!hasAnyMatch) findSuggestion(searchQuery, isPersian) else null
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         AuroraBackground()
 
@@ -120,6 +150,39 @@ fun SettingsScreen(
         ) {
             item {
                 Spacer(modifier = Modifier.statusBarsPadding().height(5.dp))
+            }
+
+            // داخل LazyColumn، بعد از Spacer اول:
+            if (suggestion != null) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f), RoundedCornerShape(14.dp))
+                            .clickable { searchQuery = suggestion!! }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lightbulb,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = if (isPersian)
+                                "منظورت «$suggestion» بود؟"
+                            else
+                                "Did you mean \"$suggestion\"?",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
             }
 
             // ظاهر برنامه
@@ -1371,7 +1434,11 @@ private fun SettingsTopBar(
 
                     TextField(
                         value = searchQuery,
-                        onValueChange = onSearchQueryChange,
+                        onValueChange = { newValue ->
+                            if (newValue.length <= 40) {          // مثلاً حداکثر ۴۰ کاراکتر
+                                onSearchQueryChange(newValue)
+                            }
+                        },
                         placeholder = {
                             Text(
                                 text = if (isPersian) "جستجو در تنظیمات..." else "Search settings...",
@@ -1436,4 +1503,76 @@ private fun openUrl(context: Context, url: String) {
     } catch (e: Exception) {
         e.printStackTrace()
     }
+}
+
+private fun levenshtein(a: String, b: String): Int {
+    if (a == b) return 0
+    if (a.isEmpty()) return b.length
+    if (b.isEmpty()) return a.length
+
+    val prev = IntArray(b.length + 1) { it }
+    val curr = IntArray(b.length + 1)
+
+    for (i in a.indices) {
+        curr[0] = i + 1
+        for (j in b.indices) {
+            val cost = if (a[i].equals(b[j], ignoreCase = true)) 0 else 1
+            curr[j + 1] = minOf(
+                curr[j] + 1,
+                prev[j + 1] + 1,
+                prev[j] + cost
+            )
+        }
+        for (j in prev.indices) prev[j] = curr[j]
+    }
+    return curr[b.length]
+}
+
+/**
+ * نزدیک‌ترین عنوان را برمی‌گرداند؛ اگر شباهت کافی نباشد null
+ */
+private fun normalizeForSearch(s: String): String {
+    return s.trim()
+        .lowercase()
+        .replace("\u200c", " ") // نیم‌فاصله -> فاصله
+        .replace('ي', 'ی')
+        .replace('ك', 'ک')
+        .replace(Regex("\\s+"), " ")
+}
+
+/**
+ * نزدیک‌ترین عنوان را برمی‌گرداند؛ اگر شباهت کافی نباشد null
+ * مقایسه در سطح کلمه انجام می‌شود، نه کل عبارت، تا typo روی یک کلمه هم تشخیص داده شود.
+ */
+private fun findSuggestion(query: String, isPersian: Boolean): String? {
+    val normalizedQuery = normalizeForSearch(query)
+    if (normalizedQuery.length < 2) return null
+
+    var bestLabel: String? = null
+    var bestDistance = Int.MAX_VALUE
+
+    for (item in ALL_SETTINGS_ITEMS) {
+        val title = if (isPersian) item.titleFa else item.titleEn
+        val subtitle = if (isPersian) item.subtitleFa else item.subtitleEn
+
+        // کلمات عنوان + زیرنویس را با هم بررسی می‌کنیم تا حتی typo توی توضیحات هم پیدا شود
+        val words = normalizeForSearch("$title $subtitle")
+            .split(Regex("[\\s/,،]+"))
+            .filter { it.length >= 2 }
+
+        for (word in words) {
+            // مقایسه‌ی طول‌ها: اگر خیلی با هم فرق دارند، اصلاً بررسی نکن (بهینه‌سازی + جلوگیری از match های بی‌معنی)
+            if (kotlin.math.abs(word.length - normalizedQuery.length) > 3) continue
+
+            val distance = levenshtein(normalizedQuery, word)
+            // آستانه: حداکثر ۴۰٪ طول کلمه، حداقل ۱، حداکثر ۳
+            val threshold = maxOf(1, (word.length * 0.4).toInt()).coerceAtMost(3)
+
+            if (distance in 1..threshold && distance < bestDistance) {
+                bestDistance = distance
+                bestLabel = title
+            }
+        }
+    }
+    return bestLabel
 }
