@@ -36,7 +36,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         NotificationEntity::class,
         PendingTransactionEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -61,8 +61,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        private val ALL_MIGRATIONS: Array<Migration> = arrayOf(
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE saving_goals ADD COLUMN lastAutoDepositTimestamp INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
+        private val ALL_MIGRATIONS = arrayOf(
             MIGRATION_1_2,
+            MIGRATION_2_3
         )
 
         fun getInstance(context: Context): AppDatabase {

@@ -10,6 +10,7 @@ data class SavingGoalEntity(
     val title: String,
     val targetAmount: Double,
     val currentAmount: Double = 0.0,
-    val monthlyAmount: Double = 0.0, // مبلغ ماهانه که از بالانس کسر و به قلک اضافه می‌شود
-    val icon: String = "🎯"
+    val monthlyAmount: Double = 0.0,
+    val icon: String = "🎯",
+    val lastAutoDepositTimestamp: Long = 0L   // ← جدید
 )
