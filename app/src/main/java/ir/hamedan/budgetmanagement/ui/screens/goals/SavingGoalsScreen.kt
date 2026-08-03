@@ -132,12 +132,32 @@ fun SavingGoalsScreen(
     val totalSaved = goalsList.sumOf { it.currentAmount }
     val totalTarget = goalsList.sumOf { it.targetAmount }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+
+// گوش دادن به خطای واریز
+    LaunchedEffect(Unit) {
+        viewModel.depositError.collect { message ->
+            snackbarHostState.showSnackbar(
+                message = message,
+                duration = SnackbarDuration.Short
+            )
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
         AuroraBackground()
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp, start = 16.dp, end = 16.dp)
+        )
 
         Column(
             modifier = Modifier

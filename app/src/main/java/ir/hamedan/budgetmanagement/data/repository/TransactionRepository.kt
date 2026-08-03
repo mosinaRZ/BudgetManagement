@@ -11,4 +11,5 @@ interface TransactionRepository {
     suspend fun reassignCategoryForTransactions(oldCategoryTitle: String, newCategoryTitle: String)
     suspend fun getTransactionsBetween(start: Long, end: Long): List<TransactionEntity>
     suspend fun getBalanceBefore(beforeDate: Long): Double
+    suspend fun getCurrentBalance(): Double
 }

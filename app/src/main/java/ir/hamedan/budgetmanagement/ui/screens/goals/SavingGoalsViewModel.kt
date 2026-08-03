@@ -7,8 +7,11 @@ import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
+import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.NotificationHelper
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -56,6 +59,9 @@ class SavingGoalsViewModel(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null
         )
+
+    private val _depositError = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val depositError: SharedFlow<String> = _depositError
 
     fun addGoal(title: String, targetAmount: Double, monthlyAmount: Double, icon: String) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -115,6 +121,20 @@ class SavingGoalsViewModel(
 
     fun deposit(goalId: String, amount: Double) {
         viewModelScope.launch(Dispatchers.IO) {
+            val currentBalance = transactionRepository.getCurrentBalance()
+
+            if (currentBalance < amount) {
+                // پیام دوزبانه
+                val isPersian = LocaleHelper.getLanguage(context) == "fa"
+                val message = if (isPersian) {
+                    "موجودی کافی نیست. موجودی فعلی: ${currentBalance.toLong()}"
+                } else {
+                    "Insufficient balance. Current balance: ${currentBalance.toLong()}"
+                }
+                _depositError.emit(message)
+                return@launch
+            }
+
             val currentGoal = savingGoals.value?.find { it.id == goalId }
             repository.depositToGoal(goalId, amount)
 

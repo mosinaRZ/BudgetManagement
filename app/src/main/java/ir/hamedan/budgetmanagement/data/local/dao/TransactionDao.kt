@@ -36,4 +36,10 @@ interface TransactionDao {
     FROM transactions WHERE timestamp < :beforeDate
 """)
     suspend fun getBalanceBefore(beforeDate: Long): Double
+
+    @Query("""
+    SELECT COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amount ELSE -amount END), 0.0)
+    FROM transactions
+""")
+    suspend fun getCurrentBalance(): Double
 }

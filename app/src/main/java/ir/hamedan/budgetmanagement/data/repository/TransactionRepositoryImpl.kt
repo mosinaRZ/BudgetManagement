@@ -35,4 +35,8 @@ class TransactionRepositoryImpl(
     override suspend fun getBalanceBefore(beforeDate: Long): Double {
         return transactionDao.getBalanceBefore(beforeDate)
     }
+
+    override suspend fun getCurrentBalance(): Double {
+        return transactionDao.getCurrentBalance()
+    }
 }
