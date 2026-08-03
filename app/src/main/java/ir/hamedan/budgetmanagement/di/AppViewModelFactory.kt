@@ -49,6 +49,7 @@ class AppViewModelFactory(
             modelClass.isAssignableFrom(SavingGoalsViewModel::class.java) -> {
                 SavingGoalsViewModel(
                     repository = container.savingGoalRepository,
+                    transactionRepository = container.transactionRepository,
                     context = appContext
                 ) as T
             }

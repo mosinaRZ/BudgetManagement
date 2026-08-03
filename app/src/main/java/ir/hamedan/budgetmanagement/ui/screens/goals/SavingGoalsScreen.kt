@@ -365,11 +365,18 @@ fun SavingGoalsScreen(
                     showAddDialog = false
                     goalToEdit = null
                 },
-                onConfirm = { title, targetAmount, icon ->
+                onConfirm = { title, targetAmount, monthlyAmount, icon ->
                     if (goalToEdit != null) {
-                        viewModel.updateGoal(goalToEdit!!.copy(title = title, targetAmount = targetAmount, icon = icon))
+                        viewModel.updateGoal(
+                            goalToEdit!!.copy(
+                                title = title,
+                                targetAmount = targetAmount,
+                                monthlyAmount = monthlyAmount,
+                                icon = icon
+                            )
+                        )
                     } else {
-                        viewModel.addGoal(title, targetAmount, icon)
+                        viewModel.addGoal(title, targetAmount, monthlyAmount, icon)
                     }
                     showAddDialog = false
                     goalToEdit = null
@@ -384,6 +391,7 @@ fun SavingGoalsScreen(
                 isPersian = isPersian,
                 currencyUnit = currencyUnit,
                 isDeposit = true,
+                initialAmount = goal.monthlyAmount,
                 onDismiss = { goalForDeposit = null },
                 onConfirm = { amount ->
                     viewModel.deposit(goal.id, amount)
@@ -601,6 +609,18 @@ fun SavingGoalItemCard(
                 trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
             )
 
+            if (goal.monthlyAmount > 0) {
+                val monthlyDisp = if (currencyUnit == "IRR") goal.monthlyAmount * 10 else goal.monthlyAmount
+                Text(
+                    text = if (isPersian)
+                        "مبلغ ماهانه: ${numberFormatter.format(monthlyDisp.toLong())} $currencyText"
+                    else
+                        "Monthly: ${numberFormatter.format(monthlyDisp.toLong())} $currencyText",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -636,7 +656,7 @@ fun AddOrEditGoalDialog(
     isPersian: Boolean,
     currencyUnit: String,
     onDismiss: () -> Unit,
-    onConfirm: (title: String, targetAmount: Double, icon: String) -> Unit
+    onConfirm: (title: String, targetAmount: Double, monthlyAmount: Double, icon: String) -> Unit
 ) {
     val maxDigits = 12
     var title by remember { mutableStateOf(goalToEdit?.title ?: "") }
@@ -651,6 +671,15 @@ fun AddOrEditGoalDialog(
     }
     // صرفاً ارقام خام در State نگهداری می‌شوند
     var rawTargetAmount by remember { mutableStateOf(initialTargetRaw) }
+
+    val initialMonthlyRaw = remember(goalToEdit, currencyUnit) {
+        if (goalToEdit == null || goalToEdit.monthlyAmount <= 0) ""
+        else {
+            val amount = if (currencyUnit == "IRR") (goalToEdit.monthlyAmount * 10).toLong() else goalToEdit.monthlyAmount.toLong()
+            amount.toString()
+        }
+    }
+    var rawMonthlyAmount by remember { mutableStateOf(initialMonthlyRaw) }
 
     Dialog(onDismissRequest = onDismiss) {
         val dialogShape = RoundedCornerShape(28.dp)
@@ -749,6 +778,35 @@ fun AddOrEditGoalDialog(
                     shape = RoundedCornerShape(16.dp)
                 )
 
+                val labelMonthly = if (isPersian) (if (currencyUnit == "IRR") "مبلغ ماهانه (ریال)" else "مبلغ ماهانه (تومان)")
+                else (if (currencyUnit == "IRR") "Monthly Amount (Rial)" else "Monthly Amount (Toman)")
+
+                OutlinedTextField(
+                    value = rawMonthlyAmount,
+                    onValueChange = { input ->
+                        val digitsOnly = input.filter { it.isDigit() }
+                        if (digitsOnly.length <= maxDigits) {
+                            rawMonthlyAmount = digitsOnly
+                        }
+                    },
+                    label = { Text(labelMonthly) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    visualTransformation = CurrencyAmountInputVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    supportingText = {
+                        Text(
+                            text = if (isPersian)
+                                "هر ماه این مبلغ از بالانس کسر و به قلک اضافه می‌شود"
+                            else
+                                "This amount is deducted from balance and added to the goal each month",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                )
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -769,9 +827,11 @@ fun AddOrEditGoalDialog(
 
                     Button(
                         onClick = {
-                            val cleanNumber = rawTargetAmount.toDoubleOrNull() ?: 0.0
-                            val finalTargetInToman = if (currencyUnit == "IRR") cleanNumber / 10.0 else cleanNumber
-                            onConfirm(title.trim(), finalTargetInToman, selectedIcon)
+                            val cleanTarget = rawTargetAmount.toDoubleOrNull() ?: 0.0
+                            val finalTargetInToman = if (currencyUnit == "IRR") cleanTarget / 10.0 else cleanTarget
+                            val cleanMonthly = rawMonthlyAmount.toDoubleOrNull() ?: 0.0
+                            val finalMonthlyInToman = if (currencyUnit == "IRR") cleanMonthly / 10.0 else cleanMonthly
+                            onConfirm(title.trim(), finalTargetInToman, finalMonthlyInToman, selectedIcon)
                         },
                         enabled = title.isNotBlank() && (rawTargetAmount.toDoubleOrNull() ?: 0.0) > 0,
                         modifier = Modifier
@@ -806,11 +866,19 @@ fun AmountActionDialog(
     isPersian: Boolean,
     currencyUnit: String,
     isDeposit: Boolean,
+    initialAmount: Double = 0.0,
     onDismiss: () -> Unit,
     onConfirm: (amount: Double) -> Unit
 ) {
     val maxDigits = 12
-    var rawAmount by remember { mutableStateOf("") }
+    val initialRaw = remember(initialAmount, currencyUnit) {
+        if (initialAmount <= 0) ""
+        else {
+            val amount = if (currencyUnit == "IRR") (initialAmount * 10).toLong() else initialAmount.toLong()
+            amount.toString()
+        }
+    }
+    var rawAmount by remember { mutableStateOf(initialRaw) }
 
     Dialog(onDismissRequest = onDismiss) {
         val dialogShape = RoundedCornerShape(28.dp)

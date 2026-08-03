@@ -36,7 +36,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         NotificationEntity::class,
         PendingTransactionEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -53,22 +53,16 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
-        /**
-         * Register every Migration here when bumping [version].
-         * Example for a future v2:
-         *
-         * private val MIGRATION_1_2 = object : Migration(1, 2) {
-         *     override fun migrate(db: SupportSQLiteDatabase) {
-         *         db.execSQL(
-         *             "ALTER TABLE transactions ADD COLUMN note2 TEXT NOT NULL DEFAULT ''"
-         *         )
-         *     }
-         * }
-         *
-         * Then add it to ALL_MIGRATIONS below.
-         */
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE saving_goals ADD COLUMN monthlyAmount REAL NOT NULL DEFAULT 0.0"
+                )
+            }
+        }
+
         private val ALL_MIGRATIONS: Array<Migration> = arrayOf(
-            // MIGRATION_1_2,
+            MIGRATION_1_2,
         )
 
         fun getInstance(context: Context): AppDatabase {
@@ -78,16 +72,17 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         private fun buildDatabase(context: Context): AppDatabase {
+            System.loadLibrary("sqlcipher")   // ← جایگزین loadLibs، دفاع دوم/idempotent
 
             val passphrase = DatabaseKeyProvider.getPassphrase(context)
-            val factory = SupportOpenHelperFactory(passphrase)   // یا SupportFactory(passphrase)
+            val factory = SupportOpenHelperFactory(passphrase)
 
             return Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "budget_management_db"
             )
-                .openHelperFactory(factory)          // ← این خط اصلی رمزنگاری است
+                .openHelperFactory(factory)
                 .addMigrations(*ALL_MIGRATIONS)
                 .apply {
                     if (BuildConfig.DEBUG) {

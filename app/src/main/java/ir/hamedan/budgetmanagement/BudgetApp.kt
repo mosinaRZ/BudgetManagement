@@ -9,6 +9,7 @@ class BudgetApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        System.loadLibrary("sqlcipher")   // ← جایگزین loadLibs
         container = AppContainer(this)
     }
 }
