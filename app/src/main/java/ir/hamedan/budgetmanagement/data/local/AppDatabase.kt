@@ -22,6 +22,8 @@ import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.local.models.UpcomingPaymentEntity
 import ir.hamedan.budgetmanagement.data.local.models.UserEntity
+import ir.hamedan.budgetmanagement.data.security.DatabaseKeyProvider
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
 @Database(
     entities = [
@@ -76,15 +78,18 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         private fun buildDatabase(context: Context): AppDatabase {
+
+            val passphrase = DatabaseKeyProvider.getPassphrase(context)
+            val factory = SupportOpenHelperFactory(passphrase)   // یا SupportFactory(passphrase)
+
             return Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "budget_management_db"
             )
+                .openHelperFactory(factory)          // ← این خط اصلی رمزنگاری است
                 .addMigrations(*ALL_MIGRATIONS)
                 .apply {
-                    // Debug only: wipe DB if schema changed without a Migration.
-                    // Release: crash instead of wiping user data.
                     if (BuildConfig.DEBUG) {
                         fallbackToDestructiveMigration(dropAllTables = true)
                     }
