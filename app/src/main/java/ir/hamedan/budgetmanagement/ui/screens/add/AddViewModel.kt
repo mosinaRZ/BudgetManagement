@@ -23,24 +23,6 @@ class AddViewModel(
     private val context: Context
 ) : ViewModel() {
 
-    init {
-        // ایجاد دسته‌بندی‌های پیش‌فرض در صورت خالی بودن دیتابیس
-        viewModelScope.launch {
-            val currentCategories = categoryRepository.getAllCategories().first()
-            if (currentCategories.isEmpty()) {
-                val defaults = listOf(
-                    CategoryEntity(title = "FOOD", iconEmoji = "🍕", isExpense = true),
-                    CategoryEntity(title = "TRANSPORT", iconEmoji = "🚗", isExpense = true),
-                    CategoryEntity(title = "SHOPPING", iconEmoji = "🛍️", isExpense = true),
-                    CategoryEntity(title = "BILL", iconEmoji = "📄", isExpense = true),
-                    CategoryEntity(title = "SALARY", iconEmoji = "💰", isExpense = false),
-                    CategoryEntity(title = "INVESTMENT", iconEmoji = "📈", isExpense = false)
-                )
-                defaults.forEach { categoryRepository.insertCategory(it) }
-            }
-        }
-    }
-
     val categories: StateFlow<List<CategoryEntity>> = categoryRepository.getAllCategories()
         .stateIn(
             scope = viewModelScope,

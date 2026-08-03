@@ -11,5 +11,6 @@ data class CategoryEntity(
     val title: String = "",
     val iconName: String = "",
     val iconEmoji: String = "📁",
-    val isExpense: Boolean = true
+    val isExpense: Boolean = true,
+    val isSystem: Boolean = false // فیلد جدید برای دسته‌بندی‌های غیرقابل‌حذف و سیستم
 )

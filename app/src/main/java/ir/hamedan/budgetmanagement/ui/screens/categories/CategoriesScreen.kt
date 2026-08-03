@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -425,7 +426,7 @@ fun CategoryItemCard(
                 cardShape
             )
             .clip(cardShape)
-            .clickable { onEditClick() }
+            .clickable(enabled = !category.isSystem) { onEditClick() }
             .padding(12.dp)
     ) {
         Column(
@@ -440,24 +441,35 @@ fun CategoryItemCard(
             ) {
                 Text(text = category.iconEmoji, fontSize = 28.sp)
 
-                Row {
-                    IconButton(onClick = onEditClick, modifier = Modifier.size(28.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit",
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                // فقط در صورتی که دسته‌بندی سیستمی نباشد دکمه‌های ویرایش و حذف نمایش داده می‌شوند
+                if (!category.isSystem) {
+                    Row {
+                        IconButton(onClick = onEditClick, modifier = Modifier.size(28.dp)) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit",
+                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
 
-                    IconButton(onClick = onDeleteClick, modifier = Modifier.size(28.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
-                            modifier = Modifier.size(18.dp)
-                        )
+                        IconButton(onClick = onDeleteClick, modifier = Modifier.size(28.dp)) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
+                } else {
+                    // آیکون قفل برای دسته‌بندی‌های سیستمی
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "System Category",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
 

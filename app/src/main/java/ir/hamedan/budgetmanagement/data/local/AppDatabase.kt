@@ -4,23 +4,24 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import ir.hamedan.budgetmanagement.BuildConfig
 import ir.hamedan.budgetmanagement.data.local.dao.BudgetLimitDao
 import ir.hamedan.budgetmanagement.data.local.dao.CategoryDao
+import ir.hamedan.budgetmanagement.data.local.dao.DebtCreditDao
 import ir.hamedan.budgetmanagement.data.local.dao.NotificationDao
 import ir.hamedan.budgetmanagement.data.local.dao.PendingTransactionDao
 import ir.hamedan.budgetmanagement.data.local.dao.SavingGoalDao
 import ir.hamedan.budgetmanagement.data.local.dao.TransactionDao
-import ir.hamedan.budgetmanagement.data.local.dao.UpcomingPaymentDao
 import ir.hamedan.budgetmanagement.data.local.models.BudgetLimitEntity
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
+import ir.hamedan.budgetmanagement.data.local.models.DebtCreditEntity
 import ir.hamedan.budgetmanagement.data.local.models.NotificationEntity
 import ir.hamedan.budgetmanagement.data.local.models.PendingTransactionEntity
 import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
-import ir.hamedan.budgetmanagement.data.local.models.UpcomingPaymentEntity
 import ir.hamedan.budgetmanagement.data.local.models.UserEntity
 import ir.hamedan.budgetmanagement.data.security.DatabaseKeyProvider
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
@@ -32,11 +33,11 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         CategoryEntity::class,
         SavingGoalEntity::class,
         BudgetLimitEntity::class,
-        UpcomingPaymentEntity::class,
         NotificationEntity::class,
-        PendingTransactionEntity::class
+        PendingTransactionEntity::class,
+        DebtCreditEntity::class
     ],
-    version = 3,
+    version = 1,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -45,34 +46,13 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun categoryDao(): CategoryDao
     abstract fun savingGoalDao(): SavingGoalDao
     abstract fun budgetLimitDao(): BudgetLimitDao
-    abstract fun upcomingPaymentDao(): UpcomingPaymentDao
     abstract fun notificationDao(): NotificationDao
     abstract fun pendingTransactionDao(): PendingTransactionDao
+    abstract fun debtCreditDao(): DebtCreditDao
 
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
-
-        private val MIGRATION_1_2 = object : Migration(1, 2) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    "ALTER TABLE saving_goals ADD COLUMN monthlyAmount REAL NOT NULL DEFAULT 0.0"
-                )
-            }
-        }
-
-        private val MIGRATION_2_3 = object : Migration(2, 3) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    "ALTER TABLE saving_goals ADD COLUMN lastAutoDepositTimestamp INTEGER NOT NULL DEFAULT 0"
-                )
-            }
-        }
-
-        private val ALL_MIGRATIONS = arrayOf(
-            MIGRATION_1_2,
-            MIGRATION_2_3
-        )
 
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -92,7 +72,6 @@ abstract class AppDatabase : RoomDatabase() {
                 "budget_management_db"
             )
                 .openHelperFactory(factory)
-                .addMigrations(*ALL_MIGRATIONS)
                 .apply {
                     if (BuildConfig.DEBUG) {
                         fallbackToDestructiveMigration(dropAllTables = true)

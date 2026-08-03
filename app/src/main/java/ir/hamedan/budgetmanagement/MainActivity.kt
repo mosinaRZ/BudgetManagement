@@ -52,8 +52,8 @@ import ir.hamedan.budgetmanagement.ui.screens.home.HomeScreen
 import ir.hamedan.budgetmanagement.ui.screens.auth.LoginScreen
 import ir.hamedan.budgetmanagement.ui.screens.budgetLimit.BudgetLimitScreen
 import ir.hamedan.budgetmanagement.ui.screens.categories.CategoriesScreen
+import ir.hamedan.budgetmanagement.ui.screens.debtCredit.DebtCreditScreen
 import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsScreen
-import ir.hamedan.budgetmanagement.ui.screens.upcomings.UpcomingPaymentsScreen
 import ir.hamedan.budgetmanagement.ui.screens.splash.SplashScreen
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionsScreen
 import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsScreen
@@ -208,14 +208,14 @@ class MainActivity : FragmentActivity() {
                     onCategoriesClick = {
                         navController.navigate(AppRoute.Categories)
                     },
-                    onDueClick = {
-                        navController.navigate(AppRoute.Upcoming)
-                    },
                     onGoalsClick = {
                         navController.navigate(AppRoute.Goals)
                     },
                     onLimitsClick = {
                         navController.navigate(AppRoute.Limits)
+                    },
+                    onDebtClick = {
+                        navController.navigate(AppRoute.Debt)
                     }
                 )
             }
@@ -232,14 +232,14 @@ class MainActivity : FragmentActivity() {
                 )
             }
 
-            composable<AppRoute.Upcoming> {
-                UpcomingPaymentsScreen(
+            composable<AppRoute.Goals> {
+                SavingGoalsScreen(
                     onBackClick = { navController.popBackStack() }
                 )
             }
 
-            composable<AppRoute.Goals> {
-                SavingGoalsScreen(
+            composable<AppRoute.Debt> {
+                DebtCreditScreen(
                     onBackClick = { navController.popBackStack() }
                 )
             }
@@ -269,8 +269,8 @@ class MainActivity : FragmentActivity() {
                                         restoreState = true
                                     }
                                 },
-                                onAddScreenClickDue = {
-                                    navController.navigate(AppRoute.AddScreen(highlightId = "due"))
+                                onAddScreenClickDebt = {
+                                    navController.navigate(AppRoute.AddScreen(highlightId = "debtcredit"))
                                 },
                                 onAddScreenClickLimit = {
                                     navController.navigate(AppRoute.AddScreen(highlightId = "limit"))

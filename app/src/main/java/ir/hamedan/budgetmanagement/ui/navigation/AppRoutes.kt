@@ -32,6 +32,9 @@ sealed interface AppRoute {
 
     @Serializable
     data object Goals : AppRoute
+
+    @Serializable
+    data object Debt : AppRoute
 }
 
 /**

@@ -10,6 +10,8 @@ object StringMapper {
             "SALARY" -> if (isPersian) "حقوق و درآمد" else "Salary"
             "INVESTMENT" -> if (isPersian) "سرمایه‌گذاری" else "Investment"
             "UNCATEGORIZED" -> if (isPersian) "دسته‌بندی نشده" else "Uncategorized"
+            "DEBT_CREDIT_PAYABLE" -> if (isPersian) "بدهی و وام" else "Debt & Payables"
+            "DEBT_CREDIT_RECEIVABLE" -> if (isPersian) "طلب و مطالبات" else "Receivables"
             else -> key
         }
     }

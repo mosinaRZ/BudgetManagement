@@ -55,33 +55,17 @@ import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.BalanceWidgetReceiver
-import ir.hamedan.budgetmanagement.ui.screens.upcomings.UpcomingPaymentViewModel
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
 import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsViewModel
 import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitViewModel
 import ir.hamedan.budgetmanagement.ui.screens.notification.NotificationViewModel
+import ir.hamedan.budgetmanagement.ui.viewmodels.DebtCreditViewModel
 import ir.hamedan.budgetmanagement.utils.DateUtils
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
 import java.text.NumberFormat
 import java.util.*
 import kotlin.math.abs
-
-data class NotificationItem(
-    val id: String,
-    val type: NotificationType,
-    val titleFa: String,
-    val titleEn: String,
-    val descFa: String,
-    val descEn: String,
-    val timeFa: String,
-    val timeEn: String,
-    val isRead: Boolean = false
-)
-
-enum class NotificationType {
-    SUCCESS, ERROR, REWARD, SYSTEM
-}
 
 data class HomeDueItem(
     val id: String,
@@ -97,15 +81,15 @@ fun HomeScreen(
     onTransactionClick: (TransactionEntity) -> Unit = {},
     onThemeToggle: () -> Unit = {},
     onSeeAllTransactionsClick: () -> Unit = {},
-    onAddScreenClickDue: () -> Unit = {},
+    onAddScreenClickDebt: () -> Unit = {},
     onAddScreenClickPiggy: () -> Unit = {},
     onAddScreenClickLimit: () -> Unit = {},
     transactionViewModel: TransactionViewModel = appViewModel(),
-    upcomingViewModel: UpcomingPaymentViewModel = appViewModel(),
     goalsViewModel: SavingGoalsViewModel = appViewModel(),
     budgetViewModel: BudgetLimitViewModel = appViewModel(),
     pendingViewModel: PendingTransactionViewModel = appViewModel(),
-    notificationViewModel: NotificationViewModel = appViewModel()
+    notificationViewModel: NotificationViewModel = appViewModel(),
+    debtCreditViewModel: DebtCreditViewModel = appViewModel()
 ) {
     val context = LocalContext.current
     val isPersian = LocaleHelper.getLanguage(context) == "fa"
@@ -131,7 +115,6 @@ fun HomeScreen(
     }
 
     val transactionsList by transactionViewModel.filteredTransactions.collectAsState()
-    val paymentsList by upcomingViewModel.payments.collectAsState()
     val goalsList by goalsViewModel.savingGoals.collectAsState(initial = emptyList())
     val limitsList by budgetViewModel.budgetLimitsWithSpent.collectAsState(initial = emptyList())
 
@@ -142,7 +125,7 @@ fun HomeScreen(
 
     val categories by transactionViewModel.expenseCategories.collectAsState()
 
-    // چک کردن وضعیت ویجت (قابل آپدیت)
+    // چک کردن وضعیت ویجت
     var isWidgetAdded by remember {
         mutableStateOf(
             run {
@@ -155,7 +138,6 @@ fun HomeScreen(
         )
     }
 
-// هر بار که صفحه resume می‌شود دوباره چک می‌کنیم (بعد از پین کردن ویجت)
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -173,54 +155,15 @@ fun HomeScreen(
         }
     }
 
-    // بعد از گرفتن paymentsList
-    LaunchedEffect(paymentsList) {
-        val now = System.currentTimeMillis()
-        val calendarNow = Calendar.getInstance().apply { timeInMillis = now }
-        val calendarDue = Calendar.getInstance()
+    val debtCreditList by debtCreditViewModel.debtCreditList.collectAsState()
 
-        paymentsList.filter { !it.isPaid }.forEach { payment ->
-            calendarDue.timeInMillis = payment.dueDate
-
-            // فقط روز و ماه و سال را مقایسه می‌کنیم (ساعت را نادیده می‌گیریم)
-            calendarNow.set(Calendar.HOUR_OF_DAY, 0)
-            calendarNow.set(Calendar.MINUTE, 0)
-            calendarNow.set(Calendar.SECOND, 0)
-            calendarNow.set(Calendar.MILLISECOND, 0)
-
-            calendarDue.set(Calendar.HOUR_OF_DAY, 0)
-            calendarDue.set(Calendar.MINUTE, 0)
-            calendarDue.set(Calendar.SECOND, 0)
-            calendarDue.set(Calendar.MILLISECOND, 0)
-
-            val daysLeft = ((calendarDue.timeInMillis - calendarNow.timeInMillis) / (1000 * 60 * 60 * 24)).toInt()
-
-            if (daysLeft in listOf(1, 3, 7)) {
-                notificationViewModel.addNotification(
-                    NotificationEntity(
-                        type = "WARNING",
-                        titleFa = "یادآوری سررسید",
-                        titleEn = "Payment Due Reminder",
-                        descFa = "${payment.title} تا $daysLeft روز دیگر سررسید دارد.",
-                        descEn = "${payment.title} is due in $daysLeft day(s).",
-                        tag = "DUE_${payment.id}_${daysLeft}"
-                    )
-                )
-            }
-        }
-    }
-
-    // تراز کلی حساب (بدون هیچ فیلتر زمانی) - مجموع تمام تراکنش‌ها
+    // تراز کلی حساب
     val totalAllIncome = transactionsList.filter { it.type == "INCOME" }.sumOf { it.amount }
     val totalAllExpense = transactionsList.filter { it.type == "EXPENSE" }.sumOf { it.amount }
     val totalBalance = totalAllIncome - totalAllExpense
 
     val recentTransactions = remember(transactionsList) {
         transactionsList.sortedByDescending { it.timestamp }.take(3)
-    }
-
-    val upcomingPayments = remember(paymentsList) {
-        paymentsList.filter { !it.isPaid }.sortedBy { it.dueDate }
     }
 
     val allGoals = remember(goalsList) { goalsList ?: emptyList() }
@@ -239,24 +182,17 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             item {
-                // اگر CTA هست ارتفاع بیشتر می‌دهیم تا محتوا زیر CTA نره
                 Spacer(
                     modifier = Modifier
                         .statusBarsPadding()
                         .height(if (isWidgetAdded) 55.dp else 110.dp)
                 )
             }
-            // ---------------------------------------------------------------------
-            // کارت بالانس اصلی (تراز کلی حساب)
-            // ---------------------------------------------------------------------
+
+            // کارت بالانس اصلی
             item {
                 val balanceShape = RoundedCornerShape(24.dp)
-
-                val periodLabel = if (isPersian) {
-                    "تراز کلی حساب"
-                } else {
-                    "Total Account Balance"
-                }
+                val periodLabel = if (isPersian) "تراز کلی حساب" else "Total Account Balance"
 
                 Box(
                     modifier = Modifier
@@ -293,7 +229,6 @@ fun HomeScreen(
                             if (currencyUnit == "IRR") "Rial" else "Toman"
                         }
 
-                        // محاسبه علامت منفی در صورت منفی بودن بالانس
                         val formattedAmount = numberFormatter.format(abs(displayBalance))
                         val sign = if (totalBalance < 0) "-" else ""
 
@@ -309,9 +244,7 @@ fun HomeScreen(
                 }
             }
 
-// ---------------------------------------------------------------------
-// خلاصه درآمد و هزینه
-// ---------------------------------------------------------------------
+            // خلاصه درآمد و هزینه
             item {
                 val summaryCardShape = RoundedCornerShape(20.dp)
                 val income = totalAllIncome
@@ -331,13 +264,7 @@ fun HomeScreen(
                             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), summaryCardShape)
                             .clip(summaryCardShape)
                     ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.incomebanner),
-                            contentDescription = null,
-                            modifier = Modifier.matchParentSize(),
-                            contentScale = ContentScale.Crop,
-                            alpha = 0.12f
-                        )
+                        Image(painter = painterResource(id = R.drawable.incomebanner), contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop, alpha = 0.12f)
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -345,20 +272,11 @@ fun HomeScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            Text(
-                                text = if (isPersian) "درآمد" else "Income",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Text(text = if (isPersian) "درآمد" else "Income", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(8.dp))
                             val displayIncome = if (currencyUnit == "IRR") (income * 10).toLong() else income.toLong()
                             val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")
-                            Text(
-                                text = "${numberFormatter.format(displayIncome)} $currencyText",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text(text = "${numberFormatter.format(displayIncome)} $currencyText", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -370,13 +288,7 @@ fun HomeScreen(
                             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), summaryCardShape)
                             .clip(summaryCardShape)
                     ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.expensebanner),
-                            contentDescription = null,
-                            modifier = Modifier.matchParentSize(),
-                            contentScale = ContentScale.Crop,
-                            alpha = 0.12f
-                        )
+                        Image(painter = painterResource(id = R.drawable.expensebanner), contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop, alpha = 0.12f)
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -384,28 +296,17 @@ fun HomeScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            Text(
-                                text = if (isPersian) "هزینه" else "Expense",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Text(text = if (isPersian) "هزینه" else "Expense", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(8.dp))
                             val displayExpense = if (currencyUnit == "IRR") (expense * 10).toLong() else expense.toLong()
                             val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")
-                            Text(
-                                text = "${numberFormatter.format(displayExpense)} $currencyText",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.error,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text(text = "${numberFormatter.format(displayExpense)} $currencyText", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
 
-// ---------------------------------------------------------------------
-// بخش قلک‌های پس‌انداز
-// ---------------------------------------------------------------------
+            // قلک‌های پس‌انداز
             item {
                 val piggyShape = RoundedCornerShape(24.dp)
                 Box(
@@ -415,13 +316,7 @@ fun HomeScreen(
                         .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), piggyShape)
                         .clip(piggyShape)
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.goalbanner),
-                        contentDescription = null,
-                        modifier = Modifier.matchParentSize(),
-                        contentScale = ContentScale.Crop,
-                        alpha = 0.12f
-                    )
+                    Image(painter = painterResource(id = R.drawable.goalbanner), contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop, alpha = 0.12f)
 
                     Column(
                         modifier = Modifier
@@ -437,17 +332,8 @@ fun HomeScreen(
                                 Text(text = "🎯", fontSize = MaterialTheme.typography.titleLarge.fontSize)
                                 Spacer(Modifier.width(8.dp))
                                 Column {
-                                    Text(
-                                        text = if (isPersian) "قلک‌های پس‌انداز" else "Savings Goals",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = if (isPersian) "پیشرفت هدف‌های مالی شما" else "Your financial targets progress",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Text(text = if (isPersian) "قلک‌های پس‌انداز" else "Savings Goals", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                    Text(text = if (isPersian) "پیشرفت هدف‌های مالی شما" else "Your financial targets progress", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
@@ -462,27 +348,14 @@ fun HomeScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = "${goal.icon} ${goal.title} (${(progress * 100).toInt()}%)",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        fontWeight = FontWeight.Medium
-                                    )
+                                    Text(text = "${goal.icon} ${goal.title} (${(progress * 100).toInt()}%)", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
                                     val curr = if (currencyUnit == "IRR") 10 else 1
-                                    Text(
-                                        text = "${numberFormatter.format((goal.currentAmount * curr).toLong())} / ${numberFormatter.format((goal.targetAmount * curr).toLong())} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Text(text = "${numberFormatter.format((goal.currentAmount * curr).toLong())} / ${numberFormatter.format((goal.targetAmount * curr).toLong())} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                 }
                                 Spacer(Modifier.height(8.dp))
                                 LinearProgressIndicator(
                                     progress = { progress.coerceIn(0f, 1f) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(8.dp)
-                                        .clip(CircleShape),
+                                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
                                     color = MaterialTheme.colorScheme.primary,
                                     trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
                                 )
@@ -492,29 +365,21 @@ fun HomeScreen(
 
                         Button(
                             onClick = onAddScreenClickPiggy,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
                             shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = if (isPersian) "ساخت یک قلک جدید" else "Create a New Goal",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Text(text = if (isPersian) "ساخت یک قلک جدید" else "Create a New Goal", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                 }
             }
 
-// ---------------------------------------------------------------------
-// بخش محدودیت‌های خرج‌کرد
-// ---------------------------------------------------------------------
+            // محدودیت‌های خرج‌کرد
             item {
                 val budgetShape = RoundedCornerShape(24.dp)
                 Box(
@@ -524,13 +389,7 @@ fun HomeScreen(
                         .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), budgetShape)
                         .clip(budgetShape)
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.limitbanner),
-                        contentDescription = null,
-                        modifier = Modifier.matchParentSize(),
-                        contentScale = ContentScale.Crop,
-                        alpha = 0.12f
-                    )
+                    Image(painter = painterResource(id = R.drawable.limitbanner), contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop, alpha = 0.12f)
 
                     Column(
                         modifier = Modifier
@@ -546,17 +405,8 @@ fun HomeScreen(
                                 Text(text = "⚠️", fontSize = MaterialTheme.typography.titleLarge.fontSize)
                                 Spacer(Modifier.width(8.dp))
                                 Column {
-                                    Text(
-                                        text = if (isPersian) "محدودیت‌های خرج‌کرد" else "Expense Limits",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = if (isPersian) "مدیریت سقف بودجه دسته‌ها" else "Manage category budget ceilings",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Text(text = if (isPersian) "محدودیت‌های خرج‌کرد" else "Expense Limits", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                    Text(text = if (isPersian) "مدیریت سقف بودجه دسته‌ها" else "Manage category budget ceilings", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
@@ -571,19 +421,9 @@ fun HomeScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = "${limit.categoryEmoji} ${StringMapper.getCategoryName(limit.entity.categoryName, isPersian)} (${(progress * 100).toInt()}%)",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        fontWeight = FontWeight.Medium
-                                    )
+                                    Text(text = "${limit.categoryEmoji} ${StringMapper.getCategoryName(limit.entity.categoryName, isPersian)} (${(progress * 100).toInt()}%)", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
                                     val curr = if (currencyUnit == "IRR") 10 else 1
-                                    Text(
-                                        text = "${numberFormatter.format((limit.currentSpent * curr).toLong())} / ${numberFormatter.format((limit.entity.maxLimit * curr).toLong())} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = if (progress > 0.8f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Text(text = "${numberFormatter.format((limit.currentSpent * curr).toLong())} / ${numberFormatter.format((limit.entity.maxLimit * curr).toLong())} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}", style = MaterialTheme.typography.labelMedium, color = if (progress > 0.8f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                 }
                                 Spacer(Modifier.height(8.dp))
                                 LinearProgressIndicator(
@@ -604,45 +444,15 @@ fun HomeScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = if (isPersian) "تنظیم محدودیت جدید" else "Set a New Budget Limit",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Text(text = if (isPersian) "تنظیم محدودیت جدید" else "Set a New Budget Limit", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                 }
             }
 
-            // ---------------------------------------------------------------------
-            // بخش موعد سررسید
-            // ---------------------------------------------------------------------
+            // بخش بدهی و طلب‌ها (با محاسبه روزهای مانده از dueDay)
             item {
-                val now = System.currentTimeMillis()
-                val calendarNow = Calendar.getInstance().apply { timeInMillis = now }
-                val calendarDue = Calendar.getInstance()
-
-                // فقط روز و ماه و سال را مقایسه می‌کنیم
-                calendarNow.set(Calendar.HOUR_OF_DAY, 0)
-                calendarNow.set(Calendar.MINUTE, 0)
-                calendarNow.set(Calendar.SECOND, 0)
-                calendarNow.set(Calendar.MILLISECOND, 0)
-
-                val dueItems = upcomingPayments.map { payment ->
-                    calendarDue.timeInMillis = payment.dueDate
-                    calendarDue.set(Calendar.HOUR_OF_DAY, 0)
-                    calendarDue.set(Calendar.MINUTE, 0)
-                    calendarDue.set(Calendar.SECOND, 0)
-                    calendarDue.set(Calendar.MILLISECOND, 0)
-
-                    val daysLeft = ((calendarDue.timeInMillis - calendarNow.timeInMillis) / (24 * 60 * 60 * 1000))
-                        .toInt()
-                        .coerceAtLeast(0)
-
-                    HomeDueItem(payment.id, payment.title, payment.amount, daysLeft, "installment")
-                }
-
                 val dueShape = RoundedCornerShape(24.dp)
 
                 Box(
@@ -652,13 +462,7 @@ fun HomeScreen(
                         .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), dueShape)
                         .clip(dueShape)
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.duebanner),
-                        contentDescription = null,
-                        modifier = Modifier.matchParentSize(),
-                        contentScale = ContentScale.Crop,
-                        alpha = 0.12f
-                    )
+                    Image(painter = painterResource(id = R.drawable.duebanner), contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop, alpha = 0.12f)
 
                     Column(
                         modifier = Modifier
@@ -674,17 +478,8 @@ fun HomeScreen(
                                 Text(text = "📅", fontSize = MaterialTheme.typography.titleLarge.fontSize)
                                 Spacer(Modifier.width(8.dp))
                                 Column {
-                                    Text(
-                                        text = if (isPersian) "موعد پرداخت‌ها" else "Upcoming Payments",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = if (isPersian) "مدیریت اقساط و قبوض سررسید" else "Manage upcoming bills & installments",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Text(text = if (isPersian) "بدهی و طلب‌ها" else "Debts & Credits", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                    Text(text = if (isPersian) "مدیریت اقساط و بدهی‌های شخصی" else "Manage personal debts and credits", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
@@ -695,11 +490,67 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            items(dueItems) { due ->
+                            items(debtCreditList) { debt ->
+
+                                val calendarNow = Calendar.getInstance().apply {
+                                    timeInMillis = System.currentTimeMillis()
+                                    set(Calendar.HOUR_OF_DAY, 0)
+                                    set(Calendar.MINUTE, 0)
+                                    set(Calendar.SECOND, 0)
+                                    set(Calendar.MILLISECOND, 0)
+                                }
+
+                                val calendarDue = Calendar.getInstance().apply {
+                                    if (debt.isMonthly) {
+                                        val today = Calendar.getInstance()
+
+                                        set(Calendar.YEAR, today.get(Calendar.YEAR))
+                                        set(Calendar.MONTH, today.get(Calendar.MONTH))
+                                        set(
+                                            Calendar.DAY_OF_MONTH,
+                                            debt.dueDay.coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH))
+                                        )
+
+                                        set(Calendar.HOUR_OF_DAY, 0)
+                                        set(Calendar.MINUTE, 0)
+                                        set(Calendar.SECOND, 0)
+                                        set(Calendar.MILLISECOND, 0)
+
+                                        // اگر موعد این ماه گذشته، برو ماه بعد
+                                        if (before(calendarNow)) {
+                                            add(Calendar.MONTH, 1)
+                                            set(
+                                                Calendar.DAY_OF_MONTH,
+                                                debt.dueDay.coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH))
+                                            )
+                                        }
+                                    } else {
+                                        timeInMillis = debt.dueDateMillis
+
+                                        set(Calendar.HOUR_OF_DAY, 0)
+                                        set(Calendar.MINUTE, 0)
+                                        set(Calendar.SECOND, 0)
+                                        set(Calendar.MILLISECOND, 0)
+                                    }
+                                }
+
+                                val daysLeft = (
+                                        (calendarDue.timeInMillis - calendarNow.timeInMillis) /
+                                                (24 * 60 * 60 * 1000)
+                                        ).toInt().coerceAtLeast(0)
+                                val dueItem = HomeDueItem(
+                                    id = debt.id,
+                                    title = debt.personName,
+                                    amount = debt.totalAmount,
+                                    daysLeft = daysLeft,
+                                    type = debt.type
+                                )
+
                                 val cardShape = RoundedCornerShape(16.dp)
-                                val isUrgent = due.daysLeft <= 3
-                                val statusColor = if (isUrgent) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                                val icon = "🏦"
+                                val statusColor = MaterialTheme.colorScheme.primary
+                                val icon = if (debt.type == "DEBT") "📸" else "💰"
+                                val typeFa = if (debt.type == "DEBT") "بدهی" else "طلب"
+                                val typeEn = if (debt.type == "DEBT") "Debt" else "Credit"
 
                                 Box(
                                     modifier = Modifier
@@ -722,35 +573,24 @@ fun HomeScreen(
                                                     .background(statusColor.copy(alpha = 0.12f), CircleShape)
                                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                                             ) {
-                                                Text(
-                                                    text = if (isPersian) "${due.daysLeft} روز" else "${due.daysLeft}d",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = statusColor,
-                                                    fontWeight = FontWeight.Bold
-                                                )
+                                                Text(text = if (isPersian) typeFa else typeEn, style = MaterialTheme.typography.labelSmall, color = statusColor, fontWeight = FontWeight.Bold)
                                             }
                                         }
 
                                         Spacer(Modifier.height(12.dp))
 
-                                        Text(
-                                            text = due.title,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
+                                        Text(text = dueItem.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
 
                                         Spacer(Modifier.height(2.dp))
 
                                         val curr = if (currencyUnit == "IRR") 10 else 1
-                                        Text(
-                                            text = "${numberFormatter.format((due.amount * curr).toLong())} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}",
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontWeight = FontWeight.Medium
-                                        )
+                                        Text(text = "${numberFormatter.format((dueItem.amount * curr).toLong())} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium)
+
+                                        if (daysLeft > 0) {
+                                            Text(text = if (isPersian) "${dueItem.daysLeft} روز مونده" else "${dueItem.daysLeft}d left", style = MaterialTheme.typography.labelSmall, color = if (daysLeft <= 7) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                        } else if (daysLeft == 0) {
+                                            Text(text = if (isPersian) "امروز سررسید" else "Due today", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                                        }
                                     }
                                 }
                             }
@@ -759,36 +599,24 @@ fun HomeScreen(
                         Spacer(Modifier.height(20.dp))
 
                         Button(
-                            onClick = onAddScreenClickDue,
+                            onClick = onAddScreenClickDebt,
                             modifier = Modifier.fillMaxWidth().height(48.dp),
                             shape = RoundedCornerShape(16.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = if (isPersian) "ساخت موعد پرداخت جدید" else "Create New Payment",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Text(text = if (isPersian) "ثبت بدهی/طلب جدید" else "Add New Debt or Credit", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                 }
             }
 
-            // ---------------------------------------------------------------------
-            // بخش آخرین تراکنش‌ها
-            // ---------------------------------------------------------------------
+            // آخرین تراکنش‌ها
             if (recentTransactions.isNotEmpty()) {
                 item {
-                    Text(
-                        text = if (isPersian) "آخرین تراکنش‌ها" else "Recent Transactions",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
+                    Text(text = if (isPersian) "آخرین تراکنش‌ها" else "Recent Transactions", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
                 }
 
                 items(recentTransactions, key = { it.id }) { transaction ->
@@ -815,27 +643,11 @@ fun HomeScreen(
                         }
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = transaction.title.ifEmpty { transaction.category },
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Text(text = transaction.title.ifEmpty { transaction.category }, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = DateUtils.formatTimestamp(transaction.timestamp, isPersian),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
+                            Text(text = DateUtils.formatTimestamp(transaction.timestamp, isPersian), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         }
-                        Text(
-                            text = "${if (isExpense) "-" else "+"}${numberFormatter.format(abs(displayAmount))} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isExpense) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                        )
+                        Text(text = "${if (isExpense) "-" else "+"}${numberFormatter.format(abs(displayAmount))} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = if (isExpense) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
                     }
                 }
 
@@ -852,17 +664,9 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center
                         ) {
-                            Text(
-                                text = if (isPersian) "مشاهده همه تراکنش‌ها" else "See All Transactions",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text(text = if (isPersian) "مشاهده همه تراکنش‌ها" else "See All Transactions", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                             Spacer(Modifier.width(8.dp))
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
@@ -871,9 +675,7 @@ fun HomeScreen(
             item { Spacer(modifier = Modifier.height(110.dp)) }
         }
 
-        // ---------------------------------------------------------------------
         // هدر بالای صفحه
-        // ---------------------------------------------------------------------
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -900,11 +702,7 @@ fun HomeScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     IconButton(onClick = onThemeToggle) {
-                        Icon(
-                            imageVector = Icons.Default.Brightness6,
-                            contentDescription = if (isPersian) "تغییر تم" else "Toggle Theme",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Icon(imageVector = Icons.Default.Brightness6, contentDescription = if (isPersian) "تغییر تم" else "Toggle Theme", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
 
@@ -918,12 +716,7 @@ fun HomeScreen(
                         .padding(horizontal = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = if (isPersian) "سیدنا" else "Cidna",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text(text = if (isPersian) "سیدنا" else "Cidna", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
                 }
 
                 Box(
@@ -935,11 +728,7 @@ fun HomeScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     IconButton(onClick = { showPendingSheet = true }) {
-                        Icon(
-                            imageVector = Icons.Default.Message, // آیکون پیامک
-                            contentDescription = if (isPersian) "تراکنش‌های در انتظار" else "Pending Transactions",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Icon(imageVector = Icons.Default.Message, contentDescription = if (isPersian) "تراکنش‌های در انتظار" else "Pending Transactions", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
 
                     if (pendingCount > 0) {
@@ -951,12 +740,7 @@ fun HomeScreen(
                                 .background(MaterialTheme.colorScheme.primary, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = if (pendingCount > 9) "9+" else pendingCount.toString(),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text(text = if (pendingCount > 9) "9+" else pendingCount.toString(), style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -970,14 +754,9 @@ fun HomeScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     IconButton(onClick = { showBottomSheet = true }) {
-                        Icon(
-                            imageVector = Icons.Default.Notifications,
-                            contentDescription = if (isPersian) "اعلان‌ها" else "Notifications",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Icon(imageVector = Icons.Default.Notifications, contentDescription = if (isPersian) "اعلان‌ها" else "Notifications", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
 
-                    // Badge تعداد پیام‌های خوانده نشده
                     if (unreadCount > 0) {
                         Box(
                             modifier = Modifier
@@ -987,21 +766,14 @@ fun HomeScreen(
                                 .background(MaterialTheme.colorScheme.error, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = if (unreadCount > 9) "9+" else unreadCount.toString(),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text(text = if (unreadCount > 9) "9+" else unreadCount.toString(), style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
         }
 
-        // ---------------------------------------------------------------------
-// CTA اضافه کردن ویجت (فقط وقتی ویجت اضافه نشده باشد)
-// ---------------------------------------------------------------------
+        // CTA ویجت
         if (!isWidgetAdded) {
             Box(
                 modifier = Modifier
@@ -1017,15 +789,8 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(44.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
-                            shape = capsuleShape
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                            shape = capsuleShape
-                        )
+                        .background(color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f), shape = capsuleShape)
+                        .border(width = 1.dp, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), shape = capsuleShape)
                         .clip(capsuleShape)
                         .clickable {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -1035,46 +800,24 @@ fun HomeScreen(
                                 if (appWidgetManager.isRequestPinAppWidgetSupported) {
                                     appWidgetManager.requestPinAppWidget(provider, null, null)
                                 } else {
-                                    Toast.makeText(
-                                        context,
-                                        if (isPersian) "لطفاً از منوی ویجت‌ها، ویجت سیدنا را اضافه کنید"
-                                        else "Please add Cidna widget from the widget menu",
-                                        Toast.LENGTH_LONG
-                                    ).show()
+                                    Toast.makeText(context, if (isPersian) "لطفاً از منوی ویجت‌ها، ویجت سیدنا را اضافه کنید" else "Please add Cidna widget from the widget menu", Toast.LENGTH_LONG).show()
                                 }
                             } else {
-                                Toast.makeText(
-                                    context,
-                                    if (isPersian) "لطفاً از منوی ویجت‌ها، ویجت سیدنا را اضافه کنید"
-                                    else "Please add Cidna widget from the widget menu",
-                                    Toast.LENGTH_LONG
-                                ).show()
+                                Toast.makeText(context, if (isPersian) "لطفاً از منوی ویجت‌ها، ویجت سیدنا را اضافه کنید" else "Please add Cidna widget from the widget menu", Toast.LENGTH_LONG).show()
                             }
                         }
                         .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Widgets,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    Icon(imageVector = Icons.Default.Widgets, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = if (isPersian) "ویجت موجودی را اضافه کنید" else "Add Balance Widget",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                    Text(text = if (isPersian) "ویجت موجودی را اضافه کنید" else "Add Balance Widget", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
             }
         }
 
-        // ---------------------------------------------------------------------
         // Bottom Sheet اعلان‌ها
-        // ---------------------------------------------------------------------
         if (showBottomSheet) {
             ModalBottomSheet(
                 onDismissRequest = { showBottomSheet = false },
@@ -1087,19 +830,11 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 16.dp, vertical = 36.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.96f),
-                            shape = RoundedCornerShape(32.dp)
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                            shape = RoundedCornerShape(32.dp)
-                        )
+                        .background(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.96f), shape = RoundedCornerShape(32.dp))
+                        .border(width = 1.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape = RoundedCornerShape(32.dp))
                 ) {
                     Column(modifier = Modifier.fillMaxSize()) {
 
-                        // دستگیره کشیدن
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1109,14 +844,10 @@ fun HomeScreen(
                             Box(
                                 modifier = Modifier
                                     .size(width = 36.dp, height = 4.dp)
-                                    .background(
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                                        shape = RoundedCornerShape(2.dp)
-                                    )
+                                    .background(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), shape = RoundedCornerShape(2.dp))
                             )
                         }
 
-                        // عنوان + تعداد پیام جدید + دکمه «همه را خواندم»
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1124,53 +855,31 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(
-                                text = if (isPersian) "اعلان‌ها و رویدادها" else "System Activity",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                            Text(text = if (isPersian) "اعلان‌ها و رویدادها" else "System Activity", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 if (unreadCount > 0) {
                                     Box(
                                         modifier = Modifier
-                                            .background(
-                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                                CircleShape
-                                            )
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape)
                                             .padding(horizontal = 10.dp, vertical = 4.dp)
                                     ) {
-                                        Text(
-                                            text = if (isPersian) "$unreadCount پیام جدید" else "$unreadCount New",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                        Text(text = if (isPersian) "$unreadCount پیام جدید" else "$unreadCount New", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                     }
                                 }
 
-                                // دکمه همه را خواندم
                                 if (unreadCount > 0) {
                                     TextButton(
                                         onClick = { notificationViewModel.markAllAsRead() },
                                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                                     ) {
-                                        Text(
-                                            text = if (isPersian) "همه را خواندم" else "Mark all",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
+                                        Text(text = if (isPersian) "همه را خواندم" else "Mark all", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                                     }
                                 }
                             }
                         }
 
                         if (notifications.isEmpty()) {
-                            // حالت خالی بودن لیست
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -1178,18 +887,9 @@ fun HomeScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(
-                                        imageVector = Icons.Default.NotificationsNone,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                                        modifier = Modifier.size(48.dp)
-                                    )
+                                    Icon(imageVector = Icons.Default.NotificationsNone, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), modifier = Modifier.size(48.dp))
                                     Spacer(Modifier.height(12.dp))
-                                    Text(
-                                        text = if (isPersian) "اعلانی وجود ندارد" else "No notifications yet",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                    )
+                                    Text(text = if (isPersian) "اعلانی وجود ندارد" else "No notifications yet", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
                                 }
                             }
                         } else {
@@ -1201,59 +901,38 @@ fun HomeScreen(
                                 contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)
                             ) {
                                 items(notifications, key = { it.id }) { item ->
-                                    // وقتی این آیتم رندر شد/دیده شد، اگر خوانده نشده بود علامت‌گذاری می‌شود
                                     LaunchedEffect(item.id, item.isRead) {
-                                        if (!item.isRead) {
-                                            notificationViewModel.markAsRead(item.id)
-                                        }
+                                        if (!item.isRead) notificationViewModel.markAsRead(item.id)
                                     }
 
                                     val itemShape = RoundedCornerShape(18.dp)
-
-                                    // رنگ و آیکون بر اساس type
                                     val (icon, iconColor) = when (item.type.uppercase()) {
                                         "SUCCESS" -> Icons.Default.CheckCircle to Color(0xFF4CAF50)
                                         "ERROR" -> Icons.Default.Error to Color(0xFFF44336)
                                         "WARNING" -> Icons.Default.Warning to Color(0xFFFF9800)
                                         "REWARD" -> Icons.Default.CardGiftcard to Color(0xFF9C27B0)
-                                        else -> Icons.Default.Info to MaterialTheme.colorScheme.primary // SYSTEM
+                                        else -> Icons.Default.Info to MaterialTheme.colorScheme.primary
                                     }
 
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .background(
-                                                if (!item.isRead)
-                                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)
-                                                else
-                                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
+                                                if (!item.isRead) MaterialTheme.colorScheme.primary.copy(alpha = 0.06f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
                                                 itemShape
                                             )
-                                            .border(
-                                                1.dp,
-                                                MaterialTheme.colorScheme.outline.copy(alpha = 0.08f),
-                                                itemShape
-                                            )
+                                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), itemShape)
                                             .clip(itemShape)
                                             .padding(14.dp),
                                         verticalAlignment = Alignment.Top
                                     ) {
-                                        // آیکون رنگی
                                         Box(
                                             modifier = Modifier
                                                 .size(40.dp)
-                                                .background(
-                                                    iconColor.copy(alpha = 0.12f),
-                                                    CircleShape
-                                                ),
+                                                .background(iconColor.copy(alpha = 0.12f), CircleShape),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Icon(
-                                                imageVector = icon,
-                                                contentDescription = null,
-                                                tint = iconColor,
-                                                modifier = Modifier.size(22.dp)
-                                            )
+                                            Icon(imageVector = icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(22.dp))
                                         }
 
                                         Spacer(Modifier.width(12.dp))
@@ -1264,37 +943,20 @@ fun HomeScreen(
                                                 horizontalArrangement = Arrangement.SpaceBetween,
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Text(
-                                                    text = if (isPersian) item.titleFa else item.titleEn,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                    modifier = Modifier.weight(1f)
-                                                )
+                                                Text(text = if (isPersian) item.titleFa else item.titleEn, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
 
-                                                // نشانگر خوانده‌نشده
                                                 if (!item.isRead) {
                                                     Box(
                                                         modifier = Modifier
                                                             .size(8.dp)
-                                                            .background(
-                                                                MaterialTheme.colorScheme.primary,
-                                                                CircleShape
-                                                            )
+                                                            .background(MaterialTheme.colorScheme.primary, CircleShape)
                                                     )
                                                 }
                                             }
 
                                             Spacer(Modifier.height(4.dp))
 
-                                            Text(
-                                                text = if (isPersian) item.descFa else item.descEn,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                                                lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.2
-                                            )
+                                            Text(text = if (isPersian) item.descFa else item.descEn, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f), lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.2)
                                         }
                                     }
                                 }
@@ -1329,13 +991,6 @@ fun HomeScreen(
         }
     }
 }
-
-private data class Quadruple<A, B, C, D>(
-    val first: A,
-    val second: B,
-    val third: C,
-    val fourth: D
-)
 
 private fun getCategoryEmoji(category: String): String {
     return when (category.uppercase()) {

@@ -11,7 +11,7 @@ import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsViewModel
 import ir.hamedan.budgetmanagement.ui.screens.home.PendingTransactionViewModel
 import ir.hamedan.budgetmanagement.ui.screens.notification.NotificationViewModel
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
-import ir.hamedan.budgetmanagement.ui.screens.upcomings.UpcomingPaymentViewModel
+import ir.hamedan.budgetmanagement.ui.viewmodels.DebtCreditViewModel
 
 /**
  * Central ViewModel factory.
@@ -62,12 +62,6 @@ class AppViewModelFactory(
                     context = appContext
                 ) as T
             }
-            modelClass.isAssignableFrom(UpcomingPaymentViewModel::class.java) -> {
-                UpcomingPaymentViewModel(
-                    repository = container.upcomingPaymentRepository,
-                    context = appContext
-                ) as T
-            }
             modelClass.isAssignableFrom(NotificationViewModel::class.java) -> {
                 NotificationViewModel(
                     repository = container.notificationRepository,
@@ -85,6 +79,13 @@ class AppViewModelFactory(
             modelClass.isAssignableFrom(AnalyticsViewModel::class.java) -> {
                 AnalyticsViewModel(
                     repository = container.transactionRepository
+                ) as T
+            }
+            modelClass.isAssignableFrom(DebtCreditViewModel::class.java) -> {
+                DebtCreditViewModel(
+                    debtCreditRepository = container.debtCreditRepository,
+                    transactionRepository = container.transactionRepository,
+                    context = appContext
                 ) as T
             }
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")

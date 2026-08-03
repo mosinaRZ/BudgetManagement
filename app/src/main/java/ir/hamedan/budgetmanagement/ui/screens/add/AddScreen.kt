@@ -23,6 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -103,7 +104,7 @@ fun AddScreen(
     onGoalsClick: () -> Unit = {},
     onCategoriesClick: () -> Unit = {},
     onLimitsClick: () -> Unit = {},
-    onDueClick: () -> Unit = {},
+    onDebtClick: () -> Unit = {},
     viewModel: AddViewModel = appViewModel()
 ) {
     val context = LocalContext.current
@@ -169,8 +170,8 @@ fun AddScreen(
                 Icons.Default.Warning, "تعیین یا ویرایش سقف بودجه", "Set or edit budget ceilings", "add_limit"
             ),
             AddOptionItem(
-                "due", "مدیریت موعدها", "Manage Due Dates",
-                Icons.Default.Event, "یادآور پرداخت قسط/بدهی", "Installment/Debt reminders", "add_due"
+                "debtcredit", "بدهی و طلب", "Debts & Credits",
+                Icons.Default.AccountBalance, "مدیریت بدهی‌ها و طلب‌ها", "Manage debts and credits", "add_debtcredit"
             )
         )
     }
@@ -190,7 +191,7 @@ fun AddScreen(
             contentPadding = PaddingValues(
                 start = 24.dp,
                 end = 24.dp,
-                top = 160.dp,
+                top = 180.dp,
                 bottom = 110.dp
             ),
             modifier = Modifier.fillMaxSize()
@@ -221,7 +222,7 @@ fun AddScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .then(if (isWide) Modifier.height(140.dp) else Modifier.aspectRatio(1f))
+                        .then(if (isWide) Modifier.aspectRatio(2f) else Modifier.aspectRatio(1f))
                         .background(
                             if (isTargetHighlight) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
                             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -232,31 +233,45 @@ fun AddScreen(
                         .clickable {
                             when (option.id) {
                                 "transaction" -> showTransactionBottomSheet = true
+                                "debtcredit" -> onDebtClick()
                                 "piggy" -> onGoalsClick()
                                 "category" -> onCategoriesClick()
                                 "limit" -> onLimitsClick()
-                                "due" -> onDueClick()
                             }
                         }
                         .padding(16.dp)
                 ) {
                     if (isWide) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            Icon(option.icon, null, modifier = Modifier.size(40.dp), tint = if (isTargetHighlight) MaterialTheme.colorScheme.primary else contentColor)
-                            Spacer(Modifier.width(16.dp))
-                            Column {
-                                Text(if (isPersian) option.titleFa else option.titleEn, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = if (isTargetHighlight) MaterialTheme.colorScheme.primary else contentColor)
-                                Text(if (isPersian) option.descriptionFa else option.descriptionEn, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
+                            Icon(option.icon, null, modifier = Modifier.size(36.dp), tint = if (isTargetHighlight) MaterialTheme.colorScheme.primary else contentColor)
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                text = if (isPersian) option.titleFa else option.titleEn,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isTargetHighlight) MaterialTheme.colorScheme.primary else contentColor,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     } else {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.fillMaxSize()) {
-                            Icon(option.icon, null, modifier = Modifier.size(48.dp), tint = if (isTargetHighlight) MaterialTheme.colorScheme.primary else contentColor)
-                            Spacer(Modifier.height(12.dp))
-                            Text(if (isPersian) option.titleFa else option.titleEn, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = if (isTargetHighlight) MaterialTheme.colorScheme.primary else contentColor, textAlign = TextAlign.Center)
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Icon(option.icon, null, modifier = Modifier.size(36.dp), tint = if (isTargetHighlight) MaterialTheme.colorScheme.primary else contentColor)
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                text = if (isPersian) option.titleFa else option.titleEn,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isTargetHighlight) MaterialTheme.colorScheme.primary else contentColor,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                 }
@@ -270,7 +285,7 @@ fun AddScreen(
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
                 .padding(horizontal = 24.dp)
-                .padding(top = 48.dp, bottom = 8.dp)
+                .padding(top = 24.dp, bottom = 8.dp)
         ) {
             Text(
                 text = if (isPersian) "مدیریت و افزودن آیتم‌ها" else "Add & Manage Items",
