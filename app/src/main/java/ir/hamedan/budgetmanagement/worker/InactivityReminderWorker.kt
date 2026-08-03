@@ -24,7 +24,6 @@ class InactivityReminderWorker(
         ).toInt()
 
         val lastNotified = AppUsagePreferences.getLastNotifiedDays(applicationContext)
-        val isPersian = LocaleHelper.getLanguage(applicationContext) == "fa"
 
         // فقط بالاترین thresholdی که رسیده و قبلاً نوتیف ندادیم
         val targetThreshold = thresholds

@@ -14,6 +14,7 @@ import io.mockk.unmockkAll
 import io.mockk.verify
 import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
 import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepository
+import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsViewModel
 import ir.hamedan.budgetmanagement.utils.NotificationHelper
 import kotlinx.coroutines.Dispatchers
@@ -41,7 +42,7 @@ class SavingGoalsViewModelTest {
 
     private lateinit var repository: SavingGoalRepository
     private lateinit var context: Context
-
+    private lateinit var transactionRepository: TransactionRepository
     private val sampleGoal = SavingGoalEntity(
         id = "g1",
         title = "سفر",
@@ -55,9 +56,11 @@ class SavingGoalsViewModelTest {
         Dispatchers.setMain(testDispatcher)
 
         repository = mockk(relaxed = true)
+        transactionRepository = mockk(relaxed = true)
         context = mockk(relaxed = true)
 
         every { repository.getAllGoals() } returns flowOf(listOf(sampleGoal))
+        coEvery { transactionRepository.getCurrentBalance() } returns 100_000_000.0
 
         mockkObject(NotificationHelper)
         every {
@@ -76,7 +79,7 @@ class SavingGoalsViewModelTest {
         goals: List<SavingGoalEntity> = listOf(sampleGoal)
     ): SavingGoalsViewModel {
         every { repository.getAllGoals() } returns flowOf(goals)
-        return SavingGoalsViewModel(repository, context)
+        return SavingGoalsViewModel(repository, transactionRepository, context)
     }
 
     private fun TestScope.collectGoals(vm: SavingGoalsViewModel): List<SavingGoalEntity>? {
@@ -110,8 +113,7 @@ class SavingGoalsViewModelTest {
         coEvery { repository.insertGoal(any()) } just Runs
         val vm = createViewModel()
 
-        vm.addGoal(title = "لپتاپ", targetAmount = 80_000_000.0, icon = "💻")
-
+        vm.addGoal(title = "لپتاپ", targetAmount = 80_000_000.0, monthlyAmount = 0.0, icon = "💻")
         coVerify(timeout = 3_000) {
             repository.insertGoal(
                 match {
@@ -129,8 +131,7 @@ class SavingGoalsViewModelTest {
         coEvery { repository.insertGoal(any()) } just Runs
         val vm = createViewModel()
 
-        vm.addGoal(title = "لپتاپ", targetAmount = 80_000_000.0, icon = "💻")
-
+        vm.addGoal(title = "لپتاپ", targetAmount = 80_000_000.0, monthlyAmount = 0.0, icon = "💻")
         verify(timeout = 3_000) {
             NotificationHelper.send(
                 context = context,

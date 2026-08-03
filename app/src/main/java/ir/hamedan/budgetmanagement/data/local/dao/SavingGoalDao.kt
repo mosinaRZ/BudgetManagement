@@ -29,4 +29,7 @@ interface SavingGoalDao {
 
     @Query("UPDATE saving_goals SET currentAmount = CASE WHEN (currentAmount - :amount) < 0 THEN 0.0 ELSE (currentAmount - :amount) END WHERE id = :goalId")
     suspend fun withdrawFromGoal(goalId: String, amount: Double)
+
+    @Query("UPDATE saving_goals SET lastAutoDepositTimestamp = :timestamp WHERE id = :goalId")
+    suspend fun updateLastAutoDepositTimestamp(goalId: String, timestamp: Long)
 }

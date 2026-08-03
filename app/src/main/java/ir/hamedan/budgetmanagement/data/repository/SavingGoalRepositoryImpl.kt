@@ -21,4 +21,8 @@ class SavingGoalRepositoryImpl(
 
     override suspend fun withdrawFromGoal(goalId: String, amount: Double) =
         savingGoalDao.withdrawFromGoal(goalId, amount)
+
+    override suspend fun updateLastAutoDepositTimestamp(goalId: String, timestamp: Long) {
+        savingGoalDao.updateLastAutoDepositTimestamp(goalId, timestamp)
+    }
 }

@@ -53,15 +53,13 @@ class MonthlyGoalDepositWorker(
                 continue
             }
 
-            // واریز
+            // واریز مبلغ
             goalRepository.depositToGoal(goal.id, goal.monthlyAmount)
-            // آپدیت زمان آخرین واریز
-            goalRepository.updateGoal(
-                goal.copy(
-                    currentAmount = goal.currentAmount + goal.monthlyAmount,
-                    lastAutoDepositTimestamp = now
-                )
-            )
+
+// فقط زمان آخرین واریز را آپدیت کن
+            goalRepository.updateLastAutoDepositTimestamp(goal.id, now)
+
+            currentBalance -= goal.monthlyAmount
 
             currentBalance -= goal.monthlyAmount
 

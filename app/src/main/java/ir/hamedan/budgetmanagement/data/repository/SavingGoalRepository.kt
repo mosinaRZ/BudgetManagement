@@ -10,4 +10,5 @@ interface SavingGoalRepository {
     suspend fun deleteGoal(goal: SavingGoalEntity)
     suspend fun depositToGoal(goalId: String, amount: Double)
     suspend fun withdrawFromGoal(goalId: String, amount: Double)
+    suspend fun updateLastAutoDepositTimestamp(goalId: String, timestamp: Long)
 }
