@@ -11,6 +11,7 @@
         <exclude domain="sharedpref" path="budget_management_prefs.xml" />
         <exclude domain="sharedpref" path="app_prefs.xml" />
         <exclude domain="sharedpref" path="settings.xml" />
+        <exclude domain="sharedpref" path="db_key_prefs.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="database" path="budget_management_db" />
@@ -23,5 +24,6 @@
         <exclude domain="sharedpref" path="budget_management_prefs.xml" />
         <exclude domain="sharedpref" path="app_prefs.xml" />
         <exclude domain="sharedpref" path="settings.xml" />
+        <exclude domain="sharedpref" path="db_key_prefs.xml" />
     </device-transfer>
 </data-extraction-rules>
