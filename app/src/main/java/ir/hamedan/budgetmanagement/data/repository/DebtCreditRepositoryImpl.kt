@@ -19,6 +19,12 @@ class DebtCreditRepositoryImpl(
     }
 
     override suspend fun toggleSettledStatus(id: String, currentStatus: Boolean) {
-        dao.updateSettledStatus(id, !currentStatus)
+        val entity = dao.getById(id) ?: return
+        val newStatus = !currentStatus
+        val newPaidAmount = if (newStatus) entity.totalAmount else 0.0
+
+        // این خط مهم است:
+        dao.updateSettledStatus(id, newStatus, newPaidAmount)
+        // (اگر از @Update استفاده می‌کنی، dao.update(entity.copy(paidAmount = newPaidAmount)) را بزن)
     }
 }

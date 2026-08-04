@@ -228,7 +228,10 @@ class MainActivity : FragmentActivity() {
 
             composable<AppRoute.Limits> {
                 BudgetLimitScreen(
-                    onBackClick = { navController.popBackStack() }
+                    onBackClick = { navController.popBackStack() },
+                    onCategoriesClick = {
+                        navController.navigate(AppRoute.Categories)
+                    }
                 )
             }
 

@@ -1,23 +1,19 @@
 # Budget Management (مدیریت بودجه)
 
-اپلیکیشن اندرویدی مدیریت بودجه شخصی با Jetpack Compose.
+اپلیکیشن اندرویدی مدیریت بودجه شخصی با Jetpack Compose + Clean Architecture.
 
-## ویژگی‌های فعلی
-- ثبت تراکنش‌های درآمد و هزینه
-- دسته‌بندی‌ها
-- اهداف پس‌انداز
-- محدودیت بودجه
-- پرداخت‌های پیش‌رو
-- دریافت خودکار تراکنش از پیامک بانکی (پارسر)
-- ویجت موجودی
-- نوتیفیکیشن
-- پشتیبانی از زبان فارسی و انگلیسی
-- تم روشن / تاریک
-- خروجی Excel و PDF
+## ویژگی‌های اصلی
+- ثبت تراکنش درآمد/هزینه
+- دسته‌بندی‌ها، اهداف پس‌انداز، محدودیت بودجه
+- **دریافت خودکار تراکنش از پیامک بانکی** (پارسر SMS + SmsReceiver)
+- ویجت موجودی + نوتیفیکیشن
+- خروجی Excel (Xlsx) + PDF
+- پشتیبانی کامل فارسی + انگلیسی + تم روشن/تاریک
 
 ## وضعیت پروژه
-این پروژه در حال بازنویسی و بهبود معماری است.  
-بخش لاگین فعلاً نمایشی است و در آینده با بک‌اند Go + Clean Architecture جایگزین خواهد شد.
+- معماری در حال بازنویسی و بهبود است (AppContainer + Hilt + Clean Architecture)
+- بخش لاگین فعلاً نمایشی است و در آینده با بک‌اند Go جایگزین می‌شود
+- نسخه فعلی: ۱.۰ (در حال توسعه)
 
 ## پیش‌نیازها
 - Android Studio Ladybug یا جدیدتر
@@ -25,13 +21,39 @@
 - minSdk 26
 
 ## نحوه اجرا
-1. پروژه را کلون کنید
-2. در Android Studio باز کنید
-3. Gradle Sync را بزنید
-4. روی یک دستگاه یا امولاتور اجرا کنید
+1. کلون کنید
+2. Gradle Sync بزنید
+3. روی دستگاه/امولاتور اجرا کنید
 
-## ساختار فعلی
+## ساختار پروژه
 app/
-├── data/          # Room + Preferences + Repository
-├── ui/            # Screens + Components + Theme
-└── utils/         # Helper classes
+├── data/          # Room + Preferences + Repository + security
+├── ui/            # Compose Screens + Components + Theme
+├── di/            # Hilt + AppContainer
+├── utils/         # SmsParser, ExportManager, Biometric...
+├── worker/        # WorkManager
+└── security/      # DatabaseKeyProvider, BiometricPromptManager
+
+
+## امنیت
+- دیتابیس کاملاً رمزنگاری شده با SQLCipher
+- رمزنگاری SharedPreferences با androidx.security:security-crypto
+- هاشینگ پسورد + بیومتریک (در حال تکمیل)
+
+## صادرات داده
+- Excel + PDF با آمار دقیق (موجودی، درآمد، هزینه، میانگین روزانه)
+
+## به‌روزرسانی‌ها
+- نسخه ۱.۱: اضافه شدن Hilt و نوع-safe navigation
+- نسخه ۱.۲: بک‌اند Go + تست کامل
+
+## نقشه راه
+- [ ] بک‌اند کامل با Go + API
+- [ ] تست‌های واحد + UI
+- [ ] CI/CD با GitHub Actions
+- [ ] انتشار در Google Play
+
+## مشارکت
+- Fork بزنید
+- Branch جدید ایجاد کنید
+- Pull Request بدهید

@@ -11,6 +11,7 @@ import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.ui.components.BalanceWidget
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.NotificationHelper
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -26,7 +27,8 @@ import kotlin.math.ceil
 class DebtCreditViewModel(
     private val debtCreditRepository: DebtCreditRepository,
     private val transactionRepository: TransactionRepository,
-    private val context: Context
+    private val context: Context,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
     val debtCreditList: StateFlow<List<DebtCreditEntity>> = debtCreditRepository.allDebtCredits
@@ -39,7 +41,7 @@ class DebtCreditViewModel(
                         isSettled = true,
                         paidAmount = item.totalAmount
                     )
-                    viewModelScope.launch(Dispatchers.IO) {
+                    viewModelScope.launch(ioDispatcher) {
                         debtCreditRepository.insertOrUpdateDebtCredit(autoSettledItem)
                     }
                     autoSettledItem
@@ -70,7 +72,7 @@ class DebtCreditViewModel(
         note: String?,
         addToBalance: Boolean = true
     ) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(ioDispatcher) {
             val isEdit = id != null
             val calculatedDueDate = if (isMonthly && monthlyAmount > 0) {
                 calculateExpirationDate(totalAmount, monthlyAmount, dueDay)
@@ -153,7 +155,7 @@ class DebtCreditViewModel(
     }
 
     fun deposit(id: String, amount: Double) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(ioDispatcher) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
             val isDebt = item.type == "DEBT"
 
@@ -209,7 +211,7 @@ class DebtCreditViewModel(
     }
 
     fun withdraw(id: String, amount: Double) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(ioDispatcher) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
             val isDebt = item.type == "DEBT"
 
@@ -246,7 +248,7 @@ class DebtCreditViewModel(
     }
 
     fun delete(id: String) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(ioDispatcher) {
             val item = debtCreditList.value.find { it.id == id }
             debtCreditRepository.deleteDebtCredit(id)
 
@@ -264,7 +266,7 @@ class DebtCreditViewModel(
     }
 
     fun toggleSettled(id: String, currentStatus: Boolean) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(ioDispatcher) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
             val newStatus = !currentStatus
             val newPaid = if (newStatus) item.totalAmount else 0.0

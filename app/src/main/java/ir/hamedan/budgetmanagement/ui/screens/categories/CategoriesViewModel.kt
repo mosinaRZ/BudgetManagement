@@ -17,29 +17,6 @@ class CategoriesViewModel(
     private val categoryRepository: CategoryRepository,
     private val context: Context
 ) : ViewModel() {
-
-    init {
-        viewModelScope.launch(Dispatchers.IO) {
-            val currentCategories = categoryRepository.getAllCategories().first()
-            val defaultCategories = listOf(
-                CategoryEntity(title = "FOOD", iconEmoji = "🍕", isExpense = true),
-                CategoryEntity(title = "TRANSPORT", iconEmoji = "🚗", isExpense = true),
-                CategoryEntity(title = "SHOPPING", iconEmoji = "🛍️", isExpense = true),
-                CategoryEntity(title = "BILL", iconEmoji = "📄", isExpense = true),
-                CategoryEntity(title = "DEBT_CREDIT_PAYABLE", iconEmoji = "💸", isExpense = true, isSystem = true), // بدهی
-                CategoryEntity(title = "SALARY", iconEmoji = "💰", isExpense = false),
-                CategoryEntity(title = "INVESTMENT", iconEmoji = "📈", isExpense = false),
-                CategoryEntity(title = "DEBT_CREDIT_RECEIVABLE", iconEmoji = "📥", isExpense = false, isSystem = true) // طلب
-            )
-
-            defaultCategories.forEach { category ->
-                if (currentCategories.none { it.title == category.title }) {
-                    categoryRepository.insertCategory(category)
-                }
-            }
-        }
-    }
-
     val categories: StateFlow<List<CategoryEntity>?> = categoryRepository.getAllCategories()
         .stateIn(
             scope = viewModelScope,

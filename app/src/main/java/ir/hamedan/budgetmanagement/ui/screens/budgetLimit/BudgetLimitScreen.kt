@@ -1,5 +1,6 @@
 package ir.hamedan.budgetmanagement.ui.screens.budgetLimit
 
+import android.R.attr.category
 import ir.hamedan.budgetmanagement.di.appViewModel
 
 import androidx.compose.animation.core.animateFloatAsState
@@ -16,11 +17,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -94,6 +95,7 @@ class ThousandsSeparatorTransformation : VisualTransformation {
 @Composable
 fun BudgetLimitScreen(
     onBackClick: () -> Unit = {},
+    onCategoriesClick: () -> Unit = {},
     viewModel: BudgetLimitViewModel = appViewModel()
 ) {
     val context = LocalContext.current
@@ -272,6 +274,7 @@ fun BudgetLimitScreen(
                     showAddDialog = false
                     limitToEdit = null
                 },
+                onCategoriesClick = onCategoriesClick,
                 onConfirm = { categoryName, maxLimit, startDate, endDate ->
                     viewModel.saveBudgetLimit(categoryName, maxLimit, startDate, endDate)
                     showAddDialog = false
@@ -545,6 +548,7 @@ fun AddOrEditLimitDialog(
     isPersian: Boolean,
     currencyUnit: String,
     onDismiss: () -> Unit,
+    onCategoriesClick: () -> Unit = {},
     onConfirm: (categoryName: String, maxLimit: Double, startDate: Long, endDate: Long) -> Unit
 ) {
     val maxDigitsLength = 12 // حداکثر ۱۲ رقم برای مبلغ
@@ -598,6 +602,7 @@ fun AddOrEditLimitDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         val dialogShape = RoundedCornerShape(28.dp)
+        val selectedCategoryObj = categories.find { it.title == selectedCategoryKey }
 
         Box(
             modifier = Modifier
@@ -653,32 +658,96 @@ fun AddOrEditLimitDialog(
                         readOnly = true,
                         label = { Text(if (isPersian) "دسته‌بندی" else "Category") },
                         leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Category,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
+                            if (selectedCategoryObj != null) {
+                                Text(
+                                    text = selectedCategoryObj.iconEmoji,
+                                    fontSize = 20.sp,
+                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                )
+                            }
                         },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                         modifier = Modifier
                             .menuAnchor()
                             .fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(14.dp)
                     )
 
                     ExposedDropdownMenu(
                         expanded = expanded,
-                        onDismissRequest = { expanded = false }
+                        onDismissRequest = { expanded = false },
+                        modifier = Modifier
+                            .heightIn(max = 280.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
-                        categories.forEach { category ->
+                        if (categories.isEmpty()) {
                             DropdownMenuItem(
-                                text = { Text("${category.iconEmoji} ${StringMapper.getCategoryName(category.title, isPersian)}") },
-                                onClick = {
-                                    selectedCategoryKey = category.title
-                                    expanded = false
-                                }
+                                text = {
+                                    Text(
+                                        text = if (isPersian) "دسته‌بندی یافت نشد" else "No categories found",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                },
+                                onClick = { expanded = false }
                             )
+                        } else {
+                            categories.forEach { category ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Text(text = category.iconEmoji, fontSize = 22.sp)
+                                            Text(
+                                                text = StringMapper.getCategoryName(category.title, isPersian),
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        selectedCategoryKey = category.title
+                                        expanded = false
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                                )
+                            }
                         }
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = if (isPersian) "مدیریت دسته‌بندی‌ها..." else "Manage Categories...",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            },
+                            onClick = {
+                                expanded = false
+                                onDismiss()
+                                onCategoriesClick()
+                            },
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+                        )
                     }
                 }
 

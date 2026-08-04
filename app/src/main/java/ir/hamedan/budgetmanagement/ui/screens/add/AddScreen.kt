@@ -192,7 +192,7 @@ fun AddScreen(
                 start = 24.dp,
                 end = 24.dp,
                 top = 180.dp,
-                bottom = 110.dp
+                bottom = 140.dp
             ),
             modifier = Modifier.fillMaxSize()
         ) {
