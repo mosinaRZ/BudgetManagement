@@ -25,19 +25,21 @@ class NotificationViewModel(
 
     fun addNotification(notification: NotificationEntity) {
         viewModelScope.launch {
-            repository.addNotification(notification)
-            // همزمان push سیستمی هم بفرست (اگه کاربر اجازه داده)
-            AppNotificationManager.sendPushIfAllowed(
-                context = context,
-                titleFa = notification.titleFa,
-                titleEn = notification.titleEn,
-                bodyFa = notification.descFa,
-                bodyEn = notification.descEn
-            )
+            val wasInserted = repository.addNotification(notification)
+            // اعلان سیستمی فقط وقتی ارسال می‌شود که رکورد جدیدی واقعاً ثبت شده باشد
+            if (wasInserted) {
+                AppNotificationManager.sendPushIfAllowed(
+                    context = context,
+                    titleFa = notification.titleFa,
+                    titleEn = notification.titleEn,
+                    bodyFa = notification.descFa,
+                    bodyEn = notification.descEn
+                )
+            }
         }
     }
 
     fun markAsRead(id: String) = viewModelScope.launch { repository.markAsRead(id) }
 
     fun markAllAsRead() = viewModelScope.launch { repository.markAllAsRead() }
-    }
+}

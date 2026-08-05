@@ -14,7 +14,10 @@ import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
 
 object AppNotificationManager {
 
-    private const val CHANNEL_ID = "budget_channel"
+    // شناسه‌ی کانال عوض شد (v2) چون NotificationChannel بعد از ساخته‌شدن
+    // غیرقابل‌تغییره؛ کاربرانی که نسخه‌ی قبلی رو نصب داشتن با importance
+    // قدیمی (DEFAULT) گیر می‌کردن و صرفاً عوض‌کردن این مقدار در کد براشون اثر نمی‌کرد.
+    private const val CHANNEL_ID = "budget_channel_v2"
     private const val CHANNEL_NAME = "Budget Notifications"
 
     fun createChannel(context: Context) {
@@ -22,7 +25,7 @@ object AppNotificationManager {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_HIGH // برای نمایش پاپ‌آپ (heads-up) لازم است
             ).apply { description = "Budget management alerts" }
 
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

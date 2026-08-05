@@ -37,16 +37,20 @@ object NotificationHelper {
 
         CoroutineScope(Dispatchers.IO).launch {
             // اول در دیتابیس ذخیره می‌شود (اعلان درون‌برنامه‌ای)
-            repository.addNotification(entity)
+            val wasInserted = repository.addNotification(entity)
 
-            // بعد در صورت مجاز بودن، اعلان سیستمی هم ارسال می‌شود
-            AppNotificationManager.sendPushIfAllowed(
-                context = context.applicationContext,
-                titleFa = titleFa,
-                titleEn = titleEn,
-                bodyFa = descFa,
-                bodyEn = descEn
-            )
+            // اعلان سیستمی فقط زمانی ارسال می‌شود که رکورد جدیدی واقعاً ثبت شده باشد؛
+            // در غیر این صورت (تگ تکراری) اعلان سیستمی بدون داشتن رکورد متناظر در
+            // لیست درون‌برنامه‌ای، به‌طور مکرر ارسال می‌شد (فقط صدا، بدون نمایش در لیست).
+            if (wasInserted) {
+                AppNotificationManager.sendPushIfAllowed(
+                    context = context.applicationContext,
+                    titleFa = titleFa,
+                    titleEn = titleEn,
+                    bodyFa = descFa,
+                    bodyEn = descEn
+                )
+            }
         }
     }
 }

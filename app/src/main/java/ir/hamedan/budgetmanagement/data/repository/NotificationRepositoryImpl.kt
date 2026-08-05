@@ -12,12 +12,13 @@ class NotificationRepositoryImpl(
 
     override fun getUnreadCount(): Flow<Int> = dao.getUnreadCount()
 
-    override suspend fun addNotification(notification: NotificationEntity) {
+    override suspend fun addNotification(notification: NotificationEntity): Boolean {
         if (notification.tag.isNotEmpty()) {
             val existing = dao.countByTag(notification.tag)
-            if (existing > 0) return
+            if (existing > 0) return false
         }
         dao.insert(notification)
+        return true
     }
 
     override suspend fun markAsRead(id: String) = dao.markAsRead(id)
