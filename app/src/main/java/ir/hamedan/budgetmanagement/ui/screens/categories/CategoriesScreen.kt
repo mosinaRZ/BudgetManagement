@@ -293,9 +293,11 @@ fun CategoriesScreen(
         // دیالوگ حذف با سبک دیزاین اختصاصی برنامه
         categoryToDelete?.let { category ->
             var transactionCount by remember { mutableIntStateOf(0) }
+            var budgetLimitCount by remember { mutableIntStateOf(0) }
 
             LaunchedEffect(category.title) {
                 transactionCount = categoryViewModel.getTransactionCount(category.title)
+                budgetLimitCount = categoryViewModel.getBudgetLimitCount(category.title)
             }
 
             val categoryName = StringMapper.getCategoryName(category.title, isPersian)
@@ -343,18 +345,32 @@ fun CategoriesScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
 
+                        // پیام تراکنش‌های وابسته (در صورت وجود)
+                        val transactionMessage = if (transactionCount > 0) {
+                            if (isPersian)
+                                "دسته‌بندی «$categoryName» دارای $transactionCount تراکنش ثبت‌شده است. با حذف آن، این تراکنش‌ها به دسته‌بندی «$uncategorizedName» منتقل می‌شوند."
+                            else
+                                "'$categoryName' has $transactionCount active transactions. Deleting it will move these transactions to '$uncategorizedName'."
+                        } else null
+
+                        // پیام هشدار محدودیت بودجه‌ی وابسته (در صورت وجود)
+                        val budgetLimitMessage = if (budgetLimitCount > 0) {
+                            if (isPersian)
+                                "برای دسته‌بندی «$categoryName» یک محدودیت خرج‌کرد (بودجه) هم تعریف شده است. با حذف این دسته‌بندی، آن محدودیت هم حذف خواهد شد."
+                            else
+                                "A budget limit is set for '$categoryName'. Deleting this category will also delete that budget limit."
+                        } else null
+
+                        val confirmMessage = if (isPersian)
+                            "آیا از حذف دسته‌بندی «$categoryName» اطمینان دارید؟"
+                        else
+                            "Are you sure you want to delete '$categoryName'?"
+
+                        val fullMessage = listOfNotNull(transactionMessage, budgetLimitMessage, confirmMessage)
+                            .joinToString("\n\n")
+
                         Text(
-                            text = if (transactionCount > 0) {
-                                if (isPersian)
-                                    "دسته‌بندی «$categoryName» دارای $transactionCount تراکنش ثبت‌شده است.\nبا حذف آن، این تراکنش‌ها به دسته‌بندی «$uncategorizedName» منتقل می‌شوند. ادامه می‌دهید؟"
-                                else
-                                    "'$categoryName' has $transactionCount active transactions.\nDeleting it will move these transactions to '$uncategorizedName'. Continue?"
-                            } else {
-                                if (isPersian)
-                                    "آیا از حذف دسته‌بندی «$categoryName» اطمینان دارید؟"
-                                else
-                                    "Are you sure you want to delete '$categoryName'?"
-                            },
+                            text = fullMessage,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center

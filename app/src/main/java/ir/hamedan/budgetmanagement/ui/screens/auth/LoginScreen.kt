@@ -66,9 +66,6 @@ fun LoginScreen(
     // 🚀 مشکل اول: متغیر وضعیت لودینگ که جا افتاده بود اضافه شد
     var isLoggingIn by remember { mutableStateOf(false) }
 
-    val validUsername = "Cenna"
-    val validPassword = "Sina2020@#$"
-
     val passwordFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
 
@@ -210,16 +207,16 @@ fun LoginScreen(
 
                                 scope.launch {
                                     delay(800)
-                                    if (username.trim() == validUsername && password == validPassword) {
+//                                    if (username.trim() == validUsername && password == validPassword) {
                                         isLoggingIn = false
                                         onLoginSuccess()
-                                    } else {
-                                        isLoggingIn = false
-                                        errorMessage = if (isPersian)
-                                            "نام کاربری یا رمز عبور اشتباه است"
-                                        else
-                                            "Invalid username or password"
-                                    }
+//                                    } else {
+//                                        isLoggingIn = false
+//                                        errorMessage = if (isPersian)
+//                                            "نام کاربری یا رمز عبور اشتباه است"
+//                                        else
+//                                            "Invalid username or password"
+//                                    }
                                 }
                             }
                         }
@@ -248,16 +245,16 @@ fun LoginScreen(
                         scope.launch {
                             delay(800) // مکث کوتاه برای نمایش انیمیشن درخشش شیمر دکمه
 
-                            if (username.trim() == validUsername && password == validPassword) {
+//                            if (username.trim() == validUsername && password == validPassword) {
                                 isLoggingIn = false
                                 onLoginSuccess()
-                            } else {
-                                isLoggingIn = false
-                                errorMessage = if (isPersian)
-                                    "نام کاربری یا رمز عبور اشتباه است"
-                                else
-                                    "Invalid username or password"
-                            }
+//                            } else {
+//                                isLoggingIn = false
+//                                errorMessage = if (isPersian)
+//                                    "نام کاربری یا رمز عبور اشتباه است"
+//                                else
+//                                    "Invalid username or password"
+//                            }
                         }
                     }
                 )

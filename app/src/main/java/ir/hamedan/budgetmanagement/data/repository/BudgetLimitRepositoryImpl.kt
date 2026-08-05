@@ -17,4 +17,16 @@ class BudgetLimitRepositoryImpl(
     override suspend fun deleteLimit(id: Long) {
         budgetLimitDao.deleteById(id)
     }
+
+    override suspend fun getLimitCountForCategory(categoryTitle: String): Int {
+        return budgetLimitDao.getLimitCountForCategory(categoryTitle)
+    }
+
+    override suspend fun reassignCategoryForLimits(oldCategoryTitle: String, newCategoryTitle: String) {
+        budgetLimitDao.reassignCategoryForLimits(oldCategoryTitle, newCategoryTitle)
+    }
+
+    override suspend fun deleteLimitsByCategory(categoryTitle: String) {
+        budgetLimitDao.deleteByCategoryName(categoryTitle)
+    }
 }

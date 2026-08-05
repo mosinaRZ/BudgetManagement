@@ -100,6 +100,12 @@ fun TransactionsScreen(
 
     val noSearchResults = searchQuery.isNotBlank() && transactionsList.isEmpty()
 
+    // زمانی که فیلتر (چه از باتم‌شیت فیلترینگ و چه فیلتر سریع زمانی) فعال است
+    // ولی هیچ تراکنشی با آن مطابقت ندارد
+    val noFilterResults = transactionsList.isEmpty() &&
+            searchQuery.isBlank() &&
+            (filterState.isCustomFilterActive || filterState.timeFilter != TimeFilter.ALL)
+
     Box(modifier = Modifier.fillMaxSize()) {
         AuroraBackground()
 
@@ -168,6 +174,40 @@ fun TransactionsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
+                }
+            }
+
+            noFilterResults -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = 170.dp, start = 24.dp, end = 24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(text = "🔍", fontSize = 48.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = if (isPersian) "تراکنشی با این فیلتر پیدا نشد" else "No Transactions Match This Filter",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = if (isPersian)
+                                "فیلترهای انتخاب‌شده را تغییر بده یا پاکشون کن تا تراکنش‌ها نمایش داده شوند."
+                            else
+                                "Try adjusting or clearing the selected filters to see your transactions.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             }
 
@@ -257,7 +297,8 @@ fun TransactionsScreen(
         }
 
         // سرچ و دکمه بازگشت به بالا
-        if (!isTrulyEmpty) {
+        // وقتی فیلتر باتم‌شیت (یا فیلتر سریع) نتیجه‌ای نداشته باشد، سرچ هم مخفی می‌شود
+        if (!isTrulyEmpty && !noFilterResults) {
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)

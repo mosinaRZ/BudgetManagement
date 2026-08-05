@@ -107,10 +107,16 @@ class BudgetLimitViewModel(
         categoryName: String,
         maxLimit: Double,
         startDate: Long,
-        endDate: Long
+        endDate: Long,
+        limitId: Long? = null
     ) {
         viewModelScope.launch {
-            val existingLimit = budgetLimitsWithSpent.value.find { it.entity.categoryName == categoryName }?.entity
+            // برای ویرایش، رکورد قبلی باید با شناسه (id) پیدا شود، نه با نام دسته‌بندی؛
+            // چون در حالت ویرایش ممکن است دسته‌بندی تغییر کرده باشد و جستجو بر اساس نام
+            // باعث می‌شد رکورد قدیمی پیدا نشود و یک رکورد جدید و تکراری ساخته شود.
+            val existingLimit = limitId?.let { id ->
+                budgetLimitsWithSpent.value.find { it.entity.id == id }?.entity
+            }
 
             // تنظیم تاریخ پایان تا آخرین میلی‌ثانیه همان روز (23:59:59.999)
             val adjustedEndDate = endDate + (24 * 60 * 60 * 1000L - 1)

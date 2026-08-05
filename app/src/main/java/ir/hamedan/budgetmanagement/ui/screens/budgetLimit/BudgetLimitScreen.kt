@@ -276,7 +276,13 @@ fun BudgetLimitScreen(
                 },
                 onCategoriesClick = onCategoriesClick,
                 onConfirm = { categoryName, maxLimit, startDate, endDate ->
-                    viewModel.saveBudgetLimit(categoryName, maxLimit, startDate, endDate)
+                    viewModel.saveBudgetLimit(
+                        categoryName = categoryName,
+                        maxLimit = maxLimit,
+                        startDate = startDate,
+                        endDate = endDate,
+                        limitId = limitToEdit?.entity?.id
+                    )
                     showAddDialog = false
                     limitToEdit = null
                 }

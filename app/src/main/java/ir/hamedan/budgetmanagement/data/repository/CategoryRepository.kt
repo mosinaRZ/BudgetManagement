@@ -9,5 +9,6 @@ interface CategoryRepository {
     suspend fun updateCategory(category: CategoryEntity, newTitle: String, newEmoji: String)
     fun getCategoriesByExpenseStatus(isExpense: Boolean): Flow<List<CategoryEntity>>
     suspend fun getTransactionCount(categoryTitle: String): Int
+    suspend fun getBudgetLimitCount(categoryTitle: String): Int
     suspend fun deleteCategoryWithReassignment(category: CategoryEntity): Int
 }

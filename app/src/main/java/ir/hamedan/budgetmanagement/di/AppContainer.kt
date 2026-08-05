@@ -27,16 +27,16 @@ class AppContainer(context: Context) {
         TransactionRepositoryImpl(database.transactionDao())
     }
 
+    val budgetLimitRepository: BudgetLimitRepository by lazy {
+        BudgetLimitRepositoryImpl(database.budgetLimitDao())
+    }
+
     val categoryRepository: CategoryRepository by lazy {
-        CategoryRepositoryImpl(database.categoryDao(), database.transactionDao())
+        CategoryRepositoryImpl(database.categoryDao(), database.transactionDao(), budgetLimitRepository)
     }
 
     val savingGoalRepository: SavingGoalRepository by lazy {
         SavingGoalRepositoryImpl(database.savingGoalDao())
-    }
-
-    val budgetLimitRepository: BudgetLimitRepository by lazy {
-        BudgetLimitRepositoryImpl(database.budgetLimitDao())
     }
 
     val notificationRepository: NotificationRepository by lazy {
@@ -47,7 +47,6 @@ class AppContainer(context: Context) {
         PendingTransactionRepositoryImpl(database.pendingTransactionDao())
     }
 
-    // === اضافه شده ===
     val debtCreditRepository: DebtCreditRepository by lazy {
         DebtCreditRepositoryImpl(database.debtCreditDao())
     }

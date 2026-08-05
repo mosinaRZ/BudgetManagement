@@ -68,4 +68,8 @@ class CategoriesViewModel(
     suspend fun getTransactionCount(categoryTitle: String): Int {
         return categoryRepository.getTransactionCount(categoryTitle)
     }
+
+    suspend fun getBudgetLimitCount(categoryTitle: String): Int {
+        return categoryRepository.getBudgetLimitCount(categoryTitle)
+    }
 }

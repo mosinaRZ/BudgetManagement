@@ -7,7 +7,8 @@ import kotlinx.coroutines.flow.Flow
 
 class CategoryRepositoryImpl(
     private val categoryDao: CategoryDao,
-    private val transactionDao: TransactionDao
+    private val transactionDao: TransactionDao,
+    private val budgetLimitRepository: BudgetLimitRepository
 ) : CategoryRepository {
 
     override fun getAllCategories(): Flow<List<CategoryEntity>> {
@@ -28,6 +29,11 @@ class CategoryRepositoryImpl(
                 oldCategoryTitle = category.title,
                 newCategoryTitle = newTitle
             )
+            // هم‌گام‌سازی محدودیت‌های بودجه با عنوان جدید دسته‌بندی
+            budgetLimitRepository.reassignCategoryForLimits(
+                oldCategoryTitle = category.title,
+                newCategoryTitle = newTitle
+            )
         }
         categoryDao.update(updatedCategory)
     }
@@ -38,6 +44,10 @@ class CategoryRepositoryImpl(
 
     override suspend fun getTransactionCount(categoryTitle: String): Int {
         return transactionDao.getTransactionCountForCategory(categoryTitle)
+    }
+
+    override suspend fun getBudgetLimitCount(categoryTitle: String): Int {
+        return budgetLimitRepository.getLimitCountForCategory(categoryTitle)
     }
 
     override suspend fun deleteCategoryWithReassignment(category: CategoryEntity): Int {
@@ -61,6 +71,9 @@ class CategoryRepositoryImpl(
                 newCategoryTitle = defaultKey
             )
         }
+
+        // حذف محدودیت‌های بودجه متصل به این دسته‌بندی، چون بعد از حذف دسته دیگر معنایی ندارند
+        budgetLimitRepository.deleteLimitsByCategory(category.title)
 
         categoryDao.delete(category)
         return affectedCount
