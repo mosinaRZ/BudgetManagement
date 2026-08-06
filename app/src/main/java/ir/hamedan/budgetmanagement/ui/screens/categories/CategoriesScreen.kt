@@ -37,7 +37,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
+import ir.hamedan.budgetmanagement.utils.CategorySuggestionHelper
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
 
@@ -517,6 +519,9 @@ fun AddOrEditCategoryDialog(
         "💅", "👕", "👟", "💡", "💧", "📶", "📱", "🎁", "🎓", "💎", "💳", "🏦"
     )
 
+    // متن تشخیص داده شده از میکروفون
+    var detectedTitle by remember { mutableStateOf<String?>(null) }
+
     Dialog(onDismissRequest = onDismiss) {
         val dialogShape = RoundedCornerShape(28.dp)
 
@@ -577,7 +582,7 @@ fun AddOrEditCategoryDialog(
                     }
                 }
 
-                // ورودی عنوان همراه با محدودیت ۲۰ کاراکتر
+                // ورودی عنوان همراه با محدودیت ۲۰ کاراکتر + ویس
                 OutlinedTextField(
                     value = title,
                     onValueChange = { input ->
@@ -589,7 +594,16 @@ fun AddOrEditCategoryDialog(
                     leadingIcon = { Text(text = emoji, fontSize = 20.sp) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    trailingIcon = {
+                        VoiceInputButton(
+                            onResult = { spoken ->
+                                detectedTitle = spoken
+                                title = spoken.take(maxTitleLength)
+                            },
+                            language = if (isPersian) "fa-IR" else "en-US"
+                        )
+                    }
                 )
 
                 // دکمه‌های تایید / انصراف

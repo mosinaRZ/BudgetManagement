@@ -47,11 +47,12 @@ import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
 import ir.hamedan.budgetmanagement.data.preferences.SharedPreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.saveThemeMode
-import ir.hamedan.budgetmanagement.utils.ExportManager
-import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
+import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
 import ir.hamedan.budgetmanagement.utils.BiometricPromptManager
 import ir.hamedan.budgetmanagement.utils.ExportFormat
+import ir.hamedan.budgetmanagement.utils.ExportManager
 import ir.hamedan.budgetmanagement.utils.ExportPeriod
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.NotificationHelper
@@ -1445,6 +1446,26 @@ private fun SettingsTopBar(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
+                        },
+                        trailingIcon = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { onSearchQueryChange("") }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = if (isPersian) "پاک کردن" else "Clear",
+                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        )
+                                    }
+                                }
+                                VoiceInputButton(
+                                    onResult = { spokenText ->
+                                        val query = spokenText.take(40)
+                                        onSearchQueryChange(query)
+                                    },
+                                    language = if (isPersian) "fa-IR" else "en-US"
+                                )
+                            }
                         },
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,

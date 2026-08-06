@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Message
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -81,7 +82,8 @@ fun PendingTransactionsBottomSheet(
     currencyUnit: String,
     onDismiss: () -> Unit,
     onConfirmFinal: (pending: PendingTransactionEntity, title: String, amount: Double, category: String, isExpense: Boolean, note: String) -> Unit,
-    onIgnore: (pending: PendingTransactionEntity) -> Unit
+    onIgnore: (pending: PendingTransactionEntity) -> Unit,
+    onCategoriesClick: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val numberFormatter = remember(isPersian) {
@@ -283,6 +285,7 @@ fun PendingTransactionsBottomSheet(
             isPersian = isPersian,
             currencyUnit = currencyUnit,
             onDismiss = { selectedPendingForConfirm = null },
+            onCategoriesClick = onCategoriesClick,
             onConfirmFinal = { title, amount, category, isExpense, note ->
                 onConfirmFinal(pending, title, amount, category, isExpense, note)
                 selectedPendingForConfirm = null
@@ -299,6 +302,7 @@ private fun PendingConfirmDialog(
     isPersian: Boolean,
     currencyUnit: String,
     onDismiss: () -> Unit,
+    onCategoriesClick: () -> Unit = {},
     onConfirmFinal: (title: String, amount: Double, category: String, isExpense: Boolean, note: String) -> Unit
 ) {
     val initialAmount = if (currencyUnit == "IRR") (pending.amount * 10).toLong().toString() else pending.amount.toLong().toString()
@@ -538,7 +542,7 @@ private fun PendingConfirmDialog(
                         expanded = isCategoryDropdownExpanded,
                         onDismissRequest = { isCategoryDropdownExpanded = false },
                         modifier = Modifier
-                            .heightIn(max = 280.dp)
+                            .heightIn(max = 320.dp)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         val filteredCategories = categories.filter { it.isExpense == isExpense }
@@ -577,6 +581,39 @@ private fun PendingConfirmDialog(
                                 )
                             }
                         }
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = if (isPersian) "مدیریت دسته‌بندی‌ها..." else "Manage Categories...",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            },
+                            onClick = {
+                                isCategoryDropdownExpanded = false
+                                onDismiss()
+                                onCategoriesClick()
+                            },
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+                        )
                     }
                 }
 

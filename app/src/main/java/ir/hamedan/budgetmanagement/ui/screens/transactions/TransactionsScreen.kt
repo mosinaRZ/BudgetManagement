@@ -28,8 +28,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -41,10 +39,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
-import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
 import ir.hamedan.budgetmanagement.utils.DateUtils
 import ir.hamedan.budgetmanagement.utils.StringMapper
@@ -143,7 +140,7 @@ fun TransactionsScreen(
                         )
                         Spacer(modifier = Modifier.height(20.dp))
                         Button(
-                            onClick = { onAddTransactionClick() }, // تابع مربوط به باز کردن دیالوگ/صفحه ثبت تراکنش جدید
+                            onClick = { onAddTransactionClick() },
                             shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
@@ -297,7 +294,6 @@ fun TransactionsScreen(
         }
 
         // سرچ و دکمه بازگشت به بالا
-        // وقتی فیلتر باتم‌شیت (یا فیلتر سریع) نتیجه‌ای نداشته باشد، سرچ هم مخفی می‌شود
         if (!isTrulyEmpty && !noFilterResults) {
             Column(
                 modifier = Modifier
@@ -378,14 +374,24 @@ fun TransactionsScreen(
                         )
                     },
                     trailingIcon = {
-                        if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = if (isPersian) "پاک کردن" else "Clear",
-                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = if (isPersian) "پاک کردن" else "Clear",
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
                             }
+                            // افزودن دکمه مایک برای جستجو
+                            VoiceInputButton(
+                                onResult = { spokenText ->
+                                    val query = spokenText.take(40)
+                                    viewModel.onSearchQueryChanged(query)
+                                },
+                                language = if (isPersian) "fa-IR" else "en-US"
+                            )
                         }
                     },
                     colors = TextFieldDefaults.colors(
@@ -431,7 +437,7 @@ fun TransactionsScreen(
             )
         }
 
-        // ۳. دیالوگ تایید حذف با طراحی شیشه‌ای شیک (مشابه صفحه قلک‌ها)
+        // ۳. دیالوگ تایید حذف
         transactionToDelete?.let { tx ->
             val dialogShape = RoundedCornerShape(28.dp)
             Dialog(onDismissRequest = { transactionToDelete = null }) {
@@ -454,7 +460,6 @@ fun TransactionsScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        // آیکون هشدار
                         Box(
                             modifier = Modifier
                                 .size(56.dp)
@@ -472,7 +477,6 @@ fun TransactionsScreen(
                             )
                         }
 
-                        // عنوان دیالوگ
                         Text(
                             text = if (isPersian) "حذف تراکنش" else "Delete Transaction",
                             style = MaterialTheme.typography.titleMedium,
@@ -480,7 +484,6 @@ fun TransactionsScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
 
-                        // متن توضیح
                         Text(
                             text = if (isPersian)
                                 "آیا از حذف این تراکنش اطمینان دارید؟"
@@ -491,7 +494,6 @@ fun TransactionsScreen(
                             textAlign = TextAlign.Center
                         )
 
-                        // دکمه‌های عملیاتی
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -582,7 +584,6 @@ private fun FilterBottomSheet(
                 fontWeight = FontWeight.Bold
             )
 
-            // ۱. نوع تراکنش
             Text(if (isPersian) "نوع تراکنش:" else "Type:", fontWeight = FontWeight.SemiBold)
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -597,7 +598,6 @@ private fun FilterBottomSheet(
                 }
             }
 
-            // ۲. فیلتر بازه زمانی سفارشی با قابلیت پشتیبانی از شمسی/میلادی
             Text(if (isPersian) "بازه زمانی سفارشی:" else "Custom Date Range:", fontWeight = FontWeight.SemiBold)
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -624,7 +624,6 @@ private fun FilterBottomSheet(
                 }
             }
 
-            // ۳. مرتب‌سازی
             Text(if (isPersian) "ترتیب نمایش:" else "Sort By:", fontWeight = FontWeight.SemiBold)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 SortOrder.values().forEach { sort ->
@@ -645,7 +644,6 @@ private fun FilterBottomSheet(
                 }
             }
 
-            // دکمه‌های تایید و انصراف
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -748,7 +746,6 @@ private fun EditTransactionBottomSheet(
 ) {
     var title by remember { mutableStateOf(transaction.title) }
 
-    // تبدیل مقدار پیش‌فرض مبلغ بر اساس واحد پول انتخاب‌شده
     val initialAmount = remember(transaction.amount, currencyUnit) {
         if (currencyUnit == "IRR") (transaction.amount * 10).toLong().toString()
         else transaction.amount.toLong().toString()
@@ -758,7 +755,6 @@ private fun EditTransactionBottomSheet(
     var category by remember { mutableStateOf(transaction.category) }
     var type by remember { mutableStateOf(transaction.type) }
 
-    // وضعیت‌های خطا برای Validation
     var titleError by remember { mutableStateOf(false) }
     var amountError by remember { mutableStateOf(false) }
     var categoryError by remember { mutableStateOf(false) }
@@ -766,7 +762,6 @@ private fun EditTransactionBottomSheet(
     val expenseCategories by viewModel.expenseCategories.collectAsState()
     val incomeCategories by viewModel.incomeCategories.collectAsState()
 
-    // ۱. عدم نمایش دسته‌بندی "دسته‌بندی نشده" در لیست انتخاب
     val currentCategories = remember(type, expenseCategories, incomeCategories) {
         val rawList = if (type == "EXPENSE") expenseCategories else incomeCategories
         rawList.filter { cat ->
@@ -854,7 +849,7 @@ private fun EditTransactionBottomSheet(
                 )
             }
 
-            // ۲. عنوان (اجباری)
+            // ۲. عنوان (اجباری) + دکمه مایک
             OutlinedTextField(
                 value = title,
                 onValueChange = {
@@ -862,6 +857,15 @@ private fun EditTransactionBottomSheet(
                     titleError = false
                 },
                 label = { Text(if (isPersian) "عنوان" else "Title") },
+                trailingIcon = {
+                    VoiceInputButton(
+                        onResult = { spokenText ->
+                            title = spokenText
+                            titleError = false
+                        },
+                        language = if (isPersian) "fa-IR" else "en-US"
+                    )
+                },
                 isError = titleError,
                 supportingText = if (titleError) {
                     { Text(if (isPersian) "عنوان نمی‌تواند خالی باشد" else "Title is required") }
@@ -897,11 +901,19 @@ private fun EditTransactionBottomSheet(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // ۴. یادداشت (اختیاری)
+            // ۴. یادداشت (اختیاری) + دکمه مایک
             OutlinedTextField(
                 value = note,
                 onValueChange = { note = it },
                 label = { Text(if (isPersian) "یادداشت (اختیاری)" else "Note (Optional)") },
+                trailingIcon = {
+                    VoiceInputButton(
+                        onResult = { spokenText ->
+                            note = if (note.isBlank()) spokenText else "$note $spokenText"
+                        },
+                        language = if (isPersian) "fa-IR" else "en-US"
+                    )
+                },
                 modifier = Modifier.fillMaxWidth(),
                 maxLines = 3
             )
@@ -1295,7 +1307,6 @@ private fun TransactionsTopBar(
     }
 }
 
-// به‌روزرسانی هدر تاریخ جهت پشتیبانی تمام و کمال از DateUtils
 private fun getRelativeDateHeader(timestamp: Long, isPersian: Boolean): String {
     val now = Calendar.getInstance()
     val time = Calendar.getInstance().apply { timeInMillis = timestamp }

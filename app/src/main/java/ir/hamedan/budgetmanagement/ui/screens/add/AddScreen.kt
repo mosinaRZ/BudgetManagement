@@ -45,6 +45,8 @@ import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
+import ir.hamedan.budgetmanagement.utils.CategorySuggestionHelper
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
 import kotlinx.coroutines.delay
@@ -135,6 +137,10 @@ fun AddScreen(
     var isExpense by remember { mutableStateOf(true) }
     var transactionNote by remember { mutableStateOf("") }
 
+    // آیا کاربر خودش دستی دسته‌بندی را انتخاب کرده؟
+    // اگر true باشد، پیشنهاد خودکار دیگر override نمی‌کند
+    var userManuallySelectedCategory by remember { mutableStateOf(false) }
+
     val maxDigitsLength = 12 // حداکثر ۱۲ رقم برای مبلغ
 
     // یافتن دسته‌بندی انتخاب‌شده برای استخراج ایموجی
@@ -150,6 +156,21 @@ fun AddScreen(
 
     // وضعیت کنترل منوی کشویی دسته‌بندی
     var isCategoryDropdownExpanded by remember { mutableStateOf(false) }
+
+    // کمک‌کننده برای پیشنهاد دسته‌بندی (از لیست واقعی دیتابیس)
+    fun trySuggestCategory(title: String) {
+        if (userManuallySelectedCategory) return
+        val availableCategories = categoriesList.filter { it.isExpense == isExpense }
+        val suggested = CategorySuggestionHelper.suggestCategory(
+            title = title,
+            availableCategories = availableCategories,
+            isPersian = isPersian
+        )
+        if (suggested != null) {
+            selectedCategoryKey = suggested
+            categoryError = false
+        }
+    }
 
     val addOptions = remember {
         listOf(
@@ -394,6 +415,7 @@ fun AddScreen(
                             onClick = {
                                 isExpense = true
                                 selectedCategoryKey = ""
+                                userManuallySelectedCategory = false
                             },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(
@@ -409,6 +431,7 @@ fun AddScreen(
                             onClick = {
                                 isExpense = false
                                 selectedCategoryKey = ""
+                                userManuallySelectedCategory = false
                             },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(
@@ -423,13 +446,14 @@ fun AddScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // فیلد عنوان (محدود به ۴۰ کاراکتر)
+                    // فیلد عنوان (محدود به ۴۰ کاراکتر) + ویس + پیشنهاد خودکار دسته
                     OutlinedTextField(
                         value = transactionTitle,
                         onValueChange = { input ->
                             if (input.length <= 40) {
                                 transactionTitle = input
                                 if (titleError) titleError = false
+                                trySuggestCategory(input)
                             }
                         },
                         label = { Text(if (isPersian) "عنوان تراکنش" else "Title") },
@@ -437,6 +461,17 @@ fun AddScreen(
                         shape = RoundedCornerShape(14.dp),
                         singleLine = true,
                         isError = titleError,
+                        trailingIcon = {
+                            VoiceInputButton(
+                                onResult = { spoken ->
+                                    val newTitle = spoken.take(40)
+                                    transactionTitle = newTitle
+                                    if (titleError) titleError = false
+                                    trySuggestCategory(newTitle)
+                                },
+                                language = if (isPersian) "fa-IR" else "en-US"
+                            )
+                        },
                         supportingText = {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -457,7 +492,7 @@ fun AddScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // فیلد مبلغ همراه با VisualTransformation تفکیک ۳ رقمی
+                    // فیلد مبلغ همراه با VisualTransformation تفکیک ۳ رقمی (بدون ویس)
                     val amountLabel = if (isPersian) {
                         if (currencyUnit == "IRR") "مبلغ (ریال)" else "مبلغ (تومان)"
                     } else {
@@ -565,6 +600,7 @@ fun AddScreen(
                                         },
                                         onClick = {
                                             selectedCategoryKey = category.title
+                                            userManuallySelectedCategory = true // انتخاب دستی → دیگر auto override نکند
                                             isCategoryDropdownExpanded = false
                                             categoryError = false
                                         },
@@ -610,7 +646,7 @@ fun AddScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // فیلد یادداشت (محدود به ۱۲۰ کاراکتر)
+                    // فیلد یادداشت (محدود به ۱۲۰ کاراکتر) + ویس
                     OutlinedTextField(
                         value = transactionNote,
                         onValueChange = { input ->
@@ -622,6 +658,14 @@ fun AddScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
                         maxLines = 3,
+                        trailingIcon = {
+                            VoiceInputButton(
+                                onResult = { spoken ->
+                                    transactionNote = spoken.take(120)
+                                },
+                                language = if (isPersian) "fa-IR" else "en-US"
+                            )
+                        },
                         supportingText = {
                             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
                                 Text(
@@ -669,6 +713,7 @@ fun AddScreen(
                                     selectedCategoryKey = ""
                                     transactionNote = ""
                                     isExpense = true
+                                    userManuallySelectedCategory = false
                                 }
                             }
                         },

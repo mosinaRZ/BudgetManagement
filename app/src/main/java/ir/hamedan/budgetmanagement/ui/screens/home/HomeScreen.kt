@@ -84,6 +84,7 @@ fun HomeScreen(
     onAddScreenClickDebt: () -> Unit = {},
     onAddScreenClickPiggy: () -> Unit = {},
     onAddScreenClickLimit: () -> Unit = {},
+    onCategoriesClick: () -> Unit = {},
     transactionViewModel: TransactionViewModel = appViewModel(),
     goalsViewModel: SavingGoalsViewModel = appViewModel(),
     budgetViewModel: BudgetLimitViewModel = appViewModel(),
@@ -123,7 +124,11 @@ fun HomeScreen(
     val notifications by notificationViewModel.notifications.collectAsState()
     val unreadCount by notificationViewModel.unreadCount.collectAsState()
 
-    val categories by transactionViewModel.expenseCategories.collectAsState()
+    val expensePendingCategories by pendingViewModel.expenseCategories.collectAsState()
+    val incomePendingCategories by pendingViewModel.incomeCategories.collectAsState()
+    val allPendingCategories = remember(expensePendingCategories, incomePendingCategories) {
+        expensePendingCategories + incomePendingCategories
+    }
 
     // چک کردن وضعیت ویجت
     var isWidgetAdded by remember {
@@ -970,7 +975,7 @@ fun HomeScreen(
         if (showPendingSheet) {
             PendingTransactionsBottomSheet(
                 pendingList = pendingTransactions,
-                categories = categories,
+                categories = allPendingCategories,
                 isPersian = isPersian,
                 currencyUnit = currencyUnit,
                 onDismiss = { showPendingSheet = false },
@@ -986,7 +991,8 @@ fun HomeScreen(
                 },
                 onIgnore = { pending ->
                     pendingViewModel.ignoreTransaction(pending)
-                }
+                },
+                onCategoriesClick = onCategoriesClick
             )
         }
     }

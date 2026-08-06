@@ -35,11 +35,14 @@ import androidx.compose.ui.window.Dialog
 import ir.hamedan.budgetmanagement.data.local.models.DebtCreditEntity
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.ui.screens.add.ThousandsSeparatorTransformation
 import ir.hamedan.budgetmanagement.ui.screens.goals.AmountActionDialog
 import ir.hamedan.budgetmanagement.ui.viewmodels.DebtCreditViewModel
+import ir.hamedan.budgetmanagement.utils.CategorySuggestionHelper
 import ir.hamedan.budgetmanagement.utils.DateUtils
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
+import ir.hamedan.budgetmanagement.utils.StringMapper
 import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -560,7 +563,8 @@ fun DebtCreditItemCard(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -654,16 +658,28 @@ fun DebtCreditItemCard(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(Icons.Default.Remove, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(if (isPersian) "برداشت / اصلاح" else "Withdraw", style = MaterialTheme.typography.bodySmall)
                 }
             }
 
+            // اگر آیتم هم منقضی شده و هم تسویه است، تغییر وضعیت (و اعلان) ممنوع است
+            val isExpiredAndSettled = item.isSettled
+                    && item.dueDateMillis > 0
+                    && item.dueDateMillis < System.currentTimeMillis()
+
             Row(
-                modifier = Modifier.fillMaxWidth().clickable { onToggleSettled() },
+                modifier = Modifier.fillMaxWidth().clickable {
+                    if (!isExpiredAndSettled) onToggleSettled()
+                },
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Checkbox(checked = item.isSettled, onCheckedChange = { onToggleSettled() })
+                Checkbox(
+                    checked = item.isSettled,
+                    onCheckedChange = { _ ->
+                        if (!isExpiredAndSettled) onToggleSettled()
+                    }
+                )
                 Text(
                     text = if (isPersian) "تسویه شده / منقضی شده" else "Settled / Expired",
                     style = MaterialTheme.typography.bodyMedium,
@@ -696,6 +712,7 @@ fun AddOrEditDebtCreditDialog(
 ) {
     val maxNameLength = 40
     val maxDigitsLength = 12
+    val maxNoteLength = 120
 
     var type by remember { mutableStateOf(initialItem?.type ?: "DEBT") }
     var personName by remember { mutableStateOf(initialItem?.personName ?: "") }
@@ -787,6 +804,10 @@ fun AddOrEditDebtCreditDialog(
         }
     }
 
+    // متن تشخیص داده شده از میکروفون
+    var detectedPersonName by remember { mutableStateOf<String?>(null) }
+    var detectedNote by remember { mutableStateOf<String?>(null) }
+
     Dialog(onDismissRequest = onDismiss) {
         val dialogShape = RoundedCornerShape(24.dp)
         Box(
@@ -849,6 +870,7 @@ fun AddOrEditDebtCreditDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                // فیلد نام طرف حساب + میکروفون
                 OutlinedTextField(
                     value = personName,
                     onValueChange = { input ->
@@ -857,11 +879,21 @@ fun AddOrEditDebtCreditDialog(
                     label = { Text(if (isPersian) "نام طرف حساب" else "Person Name") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    trailingIcon = {
+                        VoiceInputButton(
+                            onResult = { spoken ->
+                                detectedPersonName = spoken
+                                personName = spoken.take(maxNameLength)
+                            },
+                            language = if (isPersian) "fa-IR" else "en-US"
+                        )
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // فیلد مبلغ کل + هزارتومان
                 OutlinedTextField(
                     value = totalAmountDigits,
                     onValueChange = { input ->
@@ -982,12 +1014,23 @@ fun AddOrEditDebtCreditDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // فیلد یادداشت + میکروفون
                 OutlinedTextField(
                     value = note,
                     onValueChange = { note = it },
                     label = { Text(if (isPersian) "یادداشت (اختیاری)" else "Note (Optional)") },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    maxLines = 3,
+                    trailingIcon = {
+                        VoiceInputButton(
+                            onResult = { spoken ->
+                                detectedNote = spoken
+                                note = spoken.take(maxNoteLength)
+                            },
+                            language = if (isPersian) "fa-IR" else "en-US"
+                        )
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(20.dp))

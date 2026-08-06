@@ -49,6 +49,7 @@ import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import java.text.NumberFormat
 import java.util.Locale
@@ -134,7 +135,7 @@ fun SavingGoalsScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
 
-// گوش دادن به خطای واریز
+    // گوش دادن به خطای واریز
     LaunchedEffect(Unit) {
         viewModel.depositError.collect { message ->
             snackbarHostState.showSnackbar(
@@ -678,7 +679,9 @@ fun AddOrEditGoalDialog(
     onDismiss: () -> Unit,
     onConfirm: (title: String, targetAmount: Double, monthlyAmount: Double, icon: String) -> Unit
 ) {
+    val maxTitleLength = 25
     val maxDigits = 12
+
     var title by remember { mutableStateOf(goalToEdit?.title ?: "") }
     var selectedIcon by remember { mutableStateOf(goalToEdit?.icon ?: "🎯") }
 
@@ -689,7 +692,6 @@ fun AddOrEditGoalDialog(
             amount.toString()
         }
     }
-    // صرفاً ارقام خام در State نگهداری می‌شوند
     var rawTargetAmount by remember { mutableStateOf(initialTargetRaw) }
 
     val initialMonthlyRaw = remember(goalToEdit, currencyUnit) {
@@ -700,6 +702,9 @@ fun AddOrEditGoalDialog(
         }
     }
     var rawMonthlyAmount by remember { mutableStateOf(initialMonthlyRaw) }
+
+    // متن تشخیص داده شده از میکروفون
+    var detectedTitle by remember { mutableStateOf<String?>(null) }
 
     Dialog(onDismissRequest = onDismiss) {
         val dialogShape = RoundedCornerShape(28.dp)
@@ -769,13 +774,23 @@ fun AddOrEditGoalDialog(
                     }
                 }
 
+                // فیلد عنوان + میکروفون
                 OutlinedTextField(
                     value = title,
-                    onValueChange = { if (it.length <= 25) title = it },
+                    onValueChange = { if (it.length <= maxTitleLength) title = it },
                     label = { Text(if (isPersian) "عنوان قلک (مثلاً: خرید لپ‌تاپ)" else "Goal Title") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    trailingIcon = {
+                        VoiceInputButton(
+                            onResult = { spoken ->
+                                detectedTitle = spoken
+                                title = spoken.take(maxTitleLength)
+                            },
+                            language = if (isPersian) "fa-IR" else "en-US"
+                        )
+                    }
                 )
 
                 val labelCurrency = if (isPersian) (if (currencyUnit == "IRR") "مبلغ هدف (ریال)" else "مبلغ هدف (تومان)")
