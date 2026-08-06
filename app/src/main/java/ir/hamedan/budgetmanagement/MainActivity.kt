@@ -1,6 +1,5 @@
 package ir.hamedan.budgetmanagement
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
@@ -24,26 +23,38 @@ import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity // اضافه شدن فرگمنت اکتیویتی برای بیومتریک
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
+import ir.hamedan.budgetmanagement.data.preferences.OnboardingPreferences
+import ir.hamedan.budgetmanagement.data.preferences.PermissionReminderPreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.getThemeMode
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.saveThemeMode
 import ir.hamedan.budgetmanagement.ui.components.CapsuleBottomNavigation
+import ir.hamedan.budgetmanagement.ui.components.OnboardingDialog
+import ir.hamedan.budgetmanagement.ui.components.OnboardingPermission
+import ir.hamedan.budgetmanagement.ui.components.PermissionReminderBanner
+import ir.hamedan.budgetmanagement.ui.components.onboardingPermissions
 import ir.hamedan.budgetmanagement.ui.navigation.AppRoute
 import ir.hamedan.budgetmanagement.ui.navigation.MainTabRoute
 import ir.hamedan.budgetmanagement.ui.screens.add.AddScreen
@@ -71,17 +82,14 @@ class MainActivity : FragmentActivity() {
         super.attachBaseContext(LocaleHelper.onAttach(newBase))
     }
 
+    // هر بار کاربر به یک درخواست مجوز پاسخ می‌دهد، این تریگر را بالا می‌بریم
+    // تا دیالوگ آنبوردینگ وضعیت «فعال/دادن» را دوباره محاسبه کند.
+    private var permissionRefreshTrigger by mutableIntStateOf(0)
+
     private val requestPermissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        // فعلاً فقط لاگ می‌کنیم. بعداً می‌توانیم UI مناسب نشان دهیم
-        val smsGranted = permissions[Manifest.permission.RECEIVE_SMS] == true &&
-                permissions[Manifest.permission.READ_SMS] == true
-        val notificationGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions[Manifest.permission.POST_NOTIFICATIONS] == true
-        } else true
-
-        // اینجا می‌توانی بعداً منطق بیشتری بگذاری
+    ) { _ ->
+        permissionRefreshTrigger++
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -93,22 +101,8 @@ class MainActivity : FragmentActivity() {
 
         AppNotificationManager.createChannel(applicationContext)
 
-        val permissionsToRequest = mutableListOf(
-            Manifest.permission.RECEIVE_SMS,
-            Manifest.permission.READ_SMS
-        )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
-        }
-
-// فقط پرمیشن‌هایی که هنوز داده نشده‌اند را درخواست کن
-        val missingPermissions = permissionsToRequest.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-
-        if (missingPermissions.isNotEmpty()) {
-            requestPermissionsLauncher.launch(missingPermissions.toTypedArray())
-        }
+        // 🚀 درخواست خودکار مجوزها از اینجا حذف شد.
+        // حالا دیالوگ آنبوردینگ (اولین ورود کاربر) با توضیح هر مجوز، خودش این درخواست را می‌زند.
 
 // اعلان خوش‌آمدگویی (فقط یک‌بار)
         val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
@@ -134,6 +128,21 @@ class MainActivity : FragmentActivity() {
             // وضعیت تم سیستم
             val isSystemDark = isSystemInDarkTheme()
 
+            // آیا دیالوگ اولین ورود (خوش‌آمدگویی + مجوزها) باید نشان داده شود؟
+            var showOnboarding by remember { mutableStateOf(!OnboardingPreferences.isCompleted(context)) }
+
+            // اگر کاربر از تنظیمات گوشی مجوزی را تغییر داد و به اپ برگشت، وضعیت را رفرش کن
+            val lifecycleOwner = LocalLifecycleOwner.current
+            DisposableEffect(lifecycleOwner) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME) {
+                        permissionRefreshTrigger++
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
+
             BudgetManagementTheme(themeMode = themeMode) {
                 TheApp(
                     modifier = Modifier.fillMaxSize(),
@@ -153,6 +162,24 @@ class MainActivity : FragmentActivity() {
                         }
                     }
                 )
+
+                if (showOnboarding) {
+                    val isPersian = LocaleHelper.getLanguage(context) == "fa"
+                    OnboardingDialog(
+                        isPersian = isPersian,
+                        isPermissionGranted = { permission ->
+                            permissionRefreshTrigger // فقط برای وابسته‌کردن ری‌کامپوز به این state
+                            ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+                        },
+                        onRequestPermissions = { perms ->
+                            requestPermissionsLauncher.launch(perms.toTypedArray())
+                        },
+                        onFinish = {
+                            OnboardingPreferences.setCompleted(context)
+                            showOnboarding = false
+                        }
+                    )
+                }
             }
         }
     }
@@ -253,6 +280,30 @@ class MainActivity : FragmentActivity() {
                 val appBackStackEntry by appNavController.currentBackStackEntryAsState()
                 val appCurrentRoute = appBackStackEntry?.destination?.route
 
+                val context = LocalContext.current
+                val isPersian = LocaleHelper.getLanguage(context) == "fa"
+
+                // ===== یادآوری ملایمِ مجوزهای داده‌نشده (بنر، نه دیالوگ مسدودکننده) =====
+                var reminderPermission by remember { mutableStateOf<OnboardingPermission?>(null) }
+
+                LaunchedEffect(permissionRefreshTrigger) {
+                    reminderPermission = if (OnboardingPreferences.isCompleted(context)) {
+                        onboardingPermissions(Build.VERSION.SDK_INT).firstOrNull { perm ->
+                            val granted = perm.permissions.all {
+                                ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+                            }
+                            !granted && PermissionReminderPreferences.shouldRemindNow(context, perm.key)
+                        }
+                    } else null
+                }
+
+                // همین که بنر واقعاً روی صفحه اومد، فاصلهٔ عادی (۴ روزه) رو براش ثبت کن
+                LaunchedEffect(reminderPermission) {
+                    reminderPermission?.let {
+                        PermissionReminderPreferences.markShownNow(context, it.key)
+                    }
+                }
+
                 Box(modifier = Modifier.fillMaxSize()) {
 
                     NavHost(
@@ -318,10 +369,28 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
-                    // ===== Bottom Bar + FAB =====
-                    val context = LocalContext.current
-                    val isPersian = LocaleHelper.getLanguage(context) == "fa"
+                    // ===== بنر یادآوری مجوز (بالای صفحه، شناور روی محتوا) =====
+                    reminderPermission?.let { perm ->
+                        PermissionReminderBanner(
+                            visible = true,
+                            isPersian = isPersian,
+                            permission = perm,
+                            onAllow = {
+                                requestPermissionsLauncher.launch(perm.permissions.toTypedArray())
+                                reminderPermission = null
+                            },
+                            onLater = {
+                                PermissionReminderPreferences.snooze(context, perm.key)
+                                reminderPermission = null
+                            },
+                            onNeverAskAgain = {
+                                PermissionReminderPreferences.dismissForever(context, perm.key)
+                                reminderPermission = null
+                            }
+                        )
+                    }
 
+                    // ===== Bottom Bar + FAB =====
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
