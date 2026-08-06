@@ -144,7 +144,7 @@ class SavingGoalsViewModel(
                 TransactionEntity(
                     title = "واریز به قلک: $goalTitle",
                     amount = amount,
-                    category = "قلک",
+                    category = "SAVING_GOAL",
                     type = "EXPENSE",
                     note = "واریز ماهانه/دستی به هدف پس‌انداز «$goalTitle»"
                 )
@@ -173,7 +173,7 @@ class SavingGoalsViewModel(
                 TransactionEntity(
                     title = "برداشت از قلک: $goalTitle",
                     amount = amount,
-                    category = "قلک",
+                    category = "SAVING_GOAL",
                     type = "INCOME",
                     note = "برداشت از هدف پس‌انداز «$goalTitle»"
                 )

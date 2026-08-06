@@ -127,6 +127,7 @@ class DebtCreditViewModel(
                     TransactionEntity(
                         title = "$titlePrefix: $personName",
                         amount = totalAmount,
+                        category = if (isDebt) "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE",   // ← این خط اضافه شد
                         type = txType,
                         note = note ?: "ثبت اولیه $personName",
                         timestamp = System.currentTimeMillis()
@@ -186,7 +187,7 @@ class DebtCreditViewModel(
                 TransactionEntity(
                     title = txTitle,
                     amount = amount,
-                    category = "بدهی و طلب",
+                    category = if (isDebt) "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE",
                     type = txType,
                     note = "ثبت واریزی/پرداختی بدهی و طلب"
                 )
@@ -228,7 +229,7 @@ class DebtCreditViewModel(
                 TransactionEntity(
                     title = txTitle,
                     amount = amount,
-                    category = "بدهی و طلب",
+                    category = if (isDebt) "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE",
                     type = txType,
                     note = "اصلاح واریزی بدهی و طلب"
                 )

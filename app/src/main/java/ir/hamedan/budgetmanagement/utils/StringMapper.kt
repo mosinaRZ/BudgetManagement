@@ -12,6 +12,7 @@ object StringMapper {
             "UNCATEGORIZED" -> if (isPersian) "دسته‌بندی نشده" else "Uncategorized"
             "DEBT_CREDIT_PAYABLE" -> if (isPersian) "بدهی و وام" else "Debt & Payables"
             "DEBT_CREDIT_RECEIVABLE" -> if (isPersian) "طلب و مطالبات" else "Receivables"
+            "SAVING_GOAL" -> if (isPersian) "قلک" else "Piggy Bank"   // ← جدید
             else -> key
         }
     }

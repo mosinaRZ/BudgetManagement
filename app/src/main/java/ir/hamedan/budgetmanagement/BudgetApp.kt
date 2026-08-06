@@ -46,7 +46,8 @@ class BudgetApp : Application() {
                 CategoryEntity(title = "DEBT_CREDIT_PAYABLE", iconEmoji = "💸", isExpense = true, isSystem = true), // بدهی
                 CategoryEntity(title = "SALARY", iconEmoji = "💰", isExpense = false),
                 CategoryEntity(title = "INVESTMENT", iconEmoji = "📈", isExpense = false),
-                CategoryEntity(title = "DEBT_CREDIT_RECEIVABLE", iconEmoji = "📥", isExpense = false, isSystem = true) // طلب
+                CategoryEntity(title = "DEBT_CREDIT_RECEIVABLE", iconEmoji = "📥", isExpense = false, isSystem = true), // طلب
+                CategoryEntity(title = "SAVING_GOAL", iconEmoji = "🐷", isExpense = true, isSystem = true) // قلک/پس‌انداز ← جدید
             )
 
             val currentCategories = container.categoryRepository.getAllCategories().first()
