@@ -3,8 +3,7 @@ package ir.hamedan.budgetmanagement.ui.screens.transactions
 import ir.hamedan.budgetmanagement.di.appViewModel
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -26,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
@@ -45,6 +46,7 @@ import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
 import ir.hamedan.budgetmanagement.utils.DateUtils
 import ir.hamedan.budgetmanagement.utils.StringMapper
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -61,6 +63,7 @@ fun TransactionsScreen(
     val isPersian = isPersianLocale()
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
     val keyboardVisible = imeBottom > 0
@@ -69,11 +72,11 @@ fun TransactionsScreen(
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
     }
 
+    val isLoading by viewModel.isLoading.collectAsState(initial = false)
     val searchQuery by viewModel.searchQuery.collectAsState()
     val filterState by viewModel.filterState.collectAsState()
     val transactionsList by viewModel.filteredTransactions.collectAsState()
 
-    // دریافت واحد پول (IRT یا IRR) از ViewModel
     val currencyUnit by viewModel.currencyUnit.collectAsState(initial = "IRT")
 
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -90,16 +93,14 @@ fun TransactionsScreen(
         }
     }
 
-    val isTrulyEmpty = transactionsList.isEmpty() &&
+    val isTrulyEmpty = !isLoading && transactionsList.isEmpty() &&
             searchQuery.isBlank() &&
             !filterState.isCustomFilterActive &&
             filterState.timeFilter == TimeFilter.ALL
 
-    val noSearchResults = searchQuery.isNotBlank() && transactionsList.isEmpty()
+    val noSearchResults = !isLoading && searchQuery.isNotBlank() && transactionsList.isEmpty()
 
-    // زمانی که فیلتر (چه از باتم‌شیت فیلترینگ و چه فیلتر سریع زمانی) فعال است
-    // ولی هیچ تراکنشی با آن مطابقت ندارد
-    val noFilterResults = transactionsList.isEmpty() &&
+    val noFilterResults = !isLoading && transactionsList.isEmpty() &&
             searchQuery.isBlank() &&
             (filterState.isCustomFilterActive || filterState.timeFilter != TimeFilter.ALL)
 
@@ -107,6 +108,11 @@ fun TransactionsScreen(
         AuroraBackground()
 
         when {
+            // حالت بارگذاری اسکلتون
+            isLoading -> {
+                TransactionsSkeletonScreen()
+            }
+
             isTrulyEmpty -> {
                 val emptyCardShape = RoundedCornerShape(24.dp)
                 Box(
@@ -256,11 +262,11 @@ fun TransactionsScreen(
             TransactionsTopBar(
                 isPersian = isPersian,
                 isFilterActive = filterState.isCustomFilterActive,
-                showFilterButton = !isTrulyEmpty,
+                showFilterButton = !isTrulyEmpty && !isLoading,
                 onFilterClick = { showFilterSheet = true }
             )
 
-            if (!isTrulyEmpty) {
+            if (!isTrulyEmpty && !isLoading) {
                 if (filterState.isCustomFilterActive) {
                     Box(
                         modifier = Modifier
@@ -287,14 +293,27 @@ fun TransactionsScreen(
                     TimeFilterSelector(
                         selectedFilter = filterState.timeFilter,
                         isPersian = isPersian,
-                        onFilterSelected = { viewModel.setQuickTimeFilter(it) }
+                        onFilterSelected = { newTimeFilter ->
+                            val previousTimeFilter = filterState.timeFilter
+                            if (newTimeFilter != previousTimeFilter) {
+                                viewModel.setQuickTimeFilter(newTimeFilter)
+
+                                coroutineScope.launch {
+                                    val newTitle = if (isPersian) newTimeFilter.titleFa else newTimeFilter.titleEn
+                                    snackbarHostState.showSnackbar(
+                                        message = if (isPersian) "فیلتر زمان به «$newTitle» تغییر یافت" else "Filter set to \"$newTitle\"",
+                                        duration = SnackbarDuration.Indefinite
+                                    )
+                                }
+                            }
+                        }
                     )
                 }
             }
         }
 
         // سرچ و دکمه بازگشت به بالا
-        if (!isTrulyEmpty && !noFilterResults) {
+        if (!isTrulyEmpty && !noFilterResults && !isLoading) {
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -384,7 +403,6 @@ fun TransactionsScreen(
                                     )
                                 }
                             }
-                            // افزودن دکمه مایک برای جستجو
                             VoiceInputButton(
                                 onResult = { spokenText ->
                                     val query = spokenText.take(40)
@@ -407,6 +425,21 @@ fun TransactionsScreen(
                     shape = searchShape
                 )
             }
+        }
+
+        // اسنک‌بار پیام اختصاصی همراه با تایمر دایره‌ای معکوس برای Undo
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 140.dp, start = 16.dp, end = 16.dp)
+        ) { data ->
+            CircularCountdownSnackbar(
+                snackbarData = data,
+                isPersian = isPersian,
+                totalSeconds = 5
+            )
         }
 
         // ۱. باتم شیت شناور فیلترینگ
@@ -518,8 +551,26 @@ fun TransactionsScreen(
 
                             Button(
                                 onClick = {
-                                    viewModel.deleteTransaction(tx.id)
+                                    val deletedTx = tx
+                                    viewModel.deleteTransaction(deletedTx)
                                     transactionToDelete = null
+
+                                    coroutineScope.launch {
+                                        val displayTitle = deletedTx.title.ifEmpty {
+                                            StringMapper.getCategoryName(deletedTx.category, isPersian)
+                                        }
+                                        val result = snackbarHostState.showSnackbar(
+                                            message = if (isPersian) "تراکنش «$displayTitle» حذف شد" else "Transaction \"$displayTitle\" deleted",
+                                            actionLabel = if (isPersian) "بازگردانی" else "Undo",
+                                            duration = SnackbarDuration.Indefinite
+                                        )
+
+                                        if (result == SnackbarResult.ActionPerformed) {
+                                            viewModel.restoreTransaction(deletedTx)
+                                        } else {
+                                            viewModel.commitDeleteTransaction(deletedTx)
+                                        }
+                                    }
                                 },
                                 modifier = Modifier
                                     .weight(1f)
@@ -542,6 +593,223 @@ fun TransactionsScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// کامپوننت‌ها و انیمیشن‌های Skeleton Loading (Shimmer Effect)
+// -----------------------------------------------------------------------------
+
+@Composable
+fun Modifier.shimmerEffect(): Modifier {
+    val transition = rememberInfiniteTransition(label = "ShimmerTransition")
+    val translateAnim = transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ShimmerTranslation"
+    )
+
+    val shimmerColors = listOf(
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+    )
+
+    val brush = Brush.linearGradient(
+        colors = shimmerColors,
+        start = Offset.Zero,
+        end = Offset(x = translateAnim.value, y = translateAnim.value)
+    )
+
+    return this.background(brush)
+}
+
+@Composable
+private fun TransactionsSkeletonScreen() {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp),
+        contentPadding = PaddingValues(top = 170.dp, bottom = 190.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // بخش ۱: هدر اسکلتون
+        item {
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .height(14.dp)
+                    .width(70.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .shimmerEffect()
+            )
+        }
+        items(3) {
+            TransactionSkeletonRow()
+        }
+
+        // بخش ۲: هدر اسکلتون دوم
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .height(14.dp)
+                    .width(90.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .shimmerEffect()
+            )
+        }
+        items(2) {
+            TransactionSkeletonRow()
+        }
+    }
+}
+
+@Composable
+private fun TransactionSkeletonRow() {
+    val rowShape = RoundedCornerShape(20.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), rowShape)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), rowShape)
+            .clip(rowShape)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // آیکون دایره‌ای
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .shimmerEffect()
+        )
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        // عنوان و دسته‌بندی
+        Column(modifier = Modifier.weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .height(16.dp)
+                    .fillMaxWidth(0.55f)
+                    .clip(RoundedCornerShape(6.dp))
+                    .shimmerEffect()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Box(
+                modifier = Modifier
+                    .height(12.dp)
+                    .fillMaxWidth(0.35f)
+                    .clip(RoundedCornerShape(4.dp))
+                    .shimmerEffect()
+            )
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        // مبلغ
+        Box(
+            modifier = Modifier
+                .height(18.dp)
+                .width(75.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .shimmerEffect()
+        )
+    }
+}
+
+// -----------------------------------------------------------------------------
+// سایر کامپوننت‌های کمکی
+// -----------------------------------------------------------------------------
+
+@Composable
+private fun CircularCountdownSnackbar(
+    snackbarData: SnackbarData,
+    isPersian: Boolean,
+    totalSeconds: Int = 5
+) {
+    val animatedProgress = remember { Animatable(1f) }
+
+    LaunchedEffect(snackbarData) {
+        animatedProgress.snapTo(1f)
+        animatedProgress.animateTo(
+            targetValue = 0f,
+            animationSpec = tween(
+                durationMillis = totalSeconds * 1000,
+                easing = LinearEasing
+            )
+        )
+        snackbarData.dismiss()
+    }
+
+    val secondsLeft = kotlin.math.ceil(animatedProgress.value * totalSeconds).toInt()
+
+    val numberFormatter = remember(isPersian) {
+        NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        tonalElevation = 6.dp,
+        shadowElevation = 8.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = snackbarData.visuals.message,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
+            )
+
+            snackbarData.visuals.actionLabel?.let { actionLabel ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.clickable { snackbarData.performAction() }
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            progress = { animatedProgress.value },
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                            strokeWidth = 3.dp
+                        )
+                        Text(
+                            text = numberFormatter.format(secondsLeft),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    Text(
+                        text = actionLabel,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }
@@ -795,7 +1063,6 @@ private fun EditTransactionBottomSheet(
                 fontWeight = FontWeight.Bold
             )
 
-            // ۱. نوع تراکنش
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -849,7 +1116,6 @@ private fun EditTransactionBottomSheet(
                 )
             }
 
-            // ۲. عنوان (اجباری) + دکمه مایک
             OutlinedTextField(
                 value = title,
                 onValueChange = {
@@ -874,7 +1140,6 @@ private fun EditTransactionBottomSheet(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // ۳. مبلغ (اجباری)
             val currencyLabel = if (isPersian) {
                 if (currencyUnit == "IRR") "مبلغ (ریال)" else "مبلغ (تومان)"
             } else {
@@ -901,7 +1166,6 @@ private fun EditTransactionBottomSheet(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // ۴. یادداشت (اختیاری) + دکمه مایک
             OutlinedTextField(
                 value = note,
                 onValueChange = { note = it },
@@ -918,7 +1182,6 @@ private fun EditTransactionBottomSheet(
                 maxLines = 3
             )
 
-            // ۵. دسته‌بندی (اجباری)
             Column {
                 Text(
                     text = if (isPersian) "دسته‌بندی (${if (type == "EXPENSE") "هزینه‌ها" else "درآمدها"}):" else "Category:",
@@ -962,7 +1225,6 @@ private fun EditTransactionBottomSheet(
                 }
             }
 
-            // ۶. دکمه‌های ثبت
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

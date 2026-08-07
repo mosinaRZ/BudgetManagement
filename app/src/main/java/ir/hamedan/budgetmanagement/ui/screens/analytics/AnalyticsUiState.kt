@@ -10,6 +10,13 @@ data class CategoryExpenseModel(
     val color: Color
 )
 
+data class TimeExpenseModel(
+    val labelFa: String,
+    val labelEn: String,
+    val totalAmount: Double,
+    val isCurrent: Boolean = false
+)
+
 data class AnalyticsUiState(
     val isLoading: Boolean = true,
     val hasAnyTransactionInDb: Boolean = false,
@@ -17,6 +24,8 @@ data class AnalyticsUiState(
     val totalExpense: Double = 0.0,
     val balance: Double = 0.0,
     val categoryExpenses: List<CategoryExpenseModel> = emptyList(),
+    val timeExpenses: List<TimeExpenseModel> = emptyList(),
+    val currentTimeIndex: Int = 0,
     val topExpenses: List<TransactionEntity> = emptyList(),
     val averageExpense: Double = 0.0,
     val trendPoints: List<Float> = emptyList(),

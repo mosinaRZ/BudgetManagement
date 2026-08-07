@@ -1,15 +1,18 @@
 package ir.hamedan.budgetmanagement.ui.screens.analytics
 
-import android.content.Context
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TimeFilter
+import ir.hamedan.budgetmanagement.utils.DateUtils
 import kotlinx.coroutines.flow.*
-import java.util.Calendar
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.temporal.WeekFields
+import java.util.Locale
 import kotlin.math.abs
 
 class AnalyticsViewModel(
@@ -17,24 +20,27 @@ class AnalyticsViewModel(
 ) : ViewModel() {
 
     val selectedTimeFilter = MutableStateFlow(TimeFilter.MONTHLY)
+    val isPersianState = MutableStateFlow(true)
+
+    fun updateLocale(isPersian: Boolean) {
+        isPersianState.value = isPersian
+    }
 
     val uiState: StateFlow<AnalyticsUiState> = combine(
         repository.getAllTransactions(),
-        selectedTimeFilter
-    ) { allTransactions, timeFilter ->
+        selectedTimeFilter,
+        isPersianState
+    ) { allTransactions, timeFilter, isPersian ->
 
         val hasAnyTransaction = allTransactions.isNotEmpty()
 
-        // ۱. فیلتر کردن تراکنش‌ها بر اساس زمان انتخابی
-        val filteredTransactions = filterTransactionsByTime(allTransactions, timeFilter)
+        val filteredTransactions = filterTransactionsByTime(allTransactions, timeFilter, isPersian)
 
-        // ۲. محاسبه مجموع درآمد و هزینه دوره
         val totalIncome = filteredTransactions.filter { it.type == "INCOME" }.sumOf { it.amount }
         val expensesList = filteredTransactions.filter { it.type == "EXPENSE" }
         val totalExpense = expensesList.sumOf { it.amount }
         val balance = totalIncome - totalExpense
 
-        // ۳. تفکیک هزینه‌ها بر اساس دسته‌بندی برای نمودار دایره‌ای
         val categoryExpenses = expensesList
             .groupBy { it.category }
             .map { (category, list) ->
@@ -49,14 +55,15 @@ class AnalyticsViewModel(
             }
             .sortedByDescending { it.totalAmount }
 
-        // ۴. فیلتر سنگین‌ترین هزینه‌ها (فقط هزینه‌هایی که از میانگین خرج‌کرد دوره بیشتر باشند)
+        val timeExpenses = calculateTimeExpenses(allTransactions, timeFilter, isPersian)
+        val currentIndex = timeExpenses.indexOfFirst { it.isCurrent }.let { if (it == -1) 0 else it }
+
         val averageExpense = if (expensesList.isNotEmpty()) totalExpense / expensesList.size else 0.0
         val topExpenseEntities = expensesList
-            .filter { it.amount > averageExpense } // فقط هزینه‌های بالاتر از میانگین
+            .filter { it.amount > averageExpense }
             .sortedByDescending { it.amount }
             .take(5)
 
-        // ۵. محاسبه نقاط نمودار روند تغییرات (Balance Trend Points)
         val trendPoints = calculateTrendPoints(filteredTransactions)
 
         AnalyticsUiState(
@@ -66,6 +73,8 @@ class AnalyticsViewModel(
             totalExpense = totalExpense,
             balance = balance,
             categoryExpenses = categoryExpenses,
+            timeExpenses = timeExpenses,
+            currentTimeIndex = currentIndex,
             topExpenses = topExpenseEntities,
             averageExpense = averageExpense,
             trendPoints = trendPoints,
@@ -83,27 +92,269 @@ class AnalyticsViewModel(
 
     private fun filterTransactionsByTime(
         transactions: List<TransactionEntity>,
-        filter: TimeFilter
+        filter: TimeFilter,
+        isPersian: Boolean
     ): List<TransactionEntity> {
         if (filter == TimeFilter.ALL) return transactions
 
-        val now = Calendar.getInstance()
+        val now = LocalDate.now()
+        val (jYearNow, jMonthNow, jDayNow) = DateUtils.toJalali(now)
+
         return transactions.filter { tx ->
-            val txCal = Calendar.getInstance().apply { timeInMillis = tx.timestamp }
-            when (filter) {
+            val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+
+            if (isPersian) {
+                val (jYearTx, jMonthTx, jDayTx) = DateUtils.toJalali(txDate)
+                when (filter) {
+                    TimeFilter.DAILY -> jYearTx == jYearNow && jMonthTx == jMonthNow && jDayTx == jDayNow
+                    TimeFilter.WEEKLY -> {
+                        if (jYearTx != jYearNow || jMonthTx != jMonthNow) false
+                        else {
+                            val nowWeekIndex = (jDayNow - 1) / 7
+                            val txWeekIndex = (jDayTx - 1) / 7
+                            nowWeekIndex == txWeekIndex
+                        }
+                    }
+                    TimeFilter.MONTHLY -> jYearTx == jYearNow && jMonthTx == jMonthNow
+                    TimeFilter.ALL -> true
+                }
+            } else {
+                when (filter) {
+                    TimeFilter.DAILY -> txDate == now
+                    TimeFilter.WEEKLY -> {
+                        val weekFields = WeekFields.of(Locale.US)
+                        txDate.year == now.year &&
+                                txDate.get(weekFields.weekOfWeekBasedYear()) == now.get(weekFields.weekOfWeekBasedYear())
+                    }
+                    TimeFilter.MONTHLY -> txDate.year == now.year && txDate.monthValue == now.monthValue
+                    TimeFilter.ALL -> true
+                }
+            }
+        }
+    }
+
+    private fun calculateTimeExpenses(
+        allTransactions: List<TransactionEntity>,
+        filter: TimeFilter,
+        isPersian: Boolean
+    ): List<TimeExpenseModel> {
+        val expenses = allTransactions.filter { it.type == "EXPENSE" }
+        val now = LocalDate.now()
+
+        if (isPersian) {
+            val (currentJalaliYear, currentJalaliMonth, currentJalaliDay) = DateUtils.toJalali(now)
+
+            return when (filter) {
                 TimeFilter.DAILY -> {
-                    txCal.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
-                            txCal.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)
+                    val daysInMonth = DateUtils.getDaysInJalaliMonth(currentJalaliYear, currentJalaliMonth)
+                    val currentMonthExpenses = expenses.filter { tx ->
+                        val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                        val (jYear, jMonth, _) = DateUtils.toJalali(txDate)
+                        jYear == currentJalaliYear && jMonth == currentJalaliMonth
+                    }
+
+                    val dailySums = Array(daysInMonth) { 0.0 }
+                    currentMonthExpenses.forEach { tx ->
+                        val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                        val (_, _, day) = DateUtils.toJalali(txDate)
+                        if (day in 1..daysInMonth) {
+                            dailySums[day - 1] += tx.amount
+                        }
+                    }
+
+                    (1..daysInMonth).map { day ->
+                        TimeExpenseModel(
+                            labelFa = day.toString(),
+                            labelEn = day.toString(),
+                            totalAmount = dailySums[day - 1],
+                            isCurrent = (day == currentJalaliDay)
+                        )
+                    }
                 }
+
                 TimeFilter.WEEKLY -> {
-                    txCal.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
-                            txCal.get(Calendar.WEEK_OF_YEAR) == now.get(Calendar.WEEK_OF_YEAR)
+                    val currentMonthExpenses = expenses.filter { tx ->
+                        val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                        val (jYear, jMonth, _) = DateUtils.toJalali(txDate)
+                        jYear == currentJalaliYear && jMonth == currentJalaliMonth
+                    }
+
+                    val weeks = arrayOf(0.0, 0.0, 0.0, 0.0)
+                    currentMonthExpenses.forEach { tx ->
+                        val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                        val (_, _, day) = DateUtils.toJalali(txDate)
+                        when {
+                            day in 1..7 -> weeks[0] += tx.amount
+                            day in 8..14 -> weeks[1] += tx.amount
+                            day in 15..21 -> weeks[2] += tx.amount
+                            day >= 22 -> weeks[3] += tx.amount
+                        }
+                    }
+
+                    val currentWeekIndex = (currentJalaliDay - 1) / 7
+
+                    listOf(
+                        TimeExpenseModel("هفته ۱", "Week 1", weeks[0], isCurrent = currentWeekIndex == 0),
+                        TimeExpenseModel("هفته ۲", "Week 2", weeks[1], isCurrent = currentWeekIndex == 1),
+                        TimeExpenseModel("هفته ۳", "Week 3", weeks[2], isCurrent = currentWeekIndex == 2),
+                        TimeExpenseModel("هفته ۴", "Week 4", weeks[3], isCurrent = currentWeekIndex == 3)
+                    )
                 }
+
                 TimeFilter.MONTHLY -> {
-                    txCal.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
-                            txCal.get(Calendar.MONTH) == now.get(Calendar.MONTH)
+                    val currentYearExpenses = expenses.filter { tx ->
+                        val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                        val (jYear, _, _) = DateUtils.toJalali(txDate)
+                        jYear == currentJalaliYear
+                    }
+
+                    val months = Array(12) { 0.0 }
+                    currentYearExpenses.forEach { tx ->
+                        val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                        val (_, jMonth, _) = DateUtils.toJalali(txDate)
+                        if (jMonth in 1..12) {
+                            months[jMonth - 1] += tx.amount
+                        }
+                    }
+
+                    DateUtils.PERSIAN_MONTH_NAMES.indices.map { index ->
+                        TimeExpenseModel(
+                            labelFa = DateUtils.PERSIAN_MONTH_NAMES[index],
+                            labelEn = DateUtils.PERSIAN_MONTH_NAMES[index],
+                            totalAmount = months[index],
+                            isCurrent = (index == currentJalaliMonth - 1)
+                        )
+                    }
                 }
-                TimeFilter.ALL -> true
+
+                TimeFilter.ALL -> {
+                    val yearGrouped = expenses.groupBy { tx ->
+                        val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                        val (jYear, _, _) = DateUtils.toJalali(txDate)
+                        jYear
+                    }
+
+                    if (yearGrouped.isEmpty()) {
+                        listOf(TimeExpenseModel(currentJalaliYear.toString(), currentJalaliYear.toString(), 0.0, isCurrent = true))
+                    } else {
+                        yearGrouped.keys.sorted().map { year ->
+                            val sum = yearGrouped[year]?.sumOf { it.amount } ?: 0.0
+                            TimeExpenseModel(
+                                labelFa = year.toString(),
+                                labelEn = year.toString(),
+                                totalAmount = sum,
+                                isCurrent = (year == currentJalaliYear)
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            // تقویم میلادی برای زبان انگلیسی
+            val currentGYear = now.year
+            val currentGMonth = now.monthValue
+            val currentGDay = now.dayOfMonth
+
+            return when (filter) {
+                TimeFilter.DAILY -> {
+                    val daysInMonth = now.lengthOfMonth()
+                    val currentMonthExpenses = expenses.filter { tx ->
+                        val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                        txDate.year == currentGYear && txDate.monthValue == currentGMonth
+                    }
+
+                    val dailySums = Array(daysInMonth) { 0.0 }
+                    currentMonthExpenses.forEach { tx ->
+                        val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                        val day = txDate.dayOfMonth
+                        if (day in 1..daysInMonth) {
+                            dailySums[day - 1] += tx.amount
+                        }
+                    }
+
+                    (1..daysInMonth).map { day ->
+                        TimeExpenseModel(
+                            labelFa = day.toString(),
+                            labelEn = day.toString(),
+                            totalAmount = dailySums[day - 1],
+                            isCurrent = (day == currentGDay)
+                        )
+                    }
+                }
+
+                TimeFilter.WEEKLY -> {
+                    val currentMonthExpenses = expenses.filter { tx ->
+                        val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                        txDate.year == currentGYear && txDate.monthValue == currentGMonth
+                    }
+
+                    val weeks = arrayOf(0.0, 0.0, 0.0, 0.0)
+                    currentMonthExpenses.forEach { tx ->
+                        val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                        val day = txDate.dayOfMonth
+                        when {
+                            day in 1..7 -> weeks[0] += tx.amount
+                            day in 8..14 -> weeks[1] += tx.amount
+                            day in 15..21 -> weeks[2] += tx.amount
+                            day >= 22 -> weeks[3] += tx.amount
+                        }
+                    }
+
+                    val currentWeekIndex = (currentGDay - 1) / 7
+
+                    listOf(
+                        TimeExpenseModel("Week 1", "Week 1", weeks[0], isCurrent = currentWeekIndex == 0),
+                        TimeExpenseModel("Week 2", "Week 2", weeks[1], isCurrent = currentWeekIndex == 1),
+                        TimeExpenseModel("Week 3", "Week 3", weeks[2], isCurrent = currentWeekIndex == 2),
+                        TimeExpenseModel("Week 4", "Week 4", weeks[3], isCurrent = currentWeekIndex == 3)
+                    )
+                }
+
+                TimeFilter.MONTHLY -> {
+                    val currentYearExpenses = expenses.filter { tx ->
+                        val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                        txDate.year == currentGYear
+                    }
+
+                    val months = Array(12) { 0.0 }
+                    currentYearExpenses.forEach { tx ->
+                        val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                        val gMonth = txDate.monthValue
+                        if (gMonth in 1..12) {
+                            months[gMonth - 1] += tx.amount
+                        }
+                    }
+
+                    DateUtils.ENGLISH_MONTH_NAMES.indices.map { index ->
+                        TimeExpenseModel(
+                            labelFa = DateUtils.ENGLISH_MONTH_NAMES[index],
+                            labelEn = DateUtils.ENGLISH_MONTH_NAMES[index],
+                            totalAmount = months[index],
+                            isCurrent = (index == currentGMonth - 1)
+                        )
+                    }
+                }
+
+                TimeFilter.ALL -> {
+                    val yearGrouped = expenses.groupBy { tx ->
+                        val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                        txDate.year
+                    }
+
+                    if (yearGrouped.isEmpty()) {
+                        listOf(TimeExpenseModel(currentGYear.toString(), currentGYear.toString(), 0.0, isCurrent = true))
+                    } else {
+                        yearGrouped.keys.sorted().map { year ->
+                            val sum = yearGrouped[year]?.sumOf { it.amount } ?: 0.0
+                            TimeExpenseModel(
+                                labelFa = year.toString(),
+                                labelEn = year.toString(),
+                                totalAmount = sum,
+                                isCurrent = (year == currentGYear)
+                            )
+                        }
+                    }
+                }
             }
         }
     }

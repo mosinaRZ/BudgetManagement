@@ -8,7 +8,16 @@ import java.util.Locale
 
 object DateUtils {
 
-    // ۱. دریافت تاریخ امروز با نام روز هفته (برای بنر یا تاپ‌بار صفحه اصلی)
+    val PERSIAN_MONTH_NAMES = arrayOf(
+        "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
+        "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
+    )
+
+    val ENGLISH_MONTH_NAMES = arrayOf(
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    )
+
     fun getFormattedHeaderDate(isPersian: Boolean): String {
         return if (isPersian) getFormattedPersianDate() else getFormattedEnglishDate()
     }
@@ -22,14 +31,9 @@ object DateUtils {
     private fun getFormattedPersianDate(): String {
         val current = LocalDate.now()
         val (jalaliYear, jalaliMonth, jalaliDay, dayName) = toJalaliFull(current)
-        val jMonthNames = arrayOf(
-            "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
-            "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
-        )
-        return "$dayName $jalaliDay ${jMonthNames[jalaliMonth - 1]} $jalaliYear"
+        return "$dayName $jalaliDay ${PERSIAN_MONTH_NAMES[jalaliMonth - 1]} $jalaliYear"
     }
 
-    // ۲. تابع اصلی: تبدیل Timestamp (میلی‌ثانیه) به فرمت کوتاه yyyy/MM/dd بر اساس زبان
     fun formatTimestamp(millis: Long, isPersian: Boolean): String {
         val localDate = Instant.ofEpochMilli(millis)
             .atZone(ZoneId.systemDefault())
@@ -44,9 +48,28 @@ object DateUtils {
         }
     }
 
-    // --- الگوریتم‌های محاسباتی تقویم شمسی (بدون کتابخانه خارجی) ---
+    fun getDaysInJalaliMonth(year: Int, month: Int): Int {
+        return when (month) {
+            in 1..6 -> 31
+            in 7..11 -> 30
+            12 -> if (isJalaliLeapYear(year)) 30 else 29
+            else -> 30
+        }
+    }
 
-    private fun toJalali(date: LocalDate): Triple<Int, Int, Int> {
+    private fun isJalaliLeapYear(year: Int): Boolean {
+        val breaks = intArrayOf(
+            -61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181, 1210,
+            1635, 2060, 2097, 2192, 2262, 2324, 2394, 2456, 3178
+        )
+        val jp = breaks.firstOrNull { year < it } ?: breaks.last()
+        var jg = year - jp
+        if (jg < 0) jg += 33
+        val leap = (jg % 33) % 4
+        return leap == 1
+    }
+
+    fun toJalali(date: LocalDate): Triple<Int, Int, Int> {
         val gYear = date.year
         val gMonth = date.monthValue
         val gDay = date.dayOfMonth

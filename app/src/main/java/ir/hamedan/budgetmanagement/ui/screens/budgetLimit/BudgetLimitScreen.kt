@@ -1,11 +1,12 @@
 package ir.hamedan.budgetmanagement.ui.screens.budgetLimit
 
-import android.R.attr.category
-import ir.hamedan.budgetmanagement.di.appViewModel
-
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -34,16 +35,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.di.appViewModel
@@ -53,12 +53,11 @@ import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitViewModel
 import ir.hamedan.budgetmanagement.utils.DateUtils
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
+import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.*
+import kotlin.math.ceil
 
-// -----------------------------------------------------------------------------
-// VisualTransformation برای تفکیک ۳ رقمی بدون جابه‌جا شدن Cursor
-// -----------------------------------------------------------------------------
 class ThousandsSeparatorTransformation : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
         val originalText = text.text
@@ -99,6 +98,8 @@ fun BudgetLimitScreen(
     viewModel: BudgetLimitViewModel = appViewModel()
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }
 
     val limitsListState by viewModel.budgetLimitsWithSpent.collectAsState()
@@ -131,6 +132,7 @@ fun BudgetLimitScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
         ) {
+            // ------------------ Top Bar ------------------
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -164,13 +166,14 @@ fun BudgetLimitScreen(
                 Spacer(modifier = Modifier.size(44.dp))
             }
 
+            // ------------------ Main Content List ------------------
             if (limitsListState != null) {
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(bottom = 90.dp)
+                    contentPadding = PaddingValues(bottom = 120.dp)
                 ) {
                     if (limitsList.isEmpty()) {
                         item {
@@ -248,6 +251,7 @@ fun BudgetLimitScreen(
             }
         }
 
+        // ------------------ Floating Action Button ------------------
         if (limitsListState != null && limitsList.isNotEmpty()) {
             FloatingActionButton(
                 onClick = { showAddDialog = true },
@@ -257,13 +261,29 @@ fun BudgetLimitScreen(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
-                    .padding(24.dp)
+                    .padding(bottom = 90.dp, end = 24.dp)
                     .size(56.dp)
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Limit", modifier = Modifier.size(28.dp))
             }
         }
 
+        // ------------------ Snackbar Host (Overlay) ------------------
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 90.dp, start = 16.dp, end = 16.dp)
+        ) { snackbarData ->
+            CircularCountdownSnackbar(
+                snackbarData = snackbarData,
+                isPersian = isPersian,
+                totalSeconds = 5
+            )
+        }
+
+        // ------------------ Dialog Add/Edit ------------------
         if (showAddDialog || limitToEdit != null) {
             AddOrEditLimitDialog(
                 limitToEdit = limitToEdit,
@@ -289,9 +309,7 @@ fun BudgetLimitScreen(
             )
         }
 
-        // ---------------------------------------------------------------------
-        // دیالوگ حذف
-        // ---------------------------------------------------------------------
+        // ------------------ Delete Dialog ------------------
         limitToDelete?.let { item ->
             val mappedCategoryName = StringMapper.getCategoryName(item.entity.categoryName, isPersian)
             val dialogShape = RoundedCornerShape(28.dp)
@@ -367,8 +385,23 @@ fun BudgetLimitScreen(
 
                             Button(
                                 onClick = {
-                                    viewModel.deleteBudgetLimit(item.entity.id)
+                                    val deletedEntity = item.entity
+                                    viewModel.deleteBudgetLimit(deletedEntity.id)
                                     limitToDelete = null
+
+                                    coroutineScope.launch {
+                                        val result = snackbarHostState.showSnackbar(
+                                            message = if (isPersian) "محدودیت «$mappedCategoryName» حذف شد" else "Limit '$mappedCategoryName' deleted",
+                                            actionLabel = if (isPersian) "بازگردانی" else "Undo",
+                                            duration = SnackbarDuration.Indefinite
+                                        )
+
+                                        if (result == SnackbarResult.ActionPerformed) {
+                                            viewModel.restoreLimit(deletedEntity)
+                                        } else {
+                                            viewModel.commitDeleteLimit(deletedEntity)
+                                        }
+                                    }
                                 },
                                 modifier = Modifier
                                     .weight(1f)
@@ -384,6 +417,91 @@ fun BudgetLimitScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CircularCountdownSnackbar(
+    snackbarData: SnackbarData,
+    isPersian: Boolean,
+    totalSeconds: Int = 5
+) {
+    val animatedProgress = remember { Animatable(1f) }
+
+    LaunchedEffect(snackbarData) {
+        animatedProgress.snapTo(1f)
+        animatedProgress.animateTo(
+            targetValue = 0f,
+            animationSpec = tween(
+                durationMillis = totalSeconds * 1000,
+                easing = LinearEasing
+            )
+        )
+        snackbarData.dismiss()
+    }
+
+    val secondsLeft = ceil(animatedProgress.value * totalSeconds).toInt()
+
+    val numberFormatter = remember(isPersian) {
+        NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        tonalElevation = 6.dp,
+        shadowElevation = 8.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = snackbarData.visuals.message,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
+            )
+
+            snackbarData.visuals.actionLabel?.let { actionLabel ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.clickable { snackbarData.performAction() }
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            progress = { animatedProgress.value },
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                            strokeWidth = 3.dp
+                        )
+                        Text(
+                            text = numberFormatter.format(secondsLeft),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    Text(
+                        text = actionLabel,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }
@@ -543,9 +661,6 @@ fun BudgetLimitItemCard(
     }
 }
 
-// -----------------------------------------------------------------------------
-// دیالوگ افزودن/ویرایش با اعمال محدودیت ۱۲ رقم
-// -----------------------------------------------------------------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddOrEditLimitDialog(
@@ -557,7 +672,7 @@ fun AddOrEditLimitDialog(
     onCategoriesClick: () -> Unit = {},
     onConfirm: (categoryName: String, maxLimit: Double, startDate: Long, endDate: Long) -> Unit
 ) {
-    val maxDigitsLength = 12 // حداکثر ۱۲ رقم برای مبلغ
+    val maxDigitsLength = 12
 
     var selectedCategoryKey by remember {
         mutableStateOf(limitToEdit?.entity?.categoryName ?: categories.firstOrNull()?.title ?: "")
@@ -760,7 +875,6 @@ fun AddOrEditLimitDialog(
                 val labelCurrency = if (isPersian) (if (currencyUnit == "IRR") "سقف مجاز (ریال)" else "سقف مجاز (تومان)")
                 else (if (currencyUnit == "IRR") "Max Limit (Rial)" else "Max Limit (Toman)")
 
-                // فیلد ورودی مبلغ همراه با شرط محدودیت ارقام
                 OutlinedTextField(
                     value = rawAmountDigits,
                     onValueChange = { input ->

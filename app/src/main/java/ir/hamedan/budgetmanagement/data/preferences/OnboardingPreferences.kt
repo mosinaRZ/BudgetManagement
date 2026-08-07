@@ -8,7 +8,7 @@ import android.content.Context
  */
 object OnboardingPreferences {
     private const val PREFS_NAME = "settings"
-    private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+    internal const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
 
     fun isCompleted(context: Context): Boolean {
         val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

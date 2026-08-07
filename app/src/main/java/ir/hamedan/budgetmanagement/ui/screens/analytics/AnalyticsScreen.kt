@@ -1,13 +1,12 @@
 package ir.hamedan.budgetmanagement.ui.screens.analytics
 
-import ir.hamedan.budgetmanagement.di.appViewModel
-
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,11 +33,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.BarChartEntry
+import ir.hamedan.budgetmanagement.ui.components.ColumnBarChartCard
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TimeFilter
 import ir.hamedan.budgetmanagement.utils.DateUtils
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
@@ -54,9 +54,28 @@ fun AnalyticsScreen(
     val context = LocalContext.current
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }
 
+    // همگام‌سازی وضعیت زبان با ویومدل
+    LaunchedEffect(isPersian) {
+        analyticsViewModel.updateLocale(isPersian)
+    }
+
     val uiState by analyticsViewModel.uiState.collectAsState()
     val selectedFilter by analyticsViewModel.selectedTimeFilter.collectAsState()
     val currencyUnit by CurrencySharedPreferences.currencyFlow.collectAsState(initial = "IRT")
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    var isFirstFilterEmission by remember { mutableStateOf(true) }
+
+    LaunchedEffect(selectedFilter) {
+        if (isFirstFilterEmission) {
+            isFirstFilterEmission = false
+        } else {
+            val filterTitle = if (isPersian) selectedFilter.titleFa else selectedFilter.titleEn
+            snackbarHostState.showSnackbar(
+                message = if (isPersian) "فیلتر زمانی به «$filterTitle» تغییر کرد" else "Filter changed to $filterTitle"
+            )
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -66,15 +85,13 @@ fun AnalyticsScreen(
         AuroraBackground()
 
         if (uiState.isLoading) {
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            AnalyticsSkeletonScreen()
         } else if (!uiState.hasAnyTransactionInDb) {
-            // حالت ۱: کلاً هیچ تراکنشی در برنامه ثبت نشده است (بدون دکمه‌های فیلتر)
             EmptyAnalyticsView(
                 isPersian = isPersian,
                 onAddTransactionClick = onAddScreenClick
             )
         } else {
-            // حالت ۲: تراکنش وجود دارد (نمایش محتوا)
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -94,6 +111,16 @@ fun AnalyticsScreen(
                 BalanceTrendChartCard(
                     isPersian = isPersian,
                     dataPoints = uiState.trendPoints
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                ExpenseTimeBarChartCard(
+                    isPersian = isPersian,
+                    timeExpenses = uiState.timeExpenses,
+                    currentIndex = uiState.currentTimeIndex,
+                    selectedFilter = selectedFilter,
+                    currencyUnit = currencyUnit
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -118,7 +145,6 @@ fun AnalyticsScreen(
                 Spacer(modifier = Modifier.navigationBarsPadding().height(80.dp))
             }
 
-            // هدر بالای صفحه و فیلترها (فقط زمانی نشان داده می‌شود که داده در دیتابیس وجود دارد)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -137,10 +163,147 @@ fun AnalyticsScreen(
                 )
             }
         }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 72.dp)
+        )
     }
 }
 
-// --- نمای صفحه خالی و CTA ثبت تراکنش ---
+@Composable
+private fun shimmerBrush(): Brush {
+    val shimmerColors = listOf(
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
+    )
+
+    val transition = rememberInfiniteTransition(label = "ShimmerTransition")
+    val translateAnimation = transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ShimmerTranslation"
+    )
+
+    return Brush.linearGradient(
+        colors = shimmerColors,
+        start = Offset.Zero,
+        end = Offset(x = translateAnimation.value, y = translateAnimation.value)
+    )
+}
+
+@Composable
+private fun AnalyticsSkeletonScreen() {
+    val brush = shimmerBrush()
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+        ) {
+            Spacer(modifier = Modifier.statusBarsPadding().height(140.dp))
+
+            // Smart Insight Card Placeholder
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(80.dp)
+                    .padding(horizontal = 24.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(brush)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Balance Trend Chart Card Placeholder
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(260.dp)
+                    .padding(horizontal = 24.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(brush)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Expense Time Bar Chart Card Placeholder
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(280.dp)
+                    .padding(horizontal = 24.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(brush)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Expense Category Pie Chart Card Placeholder
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+                    .padding(horizontal = 24.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(brush)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Top Expenses Card Placeholder
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .padding(horizontal = 24.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(brush)
+            )
+
+            Spacer(modifier = Modifier.navigationBarsPadding().height(80.dp))
+        }
+
+        // Top Bar & Time Filter Selector Skeletons
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+        ) {
+            Spacer(modifier = Modifier.statusBarsPadding().padding(top = 12.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .padding(horizontal = 24.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(brush)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(46.dp)
+                    .padding(horizontal = 24.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(brush)
+            )
+        }
+    }
+}
+
 @Composable
 private fun EmptyAnalyticsView(
     isPersian: Boolean,
@@ -210,7 +373,6 @@ private fun EmptyAnalyticsView(
     }
 }
 
-// --- هدر بالای صفحه ---
 @Composable
 private fun AnalyticsTopBar(isPersian: Boolean) {
     val centerShape = RoundedCornerShape(24.dp)
@@ -241,7 +403,6 @@ private fun AnalyticsTopBar(isPersian: Boolean) {
     }
 }
 
-// --- انتخاب‌گر زمان ---
 @Composable
 private fun TimeFilterSelector(
     selectedFilter: TimeFilter,
@@ -259,7 +420,7 @@ private fun TimeFilterSelector(
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        val filters = remember { TimeFilter.values().filter { it != TimeFilter.DAILY } }
+        val filters = remember { TimeFilter.values() }
 
         filters.forEach { filter ->
             val isSelected = filter == selectedFilter
@@ -295,7 +456,6 @@ private fun TimeFilterSelector(
     }
 }
 
-// --- کارت تحلیل هوشمند ---
 @Composable
 private fun SmartInsightCard(
     isPersian: Boolean,
@@ -369,7 +529,6 @@ private fun SmartInsightCard(
     }
 }
 
-// --- کارت نمودار خطی ---
 @Composable
 private fun BalanceTrendChartCard(
     isPersian: Boolean,
@@ -403,12 +562,10 @@ private fun BalanceTrendChartCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // محورها و نمودار
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // برچسب محور Y (مبلغ)
                 Text(
                     text = if (isPersian) "مبلغ" else "Amount",
                     style = MaterialTheme.typography.labelSmall,
@@ -433,7 +590,6 @@ private fun BalanceTrendChartCard(
 
                         val distanceX = if (dataPoints.size > 1) width / (dataPoints.size - 1) else width
 
-                        // محاسبه میانگین
                         val average = dataPoints.average().toFloat()
                         val avgNormalizedY = if (maxVal != minVal) {
                             (average - minVal) / (maxVal - minVal)
@@ -442,7 +598,6 @@ private fun BalanceTrendChartCard(
                         }
                         val avgY = height - (avgNormalizedY * height)
 
-                        // رسم خط چین میانگین
                         val dashPathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
                         drawLine(
                             color = averageColor.copy(alpha = 0.85f),
@@ -520,7 +675,6 @@ private fun BalanceTrendChartCard(
                         }
                     }
 
-                    // برچسب محور X (زمان)
                     Text(
                         text = if (isPersian) "زمان" else "Time",
                         style = MaterialTheme.typography.labelSmall,
@@ -532,7 +686,6 @@ private fun BalanceTrendChartCard(
                 }
             }
 
-            // راهنمای خط میانگین
             if (dataPoints.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(
@@ -559,7 +712,59 @@ private fun BalanceTrendChartCard(
     }
 }
 
-// --- کارت نمودار دایره‌ای دسته‌بندی هزینه‌ها ---
+@Composable
+private fun ExpenseTimeBarChartCard(
+    isPersian: Boolean,
+    timeExpenses: List<TimeExpenseModel>,
+    currentIndex: Int,
+    selectedFilter: TimeFilter,
+    currencyUnit: String
+) {
+    val numberFormatter = remember(isPersian) {
+        NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
+    }
+    val currencyMultiplier = if (currencyUnit == "IRR") 10f else 1f
+    val barThemeColor = MaterialTheme.colorScheme.primary
+
+    val barListState = rememberLazyListState()
+
+    LaunchedEffect(timeExpenses, currentIndex) {
+        if (timeExpenses.isNotEmpty() && currentIndex in timeExpenses.indices) {
+            barListState.animateScrollToItem(currentIndex)
+        }
+    }
+
+    val entries = remember(timeExpenses, currencyUnit, isPersian, barThemeColor) {
+        timeExpenses.map { item ->
+            BarChartEntry(
+                label = if (isPersian) item.labelFa else item.labelEn,
+                value = (item.totalAmount.toFloat() * currencyMultiplier),
+                color = barThemeColor,
+                isHighlighted = item.isCurrent
+            )
+        }
+    }
+
+    val subtitle = when (selectedFilter) {
+        TimeFilter.DAILY -> if (isPersian) "توزیع هزینه‌ها به تفکیک روزهای ماه جاری" else "Daily breakdown for current month"
+        TimeFilter.WEEKLY -> if (isPersian) "توزیع هزینه‌ها در هفته‌های ماه جاری" else "Weekly breakdown for current month"
+        TimeFilter.MONTHLY -> if (isPersian) "توزیع هزینه‌ها در ماه‌های سال جاری" else "Monthly breakdown for current year"
+        TimeFilter.ALL -> if (isPersian) "توزیع هزینه‌ها به تفکیک سال" else "Yearly breakdown"
+    }
+
+    ColumnBarChartCard(
+        title = if (isPersian) "مقایسه زمانی هزینه‌ها" else "Time Comparison",
+        subtitle = subtitle,
+        entries = entries,
+        emptyStateText = if (isPersian) "داده‌ای برای نمایش در این دوره وجود ندارد" else "No expense data for this period",
+        averageLabel = if (isPersian) "میانگین" else "Average",
+        yAxisLabel = if (isPersian) "مبلغ" else "Amount",
+        xAxisLabel = if (isPersian) "زمان" else "Time",
+        listState = barListState,
+        valueFormatter = { value -> numberFormatter.format(value.toLong()) }
+    )
+}
+
 @Composable
 private fun ExpenseCategoryPieChartCard(
     isPersian: Boolean,
@@ -702,7 +907,6 @@ private fun ExpenseCategoryPieChartCard(
     }
 }
 
-// --- کارت سنگین‌ترین هزینه‌های دوره (فیلتر بر اساس میانگین) ---
 @Composable
 private fun TopExpensesCard(
     isPersian: Boolean,

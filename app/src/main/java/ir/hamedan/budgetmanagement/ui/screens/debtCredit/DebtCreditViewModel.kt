@@ -248,19 +248,30 @@ class DebtCreditViewModel(
         }
     }
 
-    fun delete(id: String) {
+    // حذف موقت جهت پاک‌سازی سریع از UI
+    fun softDelete(item: DebtCreditEntity) {
         viewModelScope.launch(ioDispatcher) {
-            val item = debtCreditList.value.find { it.id == id }
-            debtCreditRepository.deleteDebtCredit(id)
+            debtCreditRepository.deleteDebtCredit(item.id)
+        }
+    }
 
-            val name = item?.personName ?: ""
+    // بازگردانی آیتم حذف‌شده در صورت فشردن دکمه Undo
+    fun restore(item: DebtCreditEntity) {
+        viewModelScope.launch(ioDispatcher) {
+            debtCreditRepository.insertOrUpdateDebtCredit(item)
+        }
+    }
+
+    // ثبت حذف نهایی و ارسال نوتیفیکیشن پس از اتمام ۵ ثانیه
+    fun commitDelete(id: String) {
+        viewModelScope.launch(ioDispatcher) {
             NotificationHelper.send(
                 context = context,
                 type = "ERROR",
                 titleFa = "حذف بدهی/طلب",
                 titleEn = "Record Deleted",
-                descFa = "اطلاعات مربوط به «$name» حذف شد.",
-                descEn = "Record for '$name' was deleted.",
+                descFa = "اطلاعات با موفقیت حذف گردید.",
+                descEn = "Record was successfully deleted.",
                 tag = "DEBT_DELETE_${id}_${System.currentTimeMillis()}"
             )
         }

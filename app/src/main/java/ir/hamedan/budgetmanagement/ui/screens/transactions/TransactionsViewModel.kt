@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
@@ -17,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -58,6 +58,9 @@ class TransactionViewModel(
     private val notificationRepository: NotificationRepository
 ) : ViewModel() {
 
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading
+
     val currencyUnit: StateFlow<String> = CurrencySharedPreferences.currencyFlow
 
     val expenseCategories: StateFlow<List<CategoryEntity>> =
@@ -80,7 +83,7 @@ class TransactionViewModel(
     val filterState = MutableStateFlow(FilterState())
 
     val filteredTransactions: StateFlow<List<TransactionEntity>> = combine(
-        transactionRepository.getAllTransactions(),
+        transactionRepository.getAllTransactions().onEach { _isLoading.value = false },
         searchQuery,
         filterState
     ) { transactions, query, filter ->
@@ -158,15 +161,23 @@ class TransactionViewModel(
         filterState.value = FilterState()
     }
 
+    fun deleteTransaction(transaction: TransactionEntity) {
+        viewModelScope.launch {
+            transactionRepository.deleteTransactionById(transaction.id.toString())
+            BalanceWidget().updateAll(context)
+        }
+    }
+
     fun deleteTransaction(transactionId: String) {
         viewModelScope.launch {
-            val targetTx = filteredTransactions.value.find { it.id.toString() == transactionId }
             transactionRepository.deleteTransactionById(transactionId)
-
             BalanceWidget().updateAll(context)
+        }
+    }
 
-            val txTitle = targetTx?.title ?: "تراکنش"
-
+    fun commitDeleteTransaction(transaction: TransactionEntity) {
+        viewModelScope.launch {
+            val txTitle = transaction.title.ifEmpty { "تراکنش" }
             NotificationHelper.send(
                 context = context,
                 type = "ERROR",
@@ -174,15 +185,21 @@ class TransactionViewModel(
                 titleEn = "Transaction Deleted",
                 descFa = "تراکنش «$txTitle» با موفقیت حذف شد.",
                 descEn = "Transaction \"$txTitle\" was successfully deleted.",
-                tag = "TX_DELETE_${transactionId}_${System.currentTimeMillis()}"
+                tag = "TX_DELETE_${transaction.id}_${System.currentTimeMillis()}"
             )
+        }
+    }
+
+    fun restoreTransaction(transaction: TransactionEntity) {
+        viewModelScope.launch {
+            transactionRepository.insertTransaction(transaction)
+            BalanceWidget().updateAll(context)
         }
     }
 
     fun updateTransaction(transaction: TransactionEntity) {
         viewModelScope.launch {
             transactionRepository.insertTransaction(transaction)
-
             BalanceWidget().updateAll(context)
 
             NotificationHelper.send(

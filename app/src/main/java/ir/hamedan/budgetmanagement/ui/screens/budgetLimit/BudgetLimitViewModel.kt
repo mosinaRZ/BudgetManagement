@@ -166,22 +166,32 @@ class BudgetLimitViewModel(
         }
     }
 
+    // حذف اولیه از پایگاه داده (بدون ارسال نوتیفیکیشن)
     fun deleteBudgetLimit(id: Long) {
         viewModelScope.launch {
-            val currentItem = budgetLimitsWithSpent.value.find { it.entity.id == id }?.entity
             budgetLimitRepository.deleteLimit(id)
-
-            currentItem?.let {
-                NotificationHelper.send(
-                    context = context,
-                    type = "ERROR",
-                    titleFa = "حذف محدودیت بودجه",
-                    titleEn = "Budget Limit Deleted",
-                    descFa = "محدودیت مالی دسته‌بندی «${it.categoryName}» حذف شد.",
-                    descEn = "Budget limit for category ${it.categoryName} was deleted.",
-                    tag = "BUDGET_DELETE_${it.categoryName}_${System.currentTimeMillis()}"
-                )
-            }
         }
     }
-}
+
+    // بازگردانی آیتم حذف شده در صورت زدن Undo
+    fun restoreLimit(entity: BudgetLimitEntity) {
+        viewModelScope.launch {
+            budgetLimitRepository.saveLimit(entity)
+        }
+    }
+
+    // ارسال نوتیفیکیشن حذف قطعی (تنها در صورتی که کاربر Undo نکرده باشد)
+    fun commitDeleteLimit(entity: BudgetLimitEntity) {
+        viewModelScope.launch {
+            val mappedCategory = entity.categoryName
+            NotificationHelper.send(
+                context = context,
+                type = "ERROR",
+                titleFa = "حذف محدودیت بودجه",
+                titleEn = "Budget Limit Deleted",
+                descFa = "محدودیت مالی دسته‌بندی «$mappedCategory» حذف شد.",
+                descEn = "Budget limit for category $mappedCategory was deleted.",
+                tag = "BUDGET_DELETE_${entity.id}_${System.currentTimeMillis()}"
+            )
+        }
+    }}

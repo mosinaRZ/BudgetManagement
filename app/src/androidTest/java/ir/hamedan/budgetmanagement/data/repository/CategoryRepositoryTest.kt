@@ -21,6 +21,7 @@ class CategoryRepositoryTest {
     private lateinit var database: AppDatabase
     private lateinit var repository: CategoryRepository
     private lateinit var transactionRepository: TransactionRepository
+    private lateinit var budgetLimitRepository: BudgetLimitRepository
 
     @Before
     fun setUp() {
@@ -29,9 +30,13 @@ class CategoryRepositoryTest {
             .allowMainThreadQueries()
             .build()
 
+        // مقداردهی BudgetLimitRepository با استفاده از DAOهای دیتابیس داخلی
+        budgetLimitRepository = BudgetLimitRepositoryImpl(database.budgetLimitDao())
+
         repository = CategoryRepositoryImpl(
             categoryDao = database.categoryDao(),
-            transactionDao = database.transactionDao()
+            transactionDao = database.transactionDao(),
+            budgetLimitRepository = budgetLimitRepository
         )
         transactionRepository = TransactionRepositoryImpl(database.transactionDao())
         AppDatabase.clearInstance()
@@ -45,7 +50,7 @@ class CategoryRepositoryTest {
 
     @Test
     fun insertAndGetAllCategories() = runTest {
-        repository.insertCategory(CategoryEntity(title = "FOOD", iconEmoji = "🍕", isExpense = true))
+        repository.insertCategory(CategoryEntity(title = "FOOD", iconEmoji = "🏷️", isExpense = true))
         repository.insertCategory(CategoryEntity(title = "SALARY", iconEmoji = "💰", isExpense = false))
 
         val all = repository.getAllCategories().first()
@@ -69,7 +74,7 @@ class CategoryRepositoryTest {
 
     @Test
     fun updateCategory_alsoReassignsTransactions() = runTest {
-        val old = CategoryEntity(title = "OLD_FOOD", iconEmoji = "🍕", isExpense = true)
+        val old = CategoryEntity(title = "OLD_FOOD", iconEmoji = "🏷️", isExpense = true)
         repository.insertCategory(old)
 
         transactionRepository.insertTransaction(
@@ -80,12 +85,12 @@ class CategoryRepositoryTest {
         )
 
         val inserted = repository.getAllCategories().first().first { it.title == "OLD_FOOD" }
-        repository.updateCategory(inserted, newTitle = "FOOD", newEmoji = "🍔")
+        repository.updateCategory(inserted, newTitle = "FOOD", newEmoji = "🍏")
 
         val categories = repository.getAllCategories().first()
         assertThat(categories).hasSize(1)
         assertThat(categories[0].title).isEqualTo("FOOD")
-        assertThat(categories[0].iconEmoji).isEqualTo("🍔")
+        assertThat(categories[0].iconEmoji).isEqualTo("🍏")
 
         val txs = transactionRepository.getAllTransactions().first()
         assertThat(txs.all { it.category == "FOOD" }).isTrue()
@@ -93,7 +98,7 @@ class CategoryRepositoryTest {
 
     @Test
     fun deleteCategoryWithReassignment_movesTransactionsToUncategorized() = runTest {
-        val food = CategoryEntity(title = "FOOD", iconEmoji = "🍕", isExpense = true)
+        val food = CategoryEntity(title = "FOOD", iconEmoji = "🏷️", isExpense = true)
         repository.insertCategory(food)
 
         transactionRepository.insertTransaction(

@@ -103,6 +103,35 @@ class SavingGoalsViewModel(
         }
     }
 
+    // حذف موقت جهت پاک‌سازی سریع از لیست UI
+    fun softDelete(goal: SavingGoalEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.deleteGoal(goal)
+        }
+    }
+
+    // بازگردانی آیتم حذف‌شده در صورت زدن دکمه Undo
+    fun restore(goal: SavingGoalEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.insertGoal(goal)
+        }
+    }
+
+    // ثبت نهایی حذف و ارسال نوتیفیکیشن پس از اتمام تایمر ۵ ثانیه‌ای
+    fun commitDelete(goal: SavingGoalEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            NotificationHelper.send(
+                context = context,
+                type = "ERROR",
+                titleFa = "حذف هدف پس‌انداز",
+                titleEn = "Saving Goal Deleted",
+                descFa = "هدف «${goal.title}» با موفقیت حذف شد.",
+                descEn = "Saving goal \"${goal.title}\" was successfully deleted.",
+                tag = "GOAL_DELETE_${goal.id}_${System.currentTimeMillis()}"
+            )
+        }
+    }
+
     fun deleteGoal(goal: SavingGoalEntity) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.deleteGoal(goal)

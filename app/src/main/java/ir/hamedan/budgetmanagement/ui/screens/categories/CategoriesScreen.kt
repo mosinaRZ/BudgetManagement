@@ -1,7 +1,8 @@
 package ir.hamedan.budgetmanagement.ui.screens.categories
 
-import ir.hamedan.budgetmanagement.di.appViewModel
-
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,26 +35,29 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
-import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
-import ir.hamedan.budgetmanagement.utils.CategorySuggestionHelper
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
+import kotlinx.coroutines.launch
+import java.text.NumberFormat
+import java.util.*
+import kotlin.math.ceil
 
 @Composable
 fun CategoriesScreen(
     onBackClick: () -> Unit = {},
-    categoryViewModel: CategoriesViewModel = appViewModel(),
-    transactionViewModel: TransactionViewModel = appViewModel()
+    categoryViewModel: CategoriesViewModel = appViewModel()
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }
 
     val categoriesState by categoryViewModel.categories.collectAsState()
+    val transactionCounts by categoryViewModel.transactionCountsMap.collectAsState()
 
     var selectedTabState by remember { mutableIntStateOf(0) }
     val isExpenseTab = selectedTabState == 0
@@ -73,7 +78,7 @@ fun CategoriesScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
         ) {
-            // هدر اصلی
+            // ------------------ Top Bar ------------------
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -107,7 +112,7 @@ fun CategoriesScreen(
                 Spacer(modifier = Modifier.size(44.dp))
             }
 
-            // تب سوییچر (هزینه / درآمد)
+            // ------------------ Tab Switcher ------------------
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -150,7 +155,7 @@ fun CategoriesScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // دریافت و نمایش داده‌ها (کنترل حالت لودینگ null)
+            // ------------------ Category Grid Content ------------------
             if (categoriesState != null) {
                 val filteredCategories = categoriesState!!.filter { category ->
                     category.isExpense == isExpenseTab &&
@@ -229,12 +234,14 @@ fun CategoriesScreen(
                         columns = GridCells.Fixed(2),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+                        contentPadding = PaddingValues(bottom = 100.dp, start = 24.dp, end = 24.dp, top = 12.dp),
                         modifier = Modifier.weight(1f)
                     ) {
                         items(filteredCategories, key = { it.id }) { category ->
+                            val count = transactionCounts[category.title] ?: 0
                             CategoryItemCard(
                                 category = category,
+                                transactionCount = count,
                                 isPersian = isPersian,
                                 onEditClick = { categoryToEdit = category },
                                 onDeleteClick = { categoryToDelete = category }
@@ -245,7 +252,7 @@ fun CategoriesScreen(
             }
         }
 
-        // دکمه شناور ایجاد (FAB)
+        // ------------------ Floating Action Button (FAB) ------------------
         val currentCategories = categoriesState
         val hasCategories = currentCategories?.any { category ->
             category.isExpense == isExpenseTab &&
@@ -270,7 +277,22 @@ fun CategoriesScreen(
             }
         }
 
-        // دیالوگ افزودن / ویرایش
+        // ------------------ Countdown Snackbar Host ------------------
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp, start = 16.dp, end = 16.dp)
+        ) { snackbarData ->
+            CircularCountdownSnackbar(
+                snackbarData = snackbarData,
+                isPersian = isPersian,
+                totalSeconds = 5
+            )
+        }
+
+        // ------------------ Dialog Add / Edit ------------------
         if (showAddDialog || categoryToEdit != null) {
             AddOrEditCategoryDialog(
                 categoryToEdit = categoryToEdit,
@@ -292,7 +314,7 @@ fun CategoriesScreen(
             )
         }
 
-        // دیالوگ حذف با سبک دیزاین اختصاصی برنامه
+        // ------------------ Delete Dialog ------------------
         categoryToDelete?.let { category ->
             var transactionCount by remember { mutableIntStateOf(0) }
             var budgetLimitCount by remember { mutableIntStateOf(0) }
@@ -347,7 +369,6 @@ fun CategoriesScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
 
-                        // پیام تراکنش‌های وابسته (در صورت وجود)
                         val transactionMessage = if (transactionCount > 0) {
                             if (isPersian)
                                 "دسته‌بندی «$categoryName» دارای $transactionCount تراکنش ثبت‌شده است. با حذف آن، این تراکنش‌ها به دسته‌بندی «$uncategorizedName» منتقل می‌شوند."
@@ -355,7 +376,6 @@ fun CategoriesScreen(
                                 "'$categoryName' has $transactionCount active transactions. Deleting it will move these transactions to '$uncategorizedName'."
                         } else null
 
-                        // پیام هشدار محدودیت بودجه‌ی وابسته (در صورت وجود)
                         val budgetLimitMessage = if (budgetLimitCount > 0) {
                             if (isPersian)
                                 "برای دسته‌بندی «$categoryName» یک محدودیت خرج‌کرد (بودجه) هم تعریف شده است. با حذف این دسته‌بندی، آن محدودیت هم حذف خواهد شد."
@@ -398,8 +418,23 @@ fun CategoriesScreen(
 
                             Button(
                                 onClick = {
-                                    transactionViewModel.deleteCategoryAndMigrateTransactions(category)
+                                    val targetCategory = category
+                                    categoryViewModel.softDeleteCategory(targetCategory)
                                     categoryToDelete = null
+
+                                    coroutineScope.launch {
+                                        val result = snackbarHostState.showSnackbar(
+                                            message = if (isPersian) "دسته‌بندی «$categoryName» حذف شد" else "Category '$categoryName' deleted",
+                                            actionLabel = if (isPersian) "بازگردانی" else "Undo",
+                                            duration = SnackbarDuration.Indefinite
+                                        )
+
+                                        if (result == SnackbarResult.ActionPerformed) {
+                                            categoryViewModel.restoreCategory(targetCategory)
+                                        } else {
+                                            categoryViewModel.commitDeleteCategory(targetCategory)
+                                        }
+                                    }
                                 },
                                 modifier = Modifier
                                     .weight(1f)
@@ -422,18 +457,107 @@ fun CategoriesScreen(
 }
 
 @Composable
+private fun CircularCountdownSnackbar(
+    snackbarData: SnackbarData,
+    isPersian: Boolean,
+    totalSeconds: Int = 5
+) {
+    val animatedProgress = remember { Animatable(1f) }
+
+    LaunchedEffect(snackbarData) {
+        animatedProgress.snapTo(1f)
+        animatedProgress.animateTo(
+            targetValue = 0f,
+            animationSpec = tween(
+                durationMillis = totalSeconds * 1000,
+                easing = LinearEasing
+            )
+        )
+        snackbarData.dismiss()
+    }
+
+    val secondsLeft = ceil(animatedProgress.value * totalSeconds).toInt()
+
+    val numberFormatter = remember(isPersian) {
+        NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        tonalElevation = 6.dp,
+        shadowElevation = 8.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = snackbarData.visuals.message,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
+            )
+
+            snackbarData.visuals.actionLabel?.let { actionLabel ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.clickable { snackbarData.performAction() }
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            progress = { animatedProgress.value },
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                            strokeWidth = 3.dp
+                        )
+                        Text(
+                            text = numberFormatter.format(secondsLeft),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    Text(
+                        text = actionLabel,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun CategoryItemCard(
     category: CategoryEntity,
+    transactionCount: Int,
     isPersian: Boolean,
     onEditClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
     val cardShape = RoundedCornerShape(20.dp)
+    val numberFormatter = remember(isPersian) {
+        NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
+    }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(110.dp)
+            .height(130.dp)
             .background(
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                 cardShape
@@ -459,7 +583,6 @@ fun CategoryItemCard(
             ) {
                 Text(text = category.iconEmoji, fontSize = 28.sp)
 
-                // فقط در صورتی که دسته‌بندی سیستمی نباشد دکمه‌های ویرایش و حذف نمایش داده می‌شوند
                 if (!category.isSystem) {
                     Row {
                         IconButton(onClick = onEditClick, modifier = Modifier.size(28.dp)) {
@@ -481,7 +604,6 @@ fun CategoryItemCard(
                         }
                     }
                 } else {
-                    // آیکون قفل برای دسته‌بندی‌های سیستمی
                     Icon(
                         imageVector = Icons.Default.Lock,
                         contentDescription = "System Category",
@@ -491,12 +613,32 @@ fun CategoryItemCard(
                 }
             }
 
-            Text(
-                text = StringMapper.getCategoryName(category.title, isPersian),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = StringMapper.getCategoryName(category.title, isPersian),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ReceiptLong,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = if (isPersian) "${numberFormatter.format(transactionCount)} تراکنش" else "${numberFormatter.format(transactionCount)} txns",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }
@@ -519,7 +661,6 @@ fun AddOrEditCategoryDialog(
         "💅", "👕", "👟", "💡", "💧", "📶", "📱", "🎁", "🎓", "💎", "💳", "🏦"
     )
 
-    // متن تشخیص داده شده از میکروفون
     var detectedTitle by remember { mutableStateOf<String?>(null) }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -559,7 +700,6 @@ fun AddOrEditCategoryDialog(
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                // لیست انتخاب ایموجی
                 LazyRow(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -582,7 +722,6 @@ fun AddOrEditCategoryDialog(
                     }
                 }
 
-                // ورودی عنوان همراه با محدودیت ۲۰ کاراکتر + ویس
                 OutlinedTextField(
                     value = title,
                     onValueChange = { input ->
@@ -606,7 +745,6 @@ fun AddOrEditCategoryDialog(
                     }
                 )
 
-                // دکمه‌های تایید / انصراف
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
