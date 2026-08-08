@@ -21,16 +21,22 @@ class AnalyticsViewModel(
 
     val selectedTimeFilter = MutableStateFlow(TimeFilter.MONTHLY)
     val isPersianState = MutableStateFlow(true)
+    val isIncomeChartSelectedState = MutableStateFlow(false)
 
     fun updateLocale(isPersian: Boolean) {
         isPersianState.value = isPersian
     }
 
+    fun setIncomeChartSelected(isSelected: Boolean) {
+        isIncomeChartSelectedState.value = isSelected
+    }
+
     val uiState: StateFlow<AnalyticsUiState> = combine(
         repository.getAllTransactions(),
         selectedTimeFilter,
-        isPersianState
-    ) { allTransactions, timeFilter, isPersian ->
+        isPersianState,
+        isIncomeChartSelectedState
+    ) { allTransactions, timeFilter, isPersian, isIncomeChartSelected ->
 
         val hasAnyTransaction = allTransactions.isNotEmpty()
 
@@ -55,7 +61,7 @@ class AnalyticsViewModel(
             }
             .sortedByDescending { it.totalAmount }
 
-        val timeExpenses = calculateTimeExpenses(allTransactions, timeFilter, isPersian)
+        val timeExpenses = calculateTimeExpenses(allTransactions, timeFilter, isPersian, isIncomeChartSelected)
         val currentIndex = timeExpenses.indexOfFirst { it.isCurrent }.let { if (it == -1) 0 else it }
 
         val averageExpense = if (expensesList.isNotEmpty()) totalExpense / expensesList.size else 0.0
@@ -78,7 +84,8 @@ class AnalyticsViewModel(
             topExpenses = topExpenseEntities,
             averageExpense = averageExpense,
             trendPoints = trendPoints,
-            selectedPeriod = timeFilter.name
+            selectedPeriod = timeFilter.name,
+            isIncomeChartSelected = isIncomeChartSelected
         )
     }.stateIn(
         scope = viewModelScope,
@@ -136,9 +143,11 @@ class AnalyticsViewModel(
     private fun calculateTimeExpenses(
         allTransactions: List<TransactionEntity>,
         filter: TimeFilter,
-        isPersian: Boolean
+        isPersian: Boolean,
+        isIncomeChartSelected: Boolean
     ): List<TimeExpenseModel> {
-        val expenses = allTransactions.filter { it.type == "EXPENSE" }
+        val targetType = if (isIncomeChartSelected) "INCOME" else "EXPENSE"
+        val targetTransactions = allTransactions.filter { it.type == targetType }
         val now = LocalDate.now()
 
         if (isPersian) {
@@ -147,7 +156,7 @@ class AnalyticsViewModel(
             return when (filter) {
                 TimeFilter.DAILY -> {
                     val daysInMonth = DateUtils.getDaysInJalaliMonth(currentJalaliYear, currentJalaliMonth)
-                    val currentMonthExpenses = expenses.filter { tx ->
+                    val currentMonthExpenses = targetTransactions.filter { tx ->
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         val (jYear, jMonth, _) = DateUtils.toJalali(txDate)
                         jYear == currentJalaliYear && jMonth == currentJalaliMonth
@@ -173,7 +182,7 @@ class AnalyticsViewModel(
                 }
 
                 TimeFilter.WEEKLY -> {
-                    val currentMonthExpenses = expenses.filter { tx ->
+                    val currentMonthExpenses = targetTransactions.filter { tx ->
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         val (jYear, jMonth, _) = DateUtils.toJalali(txDate)
                         jYear == currentJalaliYear && jMonth == currentJalaliMonth
@@ -202,7 +211,7 @@ class AnalyticsViewModel(
                 }
 
                 TimeFilter.MONTHLY -> {
-                    val currentYearExpenses = expenses.filter { tx ->
+                    val currentYearExpenses = targetTransactions.filter { tx ->
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         val (jYear, _, _) = DateUtils.toJalali(txDate)
                         jYear == currentJalaliYear
@@ -228,7 +237,7 @@ class AnalyticsViewModel(
                 }
 
                 TimeFilter.ALL -> {
-                    val yearGrouped = expenses.groupBy { tx ->
+                    val yearGrouped = targetTransactions.groupBy { tx ->
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         val (jYear, _, _) = DateUtils.toJalali(txDate)
                         jYear
@@ -250,7 +259,6 @@ class AnalyticsViewModel(
                 }
             }
         } else {
-            // تقویم میلادی برای زبان انگلیسی
             val currentGYear = now.year
             val currentGMonth = now.monthValue
             val currentGDay = now.dayOfMonth
@@ -258,7 +266,7 @@ class AnalyticsViewModel(
             return when (filter) {
                 TimeFilter.DAILY -> {
                     val daysInMonth = now.lengthOfMonth()
-                    val currentMonthExpenses = expenses.filter { tx ->
+                    val currentMonthExpenses = targetTransactions.filter { tx ->
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         txDate.year == currentGYear && txDate.monthValue == currentGMonth
                     }
@@ -283,7 +291,7 @@ class AnalyticsViewModel(
                 }
 
                 TimeFilter.WEEKLY -> {
-                    val currentMonthExpenses = expenses.filter { tx ->
+                    val currentMonthExpenses = targetTransactions.filter { tx ->
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         txDate.year == currentGYear && txDate.monthValue == currentGMonth
                     }
@@ -311,7 +319,7 @@ class AnalyticsViewModel(
                 }
 
                 TimeFilter.MONTHLY -> {
-                    val currentYearExpenses = expenses.filter { tx ->
+                    val currentYearExpenses = targetTransactions.filter { tx ->
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         txDate.year == currentGYear
                     }
@@ -336,7 +344,7 @@ class AnalyticsViewModel(
                 }
 
                 TimeFilter.ALL -> {
-                    val yearGrouped = expenses.groupBy { tx ->
+                    val yearGrouped = targetTransactions.groupBy { tx ->
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         txDate.year
                     }

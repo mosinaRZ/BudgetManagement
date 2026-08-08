@@ -54,7 +54,6 @@ fun AnalyticsScreen(
     val context = LocalContext.current
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }
 
-    // همگام‌سازی وضعیت زبان با ویومدل
     LaunchedEffect(isPersian) {
         analyticsViewModel.updateLocale(isPersian)
     }
@@ -77,11 +76,13 @@ fun AnalyticsScreen(
         }
     }
 
+    // استفاده از Box به جای Scaffold برای جلوگیری از تداخل لایه‌ها
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
+        // پس‌زمینه کاستوم شما
         AuroraBackground()
 
         if (uiState.isLoading) {
@@ -97,6 +98,7 @@ fun AnalyticsScreen(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
             ) {
+                // فاصله برای تاپ‌بار شناور
                 Spacer(modifier = Modifier.statusBarsPadding().height(140.dp))
 
                 SmartInsightCard(
@@ -115,12 +117,15 @@ fun AnalyticsScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // چارت آپدیت شده همراه با قابلیت انتخاب درآمد/هزینه
                 ExpenseTimeBarChartCard(
                     isPersian = isPersian,
                     timeExpenses = uiState.timeExpenses,
                     currentIndex = uiState.currentTimeIndex,
                     selectedFilter = selectedFilter,
-                    currencyUnit = currencyUnit
+                    currencyUnit = currencyUnit,
+                    isIncome = uiState.isIncomeChartSelected,
+                    onIncomeChange = { analyticsViewModel.setIncomeChartSelected(it) }
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -145,6 +150,7 @@ fun AnalyticsScreen(
                 Spacer(modifier = Modifier.navigationBarsPadding().height(80.dp))
             }
 
+            // تاپ‌بار شناور بدون نیاز به Scaffold
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -164,6 +170,7 @@ fun AnalyticsScreen(
             }
         }
 
+        // نمایش اسنک‌بارها روی Box
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
@@ -197,6 +204,111 @@ private fun shimmerBrush(): Brush {
         colors = shimmerColors,
         start = Offset.Zero,
         end = Offset(x = translateAnimation.value, y = translateAnimation.value)
+    )
+}
+
+@Composable
+fun ChartTypeSwitch(
+    isIncome: Boolean,
+    isPersian: Boolean,
+    onIncomeChange: (Boolean) -> Unit
+) {
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        modifier = Modifier
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), shape)
+            .padding(3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ChartTypeTab(
+            text = if (isPersian) "هزینه" else "Expense",
+            isSelected = !isIncome,
+            onClick = { onIncomeChange(false) }
+        )
+        ChartTypeTab(
+            text = if (isPersian) "درآمد" else "Income",
+            isSelected = isIncome,
+            onClick = { onIncomeChange(true) }
+        )
+    }
+}
+
+@Composable
+fun ChartTypeTab(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val backgroundAlpha by animateFloatAsState(
+        targetValue = if (isSelected) 1f else 0f,
+        label = "SwitchBgAlpha"
+    )
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = backgroundAlpha * 0.15f))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        )
+    }
+}
+
+@Composable
+fun ExpenseTimeBarChartCard(
+    isPersian: Boolean,
+    timeExpenses: List<TimeExpenseModel>,
+    currentIndex: Int,
+    selectedFilter: TimeFilter,
+    currencyUnit: String,
+    isIncome: Boolean,
+    onIncomeChange: (Boolean) -> Unit
+) {
+    val entries = timeExpenses.mapIndexed { index, model ->
+        BarChartEntry(
+            label = if (isPersian) model.labelFa else model.labelEn,
+            value = model.totalAmount.toFloat(),
+            isCurrent = model.isCurrent || index == currentIndex
+        )
+    }
+
+    val typeTextFa = if (isIncome) "درآمدها" else "هزینه‌ها"
+    val typeTextEn = if (isIncome) "income" else "expense"
+
+    val title = if (isPersian) "مقایسه زمانی $typeTextFa" else "${if (isIncome) "Income" else "Expense"} Time Comparison"
+
+    val subtitle = when (selectedFilter) {
+        TimeFilter.DAILY -> if (isPersian) "توزیع $typeTextFa به تفکیک روزهای ماه جاری" else "Daily $typeTextEn breakdown for current month"
+        TimeFilter.WEEKLY -> if (isPersian) "توزیع $typeTextFa در هفته‌های ماه جاری" else "Weekly $typeTextEn breakdown for current month"
+        TimeFilter.MONTHLY -> if (isPersian) "توزیع $typeTextFa در ماه‌های سال جاری" else "Monthly $typeTextEn breakdown for current year"
+        TimeFilter.ALL -> if (isPersian) "توزیع $typeTextFa به تفکیک سال" else "Yearly $typeTextEn breakdown"
+    }
+
+    val emptyText = if (isPersian) "داده‌ای برای نمایش در این دوره وجود ندارد" else "No $typeTextEn data for this period"
+
+    ColumnBarChartCard(
+        title = title,
+        subtitle = subtitle,
+        entries = entries,
+        emptyStateText = emptyText,
+        averageLabel = if (isPersian) "میانگین" else "Avg",
+        yAxisLabel = if (isPersian) "مبلغ ($currencyUnit)" else "Amount ($currencyUnit)",
+        xAxisLabel = if (isPersian) "زمان" else "Time",
+        actionContent = {
+            ChartTypeSwitch(
+                isIncome = isIncome,
+                isPersian = isPersian,
+                onIncomeChange = onIncomeChange
+            )
+        }
     )
 }
 
@@ -710,59 +822,6 @@ private fun BalanceTrendChartCard(
             }
         }
     }
-}
-
-@Composable
-private fun ExpenseTimeBarChartCard(
-    isPersian: Boolean,
-    timeExpenses: List<TimeExpenseModel>,
-    currentIndex: Int,
-    selectedFilter: TimeFilter,
-    currencyUnit: String
-) {
-    val numberFormatter = remember(isPersian) {
-        NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
-    }
-    val currencyMultiplier = if (currencyUnit == "IRR") 10f else 1f
-    val barThemeColor = MaterialTheme.colorScheme.primary
-
-    val barListState = rememberLazyListState()
-
-    LaunchedEffect(timeExpenses, currentIndex) {
-        if (timeExpenses.isNotEmpty() && currentIndex in timeExpenses.indices) {
-            barListState.animateScrollToItem(currentIndex)
-        }
-    }
-
-    val entries = remember(timeExpenses, currencyUnit, isPersian, barThemeColor) {
-        timeExpenses.map { item ->
-            BarChartEntry(
-                label = if (isPersian) item.labelFa else item.labelEn,
-                value = (item.totalAmount.toFloat() * currencyMultiplier),
-                color = barThemeColor,
-                isHighlighted = item.isCurrent
-            )
-        }
-    }
-
-    val subtitle = when (selectedFilter) {
-        TimeFilter.DAILY -> if (isPersian) "توزیع هزینه‌ها به تفکیک روزهای ماه جاری" else "Daily breakdown for current month"
-        TimeFilter.WEEKLY -> if (isPersian) "توزیع هزینه‌ها در هفته‌های ماه جاری" else "Weekly breakdown for current month"
-        TimeFilter.MONTHLY -> if (isPersian) "توزیع هزینه‌ها در ماه‌های سال جاری" else "Monthly breakdown for current year"
-        TimeFilter.ALL -> if (isPersian) "توزیع هزینه‌ها به تفکیک سال" else "Yearly breakdown"
-    }
-
-    ColumnBarChartCard(
-        title = if (isPersian) "مقایسه زمانی هزینه‌ها" else "Time Comparison",
-        subtitle = subtitle,
-        entries = entries,
-        emptyStateText = if (isPersian) "داده‌ای برای نمایش در این دوره وجود ندارد" else "No expense data for this period",
-        averageLabel = if (isPersian) "میانگین" else "Average",
-        yAxisLabel = if (isPersian) "مبلغ" else "Amount",
-        xAxisLabel = if (isPersian) "زمان" else "Time",
-        listState = barListState,
-        valueFormatter = { value -> numberFormatter.format(value.toLong()) }
-    )
 }
 
 @Composable

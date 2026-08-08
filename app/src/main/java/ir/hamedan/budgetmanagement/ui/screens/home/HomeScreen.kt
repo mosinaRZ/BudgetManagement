@@ -740,18 +740,18 @@ fun HomeScreen(
                     }
                 }
 
-                // آخرین تراکنش‌ها
-                item {
-                    Text(
-                        text = if (isPersian) "آخرین تراکنش‌ها" else "Recent Transactions",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
-
+                // آخرین تراکنش‌ها (اگر هیچ تراکنشی ثبت نشده باشد، کل این بخش نمایش داده نمی‌شود)
                 if (recentTransactions.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = if (isPersian) "آخرین تراکنش‌ها" else "Recent Transactions",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+
                     items(recentTransactions, key = { it.id }) { transaction ->
                         val emoji = getCategoryEmoji(transaction.category, categoriesList)
                         val isExpense = transaction.type == "EXPENSE"

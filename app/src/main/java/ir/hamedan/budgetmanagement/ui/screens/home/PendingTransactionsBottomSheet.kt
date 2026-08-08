@@ -2,13 +2,14 @@ package ir.hamedan.budgetmanagement.ui.screens.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -29,11 +30,11 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.PendingTransactionEntity
+import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.utils.StringMapper
+import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -279,7 +280,7 @@ fun PendingTransactionsBottomSheet(
     }
 
     selectedPendingForConfirm?.let { pending ->
-        PendingConfirmDialog(
+        PendingConfirmBottomSheet(
             pending = pending,
             categories = categories,
             isPersian = isPersian,
@@ -294,9 +295,12 @@ fun PendingTransactionsBottomSheet(
     }
 }
 
+// -----------------------------------------------------------------------------
+// باتم‌شیت تکمیل و ثبت تراکنش (هم‌استایل با باتم‌شیت ثبت تراکنش در AddScreen)
+// -----------------------------------------------------------------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PendingConfirmDialog(
+private fun PendingConfirmBottomSheet(
     pending: PendingTransactionEntity,
     categories: List<CategoryEntity>,
     isPersian: Boolean,
@@ -305,371 +309,402 @@ private fun PendingConfirmDialog(
     onCategoriesClick: () -> Unit = {},
     onConfirmFinal: (title: String, amount: Double, category: String, isExpense: Boolean, note: String) -> Unit
 ) {
-    val initialAmount = if (currencyUnit == "IRR") (pending.amount * 10).toLong().toString() else pending.amount.toLong().toString()
+    val scope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    var title by remember { mutableStateOf(pending.suggestedTitle.ifEmpty { if (isPersian) "تراکنش پیامکی" else "SMS Transaction" }) }
-    var amountText by remember { mutableStateOf(initialAmount) }
-    var noteText by remember { mutableStateOf("") }
-    var isExpense by remember { mutableStateOf(pending.type == "EXPENSE") }
-    var selectedCategoryKey by remember { mutableStateOf(pending.suggestedCategory) }
-    var isCategoryDropdownExpanded by remember { mutableStateOf(false) }
+    val initialAmount = remember(pending.id, currencyUnit) {
+        if (currencyUnit == "IRR") (pending.amount * 10).toLong().toString() else pending.amount.toLong().toString()
+    }
 
-    // وضعیت کلیک روی دکمه ثبت (برای کنترل زمان نمایش ارورها)
-    var isSubmitted by remember { mutableStateOf(false) }
+    // فیلدهای فرم
+    var transactionTitle by remember(pending.id) {
+        mutableStateOf(pending.suggestedTitle.ifEmpty { if (isPersian) "تراکنش پیامکی" else "SMS Transaction" })
+    }
+    var transactionAmount by remember(pending.id) { mutableStateOf(initialAmount) }
+    var selectedCategoryKey by remember(pending.id) { mutableStateOf(pending.suggestedCategory) }
+    var isExpense by remember(pending.id) { mutableStateOf(pending.type == "EXPENSE") }
+    var transactionNote by remember(pending.id) { mutableStateOf("") }
 
-    // جستجوی دسته‌بندی
+    val maxDigitsLength = 12 // حداکثر ۱۲ رقم برای مبلغ
+
+    // یافتن دسته‌بندی انتخاب‌شده برای استخراج ایموجی
     val selectedCategoryObj = categories.find { it.title.equals(selectedCategoryKey, ignoreCase = true) }
 
-    val maxDigitsLength = 12
+    // وضعیت خطای اعتبارسنجی فیلدها
+    var titleError by remember(pending.id) { mutableStateOf(false) }
+    var amountError by remember(pending.id) { mutableStateOf(false) }
+    var categoryError by remember(pending.id) { mutableStateOf(false) }
 
-    // بررسی صحت فیلدها
-    val isTitleValid = title.trim().isNotEmpty()
-    val parsedAmount = amountText.toDoubleOrNull() ?: 0.0
-    val isAmountValid = amountText.isNotEmpty() && parsedAmount > 0
-    val isCategoryValid = selectedCategoryKey.isNotEmpty()
+    // وضعیت کنترل منوی کشویی دسته‌بندی
+    var isCategoryDropdownExpanded by remember { mutableStateOf(false) }
 
-    // نمایش خطاها فقط پس از تلاش کاربر برای ثبت فرم
-    val showTitleError = isSubmitted && !isTitleValid
-    val showAmountError = isSubmitted && !isAmountValid
-    val showCategoryError = isSubmitted && !isCategoryValid
-
-    Dialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        scrimColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .padding(vertical = 12.dp)
+                    .width(48.dp)
+                    .height(4.dp)
+                    .background(
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                        RoundedCornerShape(2.dp)
+                    )
+            )
+        }
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .background(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
-                    shape = RoundedCornerShape(28.dp)
-                )
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                    shape = RoundedCornerShape(28.dp)
-                )
-                .padding(20.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState())
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+            Text(
+                text = if (isPersian) "تکمیل و ثبت تراکنش" else "Confirm Transaction",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // انتخاب نوع تراکنش (هزینه / درآمد)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        RoundedCornerShape(16.dp)
+                    )
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                        RoundedCornerShape(16.dp)
+                    )
+                    .padding(4.dp)
             ) {
-                // هدر
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Button(
+                    onClick = {
+                        isExpense = true
+                        selectedCategoryKey = ""
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isExpense) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = if (isExpense) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text(
-                        text = if (isPersian) "تکمیل و ثبت تراکنش" else "Confirm Transaction",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(if (isPersian) "هزینه" else "Expense", fontWeight = FontWeight.Bold)
                 }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
-
-                // تغییر نوع تراکنش (هزینه / درآمد)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp)
-                        .background(
-                            MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                            RoundedCornerShape(14.dp)
-                        )
-                        .padding(4.dp)
+                Button(
+                    onClick = {
+                        isExpense = false
+                        selectedCategoryKey = ""
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (!isExpense) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = if (!isExpense) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (isExpense) MaterialTheme.colorScheme.error.copy(alpha = 0.85f) else Color.Transparent)
-                            .clickable {
-                                isExpense = true
-                                selectedCategoryKey = ""
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (isPersian) "برداشتی (هزینه)" else "Expense",
-                            color = if (isExpense) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (!isExpense) MaterialTheme.colorScheme.primary.copy(alpha = 0.85f) else Color.Transparent)
-                            .clickable {
-                                isExpense = false
-                                selectedCategoryKey = ""
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (isPersian) "واریزی (درآمد)" else "Income",
-                            color = if (!isExpense) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    Text(if (isPersian) "درآمد" else "Income", fontWeight = FontWeight.Bold)
                 }
+            }
 
-                // عنوان
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { input ->
-                        if (input.length <= 40) {
-                            title = input
-                        }
-                    },
-                    label = { Text(if (isPersian) "عنوان تراکنش *" else "Title *") },
-                    isError = showTitleError,
-                    singleLine = true,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                    supportingText = {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            if (showTitleError) {
-                                Text(
-                                    text = if (isPersian) "عنوان نمی‌تواند خالی باشد" else "Title is required",
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            } else {
-                                Spacer(modifier = Modifier.weight(1f))
-                            }
-                            Text(
-                                text = "${title.length}/40",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // فیلد عنوان (محدود به ۴۰ کاراکتر) + ویس
+            OutlinedTextField(
+                value = transactionTitle,
+                onValueChange = { input ->
+                    if (input.length <= 40) {
+                        transactionTitle = input
+                        if (titleError) titleError = false
                     }
-                )
-
-                // مبلغ
-                OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { input ->
-                        val digitsOnly = input.filter { it.isDigit() }
-                        if (digitsOnly.length <= maxDigitsLength) {
-                            amountText = digitsOnly
-                        }
-                    },
-                    label = {
-                        val unit = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else currencyUnit
-                        Text("${if (isPersian) "مبلغ *" else "Amount *"} ($unit)")
-                    },
-                    isError = showAmountError,
-                    singleLine = true,
-                    visualTransformation = ThousandsSeparatorTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                    supportingText = if (showAmountError) {
-                        {
-                            Text(
-                                text = if (isPersian) "مبلغ معتبری وارد کنید" else "Enter a valid amount",
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        }
-                    } else null
-                )
-
-                // منوی کشویی انتخاب دسته‌بندی
-                ExposedDropdownMenuBox(
-                    expanded = isCategoryDropdownExpanded,
-                    onExpandedChange = { isCategoryDropdownExpanded = !isCategoryDropdownExpanded }
-                ) {
-                    val categoryDisplayText = if (selectedCategoryKey.isEmpty()) {
-                        if (isPersian) "لطفاً دسته‌بندی را انتخاب کنید" else "Select a category"
-                    } else {
-                        StringMapper.getCategoryName(selectedCategoryKey, isPersian)
-                    }
-
-                    OutlinedTextField(
-                        value = categoryDisplayText,
-                        onValueChange = {},
-                        readOnly = true,
-                        isError = showCategoryError,
-                        label = { Text(if (isPersian) "دسته‌بندی *" else "Category *") },
-                        leadingIcon = {
-                            if (selectedCategoryObj != null) {
-                                Text(
-                                    text = selectedCategoryObj.iconEmoji,
-                                    fontSize = 20.sp,
-                                    modifier = Modifier.padding(horizontal = 4.dp)
-                                )
-                            }
+                },
+                label = { Text(if (isPersian) "عنوان تراکنش" else "Title") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                singleLine = true,
+                isError = titleError,
+                trailingIcon = {
+                    VoiceInputButton(
+                        onResult = { spoken ->
+                            transactionTitle = spoken.take(40)
+                            if (titleError) titleError = false
                         },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isCategoryDropdownExpanded) },
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(),
-                        supportingText = if (showCategoryError) {
-                            {
-                                Text(
-                                    text = if (isPersian) "انتخاب دسته‌بندی الزامی است" else "Category is required",
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
-                        } else null
+                        language = if (isPersian) "fa-IR" else "en-US"
                     )
-
-                    ExposedDropdownMenu(
-                        expanded = isCategoryDropdownExpanded,
-                        onDismissRequest = { isCategoryDropdownExpanded = false },
-                        modifier = Modifier
-                            .heightIn(max = 320.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                },
+                supportingText = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        val filteredCategories = categories.filter { it.isExpense == isExpense }
-                        if (filteredCategories.isEmpty()) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = if (isPersian) "دسته‌بندی یافت نشد" else "No categories found",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                },
-                                onClick = { isCategoryDropdownExpanded = false }
-                            )
-                        } else {
-                            filteredCategories.forEach { cat ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            Text(text = cat.iconEmoji, fontSize = 22.sp)
-                                            Text(
-                                                text = StringMapper.getCategoryName(cat.title, isPersian),
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                        }
-                                    },
-                                    onClick = {
-                                        selectedCategoryKey = cat.title
-                                        isCategoryDropdownExpanded = false
-                                    },
-                                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                                )
-                            }
-                        }
-
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 8.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        Text(
+                            text = if (titleError) (if (isPersian) "عنوان تراکنش نمی‌تواند خالی باشد" else "Title cannot be empty") else "",
+                            color = MaterialTheme.colorScheme.error
                         )
+                        Text(
+                            text = "${transactionTitle.length}/40",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            )
 
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // فیلد مبلغ همراه با VisualTransformation تفکیک ۳ رقمی (بدون ویس)
+            val amountLabel = if (isPersian) {
+                if (currencyUnit == "IRR") "مبلغ (ریال)" else "مبلغ (تومان)"
+            } else {
+                if (currencyUnit == "IRR") "Amount (Rial)" else "Amount (Toman)"
+            }
+
+            OutlinedTextField(
+                value = transactionAmount,
+                onValueChange = { input ->
+                    val digitsOnly = input.filter { it.isDigit() }
+                    if (digitsOnly.length <= maxDigitsLength) {
+                        transactionAmount = digitsOnly
+                        if (amountError) amountError = false
+                    }
+                },
+                label = { Text(amountLabel) },
+                singleLine = true,
+                visualTransformation = ThousandsSeparatorTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                isError = amountError,
+                supportingText = {
+                    if (amountError) {
+                        Text(
+                            text = if (isPersian) "مبلغ معتبر (بزرگتر از ۰) وارد کنید" else "Enter a valid amount (> 0)",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // منوی کشویی انتخاب دسته‌بندی
+            ExposedDropdownMenuBox(
+                expanded = isCategoryDropdownExpanded,
+                onExpandedChange = { isCategoryDropdownExpanded = !isCategoryDropdownExpanded }
+            ) {
+                OutlinedTextField(
+                    value = StringMapper.getCategoryName(selectedCategoryKey, isPersian),
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text(if (isPersian) "انتخاب دسته‌بندی" else "Select Category") },
+                    leadingIcon = {
+                        if (selectedCategoryObj != null) {
+                            Text(
+                                text = selectedCategoryObj.iconEmoji,
+                                fontSize = 20.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            )
+                        }
+                    },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isCategoryDropdownExpanded) },
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    isError = categoryError,
+                    supportingText = {
+                        if (categoryError) {
+                            Text(
+                                text = if (isPersian) "لطفاً یک دسته‌بندی انتخاب کنید" else "Please select a category",
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                )
+
+                ExposedDropdownMenu(
+                    expanded = isCategoryDropdownExpanded,
+                    onDismissRequest = { isCategoryDropdownExpanded = false },
+                    modifier = Modifier
+                        .heightIn(max = 280.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    val filteredCategories = categories.filter { it.isExpense == isExpense }
+
+                    if (filteredCategories.isEmpty()) {
                         DropdownMenuItem(
                             text = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Text(
-                                        text = if (isPersian) "مدیریت دسته‌بندی‌ها..." else "Manage Categories...",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
+                                Text(
+                                    text = if (isPersian) "دسته‌بندی یافت نشد" else "No categories found",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             },
-                            onClick = {
-                                isCategoryDropdownExpanded = false
-                                onDismiss()
-                                onCategoriesClick()
-                            },
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+                            onClick = { isCategoryDropdownExpanded = false }
                         )
-                    }
-                }
-
-                // یادداشت (اختیاری - بدون اعتبارسنجی)
-                OutlinedTextField(
-                    value = noteText,
-                    onValueChange = { input ->
-                        if (input.length <= 120) {
-                            noteText = input
-                        }
-                    },
-                    label = { Text(if (isPersian) "یادداشت (اختیاری)" else "Note (Optional)") },
-                    shape = RoundedCornerShape(14.dp),
-                    maxLines = 3,
-                    modifier = Modifier.fillMaxWidth(),
-                    supportingText = {
-                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                            Text(
-                                text = "${noteText.length}/120",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        filteredCategories.forEach { category ->
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Text(text = category.iconEmoji, fontSize = 22.sp)
+                                        Text(
+                                            text = StringMapper.getCategoryName(category.title, isPersian),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    selectedCategoryKey = category.title
+                                    isCategoryDropdownExpanded = false
+                                    categoryError = false
+                                },
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                             )
                         }
                     }
-                )
 
-                // دکمه‌ها
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(if (isPersian) "انصراف" else "Cancel")
-                    }
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
 
-                    Button(
-                        onClick = {
-                            isSubmitted = true // کلیک کاربر روی تایید ثبت شد
-
-                            // اگر همه فیلدها معتبر باشند ثبت نهایی انجام می‌شود
-                            if (isTitleValid && isAmountValid && isCategoryValid) {
-                                val finalAmount = if (currencyUnit == "IRR") parsedAmount / 10 else parsedAmount
-                                onConfirmFinal(title.trim(), finalAmount, selectedCategoryKey, isExpense, noteText.trim())
+                    DropdownMenuItem(
+                        text = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = if (isPersian) "مدیریت دسته‌بندی‌ها..." else "Manage Categories...",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         },
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(if (isPersian) "تایید نهایی" else "Save")
+                        onClick = {
+                            isCategoryDropdownExpanded = false
+                            onDismiss()
+                            onCategoriesClick()
+                        },
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // فیلد یادداشت (محدود به ۱۲۰ کاراکتر) + ویس
+            OutlinedTextField(
+                value = transactionNote,
+                onValueChange = { input ->
+                    if (input.length <= 120) {
+                        transactionNote = input
                     }
+                },
+                label = { Text(if (isPersian) "یادداشت (اختیاری)" else "Note (Optional)") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                maxLines = 3,
+                trailingIcon = {
+                    VoiceInputButton(
+                        onResult = { spoken ->
+                            transactionNote = spoken.take(120)
+                        },
+                        language = if (isPersian) "fa-IR" else "en-US"
+                    )
+                },
+                supportingText = {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                        Text(
+                            text = "${transactionNote.length}/120",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // دکمه‌های انصراف و ذخیره
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                        }
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(54.dp),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text(
+                        text = if (isPersian) "انصراف" else "Cancel",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        val parsedAmount = transactionAmount.toDoubleOrNull() ?: 0.0
+                        val amount = if (currencyUnit == "IRR") parsedAmount / 10.0 else parsedAmount
+
+                        titleError = transactionTitle.isBlank()
+                        amountError = parsedAmount <= 0.0
+                        categoryError = selectedCategoryKey.isBlank()
+
+                        val isFormValid = !titleError && !amountError && !categoryError
+
+                        if (isFormValid) {
+                            onConfirmFinal(
+                                transactionTitle.trim(),
+                                amount,
+                                selectedCategoryKey,
+                                isExpense,
+                                transactionNote.trim()
+                            )
+                        }
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(54.dp),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text(
+                        text = if (isPersian) "ذخیره تراکنش" else "Save Transaction",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
