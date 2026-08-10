@@ -50,7 +50,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
-import java.util.Calendar
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import java.util.Date
 import java.util.Locale
 
@@ -1570,19 +1573,30 @@ private fun TransactionsTopBar(
 }
 
 private fun getRelativeDateHeader(timestamp: Long, isPersian: Boolean): String {
-    val now = Calendar.getInstance()
-    val time = Calendar.getInstance().apply { timeInMillis = timestamp }
+    val zone = ZoneId.systemDefault()
+    val today = LocalDate.now(zone)
+    val date = Instant.ofEpochMilli(timestamp).atZone(zone).toLocalDate()
 
-    val diffDays = ((now.timeInMillis - time.timeInMillis) / (24 * 60 * 60 * 1000)).toInt()
+    // Calendar-day difference, not raw millis — otherwise a 30-hour gap that
+    // crosses midnight twice gets miscounted relative to "Today"/"Yesterday".
+    val diffDays = ChronoUnit.DAYS.between(date, today)
+
+    val isSameMonth = if (isPersian) {
+        // Persian months don't line up with Gregorian months, so this has to
+        // go through the app's own Jalali conversion, not Calendar.MONTH.
+        val (todayYear, todayMonth, _) = DateUtils.toJalali(today)
+        val (dateYear, dateMonth, _) = DateUtils.toJalali(date)
+        todayYear == dateYear && todayMonth == dateMonth
+    } else {
+        today.year == date.year && today.monthValue == date.monthValue
+    }
 
     return when {
-        now.get(Calendar.YEAR) == time.get(Calendar.YEAR) &&
-                now.get(Calendar.DAY_OF_YEAR) == time.get(Calendar.DAY_OF_YEAR) -> {
+        diffDays == 0L -> {
             if (isPersian) "امروز" else "Today"
         }
 
-        now.get(Calendar.YEAR) == time.get(Calendar.YEAR) &&
-                now.get(Calendar.DAY_OF_YEAR) - time.get(Calendar.DAY_OF_YEAR) == 1 -> {
+        diffDays == 1L -> {
             if (isPersian) "دیروز" else "Yesterday"
         }
 
@@ -1590,13 +1604,7 @@ private fun getRelativeDateHeader(timestamp: Long, isPersian: Boolean): String {
             if (isPersian) "$diffDays روز پیش" else "$diffDays days ago"
         }
 
-        now.get(Calendar.YEAR) == time.get(Calendar.YEAR) &&
-                now.get(Calendar.WEEK_OF_YEAR) == time.get(Calendar.WEEK_OF_YEAR) -> {
-            if (isPersian) "این هفته" else "This week"
-        }
-
-        now.get(Calendar.YEAR) == time.get(Calendar.YEAR) &&
-                now.get(Calendar.MONTH) == time.get(Calendar.MONTH) -> {
+        isSameMonth -> {
             if (isPersian) "این ماه" else "This month"
         }
 
