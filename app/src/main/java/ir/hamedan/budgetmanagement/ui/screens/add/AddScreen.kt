@@ -45,6 +45,7 @@ import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.SwipeToConfirmButton
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.utils.CategorySuggestionHelper
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
@@ -679,9 +680,11 @@ fun AddScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // دکمه ذخیره
-                    Button(
-                        onClick = {
+                    // دکمه ذخیره به‌صورت کشیدنی
+                    SwipeToConfirmButton(
+                        text = if (isPersian) "برای ذخیره بکشید" else "Swipe to Save",
+                        resetTrigger = transactionTitle.isEmpty() && transactionAmount.isEmpty(), // یا هر کلید دیگه‌ای که با ریست فرم عوض میشه
+                        onConfirm = {
                             val parsedAmount = transactionAmount.toDoubleOrNull() ?: 0.0
                             val amount = if (currencyUnit == "IRR") parsedAmount / 10.0 else parsedAmount
 
@@ -707,7 +710,6 @@ fun AddScreen(
                                     sheetState.hide()
                                     showTransactionBottomSheet = false
 
-                                    // ریست فیلدها
                                     transactionTitle = ""
                                     transactionAmount = ""
                                     selectedCategoryKey = ""
@@ -717,17 +719,8 @@ fun AddScreen(
                                 }
                             }
                         },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(54.dp),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Text(
-                            text = if (isPersian) "ذخیره تراکنش" else "Save Transaction",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }
