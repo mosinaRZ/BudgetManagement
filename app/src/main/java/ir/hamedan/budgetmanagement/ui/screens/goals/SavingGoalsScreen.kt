@@ -2,12 +2,14 @@ package ir.hamedan.budgetmanagement.ui.screens.goals
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -29,6 +31,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -48,6 +52,7 @@ import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.StatusBarAuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import kotlinx.coroutines.launch
@@ -151,29 +156,187 @@ fun SavingGoalsScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        AuroraBackground()
+        StatusBarAuroraBackground()
+        // ------------------ Main Content List ------------------
+        if (goalsListState != null) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                // تنظیم فاصله افقی برای کل لیست و آیتم‌ها
+                contentPadding = PaddingValues(
+                    start = 20.dp,
+                    end = 20.dp,
+                    // ایجاد فضای خالی در بالا برای اینکه محتوا زیر تاپ‌بار پنهان نشود
+                    top = 120.dp,
+                    bottom = 120.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // کارت خلاصه عملکرد کلی
+                item {
+                    val summaryShape = RoundedCornerShape(24.dp)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), summaryShape)
+                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), summaryShape)
+                            .clip(summaryShape)
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.goalbanner),
+                            contentDescription = null,
+                            modifier = Modifier.matchParentSize(),
+                            contentScale = ContentScale.Crop,
+                            alpha = 0.12f
+                        )
 
-        Column(
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp)
+                        ) {
+                            Text(
+                                text = if (isPersian) "مجموع ذخیره شده" else "Total Savings",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(8.dp))
+
+                            val displayedSaved = if (currencyUnit == "IRR") totalSaved * 10 else totalSaved
+                            val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "Toman")
+
+                            Text(
+                                text = "${numberFormatter.format(displayedSaved.toLong())} $currencyText",
+                                style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+
+                            Spacer(Modifier.height(12.dp))
+
+                            val overallProgress = if (totalTarget > 0) (totalSaved / totalTarget).toFloat().coerceIn(0f, 1f) else 0f
+                            val animatedOverallProgress by animateFloatAsState(targetValue = overallProgress, label = "OverallProgress")
+
+                            LinearProgressIndicator(
+                                progress = { animatedOverallProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(10.dp)
+                                    .clip(CircleShape),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            )
+
+                            Spacer(Modifier.height(8.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = if (isPersian) "هدف کلی:" else "Total Target:",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                val displayedTarget = if (currencyUnit == "IRR") totalTarget * 10 else totalTarget
+                                Text(
+                                    text = "${numberFormatter.format(displayedTarget.toLong())} $currencyText",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // حالت خالی
+                if (goalsList.isEmpty()) {
+                    item {
+                        val emptyCardShape = RoundedCornerShape(24.dp)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 20.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), emptyCardShape)
+                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), emptyCardShape)
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(text = "🪙", fontSize = 56.sp)
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = if (isPersian) "هنوز هیچ قلکی نساختی!" else "No Savings Goals Yet!",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = if (isPersian) "برای پس‌انداز هدفمند (خرید ماشین، سفر، لپ‌تاپ و...) همین الان اولین قلکت رو بساز."
+                                    else
+                                        "Start saving for your dreams (car, travel, tech) by creating your first goal.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(20.dp))
+                                Button(
+                                    onClick = { showAddDialog = true },
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (isPersian) "ساخت اولین قلک" else "Create First Goal",
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    items(goalsList, key = { it.id }) { goal ->
+                        SavingGoalItemCard(
+                            goal = goal,
+                            isPersian = isPersian,
+                            currencyUnit = currencyUnit,
+                            numberFormatter = numberFormatter,
+                            onDepositClick = { goalForDeposit = goal },
+                            onWithdrawClick = { goalForWithdraw = goal },
+                            onEditClick = { goalToEdit = goal },
+                            onDeleteClick = { goalToDelete = goal }
+                        )
+                    }
+                }
+            }
+        }
+
+        // ------------------ Floating Header ------------------
+        Row(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
                 .statusBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // هدر صفحه
-            Row(
+            val shape = RoundedCornerShape(24.dp)
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .size(56.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), shape)
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape)
+                    .clip(shape),
+                contentAlignment = Alignment.Center
             ) {
                 IconButton(
                     onClick = onBackClick,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            CircleShape
-                        )
+                    modifier = Modifier.size(44.dp)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -181,175 +344,26 @@ fun SavingGoalsScreen(
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
+            }
 
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .size(56.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), shape)
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape)
+                    .clip(shape)
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
                     text = if (isPersian) "مدیریت قلک‌ها" else "Savings Goals",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
-
-                Spacer(modifier = Modifier.size(44.dp))
-            }
-
-            if (goalsListState != null) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(bottom = 90.dp)
-                ) {
-                    // کارت خلاصه عملکرد کلی
-                    item {
-                        val summaryShape = RoundedCornerShape(24.dp)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), summaryShape)
-                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), summaryShape)
-                                .clip(summaryShape)
-                        ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.goalbanner),
-                                contentDescription = null,
-                                modifier = Modifier.matchParentSize(),
-                                contentScale = ContentScale.Crop,
-                                alpha = 0.12f
-                            )
-
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(20.dp)
-                            ) {
-                                Text(
-                                    text = if (isPersian) "مجموع ذخیره شده" else "Total Savings",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(Modifier.height(8.dp))
-
-                                val displayedSaved = if (currencyUnit == "IRR") totalSaved * 10 else totalSaved
-                                val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "Toman")
-
-                                Text(
-                                    text = "${numberFormatter.format(displayedSaved.toLong())} $currencyText",
-                                    style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-
-                                Spacer(Modifier.height(12.dp))
-
-                                val overallProgress = if (totalTarget > 0) (totalSaved / totalTarget).toFloat().coerceIn(0f, 1f) else 0f
-                                val animatedOverallProgress by animateFloatAsState(targetValue = overallProgress, label = "OverallProgress")
-
-                                LinearProgressIndicator(
-                                    progress = { animatedOverallProgress },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(10.dp)
-                                        .clip(CircleShape),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                )
-
-                                Spacer(Modifier.height(8.dp))
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = if (isPersian) "هدف کلی:" else "Total Target:",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    val displayedTarget = if (currencyUnit == "IRR") totalTarget * 10 else totalTarget
-                                    Text(
-                                        text = "${numberFormatter.format(displayedTarget.toLong())} $currencyText",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // حالت خالی
-                    if (goalsList.isEmpty()) {
-                        item {
-                            val emptyCardShape = RoundedCornerShape(24.dp)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 20.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), emptyCardShape)
-                                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), emptyCardShape)
-                                    .padding(32.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    Text(text = "🪙", fontSize = 56.sp)
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text(
-                                        text = if (isPersian) "هنوز هیچ قلکی نساختی!" else "No Savings Goals Yet!",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = if (isPersian) "برای پس‌انداز هدفمند (خرید ماشین، سفر، لپ‌تاپ و...) همین الان اولین قلکت رو بساز."
-                                        else "Start saving for your dreams (car, travel, tech) by creating your first goal.",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center
-                                    )
-                                    Spacer(modifier = Modifier.height(20.dp))
-                                    Button(
-                                        onClick = { showAddDialog = true },
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                                    ) {
-                                        Icon(Icons.Default.Add, contentDescription = null)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = if (isPersian) "ساخت اولین قلک" else "Create First Goal",
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        item {
-                            Text(
-                                text = if (isPersian) "قلک‌های شما" else "Your Goals",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                        }
-
-                        items(goalsList, key = { it.id }) { goal ->
-                            SavingGoalItemCard(
-                                goal = goal,
-                                isPersian = isPersian,
-                                currencyUnit = currencyUnit,
-                                numberFormatter = numberFormatter,
-                                onDepositClick = { goalForDeposit = goal },
-                                onWithdrawClick = { goalForWithdraw = goal },
-                                onEditClick = { goalToEdit = goal },
-                                onDeleteClick = { goalToDelete = goal }
-                            )
-                        }
-                    }
-                }
             }
         }
 
@@ -444,9 +458,54 @@ fun SavingGoalsScreen(
             )
         }
 
-        // دیالوگ حذف با قابلیت Undo و شمارش معکوس
+        // ------------------ Delete Dialog (Hold to Delete) ------------------
         goalToDelete?.let { goal ->
+            // متغیرهای وضعیت برای تشخیص نگه‌داشتن دکمه و پر شدن انیمیشن
+            var isPressed by remember { mutableStateOf(false) }
             val dialogShape = RoundedCornerShape(28.dp)
+
+            // انیمیشن محو شدن و جمع شدن دکمه انصراف (تغییر وزن از ۱ به ۰)
+            val cancelWeight by animateFloatAsState(
+                targetValue = if (isPressed) 0.001f else 1f,
+                animationSpec = tween(durationMillis = 300, easing = LinearOutSlowInEasing),
+                label = "CancelWeight"
+            )
+
+            // انیمیشن پر شدن دکمه حذف (از ۰ تا ۱ در طی ۱.۵ ثانیه)
+            val progress by animateFloatAsState(
+                targetValue = if (isPressed) 1f else 0f,
+                animationSpec = tween(
+                    durationMillis = if (isPressed) 1500 else 300,
+                    easing = LinearEasing
+                ),
+                label = "HoldProgress"
+            )
+
+            // وقتی انیمیشن پر شدن به ۱۰۰٪ رسید، عملیات حذف نرم انجام می‌شود
+            LaunchedEffect(progress) {
+                if (progress >= 1f && isPressed) {
+                    isPressed = false
+                    val targetGoal = goal
+
+                    viewModel.softDelete(targetGoal)
+                    goalToDelete = null
+
+                    coroutineScope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = if (isPersian) "قلک «${targetGoal.title}» حذف شد" else "Goal '${targetGoal.title}' deleted",
+                            actionLabel = if (isPersian) "بازگردانی" else "Undo",
+                            duration = SnackbarDuration.Indefinite
+                        )
+
+                        if (result == SnackbarResult.ActionPerformed) {
+                            viewModel.restore(targetGoal)
+                        } else {
+                            viewModel.commitDelete(targetGoal)
+                        }
+                    }
+                }
+            }
+
             Dialog(onDismissRequest = { goalToDelete = null }) {
                 Box(
                     modifier = Modifier
@@ -500,52 +559,86 @@ fun SavingGoalsScreen(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            OutlinedButton(
-                                onClick = { goalToDelete = null },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(14.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(if (isPersian) "انصراف" else "Cancel")
+                            // دکمه انصراف با قابلیت جمع شدن هنگام نگه داشتن دکمه حذف
+                            if (cancelWeight > 0.01f) {
+                                OutlinedButton(
+                                    onClick = { goalToDelete = null },
+                                    modifier = Modifier
+                                        .weight(cancelWeight)
+                                        .height(48.dp)
+                                        .padding(end = (12 * cancelWeight).dp),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            text = if (isPersian) "انصراف" else "Cancel",
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Clip
+                                        )
+                                    }
                                 }
                             }
 
-                            Button(
-                                onClick = {
-                                    val targetGoal = goal
-                                    viewModel.softDelete(targetGoal)
-                                    goalToDelete = null
-
-                                    coroutineScope.launch {
-                                        val result = snackbarHostState.showSnackbar(
-                                            message = if (isPersian) "قلک «${targetGoal.title}» حذف شد" else "Goal '${targetGoal.title}' deleted",
-                                            actionLabel = if (isPersian) "بازگردانی" else "Undo",
-                                            duration = SnackbarDuration.Indefinite
-                                        )
-
-                                        if (result == SnackbarResult.ActionPerformed) {
-                                            viewModel.restore(targetGoal)
-                                        } else {
-                                            viewModel.commitDelete(targetGoal)
-                                        }
-                                    }
-                                },
+                            // دکمه حذف با قابلیت فشردن و نگه داشتن (Hold to Delete)
+                            Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(48.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                shape = RoundedCornerShape(14.dp)
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(MaterialTheme.colorScheme.error)
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onPress = {
+                                                isPressed = true
+                                                tryAwaitRelease()
+                                                isPressed = false
+                                            }
+                                        )
+                                    },
+                                contentAlignment = Alignment.CenterStart
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                                // لایه پیشرفت پرشونده روی دکمه
+                                if (progress > 0f) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .fillMaxWidth(progress.coerceAtLeast(0.001f))
+                                            .background(Color.White.copy(alpha = 0.25f))
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onError
+                                    )
                                     Spacer(Modifier.width(6.dp))
-                                    Text(if (isPersian) "حذف" else "Delete", fontWeight = FontWeight.Bold)
+                                    Text(
+                                        text = if (isPressed) {
+                                            if (isPersian) "در حال حذف..." else "Deleting..."
+                                        } else {
+                                            if (isPersian) "حذف" else "Hold to Delete"
+                                        },
+                                        color = MaterialTheme.colorScheme.onError,
+                                        maxLines = 1
+                                    )
                                 }
                             }
                         }

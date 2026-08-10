@@ -683,6 +683,7 @@ fun AddScreen(
                     // دکمه ذخیره به‌صورت کشیدنی
                     SwipeToConfirmButton(
                         text = if (isPersian) "برای ذخیره بکشید" else "Swipe to Save",
+                        isPersian = isPersian,
                         resetTrigger = transactionTitle.isEmpty() && transactionAmount.isEmpty(), // یا هر کلید دیگه‌ای که با ریست فرم عوض میشه
                         onConfirm = {
                             val parsedAmount = transactionAmount.toDoubleOrNull() ?: 0.0

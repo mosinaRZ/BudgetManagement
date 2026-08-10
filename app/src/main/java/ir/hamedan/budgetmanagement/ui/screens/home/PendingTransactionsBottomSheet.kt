@@ -30,10 +30,18 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.animateLottieCompositionAsState
+import com.airbnb.lottie.compose.rememberLottieComposition
+import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.PendingTransactionEntity
+import ir.hamedan.budgetmanagement.ui.components.SwipeToConfirmButton
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.utils.StringMapper
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
@@ -295,12 +303,9 @@ fun PendingTransactionsBottomSheet(
     }
 }
 
-// -----------------------------------------------------------------------------
-// باتم‌شیت تکمیل و ثبت تراکنش (هم‌استایل با باتم‌شیت ثبت تراکنش در AddScreen)
-// -----------------------------------------------------------------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PendingConfirmBottomSheet(
+fun PendingConfirmBottomSheet(
     pending: PendingTransactionEntity,
     categories: List<CategoryEntity>,
     isPersian: Boolean,
@@ -337,6 +342,55 @@ private fun PendingConfirmBottomSheet(
 
     // وضعیت کنترل منوی کشویی دسته‌بندی
     var isCategoryDropdownExpanded by remember { mutableStateOf(false) }
+
+    // وضعیت انیمیشن موفقیت و ریست شدن سوییپ
+    var showSuccessAnimation by remember { mutableStateOf(false) }
+    var swipeResetTrigger by remember { mutableStateOf(false) }
+
+    // اورلی انیمیشن موفقیت دقیقا مطابق سورس شما
+    if (showSuccessAnimation) {
+        Dialog(onDismissRequest = { }) {
+            val successShape = RoundedCornerShape(24.dp)
+            Box(
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.surface, successShape)
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), successShape)
+                    .padding(horizontal = 32.dp, vertical = 28.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    val composition by rememberLottieComposition(
+                        LottieCompositionSpec.RawRes(R.raw.success_anim)
+                    )
+                    val progress by animateLottieCompositionAsState(
+                        composition = composition,
+                        iterations = 1
+                    )
+                    LottieAnimation(
+                        composition = composition,
+                        progress = { progress },
+                        modifier = Modifier.size(130.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = if (isPersian) "انجام شد!" else "Done!",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = if (isPersian) "تراکنش با موفقیت تایید شد" else "Transaction confirmed successfully",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -650,42 +704,28 @@ private fun PendingConfirmBottomSheet(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // دکمه‌های انصراف و ذخیره
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedButton(
-                    onClick = {
+            // دکمه تایید به‌صورت کشیدنی دقیقاً مطابق استایل سورس شما
+            SwipeToConfirmButton(
+                text = if (isPersian) "برای ذخیره بکشید" else "Swipe to Save",
+                isPersian = isPersian,
+                resetTrigger = swipeResetTrigger,
+                onConfirm = {
+                    val parsedAmount = transactionAmount.toDoubleOrNull() ?: 0.0
+                    val amount = if (currencyUnit == "IRR") parsedAmount / 10.0 else parsedAmount
+
+                    titleError = transactionTitle.isBlank()
+                    amountError = parsedAmount <= 0.0
+                    categoryError = selectedCategoryKey.isBlank()
+
+                    val isFormValid = !titleError && !amountError && !categoryError
+
+                    if (isFormValid) {
                         scope.launch {
+                            showSuccessAnimation = true
+                            delay(4000) // مکث برای نمایش انیمیشن
+                            showSuccessAnimation = false
+
                             sheetState.hide()
-                            onDismiss()
-                        }
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(54.dp),
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Text(
-                        text = if (isPersian) "انصراف" else "Cancel",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Button(
-                    onClick = {
-                        val parsedAmount = transactionAmount.toDoubleOrNull() ?: 0.0
-                        val amount = if (currencyUnit == "IRR") parsedAmount / 10.0 else parsedAmount
-
-                        titleError = transactionTitle.isBlank()
-                        amountError = parsedAmount <= 0.0
-                        categoryError = selectedCategoryKey.isBlank()
-
-                        val isFormValid = !titleError && !amountError && !categoryError
-
-                        if (isFormValid) {
                             onConfirmFinal(
                                 transactionTitle.trim(),
                                 amount,
@@ -694,19 +734,13 @@ private fun PendingConfirmBottomSheet(
                                 transactionNote.trim()
                             )
                         }
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(54.dp),
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Text(
-                        text = if (isPersian) "ذخیره" else "Save",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
+                    } else {
+                        // در صورت نامعتبر بودن فرم، سوییپ به حالت اول برمی‌گردد
+                        swipeResetTrigger = !swipeResetTrigger
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

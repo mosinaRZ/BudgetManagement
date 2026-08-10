@@ -3,10 +3,13 @@ package ir.hamedan.budgetmanagement.ui.screens.debtCredit
 import android.widget.Toast
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -29,16 +32,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import ir.hamedan.budgetmanagement.data.local.models.DebtCreditEntity
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.StatusBarAuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.ui.screens.add.ThousandsSeparatorTransformation
 import ir.hamedan.budgetmanagement.ui.screens.goals.AmountActionDialog
@@ -87,54 +94,20 @@ fun DebtCreditScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        AuroraBackground()
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
+        StatusBarAuroraBackground()
+        // ------------------ Main Content (Pushed down to avoid overlapping the floating header) ------------------
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 20.dp,
+                end = 20.dp,
+                top = 120.dp,   // ← مشابه BudgetLimit
+                bottom = 100.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // هدر صفحه
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                IconButton(
-                    onClick = onBackClick,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            CircleShape
-                        )
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Text(
-                    text = if (isPersian) "بدهی‌ها و بستانکاری‌ها" else "Debts & Credits",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-
-                Spacer(modifier = Modifier.size(44.dp))
-            }
-
             if (debtCreditList.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 24.dp, vertical = 12.dp),
-                    contentAlignment = Alignment.TopCenter
-                ) {
+                item {
                     val emptyCardShape = RoundedCornerShape(24.dp)
                     Box(
                         modifier = Modifier
@@ -192,26 +165,72 @@ fun DebtCreditScreen(
                     }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 100.dp, start = 24.dp, end = 24.dp, top = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(debtCreditList, key = { it.id }) { item ->
-                        DebtCreditItemCard(
-                            item = item,
-                            isPersian = isPersian,
-                            onDepositClick = { itemForDeposit = item },
-                            onWithdrawClick = { itemForWithdraw = item },
-                            onEditClick = {
-                                selectedItemForEdit = item
-                                showAddDialog = true
-                            },
-                            onDeleteClick = { itemToDelete = item },
-                            onToggleSettled = { viewModel.toggleSettled(item.id, item.isSettled) }
-                        )
-                    }
+                items(debtCreditList, key = { it.id }) { item ->
+                    DebtCreditItemCard(
+                        item = item,
+                        isPersian = isPersian,
+                        onDepositClick = { itemForDeposit = item },
+                        onWithdrawClick = { itemForWithdraw = item },
+                        onEditClick = {
+                            selectedItemForEdit = item
+                            showAddDialog = true
+                        },
+                        onDeleteClick = { itemToDelete = item },
+                        onToggleSettled = { viewModel.toggleSettled(item.id, item.isSettled) }
+                    )
                 }
+            }
+        }
+
+        // ------------------ Floating Header ------------------
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            val shape = RoundedCornerShape(24.dp)
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), shape)
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape)
+                    .clip(shape),
+                contentAlignment = Alignment.Center
+            ) {
+                IconButton(
+                    onClick = onBackClick,
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .size(56.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), shape)
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape)
+                    .clip(shape)
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (isPersian) "بدهی‌ها و بستانکاری‌ها" else "Debts & Credits",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
             }
         }
 
@@ -450,9 +469,49 @@ fun DebtCreditScreen(
             }
         }
 
-        // دیالوگ حذف با قابلیت Undo و شمارش معکوس
+        // ------------------ Delete Dialog (Hold to Delete) ------------------
         itemToDelete?.let { item ->
+            var isPressed by remember { mutableStateOf(false) }
             val dialogShape = RoundedCornerShape(28.dp)
+
+            val cancelWeight by animateFloatAsState(
+                targetValue = if (isPressed) 0.001f else 1f,
+                animationSpec = tween(durationMillis = 300, easing = LinearOutSlowInEasing),
+                label = "CancelWeight"
+            )
+
+            val progress by animateFloatAsState(
+                targetValue = if (isPressed) 1f else 0f,
+                animationSpec = tween(
+                    durationMillis = if (isPressed) 1500 else 300,
+                    easing = LinearEasing
+                ),
+                label = "HoldProgress"
+            )
+
+            LaunchedEffect(progress) {
+                if (progress >= 1f && isPressed) {
+                    isPressed = false
+                    val targetItem = item
+                    viewModel.softDelete(targetItem)
+                    itemToDelete = null
+
+                    coroutineScope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = if (isPersian) "اطلاعات مربوط به «${targetItem.personName}» حذف شد" else "Record for '${targetItem.personName}' deleted",
+                            actionLabel = if (isPersian) "بازگردانی" else "Undo",
+                            duration = SnackbarDuration.Indefinite
+                        )
+
+                        if (result == SnackbarResult.ActionPerformed) {
+                            viewModel.restore(targetItem)
+                        } else {
+                            viewModel.commitDelete(targetItem.id)
+                        }
+                    }
+                }
+            }
+
             Dialog(onDismissRequest = { itemToDelete = null }) {
                 Box(
                     modifier = Modifier
@@ -506,48 +565,83 @@ fun DebtCreditScreen(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            OutlinedButton(
-                                onClick = { itemToDelete = null },
-                                modifier = Modifier.weight(1f).height(48.dp),
-                                shape = RoundedCornerShape(14.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(if (isPersian) "انصراف" else "Cancel")
+                            if (cancelWeight > 0.01f) {
+                                OutlinedButton(
+                                    onClick = { itemToDelete = null },
+                                    modifier = Modifier
+                                        .weight(cancelWeight)
+                                        .height(48.dp)
+                                        .padding(end = (12 * cancelWeight).dp),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            text = if (isPersian) "انصراف" else "Cancel",
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Clip
+                                        )
+                                    }
                                 }
                             }
 
-                            Button(
-                                onClick = {
-                                    val targetItem = item
-                                    viewModel.softDelete(targetItem)
-                                    itemToDelete = null
-
-                                    coroutineScope.launch {
-                                        val result = snackbarHostState.showSnackbar(
-                                            message = if (isPersian) "اطلاعات مربوط به «${targetItem.personName}» حذف شد" else "Record for '${targetItem.personName}' deleted",
-                                            actionLabel = if (isPersian) "بازگردانی" else "Undo",
-                                            duration = SnackbarDuration.Indefinite
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(MaterialTheme.colorScheme.error)
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onPress = {
+                                                isPressed = true
+                                                tryAwaitRelease()
+                                                isPressed = false
+                                            }
                                         )
-
-                                        if (result == SnackbarResult.ActionPerformed) {
-                                            viewModel.restore(targetItem)
-                                        } else {
-                                            viewModel.commitDelete(targetItem.id)
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.weight(1f).height(48.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                shape = RoundedCornerShape(14.dp)
+                                    },
+                                contentAlignment = Alignment.CenterStart
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                                if (progress > 0f) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .fillMaxWidth(progress.coerceAtLeast(0.001f))
+                                            .background(Color.White.copy(alpha = 0.25f))
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onError
+                                    )
                                     Spacer(Modifier.width(6.dp))
-                                    Text(if (isPersian) "حذف" else "Delete", fontWeight = FontWeight.Bold)
+                                    Text(
+                                        text = if (isPressed) {
+                                            if (isPersian) "در حال حذف..." else "Deleting..."
+                                        } else {
+                                            if (isPersian) "حذف" else "Hold to Delete"
+                                        },
+                                        color = MaterialTheme.colorScheme.onError,
+                                        maxLines = 1
+                                    )
                                 }
                             }
                         }
@@ -788,7 +882,6 @@ fun DebtCreditItemCard(
                 }
             }
 
-            // اگر آیتم هم منقضی شده و هم تسویه است، تغییر وضعیت (و اعلان) ممنوع است
             val isExpiredAndSettled = item.isSettled
                     && item.dueDateMillis > 0
                     && item.dueDateMillis < System.currentTimeMillis()
@@ -889,7 +982,6 @@ fun AddOrEditDebtCreditDialog(
     val labelMonthlyCurrency = if (isPersian) (if (currencyUnit == "IRR") "قسط ماهانه (ریال)" else "قسط ماهانه (تومان)")
     else (if (currencyUnit == "IRR") "Monthly Installment (Rial)" else "Monthly Installment (Toman)")
 
-    // دیالوگ انتخاب تاریخ سررسید یکباره با اعمال غیرفعالسازی روزهای گذشته
     if (showDatePickerDialog) {
         val todayStartMillis = remember {
             Calendar.getInstance().apply {
@@ -929,7 +1021,6 @@ fun AddOrEditDebtCreditDialog(
         }
     }
 
-    // متن تشخیص داده شده از میکروفون
     var detectedPersonName by remember { mutableStateOf<String?>(null) }
     var detectedNote by remember { mutableStateOf<String?>(null) }
 
@@ -995,7 +1086,6 @@ fun AddOrEditDebtCreditDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // فیلد نام طرف حساب + میکروفون
                 OutlinedTextField(
                     value = personName,
                     onValueChange = { input ->
@@ -1018,7 +1108,6 @@ fun AddOrEditDebtCreditDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // فیلد مبلغ کل + هزارتومان
                 OutlinedTextField(
                     value = totalAmountDigits,
                     onValueChange = { input ->
@@ -1139,7 +1228,6 @@ fun AddOrEditDebtCreditDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // فیلد یادداشت + میکروفون
                 OutlinedTextField(
                     value = note,
                     onValueChange = { note = it },

@@ -29,6 +29,10 @@ class CategoriesViewModel(
     private val _transactionCountsMap = MutableStateFlow<Map<String, Int>>(emptyMap())
     val transactionCountsMap: StateFlow<Map<String, Int>> = _transactionCountsMap.asStateFlow()
 
+    // استیت برای نگهداری شناسه (String) دسته‌بندی‌هایی که موقتاً در UI مخفی شده‌اند[cite: 10, 19]
+    private val _hiddenCategories = MutableStateFlow<Set<String>>(emptySet())
+    val hiddenCategories: StateFlow<Set<String>> = _hiddenCategories.asStateFlow()
+
     init {
         observeCategoryTransactionCounts()
     }
@@ -96,22 +100,16 @@ class CategoriesViewModel(
         return categoryRepository.getBudgetLimitCount(categoryTitle)
     }
 
-    // پاک‌سازی موقت دسته‌بندی برای لایه UI
     fun softDeleteCategory(category: CategoryEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
-            // اگر متد حذف موقت یا تغییر وضعیت داری فراخوانی کن
-        }
+        _hiddenCategories.value = _hiddenCategories.value + category.id
     }
 
-    // بازگردانی دسته‌بندی در صورت فشردن Undo
     fun restoreCategory(category: CategoryEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
-            categoryRepository.insertCategory(category)
-        }
+        _hiddenCategories.value = _hiddenCategories.value - category.id
     }
 
-    // حذف نهایی دسته‌بندی و انتقال تراکنش‌ها پس از پایان ۵ ثانیه شمارش معکوس
     fun commitDeleteCategory(category: CategoryEntity) {
+        _hiddenCategories.value = _hiddenCategories.value - category.id
         viewModelScope.launch(Dispatchers.IO) {
             categoryRepository.deleteCategoryWithReassignment(category)
 

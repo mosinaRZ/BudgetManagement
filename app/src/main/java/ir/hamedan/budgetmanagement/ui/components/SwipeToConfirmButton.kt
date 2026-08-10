@@ -19,11 +19,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -40,10 +42,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -54,6 +58,30 @@ import kotlin.math.roundToInt
 @Composable
 fun SwipeToConfirmButton(
     text: String,
+    isPersian: Boolean,
+    resetTrigger: Any,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier,
+    height: Dp = 54.dp,
+) {
+    val layoutDirection = if (isPersian) LayoutDirection.Ltr else LocalLayoutDirection.current
+
+    CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
+        SwipeToConfirmButtonContent(
+            text = text,
+            isPersian = isPersian,
+            resetTrigger = resetTrigger,
+            onConfirm = onConfirm,
+            modifier = modifier,
+            height = height,
+        )
+    }
+}
+
+@Composable
+private fun SwipeToConfirmButtonContent(
+    text: String,
+    isPersian: Boolean,
     resetTrigger: Any,
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,

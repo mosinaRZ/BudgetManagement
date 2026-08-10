@@ -2,11 +2,13 @@ package ir.hamedan.budgetmanagement.ui.screens.budgetLimit
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -32,6 +35,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -47,7 +51,7 @@ import androidx.compose.ui.window.Dialog
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.di.appViewModel
-import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.StatusBarAuroraBackground
 import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitUiModel
 import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitViewModel
 import ir.hamedan.budgetmanagement.utils.DateUtils
@@ -125,29 +129,111 @@ fun BudgetLimitScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        AuroraBackground()
+        StatusBarAuroraBackground()
 
-        Column(
+        // ------------------ Main Content List ------------------
+        if (limitsListState != null) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                // تنظیم فاصله افقی برای کل لیست و آیتم‌ها
+                contentPadding = PaddingValues(
+                    start = 20.dp,
+                    end = 20.dp,
+                    // ایجاد فضای خالی در بالا برای اینکه محتوا زیر تاپ‌بار پنهان نشود
+                    top = 120.dp,
+                    bottom = 120.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                if (limitsList.isEmpty()) {
+                    item {
+                        val emptyCardShape = RoundedCornerShape(24.dp)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 20.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), emptyCardShape)
+                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), emptyCardShape)
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(text = "⚠️", fontSize = 56.sp)
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = if (isPersian) "هنوز هیچ محدودیتی تعیین نکردی!" else "No Budget Limits Yet!",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = if (isPersian) "برای کنترل بهتر هزینه‌ها، برای دسته‌بندی‌های مختلف سقف تعیین کن."
+                                    else "Set limits for your categories to prevent overspending.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(20.dp))
+                                Button(
+                                    onClick = { showAddDialog = true },
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (isPersian) "افزودن اولین سقف بودجه" else "Add First Limit",
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    items(limitsList, key = { it.entity.id }) { item ->
+                        BudgetLimitItemCard(
+                            item = item,
+                            isPersian = isPersian,
+                            currencyUnit = currencyUnit,
+                            numberFormatter = numberFormatter,
+                            onToggleActive = { isActive ->
+                                viewModel.updateLimitStatus(item.entity.id, isActive)
+                            },
+                            onEditClick = { limitToEdit = item },
+                            onDeleteClick = { limitToDelete = item }
+                        )
+                    }
+                }
+            }
+        }
+
+        // ------------------ Top Bar (Floating on top) ------------------
+        Row(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
                 .statusBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // ------------------ Top Bar ------------------
-            Row(
+            val shape = RoundedCornerShape(24.dp)
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .size(56.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), shape)
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape)
+                    .clip(shape),
+                contentAlignment = Alignment.Center
             ) {
                 IconButton(
                     onClick = onBackClick,
                     modifier = Modifier
                         .size(44.dp)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            CircleShape
-                        )
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -155,99 +241,26 @@ fun BudgetLimitScreen(
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
+            }
 
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .size(56.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), shape)
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape)
+                    .clip(shape)
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
                     text = if (isPersian) "محدودیت‌های بودجه" else "Budget Limits",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
-
-                Spacer(modifier = Modifier.size(44.dp))
-            }
-
-            // ------------------ Main Content List ------------------
-            if (limitsListState != null) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(bottom = 120.dp)
-                ) {
-                    if (limitsList.isEmpty()) {
-                        item {
-                            val emptyCardShape = RoundedCornerShape(24.dp)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 20.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), emptyCardShape)
-                                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), emptyCardShape)
-                                    .padding(32.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    Text(text = "⚠️", fontSize = 56.sp)
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text(
-                                        text = if (isPersian) "هنوز هیچ محدودیتی تعیین نکردی!" else "No Budget Limits Yet!",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = if (isPersian) "برای کنترل بهتر هزینه‌ها، برای دسته‌بندی‌های مختلف سقف تعیین کن."
-                                        else "Set limits for your categories to prevent overspending.",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center
-                                    )
-                                    Spacer(modifier = Modifier.height(20.dp))
-                                    Button(
-                                        onClick = { showAddDialog = true },
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                                    ) {
-                                        Icon(Icons.Default.Add, contentDescription = null)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = if (isPersian) "افزودن اولین سقف بودجه" else "Add First Limit",
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        item {
-                            Text(
-                                text = if (isPersian) "محدودیت‌ها" else "Limits",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                        }
-
-                        items(limitsList, key = { it.entity.id }) { item ->
-                            BudgetLimitItemCard(
-                                item = item,
-                                isPersian = isPersian,
-                                currencyUnit = currencyUnit,
-                                numberFormatter = numberFormatter,
-                                onToggleActive = { isActive ->
-                                    viewModel.updateLimitStatus(item.entity.id, isActive)
-                                },
-                                onEditClick = { limitToEdit = item },
-                                onDeleteClick = { limitToDelete = item }
-                            )
-                        }
-                    }
-                }
             }
         }
 
@@ -261,7 +274,7 @@ fun BudgetLimitScreen(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
-                    .padding(bottom = 90.dp, end = 24.dp)
+                    .padding(24.dp)
                     .size(56.dp)
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Limit", modifier = Modifier.size(28.dp))
@@ -309,10 +322,52 @@ fun BudgetLimitScreen(
             )
         }
 
-        // ------------------ Delete Dialog ------------------
+        // ------------------ Delete Dialog (Hold to Delete) ------------------
         limitToDelete?.let { item ->
             val mappedCategoryName = StringMapper.getCategoryName(item.entity.categoryName, isPersian)
+            var isPressed by remember { mutableStateOf(false) }
             val dialogShape = RoundedCornerShape(28.dp)
+
+            // انیمیشن محو شدن و جمع شدن دکمه انصراف
+            val cancelWeight by animateFloatAsState(
+                targetValue = if (isPressed) 0.001f else 1f,
+                animationSpec = tween(durationMillis = 300, easing = LinearOutSlowInEasing),
+                label = "CancelWeight"
+            )
+
+            // انیمیشن پر شدن دکمه حذف (۱.۵ ثانیه)
+            val progress by animateFloatAsState(
+                targetValue = if (isPressed) 1f else 0f,
+                animationSpec = tween(
+                    durationMillis = if (isPressed) 1500 else 300,
+                    easing = LinearEasing
+                ),
+                label = "HoldProgress"
+            )
+
+            // وقتی پر شدن دکمه به ۱۰۰٪ رسید
+            LaunchedEffect(progress) {
+                if (progress >= 1f && isPressed) {
+                    isPressed = false
+                    val deletedEntity = item.entity
+                    viewModel.deleteBudgetLimit(deletedEntity.id)
+                    limitToDelete = null
+
+                    coroutineScope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = if (isPersian) "محدودیت «$mappedCategoryName» حذف شد" else "Limit '$mappedCategoryName' deleted",
+                            actionLabel = if (isPersian) "بازگردانی" else "Undo",
+                            duration = SnackbarDuration.Indefinite
+                        )
+
+                        if (result == SnackbarResult.ActionPerformed) {
+                            viewModel.restoreLimit(deletedEntity)
+                        } else {
+                            viewModel.commitDeleteLimit(deletedEntity)
+                        }
+                    }
+                }
+            }
 
             Dialog(onDismissRequest = { limitToDelete = null }) {
                 Box(
@@ -367,52 +422,86 @@ fun BudgetLimitScreen(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            OutlinedButton(
-                                onClick = { limitToDelete = null },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(14.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(if (isPersian) "انصراف" else "Cancel")
+                            // دکمه انصراف با قابلیت جمع شدن
+                            if (cancelWeight > 0.01f) {
+                                OutlinedButton(
+                                    onClick = { limitToDelete = null },
+                                    modifier = Modifier
+                                        .weight(cancelWeight)
+                                        .height(48.dp)
+                                        .padding(end = (12 * cancelWeight).dp),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            text = if (isPersian) "انصراف" else "Cancel",
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Clip
+                                        )
+                                    }
                                 }
                             }
 
-                            Button(
-                                onClick = {
-                                    val deletedEntity = item.entity
-                                    viewModel.deleteBudgetLimit(deletedEntity.id)
-                                    limitToDelete = null
-
-                                    coroutineScope.launch {
-                                        val result = snackbarHostState.showSnackbar(
-                                            message = if (isPersian) "محدودیت «$mappedCategoryName» حذف شد" else "Limit '$mappedCategoryName' deleted",
-                                            actionLabel = if (isPersian) "بازگردانی" else "Undo",
-                                            duration = SnackbarDuration.Indefinite
-                                        )
-
-                                        if (result == SnackbarResult.ActionPerformed) {
-                                            viewModel.restoreLimit(deletedEntity)
-                                        } else {
-                                            viewModel.commitDeleteLimit(deletedEntity)
-                                        }
-                                    }
-                                },
+                            // دکمه حذف با قابلیت فشردن و نگه داشتن (Hold to Delete)
+                            Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(48.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                shape = RoundedCornerShape(14.dp)
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(MaterialTheme.colorScheme.error)
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onPress = {
+                                                isPressed = true
+                                                tryAwaitRelease()
+                                                isPressed = false
+                                            }
+                                        )
+                                    },
+                                contentAlignment = Alignment.CenterStart
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                                // لایه پیشرفت پرشونده روی دکمه
+                                if (progress > 0f) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .fillMaxWidth(progress.coerceAtLeast(0.001f))
+                                            .background(Color.White.copy(alpha = 0.25f))
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onError
+                                    )
                                     Spacer(Modifier.width(6.dp))
-                                    Text(if (isPersian) "حذف" else "Delete", fontWeight = FontWeight.Bold)
+                                    Text(
+                                        text = if (isPressed) {
+                                            if (isPersian) "در حال حذف..." else "Deleting..."
+                                        } else {
+                                            if (isPersian) "حذف" else "Hold to Delete"
+                                        },
+                                        color = MaterialTheme.colorScheme.onError,
+                                        maxLines = 1
+                                    )
                                 }
                             }
                         }

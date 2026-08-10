@@ -2,10 +2,13 @@ package ir.hamedan.budgetmanagement.ui.screens.categories
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -29,15 +32,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.StatusBarAuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
@@ -66,102 +73,28 @@ fun CategoriesScreen(
     var categoryToEdit by remember { mutableStateOf<CategoryEntity?>(null) }
     var categoryToDelete by remember { mutableStateOf<CategoryEntity?>(null) }
 
+    val hiddenCategories by categoryViewModel.hiddenCategories.collectAsState()
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        AuroraBackground()
-
+        StatusBarAuroraBackground()
+        // ------------------ Main Content (Pushed down to avoid overlapping the expanded floating header) ------------------
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
+                .padding(top = 175.dp) // تنظیم فاصله از بالا متناسب با ارتفاع جدید هدر شناور
         ) {
-            // ------------------ Top Bar ------------------
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                IconButton(
-                    onClick = onBackClick,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            CircleShape
-                        )
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Text(
-                    text = if (isPersian) "مدیریت دسته‌بندی‌ها" else "Manage Categories",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-
-                Spacer(modifier = Modifier.size(44.dp))
-            }
-
-            // ------------------ Tab Switcher ------------------
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 8.dp)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        RoundedCornerShape(16.dp)
-                    )
-                    .border(
-                        1.dp,
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                        RoundedCornerShape(16.dp)
-                    )
-                    .padding(4.dp)
-            ) {
-                Button(
-                    onClick = { selectedTabState = 0 },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isExpenseTab) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0f),
-                        contentColor = if (isExpenseTab) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(if (isPersian) "هزینه‌ها" else "Expenses", fontWeight = FontWeight.Bold)
-                }
-
-                Button(
-                    onClick = { selectedTabState = 1 },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (!isExpenseTab) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0f),
-                        contentColor = if (!isExpenseTab) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(if (isPersian) "درآمدها" else "Incomes", fontWeight = FontWeight.Bold)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
             // ------------------ Category Grid Content ------------------
             if (categoriesState != null) {
                 val filteredCategories = categoriesState!!.filter { category ->
                     category.isExpense == isExpenseTab &&
                             category.title != "دسته‌بندی نشده" &&
                             category.title != "دسته بندی نشده" &&
-                            !category.title.equals("Uncategorized", ignoreCase = true)
+                            !category.title.equals("Uncategorized", ignoreCase = true) &&
+                            !hiddenCategories.contains(category.id)
                 }
 
                 if (filteredCategories.isEmpty()) {
@@ -205,7 +138,7 @@ fun CategoriesScreen(
                                     text = if (isPersian) {
                                         "برای مدیریت بهتر تراکنش‌ها و گزارش‌گیری دقیق، همین الان اولین دسته‌بندی خودت رو اضافه کن."
                                     } else {
-                                        "Start organizing your transactions by adding your first custom category."
+                                        "Start organizing your transactions by adding a first custom category."
                                     },
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -248,6 +181,105 @@ fun CategoriesScreen(
                             )
                         }
                     }
+                }
+            }
+        }
+
+        // ------------------ Floating Header (Top Bar & Tab Switcher combined) ------------------
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 16.dp)
+        ) {
+            // Top Row: Back Button & Title
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                val shape = RoundedCornerShape(24.dp)
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), shape)
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape)
+                        .clip(shape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    IconButton(
+                        onClick = onBackClick,
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .size(56.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), shape)
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape)
+                        .clip(shape)
+                        .padding(horizontal = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (isPersian) "مدیریت دسته‌بندی‌ها" else "Manage Categories",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Tab Switcher inside the floating header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
+                        RoundedCornerShape(16.dp)
+                    )
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                        RoundedCornerShape(16.dp)
+                    )
+                    .padding(4.dp)
+            ) {
+                Button(
+                    onClick = { selectedTabState = 0 },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isExpenseTab) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0f),
+                        contentColor = if (isExpenseTab) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(if (isPersian) "هزینه‌ها" else "Expenses", fontWeight = FontWeight.Bold)
+                }
+
+                Button(
+                    onClick = { selectedTabState = 1 },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (!isExpenseTab) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0f),
+                        contentColor = if (!isExpenseTab) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(if (isPersian) "درآمدها" else "Incomes", fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -319,6 +351,9 @@ fun CategoriesScreen(
             var transactionCount by remember { mutableIntStateOf(0) }
             var budgetLimitCount by remember { mutableIntStateOf(0) }
 
+            // متغیرهای وضعیت برای تشخیص نگه‌داشتن دکمه و پر شدن انیمیشن
+            var isPressed by remember { mutableStateOf(false) }
+
             LaunchedEffect(category.title) {
                 transactionCount = categoryViewModel.getTransactionCount(category.title)
                 budgetLimitCount = categoryViewModel.getBudgetLimitCount(category.title)
@@ -327,6 +362,48 @@ fun CategoriesScreen(
             val categoryName = StringMapper.getCategoryName(category.title, isPersian)
             val uncategorizedName = StringMapper.getCategoryName("UNCATEGORIZED", isPersian)
             val dialogShape = RoundedCornerShape(28.dp)
+
+            // انیمیشن محو شدن و جمع شدن دکمه انصراف (تغییر وزن از ۱ به ۰)
+            val cancelWeight by animateFloatAsState(
+                targetValue = if (isPressed) 0.001f else 1f,
+                animationSpec = tween(durationMillis = 300, easing = LinearOutSlowInEasing),
+                label = "CancelWeight"
+            )
+
+            // انیمیشن پر شدن دکمه حذف (از ۰ تا ۱ در طی ۱.۵ ثانیه)
+            val progress by animateFloatAsState(
+                targetValue = if (isPressed) 1f else 0f,
+                animationSpec = tween(
+                    durationMillis = if (isPressed) 1500 else 300, // زمان لازم برای نگه داشتن
+                    easing = LinearEasing
+                ),
+                label = "HoldProgress"
+            )
+
+            // وقتی انیمیشن پر شدن به ۱۰۰٪ رسید، عملیات حذف انجام می‌شود
+            LaunchedEffect(progress) {
+                if (progress >= 1f && isPressed) {
+                    isPressed = false // ریست کردن وضعیت
+                    val targetCategory = category
+
+                    categoryViewModel.softDeleteCategory(targetCategory)
+                    categoryToDelete = null
+
+                    coroutineScope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = if (isPersian) "دسته‌بندی «$categoryName» حذف شد" else "Category '$categoryName' deleted",
+                            actionLabel = if (isPersian) "بازگردانی" else "Undo",
+                            duration = SnackbarDuration.Indefinite
+                        )
+
+                        if (result == SnackbarResult.ActionPerformed) {
+                            categoryViewModel.restoreCategory(targetCategory)
+                        } else {
+                            categoryViewModel.commitDeleteCategory(targetCategory)
+                        }
+                    }
+                }
+            }
 
             Dialog(onDismissRequest = { categoryToDelete = null }) {
                 Box(
@@ -400,52 +477,87 @@ fun CategoriesScreen(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            OutlinedButton(
-                                onClick = { categoryToDelete = null },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(14.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(if (isPersian) "انصراف" else "Cancel")
+                            // دکمه انصراف
+                            if (cancelWeight > 0.01f) {
+                                OutlinedButton(
+                                    onClick = { categoryToDelete = null },
+                                    modifier = Modifier
+                                        .weight(cancelWeight)
+                                        .height(48.dp)
+                                        .padding(end = (12 * cancelWeight).dp),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            text = if (isPersian) "انصراف" else "Cancel",
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Clip
+                                        )
+                                    }
                                 }
                             }
 
-                            Button(
-                                onClick = {
-                                    val targetCategory = category
-                                    categoryViewModel.softDeleteCategory(targetCategory)
-                                    categoryToDelete = null
-
-                                    coroutineScope.launch {
-                                        val result = snackbarHostState.showSnackbar(
-                                            message = if (isPersian) "دسته‌بندی «$categoryName» حذف شد" else "Category '$categoryName' deleted",
-                                            actionLabel = if (isPersian) "بازگردانی" else "Undo",
-                                            duration = SnackbarDuration.Indefinite
-                                        )
-
-                                        if (result == SnackbarResult.ActionPerformed) {
-                                            categoryViewModel.restoreCategory(targetCategory)
-                                        } else {
-                                            categoryViewModel.commitDeleteCategory(targetCategory)
-                                        }
-                                    }
-                                },
+                            // دکمه حذف سفارشی (تشخیص نگه داشتن انگشت)
+                            Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(48.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                shape = RoundedCornerShape(14.dp)
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(MaterialTheme.colorScheme.error)
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onPress = {
+                                                isPressed = true // انگشت روی دکمه قرار گرفت
+                                                tryAwaitRelease() // منتظر برداشتن انگشت
+                                                isPressed = false // انگشت برداشته شد
+                                            }
+                                        )
+                                    },
+                                contentAlignment = Alignment.CenterStart
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                                // لایه پر شونده
+                                if (progress > 0f) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .fillMaxWidth(progress.coerceAtLeast(0.001f))
+                                            .background(Color.White.copy(alpha = 0.25f))
+                                    )
+                                }
+
+                                // محتوای دکمه (آیکون و متن)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onError
+                                    )
                                     Spacer(Modifier.width(6.dp))
-                                    Text(if (isPersian) "حذف" else "Delete", fontWeight = FontWeight.Bold)
+                                    Text(
+                                        text = if (isPressed) {
+                                            if (isPersian) "در حال حذف..." else "Deleting..."
+                                        } else {
+                                            if (isPersian) " حذف" else "Hold to Delete"
+                                        },
+                                        color = MaterialTheme.colorScheme.onError,
+                                        maxLines = 1
+                                    )
                                 }
                             }
                         }
