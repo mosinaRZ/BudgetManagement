@@ -701,7 +701,7 @@ private fun PendingConfirmBottomSheet(
                     shape = RoundedCornerShape(14.dp)
                 ) {
                     Text(
-                        text = if (isPersian) "ذخیره تراکنش" else "Save Transaction",
+                        text = if (isPersian) "ذخیره" else "Save",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )

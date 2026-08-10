@@ -47,7 +47,7 @@ object AppNotificationManager {
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.notificationicon)   // آیکون اعلان — ادامه راهنما
+            .setSmallIcon(R.mipmap.icon)   // آیکون اعلان — ادامه راهنما
             .setColor(ContextCompat.getColor(context, R.color.primary))
             .setContentTitle(title)
             .setContentText(body)

@@ -528,6 +528,11 @@ fun SettingsScreen(
                                 icon = Icons.Default.Phone,
                                 color = Color(0xFF25D366)
                             ) { openUrl(context, "https://wa.me/989180500841") }
+                            SocialLinkRow(
+                                title = if (isPersian) "توییتر (ایکس)" else "Twitter (X)",
+                                icon = Icons.Default.AlternateEmail,
+                                color = Color(0xFF1DA1F2)
+                            ) { openUrl(context, "https://twitter.com/CidnaApp") }
                         }
                     }
                 }
