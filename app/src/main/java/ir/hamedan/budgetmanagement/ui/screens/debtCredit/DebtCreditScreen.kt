@@ -73,7 +73,6 @@ fun DebtCreditScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // گوش دادن به خطای عدم وجود بالانس کافی
     LaunchedEffect(Unit) {
         viewModel.errorMessage.collect { msg ->
             snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
@@ -86,7 +85,6 @@ fun DebtCreditScreen(
     var itemForDeposit by remember { mutableStateOf<DebtCreditEntity?>(null) }
     var itemForWithdraw by remember { mutableStateOf<DebtCreditEntity?>(null) }
 
-    // داده‌های موقت ذخیره‌سازی جهت نمایش دیالوگ بالانس
     var pendingSaveData by remember { mutableStateOf<PendingSaveData?>(null) }
 
     Box(
@@ -95,13 +93,12 @@ fun DebtCreditScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         StatusBarAuroraBackground()
-        // ------------------ Main Content (Pushed down to avoid overlapping the floating header) ------------------
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 start = 20.dp,
                 end = 20.dp,
-                top = 120.dp,   // ← مشابه BudgetLimit
+                top = 120.dp,
                 bottom = 100.dp
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -182,7 +179,6 @@ fun DebtCreditScreen(
             }
         }
 
-        // ------------------ Floating Header ------------------
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -253,7 +249,6 @@ fun DebtCreditScreen(
             }
         }
 
-        // ------------------ Countdown Snackbar Host ------------------
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
@@ -268,7 +263,6 @@ fun DebtCreditScreen(
             )
         }
 
-        // دیالوگ واریز
         itemForDeposit?.let { item ->
             AmountActionDialog(
                 title = if (isPersian) "ثبت واریزی/پرداختی برای «${item.personName}»" else "Deposit for '${item.personName}'",
@@ -283,7 +277,6 @@ fun DebtCreditScreen(
             )
         }
 
-        // دیالوگ برداشت
         itemForWithdraw?.let { item ->
             AmountActionDialog(
                 title = if (isPersian) "کاهش مبلغ برای «${item.personName}»" else "Withdraw for '${item.personName}'",
@@ -339,7 +332,6 @@ fun DebtCreditScreen(
             )
         }
 
-        // دیالوگ پرسش ثبت تراکنش در بالانس حساب اصلی
         pendingSaveData?.let { data ->
             val dialogShape = RoundedCornerShape(24.dp)
 
@@ -469,7 +461,6 @@ fun DebtCreditScreen(
             }
         }
 
-        // ------------------ Delete Dialog (Hold to Delete) ------------------
         itemToDelete?.let { item ->
             var isPressed by remember { mutableStateOf(false) }
             val dialogShape = RoundedCornerShape(28.dp)

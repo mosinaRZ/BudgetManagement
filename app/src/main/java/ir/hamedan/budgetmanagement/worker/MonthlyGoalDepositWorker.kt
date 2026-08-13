@@ -5,6 +5,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
+import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.NotificationHelper
 import kotlinx.coroutines.flow.first
@@ -43,6 +44,7 @@ class MonthlyGoalDepositWorker(
             if (currentBalance < goal.monthlyAmount) {
                 NotificationHelper.send(
                     context = applicationContext,
+                    notificationType = NotificationType.GOAL_AUTO_DEPOSIT,
                     type = "WARNING",
                     titleFa = "موجودی ناکافی برای قلک",
                     titleEn = "Insufficient Balance for Goal",
@@ -56,10 +58,8 @@ class MonthlyGoalDepositWorker(
             // واریز مبلغ
             goalRepository.depositToGoal(goal.id, goal.monthlyAmount)
 
-// فقط زمان آخرین واریز را آپدیت کن
+            // فقط زمان آخرین واریز را آپدیت کن
             goalRepository.updateLastAutoDepositTimestamp(goal.id, now)
-
-            currentBalance -= goal.monthlyAmount
 
             currentBalance -= goal.monthlyAmount
 
@@ -76,6 +76,7 @@ class MonthlyGoalDepositWorker(
 
             NotificationHelper.send(
                 context = applicationContext,
+                notificationType = NotificationType.GOAL_AUTO_DEPOSIT,
                 type = "SUCCESS",
                 titleFa = "واریز خودکار ماهانه",
                 titleEn = "Auto Monthly Deposit",

@@ -4,7 +4,8 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
-import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
+import ir.hamedan.budgetmanagement.data.preferences.NotificationType
+import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
@@ -14,75 +15,48 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 class SavingGoalsViewModel(
     private val repository: SavingGoalRepository,
     private val transactionRepository: TransactionRepository,
+    private val notificationRepository: NotificationRepository,
     private val context: Context
 ) : ViewModel() {
 
     val savingGoals: StateFlow<List<SavingGoalEntity>?> = repository.getAllGoals()
-        .map { goals ->
-            goals?.onEach { goal ->
-                val percentReached = if (goal.targetAmount > 0) (goal.currentAmount / goal.targetAmount * 100) else 0.0
-
-                listOf(50.0, 80.0, 100.0).forEach { threshold ->
-                    if (percentReached >= threshold) {
-                        val tag = "GOAL_PROGRESS_${threshold.toInt()}_${goal.id}"
-                        viewModelScope.launch {
-                            val isCompleted = threshold >= 100.0
-                            NotificationHelper.send(
-                                context = context,
-                                type = if (isCompleted) "SUCCESS" else "WARNING",
-                                titleFa = if (isCompleted) "تکمیل هدف پس‌انداز 🎉" else "پیشرفت هدف پس‌انداز",
-                                titleEn = if (isCompleted) "Saving Goal Completed!" else "Saving Goal Progress",
-                                descFa = if (isCompleted)
-                                    "تبریک! به ۱۰۰٪ هدف «${goal.title}» رسیدید."
-                                else
-                                    "هدف «${goal.title}» به ${threshold.toInt()}٪ رسید.",
-                                descEn = if (isCompleted)
-                                    "Congratulations! You reached 100% of goal \"${goal.title}\"."
-                                else
-                                    "Goal \"${goal.title}\" reached ${threshold.toInt()}%.",
-                                tag = tag
-                            )
-                        }
-                    }
-                }
-            }
-        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null
         )
 
-    private val _depositError = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    private val _depositError = MutableSharedFlow<String>()
     val depositError: SharedFlow<String> = _depositError
 
     fun addGoal(title: String, targetAmount: Double, monthlyAmount: Double, icon: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            repository.insertGoal(
-                SavingGoalEntity(
-                    title = title,
-                    targetAmount = targetAmount,
-                    currentAmount = 0.0,
-                    monthlyAmount = monthlyAmount,
-                    icon = icon
-                )
+            val newGoal = SavingGoalEntity(
+                id = UUID.randomUUID().toString(),
+                title = title,
+                targetAmount = targetAmount,
+                currentAmount = 0.0,
+                monthlyAmount = monthlyAmount,
+                icon = icon
             )
+            repository.insertGoal(newGoal)
 
+            // ارسال اعلان ایجاد هدف
             NotificationHelper.send(
                 context = context,
-                type = "SUCCESS",
-                titleFa = "هدف پس‌انداز جدید ثبت شد",
-                titleEn = "New Saving Goal Added",
-                descFa = "هدف «$title» با مبلغ هدف $targetAmount ایجاد شد.",
-                descEn = "Saving goal \"$title\" was created with target $targetAmount.",
-                tag = "GOAL_ADD_${title}_${System.currentTimeMillis()}"
+                notificationType = NotificationType.GOAL_ADD,
+                type = "GOALS",
+                titleFa = "هدف پس‌انداز جدید",
+                titleEn = "New Saving Goal",
+                descFa = "هدف «$title» با موفقیت ایجاد شد.",
+                descEn = "Saving goal '$title' was created successfully."
             )
         }
     }
@@ -91,132 +65,126 @@ class SavingGoalsViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             repository.updateGoal(goal)
 
+            // ارسال اعلان ویرایش هدف
             NotificationHelper.send(
                 context = context,
-                type = "WARNING",
+                notificationType = NotificationType.GOAL_UPDATE,
+                type = "GOALS",
                 titleFa = "ویرایش هدف پس‌انداز",
                 titleEn = "Saving Goal Updated",
-                descFa = "اطلاعات هدف «${goal.title}» ویرایش شد.",
-                descEn = "Saving goal \"${goal.title}\" was updated.",
-                tag = "GOAL_UPDATE_${goal.id}_${System.currentTimeMillis()}"
-            )
-        }
-    }
-
-    // حذف موقت جهت پاک‌سازی سریع از لیست UI
-    fun softDelete(goal: SavingGoalEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.deleteGoal(goal)
-        }
-    }
-
-    // بازگردانی آیتم حذف‌شده در صورت زدن دکمه Undo
-    fun restore(goal: SavingGoalEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.insertGoal(goal)
-        }
-    }
-
-    // ثبت نهایی حذف و ارسال نوتیفیکیشن پس از اتمام تایمر ۵ ثانیه‌ای
-    fun commitDelete(goal: SavingGoalEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
-            NotificationHelper.send(
-                context = context,
-                type = "ERROR",
-                titleFa = "حذف هدف پس‌انداز",
-                titleEn = "Saving Goal Deleted",
-                descFa = "هدف «${goal.title}» با موفقیت حذف شد.",
-                descEn = "Saving goal \"${goal.title}\" was successfully deleted.",
-                tag = "GOAL_DELETE_${goal.id}_${System.currentTimeMillis()}"
-            )
-        }
-    }
-
-    fun deleteGoal(goal: SavingGoalEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.deleteGoal(goal)
-
-            NotificationHelper.send(
-                context = context,
-                type = "ERROR",
-                titleFa = "حذف هدف پس‌انداز",
-                titleEn = "Saving Goal Deleted",
-                descFa = "هدف «${goal.title}» با موفقیت حذف شد.",
-                descEn = "Saving goal \"${goal.title}\" was successfully deleted.",
-                tag = "GOAL_DELETE_${goal.id}_${System.currentTimeMillis()}"
+                descFa = "اطلاعات هدف «${goal.title}» به‌روزرسانی شد.",
+                descEn = "Goal '${goal.title}' details were updated."
             )
         }
     }
 
     fun deposit(goalId: String, amount: Double) {
         viewModelScope.launch(Dispatchers.IO) {
-            val currentBalance = transactionRepository.getCurrentBalance()
-
-            if (currentBalance < amount) {
-                // پیام دوزبانه
+            if (amount <= 0) {
                 val isPersian = LocaleHelper.getLanguage(context) == "fa"
-                val message = if (isPersian) {
-                    "موجودی کافی نیست. موجودی فعلی: ${currentBalance.toLong()}"
-                } else {
-                    "Insufficient balance. Current balance: ${currentBalance.toLong()}"
-                }
-                _depositError.emit(message)
+                val msg = if (isPersian) "مبلغ واریز باید بیشتر از صفر باشد" else "Deposit amount must be greater than zero"
+                _depositError.emit(msg)
                 return@launch
             }
 
-            val currentGoal = savingGoals.value?.find { it.id == goalId }
             repository.depositToGoal(goalId, amount)
 
-            val goalTitle = currentGoal?.title ?: "پس‌انداز"
-
-            transactionRepository.insertTransaction(
-                TransactionEntity(
-                    title = "واریز به قلک: $goalTitle",
-                    amount = amount,
-                    category = "SAVING_GOAL",
-                    type = "EXPENSE",
-                    note = "واریز ماهانه/دستی به هدف پس‌انداز «$goalTitle»"
-                )
-            )
+            // یافتن هدف برای محاسبه درصد پیشرفت و ارسال اعلان
+            val currentGoal = savingGoals.value?.find { it.id == goalId }
+            val goalTitle = currentGoal?.title ?: ""
 
             NotificationHelper.send(
                 context = context,
-                type = "SUCCESS",
+                notificationType = NotificationType.GOAL_DEPOSIT,
+                type = "GOALS",
                 titleFa = "واریز به هدف پس‌انداز",
                 titleEn = "Deposit to Saving Goal",
                 descFa = "مبلغ $amount به هدف «$goalTitle» واریز شد.",
-                descEn = "Amount $amount deposited to goal \"$goalTitle\".",
-                tag = "GOAL_DEPOSIT_${goalId}_${System.currentTimeMillis()}"
+                descEn = "Amount $amount deposited to goal '$goalTitle'."
             )
+
+            // بررسی درصد پیشرفت پس از واریز
+            if (currentGoal != null && currentGoal.targetAmount > 0) {
+                val newAmount = currentGoal.currentAmount + amount
+                val newRatio = newAmount / currentGoal.targetAmount
+
+                val (percentageTag, percentageText) = when {
+                    newRatio >= 1.0 -> "100" to "۱۰۰٪"
+                    newRatio >= 0.8 -> "80" to "۸۰٪"
+                    newRatio >= 0.5 -> "50" to "۵۰٪"
+                    else -> null to null
+                }
+
+                if (percentageTag != null) {
+                    NotificationHelper.send(
+                        context = context,
+                        notificationType = NotificationType.GOAL_PROGRESS,
+                        type = "GOALS",
+                        titleFa = "پیشرفت هدف پس‌انداز",
+                        titleEn = "Saving Goal Progress",
+                        descFa = "هدف «$goalTitle» به پیشرفت $percentageText رسید!",
+                        descEn = "Goal '$goalTitle' reached $percentageText progress!",
+                        tag = "goal_progress_${goalId}_$percentageTag"
+                    )
+                }
+            }
         }
     }
 
     fun withdraw(goalId: String, amount: Double) {
         viewModelScope.launch(Dispatchers.IO) {
-            val currentGoal = savingGoals.value?.find { it.id == goalId }
+            if (amount <= 0) return@launch
             repository.withdrawFromGoal(goalId, amount)
 
-            val goalTitle = currentGoal?.title ?: "پس‌انداز"
-
-            transactionRepository.insertTransaction(
-                TransactionEntity(
-                    title = "برداشت از قلک: $goalTitle",
-                    amount = amount,
-                    category = "SAVING_GOAL",
-                    type = "INCOME",
-                    note = "برداشت از هدف پس‌انداز «$goalTitle»"
-                )
-            )
+            val goalTitle = savingGoals.value?.find { it.id == goalId }?.title ?: ""
 
             NotificationHelper.send(
                 context = context,
-                type = "WARNING",
+                notificationType = NotificationType.GOAL_WITHDRAW,
+                type = "GOALS",
                 titleFa = "برداشت از هدف پس‌انداز",
                 titleEn = "Withdrawal from Saving Goal",
                 descFa = "مبلغ $amount از هدف «$goalTitle» برداشت شد.",
-                descEn = "Amount $amount withdrawn from goal \"$goalTitle\".",
-                tag = "GOAL_WITHDRAW_${goalId}_${System.currentTimeMillis()}"
+                descEn = "Amount $amount withdrawn from goal '$goalTitle'."
             )
+        }
+    }
+
+    fun softDelete(goal: SavingGoalEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.deleteGoal(goal)
+            sendDeleteNotification(goal.title)
+        }
+    }
+
+    fun restore(goal: SavingGoalEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.insertGoal(goal)
+        }
+    }
+
+    fun commitDelete(goal: SavingGoalEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.deleteGoal(goal)
+            sendDeleteNotification(goal.title)
+        }
+    }
+
+    private fun sendDeleteNotification(title: String) {
+        NotificationHelper.send(
+            context = context,
+            notificationType = NotificationType.GOAL_DELETE,
+            type = "GOALS",
+            titleFa = "حذف هدف پس‌انداز",
+            titleEn = "Saving Goal Deleted",
+            descFa = "هدف «$title» حذف شد.",
+            descEn = "Saving goal '$title' was deleted."
+        )
+    }
+
+    fun updateLastAutoDepositTimestamp(goalId: String, timestamp: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.updateLastAutoDepositTimestamp(goalId, timestamp)
         }
     }
 }

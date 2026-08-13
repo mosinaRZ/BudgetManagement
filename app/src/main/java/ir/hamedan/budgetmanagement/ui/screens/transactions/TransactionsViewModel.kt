@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
+import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
@@ -180,6 +181,7 @@ class TransactionViewModel(
             val txTitle = transaction.title.ifEmpty { "تراکنش" }
             NotificationHelper.send(
                 context = context,
+                notificationType = NotificationType.TRANSACTION_DELETE,
                 type = "ERROR",
                 titleFa = "حذف تراکنش",
                 titleEn = "Transaction Deleted",
@@ -204,6 +206,7 @@ class TransactionViewModel(
 
             NotificationHelper.send(
                 context = context,
+                notificationType = NotificationType.TRANSACTION_EDIT,
                 type = "WARNING",
                 titleFa = "ویرایش تراکنش",
                 titleEn = "Transaction Updated",
@@ -221,6 +224,7 @@ class TransactionViewModel(
             if (affectedCount > 0) {
                 NotificationHelper.send(
                     context = context,
+                    notificationType = NotificationType.TRANSACTION_CATEGORY_CHANGE,
                     type = "WARNING",
                     titleFa = "تغییر دسته‌بندی تراکنش‌ها",
                     titleEn = "Transactions Category Changed",

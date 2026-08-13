@@ -29,6 +29,8 @@ data class AnalyticsUiState(
     val topExpenses: List<TransactionEntity> = emptyList(),
     val averageExpense: Double = 0.0,
     val trendPoints: List<Float> = emptyList(),
-    val selectedPeriod: String = "MONTHLY",
+    val trendHasEnoughData: Boolean = true,
+    val trendCurrentIndex: Int = 0,
+    val selectedPeriod: String = "ALL",
     val isIncomeChartSelected: Boolean = false
 )

@@ -6,7 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -15,7 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 data class BarChartEntry(
@@ -35,6 +36,7 @@ fun ColumnBarChartCard(
     xAxisLabel: String,
     modifier: Modifier = Modifier,
     actionContent: (@Composable () -> Unit)? = null,
+    scrollToIndex: Int? = null,
     valueFormatter: (Float) -> String = { it.toLong().toString() }
 ) {
     val cardShape = RoundedCornerShape(24.dp)
@@ -79,7 +81,7 @@ fun ColumnBarChartCard(
             Spacer(modifier = Modifier.height(24.dp))
 
             // بدنه نمودار
-            if (entries.isEmpty() || entries.all { it.value == 0f }) {
+            if (entries.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -94,20 +96,30 @@ fun ColumnBarChartCard(
                 }
             } else {
                 val maxValue = entries.maxOfOrNull { it.value }?.takeIf { it > 0f } ?: 1f
+                val listState = rememberLazyListState()
+
+                LaunchedEffect(scrollToIndex, entries.size) {
+                    scrollToIndex?.let { index ->
+                        if (index in entries.indices) {
+                            listState.animateScrollToItem(index)
+                        }
+                    }
+                }
 
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp)
+                        .height(200.dp)
                 ) {
                     LazyRow(
+                        state = listState,
                         modifier = Modifier.fillMaxSize(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         contentPadding = PaddingValues(horizontal = 8.dp),
                         verticalAlignment = Alignment.Bottom
                     ) {
-                        items(entries) { entry ->
-                            val targetHeight = (entry.value / maxValue) * 130f
+                        itemsIndexed(entries) { _, entry ->
+                            val targetHeight = (entry.value / maxValue) * 120f
                             val animatedHeight by animateFloatAsState(
                                 targetValue = targetHeight,
                                 animationSpec = tween(durationMillis = 800),
@@ -117,12 +129,29 @@ fun ColumnBarChartCard(
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Bottom,
-                                modifier = Modifier.fillMaxHeight()
+                                modifier = Modifier
+                                    .width(36.dp)
+                                    .fillMaxHeight()
                             ) {
+                                if (entry.value > 0f) {
+                                    Text(
+                                        text = valueFormatter(entry.value),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (entry.isCurrent) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = if (entry.isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                        maxLines = 1,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.width(36.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                } else {
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                }
                                 Box(
                                     modifier = Modifier
                                         .width(28.dp)
-                                        .height(animatedHeight.coerceAtLeast(4f).dp) // حداقل ارتفاع برای مقادیر صفر
+                                        .height(animatedHeight.coerceAtLeast(4f).dp)
                                         .background(
                                             color = if (entry.isCurrent) MaterialTheme.colorScheme.primary
                                             else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
@@ -136,7 +165,8 @@ fun ColumnBarChartCard(
                                     color = if (entry.isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontWeight = if (entry.isCurrent) FontWeight.Bold else FontWeight.Normal,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.width(36.dp)
                                 )
                             }
                         }

@@ -19,7 +19,7 @@ class AnalyticsViewModel(
     private val repository: TransactionRepository
 ) : ViewModel() {
 
-    val selectedTimeFilter = MutableStateFlow(TimeFilter.MONTHLY)
+    val selectedTimeFilter = MutableStateFlow(TimeFilter.ALL)
     val isPersianState = MutableStateFlow(true)
     val isIncomeChartSelectedState = MutableStateFlow(false)
 
@@ -70,7 +70,7 @@ class AnalyticsViewModel(
             .sortedByDescending { it.amount }
             .take(5)
 
-        val trendPoints = calculateTrendPoints(filteredTransactions)
+        val trendChartData = calculateTrendChartData(allTransactions, timeFilter, isPersian)
 
         AnalyticsUiState(
             isLoading = false,
@@ -83,7 +83,9 @@ class AnalyticsViewModel(
             currentTimeIndex = currentIndex,
             topExpenses = topExpenseEntities,
             averageExpense = averageExpense,
-            trendPoints = trendPoints,
+            trendPoints = trendChartData.points,
+            trendHasEnoughData = trendChartData.hasEnoughData,
+            trendCurrentIndex = trendChartData.currentIndex,
             selectedPeriod = timeFilter.name,
             isIncomeChartSelected = isIncomeChartSelected
         )
@@ -367,18 +369,255 @@ class AnalyticsViewModel(
         }
     }
 
-    private fun calculateTrendPoints(transactions: List<TransactionEntity>): List<Float> {
-        if (transactions.isEmpty()) return listOf(0f)
-        val sorted = transactions.sortedBy { it.timestamp }
-        var runningBalance = 0.0
-        val points = mutableListOf<Float>()
+    private data class TrendChartData(
+        val points: List<Float>,
+        val hasEnoughData: Boolean,
+        val currentIndex: Int = 0
+    )
 
-        sorted.forEach { tx ->
-            if (tx.type == "INCOME") runningBalance += tx.amount
-            else runningBalance -= tx.amount
-            points.add(runningBalance.toFloat())
+    private fun countDistinctCalendarMonths(
+        transactions: List<TransactionEntity>,
+        isPersian: Boolean
+    ): Int {
+        if (transactions.isEmpty()) return 0
+        return transactions.map { tx ->
+            val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+            if (isPersian) {
+                val (year, month, _) = DateUtils.toJalali(txDate)
+                year * 100 + month
+            } else {
+                txDate.year * 100 + txDate.monthValue
+            }
+        }.distinct().count()
+    }
+
+    private fun calculateTrendChartData(
+        allTransactions: List<TransactionEntity>,
+        filter: TimeFilter,
+        isPersian: Boolean
+    ): TrendChartData {
+        val distinctMonths = countDistinctCalendarMonths(allTransactions, isPersian)
+        val hasEnoughData = when (filter) {
+            TimeFilter.DAILY, TimeFilter.WEEKLY -> true
+            TimeFilter.MONTHLY -> distinctMonths >= 2
+            TimeFilter.ALL -> allTransactions.size >= 2
         }
-        return if (points.size < 2) listOf(points.firstOrNull() ?: 0f, points.firstOrNull() ?: 0f) else points
+
+        if (!hasEnoughData) {
+            return TrendChartData(points = emptyList(), hasEnoughData = false, currentIndex = 0)
+        }
+
+        val points = calculateTrendPoints(allTransactions, filter, isPersian)
+        val currentIndex = calculateTrendCurrentIndex(points.size, filter, isPersian)
+        return TrendChartData(points = points, hasEnoughData = true, currentIndex = currentIndex)
+    }
+
+    private fun calculateTrendCurrentIndex(
+        pointCount: Int,
+        filter: TimeFilter,
+        isPersian: Boolean
+    ): Int {
+        if (pointCount <= 0) return 0
+
+        val now = LocalDate.now()
+        return when (filter) {
+            TimeFilter.DAILY -> pointCount - 1
+            TimeFilter.WEEKLY -> {
+                val currentDay = if (isPersian) {
+                    DateUtils.toJalali(now).third
+                } else {
+                    now.dayOfMonth
+                }
+                ((currentDay - 1) / 7).coerceIn(0, pointCount - 1)
+            }
+            TimeFilter.MONTHLY -> pointCount - 1
+            TimeFilter.ALL -> pointCount - 1
+        }
+    }
+
+    private fun calculateTrendPoints(
+        allTransactions: List<TransactionEntity>,
+        filter: TimeFilter,
+        isPersian: Boolean
+    ): List<Float> {
+        val now = LocalDate.now()
+        val netAmount: (TransactionEntity) -> Double = { tx ->
+            if (tx.type == "INCOME") tx.amount else -tx.amount
+        }
+
+        if (isPersian) {
+            val (currentJalaliYear, currentJalaliMonth, currentJalaliDay) = DateUtils.toJalali(now)
+
+            return when (filter) {
+                TimeFilter.DAILY -> calculateDailyTrendPoints(
+                    allTransactions = allTransactions,
+                    isPersian = true,
+                    currentDay = currentJalaliDay,
+                    netAmount = netAmount
+                )
+
+                TimeFilter.WEEKLY -> {
+                    val monthTransactions = allTransactions.filter { tx ->
+                        val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                        val (jYear, jMonth, _) = DateUtils.toJalali(txDate)
+                        jYear == currentJalaliYear && jMonth == currentJalaliMonth
+                    }
+                    val weeklyNet = arrayOf(0.0, 0.0, 0.0, 0.0)
+                    monthTransactions.forEach { tx ->
+                        val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                        val (_, _, day) = DateUtils.toJalali(txDate)
+                        val weekIndex = when {
+                            day in 1..7 -> 0
+                            day in 8..14 -> 1
+                            day in 15..21 -> 2
+                            else -> 3
+                        }
+                        weeklyNet[weekIndex] += netAmount(tx)
+                    }
+                    var cumulative = 0.0
+                    weeklyNet.map { weekNet ->
+                        cumulative += weekNet
+                        cumulative.toFloat()
+                    }
+                }
+
+                TimeFilter.MONTHLY -> {
+                    val monthGroups = allTransactions
+                        .groupBy { tx ->
+                            val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                            val (jYear, jMonth, _) = DateUtils.toJalali(txDate)
+                            jYear * 100 + jMonth
+                        }
+                        .toSortedMap()
+
+                    var cumulative = 0.0
+                    monthGroups.values.map { monthTransactions ->
+                        val monthNet = monthTransactions.sumOf { netAmount(it) }
+                        cumulative += monthNet
+                        cumulative.toFloat()
+                    }
+                }
+
+                TimeFilter.ALL -> {
+                    if (allTransactions.isEmpty()) return emptyList()
+                    val sorted = allTransactions.sortedBy { it.timestamp }
+                    var runningBalance = 0.0
+                    sorted.map { tx ->
+                        runningBalance += netAmount(tx)
+                        runningBalance.toFloat()
+                    }
+                }
+            }
+        } else {
+            val currentGYear = now.year
+            val currentGMonth = now.monthValue
+            val currentGDay = now.dayOfMonth
+
+            return when (filter) {
+                TimeFilter.DAILY -> calculateDailyTrendPoints(
+                    allTransactions = allTransactions,
+                    isPersian = false,
+                    currentDay = currentGDay,
+                    netAmount = netAmount
+                )
+
+                TimeFilter.WEEKLY -> {
+                    val monthTransactions = allTransactions.filter { tx ->
+                        val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                        txDate.year == currentGYear && txDate.monthValue == currentGMonth
+                    }
+                    val weeklyNet = arrayOf(0.0, 0.0, 0.0, 0.0)
+                    monthTransactions.forEach { tx ->
+                        val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                        val day = txDate.dayOfMonth
+                        val weekIndex = when {
+                            day in 1..7 -> 0
+                            day in 8..14 -> 1
+                            day in 15..21 -> 2
+                            else -> 3
+                        }
+                        weeklyNet[weekIndex] += netAmount(tx)
+                    }
+                    var cumulative = 0.0
+                    weeklyNet.map { weekNet ->
+                        cumulative += weekNet
+                        cumulative.toFloat()
+                    }
+                }
+
+                TimeFilter.MONTHLY -> {
+                    val monthGroups = allTransactions
+                        .groupBy { tx ->
+                            val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                            txDate.year * 100 + txDate.monthValue
+                        }
+                        .toSortedMap()
+
+                    var cumulative = 0.0
+                    monthGroups.values.map { monthTransactions ->
+                        val monthNet = monthTransactions.sumOf { netAmount(it) }
+                        cumulative += monthNet
+                        cumulative.toFloat()
+                    }
+                }
+
+                TimeFilter.ALL -> {
+                    if (allTransactions.isEmpty()) return emptyList()
+                    val sorted = allTransactions.sortedBy { it.timestamp }
+                    var runningBalance = 0.0
+                    sorted.map { tx ->
+                        runningBalance += netAmount(tx)
+                        runningBalance.toFloat()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun calculateDailyTrendPoints(
+        allTransactions: List<TransactionEntity>,
+        isPersian: Boolean,
+        currentDay: Int,
+        netAmount: (TransactionEntity) -> Double
+    ): List<Float> {
+        val now = LocalDate.now()
+        val monthTransactions = allTransactions.filter { tx ->
+            val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+            if (isPersian) {
+                val (jYear, jMonth, _) = DateUtils.toJalali(txDate)
+                val (currentJYear, currentJMonth, _) = DateUtils.toJalali(now)
+                jYear == currentJYear && jMonth == currentJMonth
+            } else {
+                txDate.year == now.year && txDate.monthValue == now.monthValue
+            }
+        }
+
+        if (monthTransactions.isEmpty()) return emptyList()
+
+        fun transactionDay(tx: TransactionEntity): Int {
+            val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+            return if (isPersian) {
+                DateUtils.toJalali(txDate).third
+            } else {
+                txDate.dayOfMonth
+            }
+        }
+
+        val firstDay = monthTransactions.minOf(::transactionDay)
+        val dailyNet = mutableMapOf<Int, Double>()
+
+        monthTransactions.forEach { tx ->
+            val day = transactionDay(tx)
+            if (day in firstDay..currentDay) {
+                dailyNet[day] = (dailyNet[day] ?: 0.0) + netAmount(tx)
+            }
+        }
+
+        var cumulative = 0.0
+        return (firstDay..currentDay).map { day ->
+            cumulative += dailyNet[day] ?: 0.0
+            cumulative.toFloat()
+        }
     }
 }
 

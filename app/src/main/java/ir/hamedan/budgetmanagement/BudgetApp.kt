@@ -6,6 +6,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.preferences.AppUsagePreferences
+import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
 import ir.hamedan.budgetmanagement.data.preferences.CategorySeedPreferences
 import ir.hamedan.budgetmanagement.di.AppContainer
 import ir.hamedan.budgetmanagement.utils.AppNotificationManager
@@ -24,6 +25,7 @@ class BudgetApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        NotificationPreferences.ensureDefaultsInitialized(this)
         AppNotificationManager.createChannel(this)
         AppUsagePreferences.updateLastOpen(this)
         seedDefaultCategoriesIfNeeded()

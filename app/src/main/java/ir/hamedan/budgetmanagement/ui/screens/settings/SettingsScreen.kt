@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
+import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.preferences.SharedPreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.saveThemeMode
@@ -86,7 +87,8 @@ fun SettingsScreen(
     onCurrencyChanged: (String) -> Unit = {},  // "IRT" یا "IRR"
     onLoginClick: () -> Unit = {},
     onAddScreenClick: () -> Unit = {},
-    onThemeToggle: () -> Unit = {}
+    onThemeToggle: () -> Unit = {},
+    onNotificationCalibrationClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val isPersian = isPersianLocale()
@@ -269,7 +271,8 @@ fun SettingsScreen(
                                 }
 
                                 NotificationHelper.send(
-                                    context,
+                                    context = context,
+                                    notificationType = NotificationType.SETTINGS_CHANGED,
                                     type = "SYSTEM",
                                     titleFa = "تنظیمات به‌روزرسانی شد",
                                     titleEn = "Settings Updated",
@@ -292,7 +295,8 @@ fun SettingsScreen(
                                 }
 
                                 NotificationHelper.send(
-                                    context,
+                                    context = context,
+                                    notificationType = NotificationType.SETTINGS_CHANGED,
                                     type = "SYSTEM",
                                     titleFa = "تنظیمات به‌روزرسانی شد",
                                     titleEn = "Settings Updated",
@@ -336,7 +340,8 @@ fun SettingsScreen(
                                 NotificationPreferences.setMode(context, NotificationPreferences.MODE_IN_APP)
 
                                 NotificationHelper.send(
-                                    context,
+                                    context = context,
+                                    notificationType = NotificationType.SETTINGS_CHANGED,
                                     type = "SYSTEM",
                                     titleFa = "تنظیمات به‌روزرسانی شد",
                                     titleEn = "Settings Updated",
@@ -354,13 +359,31 @@ fun SettingsScreen(
                                 NotificationPreferences.setMode(context, NotificationPreferences.MODE_BOTH)
 
                                 NotificationHelper.send(
-                                    context,
+                                    context = context,
+                                    notificationType = NotificationType.SETTINGS_CHANGED,
                                     type = "SYSTEM",
                                     titleFa = "تنظیمات به‌روزرسانی شد",
                                     titleEn = "Settings Updated",
                                     descFa = "نحوه ارسال اعلان برنامه با موفقیت تغییر کرد.",
                                     descEn = "Way of sending notification have been updated successfully.",
                                     tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
+                                )
+                            }
+
+                            OutlinedButton(
+                                onClick = onNotificationCalibrationClick,
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Tune,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (isPersian) "کالیبراسیون و مدیریت دقیق اعلان‌ها" else "Notification Calibration",
+                                    style = MaterialTheme.typography.bodyMedium
                                 )
                             }
                         }
@@ -419,7 +442,8 @@ fun SettingsScreen(
                                                     SharedPreferences.setBiometricEnabled(context, targetChecked)
 
                                                     NotificationHelper.send(
-                                                        context,
+                                                        context = context,
+                                                        notificationType = NotificationType.SETTINGS_CHANGED,
                                                         type = "SYSTEM",
                                                         titleFa = "تنظیمات به‌روزرسانی شد",
                                                         titleEn = "Settings Updated",
@@ -564,7 +588,8 @@ fun SettingsScreen(
                 onDismiss = { showChangePasswordDialog = false },
                 onConfirm = { oldPassword, secureNewPassword ->
                     NotificationHelper.send(
-                        context,
+                        context = context,
+                        notificationType = NotificationType.SETTINGS_CHANGED,
                         type = "SYSTEM",
                         titleFa = "تنظیمات به‌روزرسانی شد",
                         titleEn = "Settings Updated",

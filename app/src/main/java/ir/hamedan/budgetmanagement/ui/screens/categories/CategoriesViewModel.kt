@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
+import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.utils.NotificationHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -66,8 +67,9 @@ class CategoriesViewModel(
 
             NotificationHelper.send(
                 context = context,
+                notificationType = NotificationType.CATEGORY_ADD,
                 type = "SUCCESS",
-                titleFa = "دسته‌بندی جدید ثبت شد",
+                titleFa = "دسته بندی جدید اضافه شد",
                 titleEn = "New Category Added",
                 descFa = "دسته‌بندی «$title» به عنوان $typeTextFa اضافه شد.",
                 descEn = "Category \"$title\" was added as $typeTextEn.",
@@ -82,8 +84,9 @@ class CategoriesViewModel(
 
             NotificationHelper.send(
                 context = context,
+                notificationType = NotificationType.CATEGORY_UPDATE,
                 type = "WARNING",
-                titleFa = "ویرایش دسته‌بندی",
+                titleFa = "دسته بندی ویرایش شد",
                 titleEn = "Category Updated",
                 descFa = "دسته‌بندی «${category.title}» به «$newTitle» تغییر یافت.",
                 descEn = "Category \"${category.title}\" was updated to \"$newTitle\".",
@@ -115,8 +118,9 @@ class CategoriesViewModel(
 
             NotificationHelper.send(
                 context = context,
+                notificationType = NotificationType.CATEGORY_DELETE,
                 type = "ERROR",
-                titleFa = "حذف دسته بندی",
+                titleFa = "دسته بندی حذف شد",
                 titleEn = "Category Deleted",
                 descFa = "دسته بندی دسته‌بندی «${category.title}» حذف شد.",
                 descEn = "Category ${category.title} was deleted.",

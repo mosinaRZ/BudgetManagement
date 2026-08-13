@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.models.DebtCreditEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
+import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.repository.DebtCreditRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.ui.components.BalanceWidget
@@ -33,22 +34,9 @@ class DebtCreditViewModel(
 
     val debtCreditList: StateFlow<List<DebtCreditEntity>> = debtCreditRepository.allDebtCredits
         .map { list ->
-            val now = System.currentTimeMillis()
             list.map { item ->
-                // اگر از تاریخ سررسید گذشته باشد و هنوز تسویه نشده باشد، به صورت خودکار تسویه می‌شود
-                if (!item.isSettled && item.dueDateMillis in 1 until now) {
-                    val autoSettledItem = item.copy(
-                        isSettled = true,
-                        paidAmount = item.totalAmount
-                    )
-                    viewModelScope.launch(ioDispatcher) {
-                        debtCreditRepository.insertOrUpdateDebtCredit(autoSettledItem)
-                    }
-                    autoSettledItem
-                } else {
-                    checkDueDateNotifications(item)
-                    item
-                }
+                checkDueDateNotifications(item)
+                item
             }
         }
         .stateIn(
@@ -80,7 +68,6 @@ class DebtCreditViewModel(
                 oneTimeDueDateMillis
             }
 
-            // ۱. چک کردن موجودی فقط در صورت ایجاد "طلب جدید" و درخواست ثبت در بالانس
             if (!isEdit && type == "CREDIT" && addToBalance) {
                 val currentBalance = transactionRepository.getCurrentBalance()
                 if (currentBalance < totalAmount) {
@@ -97,26 +84,21 @@ class DebtCreditViewModel(
 
             val existingEntity = if (isEdit) debtCreditList.value.find { it.id == id } else null
 
-            // بررسی اینکه آیا تاریخ سررسید منقضی شده است یا خیر
-            val now = System.currentTimeMillis()
-            val isExpired = calculatedDueDate in 1 until now
-
             val entity = DebtCreditEntity(
                 id = id ?: java.util.UUID.randomUUID().toString(),
                 type = type,
                 personName = personName,
                 totalAmount = totalAmount,
-                paidAmount = if (isExpired) totalAmount else (existingEntity?.paidAmount ?: 0.0),
+                paidAmount = existingEntity?.paidAmount ?: 0.0,
                 isMonthly = isMonthly,
                 monthlyAmount = if (isMonthly) monthlyAmount else 0.0,
                 dueDay = dueDay,
                 dueDateMillis = calculatedDueDate,
                 note = note,
-                isSettled = if (isExpired) true else (existingEntity?.isSettled ?: false)
+                isSettled = existingEntity?.isSettled ?: false
             )
             debtCreditRepository.insertOrUpdateDebtCredit(entity)
 
-            // ۲. ثبت تراکنش مالی اولیه (فقط اگر جدید باشد و کاربر تایید کرده باشد)
             if (!isEdit && addToBalance) {
                 val isDebt = type == "DEBT"
 
@@ -127,7 +109,7 @@ class DebtCreditViewModel(
                     TransactionEntity(
                         title = "$titlePrefix: $personName",
                         amount = totalAmount,
-                        category = if (isDebt) "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE",   // ← این خط اضافه شد
+                        category = if (isDebt) "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE",
                         type = txType,
                         note = note ?: "ثبت اولیه $personName",
                         timestamp = System.currentTimeMillis()
@@ -136,7 +118,6 @@ class DebtCreditViewModel(
                 BalanceWidget().updateAll(context)
             }
 
-            // ۳. ارسال اعلان
             val notifType = if (isEdit) "WARNING" else "SUCCESS"
             val titleFa = if (isEdit) "ویرایش بدهی/طلب" else "ثبت بدهی/طلب جدید"
             val titleEn = if (isEdit) "Record Updated" else "New Record Added"
@@ -145,6 +126,7 @@ class DebtCreditViewModel(
 
             NotificationHelper.send(
                 context = context,
+                notificationType = NotificationType.DEBT_ADD,
                 type = notifType,
                 titleFa = titleFa,
                 titleEn = titleEn,
@@ -201,6 +183,7 @@ class DebtCreditViewModel(
 
             NotificationHelper.send(
                 context = context,
+                notificationType = NotificationType.DEBT_PAYMENT,
                 type = "SUCCESS",
                 titleFa = titleFa,
                 titleEn = titleEn,
@@ -238,6 +221,7 @@ class DebtCreditViewModel(
 
             NotificationHelper.send(
                 context = context,
+                notificationType = NotificationType.DEBT_ADJUSTMENT,
                 type = "WARNING",
                 titleFa = "اصلاح واریزی بدهی/طلب",
                 titleEn = "Payment Adjustment",
@@ -248,25 +232,23 @@ class DebtCreditViewModel(
         }
     }
 
-    // حذف موقت جهت پاک‌سازی سریع از UI
     fun softDelete(item: DebtCreditEntity) {
         viewModelScope.launch(ioDispatcher) {
             debtCreditRepository.deleteDebtCredit(item.id)
         }
     }
 
-    // بازگردانی آیتم حذف‌شده در صورت فشردن دکمه Undo
     fun restore(item: DebtCreditEntity) {
         viewModelScope.launch(ioDispatcher) {
             debtCreditRepository.insertOrUpdateDebtCredit(item)
         }
     }
 
-    // ثبت حذف نهایی و ارسال نوتیفیکیشن پس از اتمام ۵ ثانیه
     fun commitDelete(id: String) {
         viewModelScope.launch(ioDispatcher) {
             NotificationHelper.send(
                 context = context,
+                notificationType = NotificationType.DEBT_DELETE,
                 type = "ERROR",
                 titleFa = "حذف بدهی/طلب",
                 titleEn = "Record Deleted",
@@ -291,12 +273,79 @@ class DebtCreditViewModel(
 
             NotificationHelper.send(
                 context = context,
+                notificationType = NotificationType.DEBT_SETTLE,
                 type = if (newStatus) "SUCCESS" else "WARNING",
                 titleFa = "تغییر وضعیت تسویه",
                 titleEn = "Settlement Status Changed",
                 descFa = "وضعیت «${item.personName}» به «$statusFa» تغییر یافت.",
                 descEn = "Status of '${item.personName}' changed to $statusEn.",
                 tag = "DEBT_SETTLE_${id}_${System.currentTimeMillis()}"
+            )
+        }
+    }
+
+    fun settleDueReminder(id: String) {
+        viewModelScope.launch(ioDispatcher) {
+            val item = debtCreditList.value.find { it.id == id } ?: return@launch
+            val remaining = (item.totalAmount - item.paidAmount).coerceAtLeast(0.0)
+            if (remaining <= 0.0) {
+                if (!item.isSettled) {
+                    debtCreditRepository.insertOrUpdateDebtCredit(item.copy(isSettled = true))
+                }
+                return@launch
+            }
+
+            val isDebt = item.type == "DEBT"
+            val updated = item.copy(paidAmount = item.totalAmount, isSettled = true)
+            debtCreditRepository.insertOrUpdateDebtCredit(updated)
+
+            val txType = if (isDebt) "EXPENSE" else "INCOME"
+            val txTitle = if (isDebt) "پرداخت بدهی به: ${item.personName}" else "دریافت طلب از: ${item.personName}"
+
+            transactionRepository.insertTransaction(
+                TransactionEntity(
+                    title = txTitle,
+                    amount = remaining,
+                    category = if (isDebt) "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE",
+                    type = txType,
+                    note = "تسویه از طریق یادآوری سررسید"
+                )
+            )
+            BalanceWidget().updateAll(context)
+
+            val titleFa = if (isDebt) "پرداخت بدهی" else "دریافت طلب"
+            val titleEn = if (isDebt) "Debt Payment" else "Credit Received"
+            val descFa = "«${item.personName}» با موفقیت تسویه شد."
+            val descEn = "'${item.personName}' was fully settled."
+
+            NotificationHelper.send(
+                context = context,
+                notificationType = NotificationType.DEBT_DUE_SETTLE,
+                type = "SUCCESS",
+                titleFa = titleFa,
+                titleEn = titleEn,
+                descFa = descFa,
+                descEn = descEn,
+                tag = "DEBT_DUE_SETTLE_${id}_${System.currentTimeMillis()}"
+            )
+        }
+    }
+
+    fun updateDueDate(id: String, newDueDateMillis: Long) {
+        viewModelScope.launch(ioDispatcher) {
+            val item = debtCreditList.value.find { it.id == id } ?: return@launch
+            val updated = item.copy(dueDateMillis = newDueDateMillis)
+            debtCreditRepository.insertOrUpdateDebtCredit(updated)
+
+            NotificationHelper.send(
+                context = context,
+                notificationType = NotificationType.DEBT_DUE_DATE_CHANGE,
+                type = "WARNING",
+                titleFa = "تغییر تاریخ سررسید",
+                titleEn = "Due Date Changed",
+                descFa = "تاریخ سررسید «${item.personName}» تغییر یافت.",
+                descEn = "Due date for '${item.personName}' was changed.",
+                tag = "DEBT_DUE_CHANGE_${id}_${System.currentTimeMillis()}"
             )
         }
     }
@@ -324,6 +373,7 @@ class DebtCreditViewModel(
 
             NotificationHelper.send(
                 context = context,
+                notificationType = NotificationType.DEBT_DUE_REMINDER,
                 type = "WARNING",
                 titleFa = titleFa,
                 titleEn = titleEn,

@@ -12,6 +12,7 @@ import ir.hamedan.budgetmanagement.data.repository.BudgetLimitRepository
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
+import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.utils.NotificationHelper
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -78,6 +79,7 @@ class BudgetLimitViewModel(
                     viewModelScope.launch {
                         NotificationHelper.send(
                             context = context,
+                            notificationType = NotificationType.BUDGET_THRESHOLD,
                             type = if (threshold >= 100.0) "ERROR" else "WARNING",
                             titleFa = "هشدار محدودیت بودجه",
                             titleEn = "Budget Limit Alert",
@@ -133,6 +135,7 @@ class BudgetLimitViewModel(
 
             NotificationHelper.send(
                 context = context,
+                notificationType = NotificationType.BUDGET_ADD,
                 type = "SUCCESS",
                 titleFa = "محدودیت مالی جدید ثبت شد",
                 titleEn = "New Budget Limit Added",
@@ -155,8 +158,9 @@ class BudgetLimitViewModel(
 
                 NotificationHelper.send(
                     context = context,
+                    notificationType = NotificationType.BUDGET_STATUS_CHANGE,
                     type = "WARNING",
-                    titleFa = "تغییر وضعیت محدودیت بودجه",
+                    titleFa = "محدودیت مالی به روزرسانی شد",
                     titleEn = "Budget Limit Status Updated",
                     descFa = "محدودیت مالی دسته‌بندی «${it.categoryName}» $statusFa شد.",
                     descEn = "Budget limit for category ${it.categoryName} was $statusEn.",
@@ -186,8 +190,9 @@ class BudgetLimitViewModel(
             val mappedCategory = entity.categoryName
             NotificationHelper.send(
                 context = context,
+                notificationType = NotificationType.BUDGET_DELETE,
                 type = "ERROR",
-                titleFa = "حذف محدودیت بودجه",
+                titleFa = "محدودیت مالی حذف شد",
                 titleEn = "Budget Limit Deleted",
                 descFa = "محدودیت مالی دسته‌بندی «$mappedCategory» حذف شد.",
                 descEn = "Budget limit for category $mappedCategory was deleted.",

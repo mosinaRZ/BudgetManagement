@@ -45,6 +45,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
+import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.preferences.OnboardingPreferences
 import ir.hamedan.budgetmanagement.data.preferences.PermissionReminderPreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
@@ -67,6 +68,7 @@ import ir.hamedan.budgetmanagement.ui.screens.debtCredit.DebtCreditScreen
 import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsScreen
 import ir.hamedan.budgetmanagement.ui.screens.splash.SplashScreen
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionsScreen
+import ir.hamedan.budgetmanagement.ui.screens.settings.NotificationCalibrationScreen
 import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsScreen
 import ir.hamedan.budgetmanagement.ui.theme.BudgetManagementTheme
 import ir.hamedan.budgetmanagement.utils.AppNotificationManager
@@ -109,6 +111,7 @@ class MainActivity : FragmentActivity() {
         if (!prefs.getBoolean("welcome_shown", false)) {
             NotificationHelper.send(
                 context = applicationContext,
+                notificationType = NotificationType.SETTINGS_CHANGED,
                 type = "SYSTEM",
                 titleFa = "خوش آمدید!",
                 titleEn = "Welcome!",
@@ -274,6 +277,12 @@ class MainActivity : FragmentActivity() {
                 )
             }
 
+            composable<AppRoute.NotificationCalibration> {
+                NotificationCalibrationScreen(
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
+
             // ۴. ساختار اصلی برنامه پس از لاگین موفق
             composable<AppRoute.MainStructure> {
                 val appNavController = rememberNavController()
@@ -359,6 +368,9 @@ class MainActivity : FragmentActivity() {
                                 onThemeToggle = onThemeToggle,
                                 onAddScreenClick = {
                                     navController.navigate(AppRoute.AddScreen(highlightId = "category"))
+                                },
+                                onNotificationCalibrationClick = {
+                                    navController.navigate(AppRoute.NotificationCalibration)
                                 },
                                 onLoginClick = {
                                     navController.navigate(AppRoute.Login) {

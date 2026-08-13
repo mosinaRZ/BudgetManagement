@@ -46,9 +46,14 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.window.Dialog
 import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
+import ir.hamedan.budgetmanagement.data.local.models.DebtCreditEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
+import ir.hamedan.budgetmanagement.data.preferences.DueReminderPreferences
+import ir.hamedan.budgetmanagement.ui.components.SwipeToConfirmButton
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.BalanceWidgetReceiver
@@ -181,6 +186,37 @@ fun HomeScreen(
 
     var showBottomSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+
+    // ===== یادآوری سررسید بدهی/طلب =====
+    // به محض ورود کاربر به این صفحه، هر آیتم بدهی/طلبی که سررسیدش گذشته و هنوز
+    // تسویه نشده، صف می‌شود تا دیالوگ یادآوری برایش نمایش داده شود (یکی‌یکی).
+    var hasCapturedDueReminders by remember { mutableStateOf(false) }
+    var currentDueReminder by remember { mutableStateOf<DebtCreditEntity?>(null) }
+    var pendingDueReminders by remember { mutableStateOf<List<DebtCreditEntity>>(emptyList()) }
+    var showChangeDueDateDialog by remember { mutableStateOf(false) }
+
+    fun goToNextDueReminder() {
+        currentDueReminder = pendingDueReminders.firstOrNull()
+        pendingDueReminders = pendingDueReminders.drop(1)
+    }
+
+    LaunchedEffect(debtCreditList) {
+        if (!hasCapturedDueReminders && debtCreditList.isNotEmpty() && !DueReminderPreferences.hasShownOnce(context)) {
+            hasCapturedDueReminders = true
+            DueReminderPreferences.markShownOnce(context)
+
+            val now = System.currentTimeMillis()
+            val threeDaysAheadMillis = now + 3 * 24 * 60 * 60 * 1000L
+            // شامل هم بدهی/طلب‌های سررسیدگذشته و هم آن‌هایی که تا ۳ روز آینده سررسید می‌شوند
+            val relevant = debtCreditList
+                .filter { !it.isSettled && it.dueDateMillis > 0 && it.dueDateMillis <= threeDaysAheadMillis }
+                .sortedBy { it.dueDateMillis }
+            if (relevant.isNotEmpty()) {
+                currentDueReminder = relevant.first()
+                pendingDueReminders = relevant.drop(1)
+            }
+        }
+    }
 
     // انیمیشن عمومی برای تمامی Skeleton Screenها
     val transition = rememberInfiniteTransition(label = "global_skeleton_shimmer")
@@ -1140,6 +1176,281 @@ fun HomeScreen(
                 onCategoriesClick = onCategoriesClick
             )
         }
+
+        currentDueReminder?.let { reminder ->
+            if (!showChangeDueDateDialog) {
+                DueDateReminderDialog(
+                    isPersian = isPersian,
+                    item = reminder,
+                    currencyUnit = currencyUnit,
+                    numberFormatter = numberFormatter,
+                    onMarkAsPaid = {
+                        debtCreditViewModel.settleDueReminder(reminder.id)
+                        goToNextDueReminder()
+                    },
+                    onChangeDueDate = { showChangeDueDateDialog = true },
+                    onDismiss = { goToNextDueReminder() }
+                )
+            }
+        }
+
+        if (showChangeDueDateDialog) {
+            currentDueReminder?.let { reminder ->
+                ChangeDueDateDialog(
+                    isPersian = isPersian,
+                    initialDueDateMillis = reminder.dueDateMillis,
+                    onConfirm = { newDateMillis ->
+                        debtCreditViewModel.updateDueDate(reminder.id, newDateMillis)
+                        showChangeDueDateDialog = false
+                        goToNextDueReminder()
+                    },
+                    onDismiss = { showChangeDueDateDialog = false }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * دیالوگ یادآوری سررسید بدهی/طلب که به محض ورود کاربر به HomeScreen، برای هر آیتم
+ * سررسیدگذشته‌ی تسویه‌نشده نمایش داده می‌شود. شامل تمام اطلاعات لازم به‌همراه دو دکمه:
+ * «پرداخت شد» (ثبت تراکنش واقعی) و «تغییر تاریخ سررسید».
+ */
+@Composable
+private fun DueDateReminderDialog(
+    isPersian: Boolean,
+    item: DebtCreditEntity,
+    currencyUnit: String,
+    numberFormatter: NumberFormat,
+    onMarkAsPaid: () -> Unit,
+    onChangeDueDate: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val isDebt = item.type == "DEBT"
+    val remaining = (item.totalAmount - item.paidAmount).coerceAtLeast(0.0)
+    val curr = if (currencyUnit == "IRR") 10 else 1
+    val currencyText = if (isPersian) {
+        if (currencyUnit == "IRR") "ریال" else "تومان"
+    } else {
+        if (currencyUnit == "IRR") "Rial" else "T"
+    }
+
+    val oneDayMillis = 24 * 60 * 60 * 1000L
+    val daysDiff = ((item.dueDateMillis - System.currentTimeMillis()).toFloat() / oneDayMillis).toInt()
+    val isOverdue = item.dueDateMillis < System.currentTimeMillis()
+    val statusColor = if (isOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+
+    Dialog(onDismissRequest = onDismiss) {
+        val dialogShape = RoundedCornerShape(24.dp)
+        Box(
+            modifier = Modifier
+                .background(MaterialTheme.colorScheme.surface, dialogShape)
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), dialogShape)
+                .padding(24.dp)
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(statusColor.copy(alpha = 0.12f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = statusColor,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                Text(
+                    text = if (isOverdue) {
+                        if (isPersian) {
+                            if (isDebt) "سررسید بدهی فرا رسیده" else "سررسید طلب فرا رسیده"
+                        } else {
+                            if (isDebt) "Debt Due Date Passed" else "Credit Due Date Passed"
+                        }
+                    } else {
+                        if (isPersian) {
+                            if (isDebt) "سررسید بدهی نزدیک است" else "سررسید طلب نزدیک است"
+                        } else {
+                            if (isDebt) "Debt Due Soon" else "Credit Due Soon"
+                        }
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(Modifier.height(4.dp))
+
+                Text(
+                    text = if (isOverdue) {
+                        val overdueDays = (-daysDiff).coerceAtLeast(0)
+                        if (isPersian) "$overdueDays روز از سررسید «${item.personName}» گذشته است"
+                        else "$overdueDays day(s) past due for '${item.personName}'"
+                    } else if (daysDiff == 0) {
+                        if (isPersian) "امروز سررسید «${item.personName}» است"
+                        else "'${item.personName}' is due today"
+                    } else {
+                        if (isPersian) "$daysDiff روز تا سررسید «${item.personName}» مانده است"
+                        else "$daysDiff day(s) left until '${item.personName}' is due"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                val infoShape = RoundedCornerShape(16.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), infoShape)
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    DueReminderInfoRow(
+                        label = if (isPersian) "شخص" else "Person",
+                        value = item.personName
+                    )
+                    DueReminderInfoRow(
+                        label = if (isPersian) "نوع" else "Type",
+                        value = if (isPersian) {
+                            if (isDebt) "بدهی" else "طلب"
+                        } else {
+                            if (isDebt) "Debt" else "Credit"
+                        }
+                    )
+                    DueReminderInfoRow(
+                        label = if (isPersian) "مبلغ کل" else "Total Amount",
+                        value = "${numberFormatter.format((item.totalAmount * curr).toLong())} $currencyText"
+                    )
+                    DueReminderInfoRow(
+                        label = if (isPersian) "مانده قابل پرداخت" else "Remaining",
+                        value = "${numberFormatter.format((remaining * curr).toLong())} $currencyText"
+                    )
+                    DueReminderInfoRow(
+                        label = if (isPersian) "تاریخ سررسید" else "Due Date",
+                        value = DateUtils.formatTimestamp(item.dueDateMillis, isPersian)
+                    )
+                    val noteText = item.note
+                    if (!noteText.isNullOrBlank()) {
+                        DueReminderInfoRow(
+                            label = if (isPersian) "یادداشت" else "Note",
+                            value = noteText
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                key(item.id) {
+                    SwipeToConfirmButton(
+                        text = if (isPersian) "برای ثبت پرداخت بکشید" else "Swipe to Confirm Payment",
+                        isPersian = isPersian,
+                        resetTrigger = false,
+                        onConfirm = onMarkAsPaid,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                OutlinedButton(
+                    onClick = onChangeDueDate,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text(text = "📅", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = if (isPersian) "تغییر تاریخ سررسید" else "Change Due Date",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DueReminderInfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 12.dp)
+        )
+    }
+}
+
+/**
+ * دیالوگ انتخاب تاریخ سررسید جدید (دکمه «تغییر تاریخ سررسید» در DueDateReminderDialog).
+ * دقیقاً هم‌سبک با DatePickerDialog موجود در صفحه‌ی افزودن/ویرایش بدهی و طلب.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChangeDueDateDialog(
+    isPersian: Boolean,
+    initialDueDateMillis: Long,
+    onConfirm: (Long) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val todayStartMillis = remember {
+        Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = initialDueDateMillis.coerceAtLeast(todayStartMillis),
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                return utcTimeMillis >= todayStartMillis
+            }
+        }
+    )
+
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = {
+                datePickerState.selectedDateMillis?.let { onConfirm(it) }
+            }) {
+                Text(if (isPersian) "تایید" else "OK")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(if (isPersian) "انصراف" else "Cancel")
+            }
+        }
+    ) {
+        DatePicker(state = datePickerState)
     }
 }
 

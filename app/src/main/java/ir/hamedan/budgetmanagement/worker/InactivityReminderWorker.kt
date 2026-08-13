@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import ir.hamedan.budgetmanagement.data.preferences.AppUsagePreferences
-import ir.hamedan.budgetmanagement.utils.LocaleHelper
+import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.utils.NotificationHelper
 import java.util.concurrent.TimeUnit
 
@@ -60,6 +60,7 @@ class InactivityReminderWorker(
 
             NotificationHelper.send(
                 context = applicationContext,
+                notificationType = NotificationType.INACTIVITY_REMINDER,
                 type = "WARNING",
                 titleFa = titleFa,
                 titleEn = titleEn,

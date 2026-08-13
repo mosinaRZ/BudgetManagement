@@ -10,6 +10,7 @@ import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.ui.components.BalanceWidget
+import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.utils.NotificationHelper
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -44,6 +45,7 @@ class AddViewModel(
 
             NotificationHelper.send(
                 context = context,
+                notificationType = NotificationType.TRANSACTION_ADD,
                 type = "SUCCESS",
                 titleFa = "تراکنش ثبت شد",
                 titleEn = "Transaction Added",

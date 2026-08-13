@@ -6,16 +6,18 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,7 +30,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -112,7 +116,10 @@ fun AnalyticsScreen(
 
                 BalanceTrendChartCard(
                     isPersian = isPersian,
-                    dataPoints = uiState.trendPoints
+                    dataPoints = uiState.trendPoints,
+                    hasEnoughData = uiState.trendHasEnoughData,
+                    selectedFilter = selectedFilter,
+                    currentTimeIndex = uiState.trendCurrentIndex
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -272,6 +279,10 @@ fun ExpenseTimeBarChartCard(
     isIncome: Boolean,
     onIncomeChange: (Boolean) -> Unit
 ) {
+    val numberFormatter = remember(isPersian) {
+        NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
+    }
+
     val entries = timeExpenses.mapIndexed { index, model ->
         BarChartEntry(
             label = if (isPersian) model.labelFa else model.labelEn,
@@ -302,6 +313,11 @@ fun ExpenseTimeBarChartCard(
         averageLabel = if (isPersian) "میانگین" else "Avg",
         yAxisLabel = if (isPersian) "مبلغ ($currencyUnit)" else "Amount ($currencyUnit)",
         xAxisLabel = if (isPersian) "زمان" else "Time",
+        scrollToIndex = currentIndex,
+        valueFormatter = { value ->
+            val displayValue = if (currencyUnit == "IRR") (value * 10).toLong() else value.toLong()
+            numberFormatter.format(displayValue)
+        },
         actionContent = {
             ChartTypeSwitch(
                 isIncome = isIncome,
@@ -644,11 +660,55 @@ private fun SmartInsightCard(
 @Composable
 private fun BalanceTrendChartCard(
     isPersian: Boolean,
-    dataPoints: List<Float>
+    dataPoints: List<Float>,
+    hasEnoughData: Boolean,
+    selectedFilter: TimeFilter,
+    currentTimeIndex: Int
 ) {
     val cardShape = RoundedCornerShape(24.dp)
     val lineColor = MaterialTheme.colorScheme.primary
     val averageColor = MaterialTheme.colorScheme.tertiary
+    val isScrollable = hasEnoughData && dataPoints.size > 7
+    val pointSpacing = 44.dp
+    val chartWidth = if (isScrollable) pointSpacing * dataPoints.size.coerceAtLeast(1) else null
+    val scrollState = rememberScrollState()
+    val density = LocalDensity.current
+
+    val subtitle = when (selectedFilter) {
+        TimeFilter.DAILY -> if (isPersian) "روند موجودی از اولین تراکنش ماه تا امروز" else "Balance trend from first transaction to today"
+        TimeFilter.WEEKLY -> if (isPersian) "روند موجودی در ۴ هفته ماه جاری" else "Balance trend for 4 weeks of current month"
+        TimeFilter.MONTHLY -> if (isPersian) "روند موجودی ماه‌به‌ماه" else "Month-by-month balance trend"
+        TimeFilter.ALL -> if (isPersian) "روند موجودی به ازای هر تراکنش" else "Balance trend per transaction"
+    }
+
+    val insufficientTitle = if (isPersian) "هنوز داده کافی برای رسم روند وجود ندارد" else "Not Enough Data for Trend"
+    val insufficientMessage = when (selectedFilter) {
+        TimeFilter.MONTHLY -> if (isPersian) {
+            "برای نمایش روند ماهانه، تراکنش‌ها باید حداقل در دو ماه مختلف ثبت شده باشند. با ثبت تراکنش در ماه‌های بیشتر، این نمودار به‌صورت خودکار فعال می‌شود."
+        } else {
+            "Monthly trend requires transactions in at least two different months. Keep adding transactions across months and this chart will unlock automatically."
+        }
+        TimeFilter.ALL -> if (isPersian) {
+            "برای رسم نمودار روند، حداقل به دو تراکنش نیاز است. با ثبت تراکنش بعدی، روند موجودی شما نمایش داده می‌شود."
+        } else {
+            "At least two transactions are needed to draw a trend. Add one more transaction to see your balance trend."
+        }
+        else -> if (isPersian) {
+            "با ثبت تراکنش‌های بیشتر در بازه‌های زمانی مختلف، نمودار روند موجودی شما تکمیل‌تر نمایش داده می‌شود."
+        } else {
+            "Add more transactions across different time periods to build a richer balance trend."
+        }
+    }
+
+    LaunchedEffect(currentTimeIndex, dataPoints.size, selectedFilter, hasEnoughData) {
+        if (hasEnoughData && isScrollable && currentTimeIndex in dataPoints.indices) {
+            val spacingPx = with(density) { pointSpacing.toPx() }
+            val targetScroll = ((currentTimeIndex * spacingPx) - spacingPx * 2)
+                .coerceAtLeast(0f)
+                .toInt()
+            scrollState.animateScrollTo(targetScroll)
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -667,158 +727,277 @@ private fun BalanceTrendChartCard(
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = if (isPersian) "تغییرات موجودی بر حسب زمان" else "Balance over time",
+                text = subtitle,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (isPersian) "مبلغ" else "Amount",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .rotate(-90f)
-                        .padding(end = 4.dp)
+            if (!hasEnoughData) {
+                TrendInsufficientDataView(
+                    isPersian = isPersian,
+                    title = insufficientTitle,
+                    message = insufficientMessage
                 )
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Canvas(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(180.dp)
-                    ) {
-                        if (dataPoints.isEmpty()) return@Canvas
-
-                        val width = size.width
-                        val height = size.height
-                        val maxVal = (dataPoints.maxOrNull() ?: 1f).let { if (it == 0f) 1f else it } * 1.15f
-                        val minVal = (dataPoints.minOrNull() ?: 0f).let { if (it > 0f) it * 0.85f else it * 1.15f }
-
-                        val distanceX = if (dataPoints.size > 1) width / (dataPoints.size - 1) else width
-
-                        val average = dataPoints.average().toFloat()
-                        val avgNormalizedY = if (maxVal != minVal) {
-                            (average - minVal) / (maxVal - minVal)
-                        } else {
-                            0.5f
-                        }
-                        val avgY = height - (avgNormalizedY * height)
-
-                        val dashPathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
-                        drawLine(
-                            color = averageColor.copy(alpha = 0.85f),
-                            start = Offset(0f, avgY),
-                            end = Offset(width, avgY),
-                            strokeWidth = 2.dp.toPx(),
-                            pathEffect = dashPathEffect
-                        )
-
-                        val strokePath = Path()
-                        val fillPath = Path()
-
-                        dataPoints.forEachIndexed { index, value ->
-                            val x = index * distanceX
-                            val normalizedY = if (maxVal != minVal) {
-                                (value - minVal) / (maxVal - minVal)
-                            } else {
-                                0.5f
-                            }
-                            val y = height - (normalizedY * height)
-
-                            if (index == 0) {
-                                strokePath.moveTo(x, y)
-                                fillPath.moveTo(x, height)
-                                fillPath.lineTo(x, y)
-                            } else {
-                                val prevX = (index - 1) * distanceX
-                                val prevNormalizedY = if (maxVal != minVal) {
-                                    (dataPoints[index - 1] - minVal) / (maxVal - minVal)
-                                } else {
-                                    0.5f
-                                }
-                                val prevY = height - (prevNormalizedY * height)
-
-                                val controlX1 = prevX + distanceX / 2f
-                                val controlX2 = x - distanceX / 2f
-
-                                strokePath.cubicTo(controlX1, prevY, controlX2, y, x, y)
-                                fillPath.cubicTo(controlX1, prevY, controlX2, y, x, y)
-                            }
-
-                            if (index == dataPoints.size - 1) {
-                                fillPath.lineTo(x, height)
-                                fillPath.close()
-                            }
-                        }
-
-                        drawPath(
-                            path = fillPath,
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    lineColor.copy(alpha = 0.35f),
-                                    lineColor.copy(alpha = 0.0f)
-                                )
-                            )
-                        )
-
-                        drawPath(
-                            path = strokePath,
-                            color = lineColor,
-                            style = Stroke(width = 3.dp.toPx())
-                        )
-
-                        dataPoints.forEachIndexed { index, value ->
-                            val x = index * distanceX
-                            val normalizedY = if (maxVal != minVal) {
-                                (value - minVal) / (maxVal - minVal)
-                            } else {
-                                0.5f
-                            }
-                            val y = height - (normalizedY * height)
-
-                            drawCircle(color = lineColor, radius = 4.dp.toPx(), center = Offset(x, y))
-                            drawCircle(color = Color.White, radius = 2.dp.toPx(), center = Offset(x, y))
-                        }
-                    }
-
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = if (isPersian) "زمان" else "Time",
+                        text = if (isPersian) "مبلغ" else "Amount",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
-                            .align(Alignment.CenterHorizontally)
-                            .padding(top = 6.dp)
+                            .rotate(-90f)
+                            .padding(end = 4.dp)
                     )
-                }
-            }
 
-            if (dataPoints.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Canvas(modifier = Modifier.size(20.dp, 2.dp)) {
-                        drawLine(
-                            color = averageColor.copy(alpha = 0.85f),
-                            start = Offset(0f, size.height / 2),
-                            end = Offset(size.width, size.height / 2),
-                            strokeWidth = 2.dp.toPx(),
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        ) {
+                            if (isScrollable) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .horizontalScroll(scrollState)
+                                ) {
+                                    TrendLineCanvas(
+                                        dataPoints = dataPoints,
+                                        lineColor = lineColor,
+                                        averageColor = averageColor,
+                                        modifier = Modifier
+                                            .width(chartWidth!!)
+                                            .fillMaxHeight()
+                                    )
+                                }
+                            } else {
+                                TrendLineCanvas(
+                                    dataPoints = dataPoints,
+                                    lineColor = lineColor,
+                                    averageColor = averageColor,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = if (isPersian) "زمان" else "Time",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .padding(top = 6.dp)
                         )
                     }
-                    Text(
-                        text = if (isPersian) "میانگین" else "Average",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
+
+                if (dataPoints.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Canvas(modifier = Modifier.size(20.dp, 2.dp)) {
+                            drawLine(
+                                color = averageColor.copy(alpha = 0.85f),
+                                start = Offset(0f, size.height / 2),
+                                end = Offset(size.width, size.height / 2),
+                                strokeWidth = 2.dp.toPx(),
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
+                            )
+                        }
+                        Text(
+                            text = if (isPersian) "میانگین" else "Average",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrendInsufficientDataView(
+    isPersian: Boolean,
+    title: String,
+    message: String
+) {
+    val contentShape = RoundedCornerShape(16.dp)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(180.dp)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.06f), contentShape)
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), contentShape)
+            .clip(contentShape)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ShowChart,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.3f
+            )
+        }
+    }
+}
+
+@Composable
+private fun TrendLineCanvas(
+    dataPoints: List<Float>,
+    lineColor: Color,
+    averageColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier) {
+        if (dataPoints.isEmpty()) return@Canvas
+
+        val horizontalInset = 8.dp.toPx()
+        val verticalInset = 10.dp.toPx()
+        val chartWidth = (size.width - horizontalInset * 2).coerceAtLeast(1f)
+        val chartHeight = (size.height - verticalInset * 2).coerceAtLeast(1f)
+
+        val rawMax = dataPoints.maxOrNull() ?: 0f
+        val rawMin = dataPoints.minOrNull() ?: 0f
+        val range = (rawMax - rawMin).let { if (it <= 0f) kotlin.math.abs(rawMax).coerceAtLeast(1f) else it }
+        val padding = range * 0.15f
+        val maxVal = rawMax + padding
+        val minVal = rawMin - padding
+
+        val distanceX = if (dataPoints.size > 1) chartWidth / (dataPoints.size - 1) else chartWidth
+
+        val average = dataPoints.average().toFloat()
+        val avgNormalizedY = if (maxVal != minVal) {
+            (average - minVal) / (maxVal - minVal)
+        } else {
+            0.5f
+        }
+        val avgY = verticalInset + chartHeight - (avgNormalizedY * chartHeight)
+
+        val dashPathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+        drawLine(
+            color = averageColor.copy(alpha = 0.85f),
+            start = Offset(horizontalInset, avgY),
+            end = Offset(horizontalInset + chartWidth, avgY),
+            strokeWidth = 2.dp.toPx(),
+            pathEffect = dashPathEffect
+        )
+
+        val strokePath = Path()
+        val fillPath = Path()
+        val chartBottom = verticalInset + chartHeight
+
+        dataPoints.forEachIndexed { index, value ->
+            val x = horizontalInset + index * distanceX
+            val normalizedY = if (maxVal != minVal) {
+                (value - minVal) / (maxVal - minVal)
+            } else {
+                0.5f
+            }
+            val y = chartBottom - (normalizedY * chartHeight)
+
+            if (index == 0) {
+                strokePath.moveTo(x, y)
+                fillPath.moveTo(x, chartBottom)
+                fillPath.lineTo(x, y)
+            } else {
+                val prevX = horizontalInset + (index - 1) * distanceX
+                val prevNormalizedY = if (maxVal != minVal) {
+                    (dataPoints[index - 1] - minVal) / (maxVal - minVal)
+                } else {
+                    0.5f
+                }
+                val prevY = chartBottom - (prevNormalizedY * chartHeight)
+
+                val controlX1 = prevX + distanceX / 2f
+                val controlX2 = x - distanceX / 2f
+
+                strokePath.cubicTo(controlX1, prevY, controlX2, y, x, y)
+                fillPath.cubicTo(controlX1, prevY, controlX2, y, x, y)
+            }
+
+            if (index == dataPoints.size - 1) {
+                fillPath.lineTo(x, chartBottom)
+                fillPath.close()
+            }
+        }
+
+        clipRect(
+            left = horizontalInset - 2.dp.toPx(),
+            top = verticalInset - 2.dp.toPx(),
+            right = horizontalInset + chartWidth + 2.dp.toPx(),
+            bottom = chartBottom + 2.dp.toPx()
+        ) {
+            drawPath(
+                path = fillPath,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        lineColor.copy(alpha = 0.35f),
+                        lineColor.copy(alpha = 0.0f)
+                    ),
+                    startY = verticalInset,
+                    endY = chartBottom
+                )
+            )
+
+            drawPath(
+                path = strokePath,
+                color = lineColor,
+                style = Stroke(width = 3.dp.toPx())
+            )
+
+            dataPoints.forEachIndexed { index, value ->
+                val x = horizontalInset + index * distanceX
+                val normalizedY = if (maxVal != minVal) {
+                    (value - minVal) / (maxVal - minVal)
+                } else {
+                    0.5f
+                }
+                val y = chartBottom - (normalizedY * chartHeight)
+
+                drawCircle(color = lineColor, radius = 4.dp.toPx(), center = Offset(x, y))
+                drawCircle(color = Color.White, radius = 2.dp.toPx(), center = Offset(x, y))
             }
         }
     }

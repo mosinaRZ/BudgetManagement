@@ -50,6 +50,7 @@ class AppViewModelFactory(
                 SavingGoalsViewModel(
                     repository = container.savingGoalRepository,
                     transactionRepository = container.transactionRepository,
+                    notificationRepository = container.notificationRepository,
                     context = appContext
                 ) as T
             }

@@ -4,6 +4,8 @@ import android.content.Context
 import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.NotificationEntity
+import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
+import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +18,7 @@ object NotificationHelper {
      */
     fun send(
         context: Context,
+        notificationType: NotificationType,
         type: String = "SYSTEM",
         titleFa: String,
         titleEn: String,
@@ -23,6 +26,8 @@ object NotificationHelper {
         descEn: String,
         tag: String = ""
     ) {
+        if (!NotificationPreferences.isTypeEnabled(context, notificationType)) return
+
         val app = context.applicationContext as BudgetApp
         val repository = app.container.notificationRepository
 

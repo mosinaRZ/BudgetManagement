@@ -6,48 +6,51 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
 @Composable
 fun StatusBarAuroraBackground() {
-    // رنگ‌ها با آلفای (شفافیت) بالاتر برای نوردهی خیلی بیشتر
     val primaryColor = MaterialTheme.colorScheme.primary
     val secondaryColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
     val backgroundColor = MaterialTheme.colorScheme.background
 
     Canvas(modifier = Modifier.fillMaxSize()) {
-        // ۱. پر کردن کل صفحه با رنگ پس‌زمینه تیره
+        // ۱. پر کردن کل صفحه با رنگ پس‌زمینه
         drawRect(color = backgroundColor)
 
-        // ۲. هاله اصلی شفق با پهنا و شعاع بیشتر (افزایش از 0.95 به 1.4)
-        drawCircle(
-            brush = Brush.radialGradient(
+        // محاسبه ارتفاع دقیق یک‌سوم صفحه
+        val oneThirdHeight = size.height / 3f
+
+        // ۲. رسم مستطیل شفق اصلی در یک‌سوم بالای صفحه
+        drawRect(
+            brush = Brush.verticalGradient(
                 colors = listOf(
-                    primaryColor,
-                    primaryColor.copy(alpha = 0.25f),
-                    Color.Transparent
+                    primaryColor.copy(alpha = 0.85f), // نور قوی در بالاترین قسمت
+                    primaryColor.copy(alpha = 0.35f),
+                    Color.Transparent                 // محو شدن کامل در انتهای یک‌سوم
                 ),
-                center = Offset(x = size.width * 0.5f, y = 0f),
-                radius = size.width * 1.4f
+                startY = 0f,
+                endY = oneThirdHeight
             ),
-            radius = size.width * 1.4f,
-            center = Offset(x = size.width * 0.5f, y = 0f)
+            topLeft = Offset.Zero,
+            size = Size(width = size.width, height = oneThirdHeight)
         )
 
-        // ۳. هاله مکمل برای پهنای بیشتر در بالای صفحه (افزایش از 0.8 به 1.2)
-        drawCircle(
-            brush = Brush.radialGradient(
+        // ۳. لایه شفق مکمل برای عمق‌بخشی بیشتر و ترکیب رنگ نرم‌تر
+        drawRect(
+            brush = Brush.verticalGradient(
                 colors = listOf(
                     secondaryColor,
-                    secondaryColor.copy(alpha = 0.1f),
+                    secondaryColor.copy(alpha = 0.15f),
                     Color.Transparent
                 ),
-                center = Offset(x = size.width * 0.5f, y = size.height * 0.03f),
-                radius = size.width * 1.2f
+                startY = 0f,
+                endY = oneThirdHeight
             ),
-            radius = size.width * 1.2f,
-            center = Offset(x = size.width * 0.5f, y = size.height * 0.03f)
+            topLeft = Offset.Zero,
+            size = Size(width = size.width, height = oneThirdHeight)
         )
     }
 }

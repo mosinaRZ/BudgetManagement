@@ -35,6 +35,9 @@ sealed interface AppRoute {
 
     @Serializable
     data object Debt : AppRoute
+
+    @Serializable
+    data object NotificationCalibration : AppRoute
 }
 
 /**

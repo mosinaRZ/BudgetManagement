@@ -3,10 +3,10 @@ package ir.hamedan.budgetmanagement.ui.screens.home
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.PendingTransactionEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
+import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.PendingTransactionRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
@@ -60,9 +60,11 @@ class PendingTransactionViewModel(
             )
             pendingRepository.confirm(pending.id)
 
+            // ارسال اعلان اصلاح‌شده با NotificationType مربوطه
             NotificationHelper.send(
                 context = context,
-                type = "SUCCESS",
+                notificationType = NotificationType.SMS_CONFIRMED,
+                type = "SMS",
                 titleFa = "تراکنش ثبت شد",
                 titleEn = "Transaction Added",
                 descFa = "تراکنش پیامکی «$title» با موفقیت ثبت شد.",
