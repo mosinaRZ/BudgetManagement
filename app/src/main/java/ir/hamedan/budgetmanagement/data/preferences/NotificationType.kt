@@ -275,7 +275,7 @@ enum class NotificationType(
         "Settings Changed",
         "وقتی تنظیمات برنامه (واحد پول، امنیت و...) تغییر می‌کند.",
         "When app settings (currency, security, etc.) are changed.",
-        defaultEnabled = false
+        defaultEnabled = true
     );
 
     val prefKey: String get() = "notif_type_$name"

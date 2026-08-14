@@ -382,7 +382,7 @@ fun SettingsScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = if (isPersian) "کالیبراسیون و مدیریت دقیق اعلان‌ها" else "Notification Calibration",
+                                    text = if (isPersian) "شخصی‌سازی و مدیریت دقیق اعلان‌ها" else "Notification Calibration",
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                             }

@@ -6,7 +6,13 @@ import android.content.ComponentName
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,6 +34,8 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsNone
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.*
@@ -35,9 +43,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -78,6 +89,19 @@ data class HomeDueItem(
     val type: String
 )
 
+// ===== حریم خصوصی مبالغ (نمایش/عدم‌نمایش تراز، درآمد و هزینه) =====
+private const val PRIVACY_PREFS_NAME = "home_privacy_prefs"
+private const val KEY_AMOUNTS_HIDDEN = "key_amounts_hidden"
+
+/**
+ * جایگزینی مبلغ نمایشی با الگوی ستاره‌ای هنگام فعال بودن حالت حریم خصوصی.
+ * تعداد ستاره‌ها بر اساس تعداد ارقام مبلغ واقعی تنظیم می‌شود تا حس طبیعی حفظ شود.
+ */
+private fun maskedStars(realLength: Int): String {
+    val starCount = realLength.coerceIn(4, 9)
+    return "*".repeat(starCount)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -98,6 +122,33 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val isPersian = LocaleHelper.getLanguage(context) == "fa"
+    val haptic = LocalHapticFeedback.current
+
+    // ===== وضعیت مخفی/نمایان بودن مبالغ (تراز کلی، درآمد و هزینه) با SharedPreferences =====
+    val privacyPrefs = remember {
+        context.getSharedPreferences(PRIVACY_PREFS_NAME, android.content.Context.MODE_PRIVATE)
+    }
+    var isAmountsHidden by remember {
+        mutableStateOf(privacyPrefs.getBoolean(KEY_AMOUNTS_HIDDEN, false))
+    }
+    // یک انیمیشن کوچک «چشمک» روی آیکون به هنگام هر تغییر وضعیت
+    var eyeToggleTrigger by remember { mutableIntStateOf(0) }
+    val eyeBlinkScale = remember { Animatable(1f) }
+
+    fun toggleAmountsVisibility() {
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        isAmountsHidden = !isAmountsHidden
+        privacyPrefs.edit().putBoolean(KEY_AMOUNTS_HIDDEN, isAmountsHidden).apply()
+        eyeToggleTrigger++
+    }
+
+    LaunchedEffect(eyeToggleTrigger) {
+        if (eyeToggleTrigger > 0) {
+            // شبیه‌سازی «چشمک زدن» چشم: جمع شدن سریع و باز شدن دوباره
+            eyeBlinkScale.animateTo(0.55f, animationSpec = tween(90, easing = FastOutSlowInEasing))
+            eyeBlinkScale.animateTo(1f, animationSpec = tween(140, easing = FastOutSlowInEasing))
+        }
+    }
 
     var lastBackPressTime by remember { mutableLongStateOf(0L) }
     BackHandler {
@@ -378,11 +429,45 @@ fun HomeScreen(
                                 .fillMaxWidth()
                                 .padding(20.dp)
                         ) {
-                            Text(
-                                text = periodLabel,
-                                style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = periodLabel,
+                                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                )
+
+                                // آیکون چشمی برای مخفی/نمایان‌سازی مبالغ (ذخیره در SharedPreferences)
+                                IconButton(
+                                    onClick = { toggleAmountsVisibility() },
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .scale(eyeBlinkScale.value)
+                                ) {
+                                    AnimatedContent(
+                                        targetState = isAmountsHidden,
+                                        transitionSpec = {
+                                            (fadeIn(tween(180)) + scaleIn(initialScale = 0.6f, animationSpec = tween(180)))
+                                                .togetherWith(fadeOut(tween(120)) + scaleOut(targetScale = 0.6f, animationSpec = tween(120)))
+                                        },
+                                        label = "eye_icon"
+                                    ) { hidden ->
+                                        Icon(
+                                            imageVector = if (hidden) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                            contentDescription = if (isPersian) {
+                                                if (hidden) "نمایش مبالغ" else "مخفی کردن مبالغ"
+                                            } else {
+                                                if (hidden) "Show amounts" else "Hide amounts"
+                                            },
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
 
                             Spacer(Modifier.height(24.dp))
 
@@ -395,15 +480,27 @@ fun HomeScreen(
 
                             val formattedAmount = numberFormatter.format(abs(displayBalance))
                             val sign = if (totalBalance < 0) "-" else ""
+                            val fullBalanceText = "$sign$formattedAmount $currencyText"
+                            val balanceColor = if (totalBalance >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
 
-                            Text(
-                                text = "$sign$formattedAmount $currencyText",
-                                style = MaterialTheme.typography.headlineMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 28.sp
-                                ),
-                                color = if (totalBalance >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                            )
+                            AnimatedContent(
+                                targetState = isAmountsHidden,
+                                transitionSpec = {
+                                    (fadeIn(tween(220)) + scaleIn(initialScale = 0.92f, animationSpec = tween(220)))
+                                        .togetherWith(fadeOut(tween(160)) + scaleOut(targetScale = 0.92f, animationSpec = tween(160)))
+                                },
+                                label = "balance_amount"
+                            ) { hidden ->
+                                Text(
+                                    text = if (hidden) "${maskedStars(formattedAmount.length)} $currencyText" else fullBalanceText,
+                                    style = MaterialTheme.typography.headlineMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 28.sp,
+                                        letterSpacing = if (hidden) 2.sp else 0.sp
+                                    ),
+                                    color = balanceColor
+                                )
+                            }
                         }
                     }
                 }
@@ -440,7 +537,23 @@ fun HomeScreen(
                                 Spacer(Modifier.height(8.dp))
                                 val displayIncome = if (currencyUnit == "IRR") (income * 10).toLong() else income.toLong()
                                 val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")
-                                Text(text = "${numberFormatter.format(displayIncome)} $currencyText", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                val formattedIncome = numberFormatter.format(displayIncome)
+                                AnimatedContent(
+                                    targetState = isAmountsHidden,
+                                    transitionSpec = {
+                                        (fadeIn(tween(220)) + scaleIn(initialScale = 0.92f, animationSpec = tween(220)))
+                                            .togetherWith(fadeOut(tween(160)) + scaleOut(targetScale = 0.92f, animationSpec = tween(160)))
+                                    },
+                                    label = "income_amount"
+                                ) { hidden ->
+                                    Text(
+                                        text = if (hidden) "${maskedStars(formattedIncome.length)} $currencyText" else "$formattedIncome $currencyText",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = if (hidden) 1.5.sp else 0.sp
+                                    )
+                                }
                             }
                         }
 
@@ -464,7 +577,23 @@ fun HomeScreen(
                                 Spacer(Modifier.height(8.dp))
                                 val displayExpense = if (currencyUnit == "IRR") (expense * 10).toLong() else expense.toLong()
                                 val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")
-                                Text(text = "${numberFormatter.format(displayExpense)} $currencyText", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                                val formattedExpense = numberFormatter.format(displayExpense)
+                                AnimatedContent(
+                                    targetState = isAmountsHidden,
+                                    transitionSpec = {
+                                        (fadeIn(tween(220)) + scaleIn(initialScale = 0.92f, animationSpec = tween(220)))
+                                            .togetherWith(fadeOut(tween(160)) + scaleOut(targetScale = 0.92f, animationSpec = tween(160)))
+                                    },
+                                    label = "expense_amount"
+                                ) { hidden ->
+                                    Text(
+                                        text = if (hidden) "${maskedStars(formattedExpense.length)} $currencyText" else "$formattedExpense $currencyText",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.error,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = if (hidden) 1.5.sp else 0.sp
+                                    )
+                                }
                             }
                         }
                     }
