@@ -38,9 +38,12 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 		})
 
 		if deps.AuthHandler != nil {
+			r.Post("/auth/otp/request", deps.AuthHandler.RequestOTP)
 			r.Post("/auth/register", deps.AuthHandler.Register)
 			r.Post("/auth/login", deps.AuthHandler.Login)
 			r.Post("/auth/refresh", deps.AuthHandler.Refresh)
+			r.Post("/auth/password/reset", deps.AuthHandler.ResetPassword)
+			r.Post("/auth/logout", deps.AuthHandler.Logout)
 		}
 	})
 

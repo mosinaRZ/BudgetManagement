@@ -21,13 +21,32 @@ const (
 	MaxRequestCiphertextSize = 4 * 1024 * 1024
 )
 
-type SyncUsecase struct{ repo repository.SyncRepository }
+type SyncUsecase struct {
+	repo    repository.SyncRepository
+	devices repository.DeviceRepository
+}
 
-func NewSyncUsecase(repo repository.SyncRepository) *SyncUsecase { return &SyncUsecase{repo: repo} }
+func NewSyncUsecase(repo repository.SyncRepository, devices ...repository.DeviceRepository) *SyncUsecase {
+	var d repository.DeviceRepository
+	if len(devices) > 0 {
+		d = devices[0]
+	}
+	return &SyncUsecase{repo: repo, devices: d}
+}
 
 func (u *SyncUsecase) Execute(ctx context.Context, userID string, req SyncInput) (SyncOutput, error) {
 	if userID == "" || req.RequestID == "" || req.DeviceID == "" {
 		return SyncOutput{}, apperror.ErrValidation("invalid sync identity")
+	}
+	if u.devices != nil {
+		ok, err := u.devices.Exists(ctx, userID, req.DeviceID)
+		if err != nil {
+			return SyncOutput{}, err
+		}
+		if !ok {
+			return SyncOutput{}, apperror.ErrForbidden("device is not registered")
+		}
+		_ = u.devices.Touch(ctx, userID, req.DeviceID)
 	}
 	if len(req.Changes) > MaxChangesPerRequest {
 		return SyncOutput{}, apperror.ErrValidation("too many sync changes")

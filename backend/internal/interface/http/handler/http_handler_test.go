@@ -46,7 +46,7 @@ func TestAuthHandlerMapsUsecaseError(t *testing.T) {
 	h := NewAuthHandler(fakeAuthService{login: func(context.Context, authusecase.LoginInput) (authusecase.LoginOutput, error) {
 		return authusecase.LoginOutput{}, apperror.ErrUnauthorized("invalid credentials")
 	}}, validator.New())
-	body, _ := json.Marshal(dto.LoginRequest{PhoneNumber: "+989121234567", Password: "correct horse", DeviceID: "device"})
+	body, _ := json.Marshal(dto.LoginRequest{Identifier: "+989121234567", Password: "correct horse", DeviceID: "device"})
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(string(body)))
 	rec := httptest.NewRecorder()
 	h.Login(rec, req)
@@ -59,7 +59,7 @@ func TestAuthHandlerDoesNotExposeUnexpectedError(t *testing.T) {
 	h := NewAuthHandler(fakeAuthService{login: func(context.Context, authusecase.LoginInput) (authusecase.LoginOutput, error) {
 		return authusecase.LoginOutput{}, errors.New("mongo secret details")
 	}}, validator.New())
-	body := `{"phone_number":"+989121234567","password":"correct horse","device_id":"device"}`
+	body := `{"identifier":"+989121234567","password":"correct horse","device_id":"device"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	h.Login(rec, req)
