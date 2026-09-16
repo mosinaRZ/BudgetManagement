@@ -15,6 +15,7 @@ import (
 	"github.com/mosinaRZ/finance-sync-backend/internal/infrastructure/config"
 	"github.com/mosinaRZ/finance-sync-backend/internal/infrastructure/logger"
 	"github.com/mosinaRZ/finance-sync-backend/internal/infrastructure/mongodb"
+	"github.com/mosinaRZ/finance-sync-backend/internal/infrastructure/notification"
 	httpiface "github.com/mosinaRZ/finance-sync-backend/internal/interface/http"
 	"github.com/mosinaRZ/finance-sync-backend/internal/interface/http/handler"
 	authUsecase "github.com/mosinaRZ/finance-sync-backend/internal/usecase/auth"
@@ -63,13 +64,18 @@ func run() error {
 
 	validate := validator.New()
 	syncRepo := mongodb.NewSyncRepository(mongoClient, db)
-	syncUC := syncUsecase.NewSyncUsecase(syncRepo)
+	deviceRepo := mongodb.NewDeviceRepository(db)
+	syncUC := syncUsecase.NewSyncUsecase(syncRepo, deviceRepo)
 	syncHandler := handler.NewSyncHandler(syncUC, validate)
+	otpRepo := mongodb.NewOTPRepository(db)
+	delivery := notification.New(notification.Config{SMSWebhookURL: cfg.SMSWebhookURL, SMSAuthToken: cfg.SMSAuthToken, SMTPHost: cfg.SMTPHost, SMTPPort: cfg.SMTPPort, SMTPUser: cfg.SMTPUser, SMTPPassword: cfg.SMTPPassword, EmailFrom: cfg.EmailFrom, DevLog: cfg.DevLogOTP})
+	otpUC := authUsecase.NewOTPService(otpRepo, delivery, cfg.JWTSecret, cfg.OTPExpiry)
 
 	userRepo := mongodb.NewUserRepository(db)
 	refreshRepo := mongodb.NewRefreshTokenRepository(db)
-	authUC := authUsecase.NewService(userRepo, refreshRepo, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
-	authHandler := handler.NewAuthHandler(authUC, validate)
+	authUC := authUsecase.NewService(userRepo, refreshRepo, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL, otpUC)
+	authUC.SetDeviceRepository(deviceRepo)
+	authHandler := handler.NewAuthHandler(authUC, validate, otpUC)
 
 	router := httpiface.NewRouter(httpiface.RouterDependencies{
 		AuthHandler: authHandler,

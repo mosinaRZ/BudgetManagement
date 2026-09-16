@@ -14,6 +14,30 @@ import (
 
 const testSecret = "01234567890123456789012345678901"
 
+type fakeOTPService struct {
+	verify func(context.Context, VerifyOTPInput) (string, error)
+}
+
+func (f fakeOTPService) Request(context.Context, RequestOTPInput) (RequestOTPOutput, error) {
+	return RequestOTPOutput{}, nil
+}
+
+func (f fakeOTPService) Verify(ctx context.Context, in VerifyOTPInput) (string, error) {
+	if f.verify != nil {
+		return f.verify(ctx, in)
+	}
+	return "", apperror.ErrUnauthorized("invalid OTP")
+}
+
+func testRegisterOTPService() OTPService {
+	return fakeOTPService{verify: func(_ context.Context, in VerifyOTPInput) (string, error) {
+		if in.Purpose != entity.OTPPurposeRegister {
+			return "", apperror.ErrUnauthorized("invalid OTP purpose")
+		}
+		return hashIdentifier("+989121234567", testSecret), nil
+	}}
+}
+
 func newService(users *mocks.MockUserRepository, refresh *mocks.MockRefreshTokenRepository) *ServiceImpl {
 	return NewService(users, refresh, testSecret, time.Minute, 24*time.Hour)
 }
@@ -34,7 +58,8 @@ func TestRegisterSuccess(t *testing.T) {
 		}
 		return nil
 	}}
-	out, err := newService(users, refresh).Register(context.Background(), RegisterInput{PhoneNumber: "+989121234567", Password: "correct horse battery", DeviceID: "device-1"})
+	s := NewService(users, refresh, testSecret, time.Minute, 24*time.Hour, testRegisterOTPService())
+	out, err := s.Register(context.Background(), RegisterInput{PhoneNumber: "+989121234567", Password: "correct horse battery", DeviceID: "device-1", OTPChallengeID: "challenge-1", OTPCode: "123456"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +73,8 @@ func TestRegisterSuccess(t *testing.T) {
 
 func TestRegisterDuplicate(t *testing.T) {
 	users := &mocks.MockUserRepository{FindByPhoneHashFunc: func(context.Context, string) (*entity.User, error) { return &entity.User{ID: "u1"}, nil }}
-	_, err := newService(users, &mocks.MockRefreshTokenRepository{}).Register(context.Background(), RegisterInput{PhoneNumber: "+989121234567", Password: "correct horse battery", DeviceID: "d"})
+	s := NewService(users, &mocks.MockRefreshTokenRepository{}, testSecret, time.Minute, 24*time.Hour, testRegisterOTPService())
+	_, err := s.Register(context.Background(), RegisterInput{PhoneNumber: "+989121234567", Password: "correct horse battery", DeviceID: "d", OTPChallengeID: "challenge-1", OTPCode: "123456"})
 	code, _ := apperror.CodeOf(err)
 	if code != apperror.CodeConflict {
 		t.Fatalf("got %v", err)
@@ -62,10 +88,10 @@ func TestLoginSuccessAndWrongPassword(t *testing.T) {
 	users := &mocks.MockUserRepository{FindByPhoneHashFunc: func(context.Context, string) (*entity.User, error) { return user, nil }, AddDeviceFunc: func(context.Context, string, string) error { return nil }}
 	refresh := &mocks.MockRefreshTokenRepository{}
 	s := newService(users, refresh)
-	if _, err := s.Login(context.Background(), LoginInput{PhoneNumber: "+989121234567", Password: "correct horse battery", DeviceID: "d"}); err != nil {
+	if _, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: "correct horse battery", DeviceID: "d"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Login(context.Background(), LoginInput{PhoneNumber: "+989121234567", Password: "wrong password", DeviceID: "d"}); func() bool { code, _ := apperror.CodeOf(err); return code != apperror.CodeUnauthorized }() {
+	if _, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: "wrong password", DeviceID: "d"}); func() bool { code, _ := apperror.CodeOf(err); return code != apperror.CodeUnauthorized }() {
 		t.Fatalf("got %v", err)
 	}
 }

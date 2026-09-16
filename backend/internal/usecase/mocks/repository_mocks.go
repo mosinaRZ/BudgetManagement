@@ -11,6 +11,7 @@ import (
 type MockUserRepository struct {
 	CreateFunc          func(ctx context.Context, u *entity.User) error
 	FindByPhoneHashFunc func(ctx context.Context, phoneHash string) (*entity.User, error)
+	FindByEmailHashFunc func(ctx context.Context, emailHash string) (*entity.User, error)
 	FindByIDFunc        func(ctx context.Context, id string) (*entity.User, error)
 	UpdateFunc          func(ctx context.Context, u *entity.User) error
 	AddDeviceFunc       func(ctx context.Context, userID, deviceID string) error
@@ -26,6 +27,13 @@ func (m *MockUserRepository) Create(ctx context.Context, u *entity.User) error {
 func (m *MockUserRepository) FindByPhoneHash(ctx context.Context, phoneHash string) (*entity.User, error) {
 	if m.FindByPhoneHashFunc != nil {
 		return m.FindByPhoneHashFunc(ctx, phoneHash)
+	}
+	return nil, nil
+}
+
+func (m *MockUserRepository) FindByEmailHash(ctx context.Context, emailHash string) (*entity.User, error) {
+	if m.FindByEmailHashFunc != nil {
+		return m.FindByEmailHashFunc(ctx, emailHash)
 	}
 	return nil, nil
 }
