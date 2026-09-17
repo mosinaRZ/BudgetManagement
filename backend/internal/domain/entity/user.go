@@ -4,6 +4,7 @@ import "time"
 
 type User struct {
 	ID                  string
+	Role                Role
 	PhoneHash           string
 	EmailHash           string
 	PhoneVerified       bool

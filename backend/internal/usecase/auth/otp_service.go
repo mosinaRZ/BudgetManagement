@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -10,6 +11,7 @@ import (
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/repository"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"net/mail"
 	"strings"
 	"time"
 )
@@ -34,10 +36,25 @@ func hashOTP(id, code, secret string) string {
 	return base64.RawURLEncoding.EncodeToString(h[:])
 }
 func (s *otpService) Request(ctx context.Context, in RequestOTPInput) (RequestOTPOutput, error) {
+	if strings.TrimSpace(s.secret) == "" || s.ttl <= 0 {
+		return RequestOTPOutput{}, apperror.ErrInternal("OTP service is not configured")
+	}
 	d := strings.TrimSpace(in.Destination)
 	ch := strings.ToLower(strings.TrimSpace(in.Channel))
 	if d == "" || (ch != "sms" && ch != "email") {
 		return RequestOTPOutput{}, apperror.ErrValidation("invalid OTP destination")
+	}
+	if ch == "sms" {
+		normalized, err := normalizePhone(d)
+		if err != nil {
+			return RequestOTPOutput{}, apperror.ErrValidation("invalid phone number")
+		}
+		d = normalized
+	} else {
+		addr, err := mail.ParseAddress(d)
+		if err != nil || addr.Address != d {
+			return RequestOTPOutput{}, apperror.ErrValidation("invalid email address")
+		}
 	}
 	if in.Purpose != entity.OTPPurposeRegister && in.Purpose != entity.OTPPurposePasswordReset && in.Purpose != entity.OTPPurposeEmailVerification && in.Purpose != entity.OTPPurposeLogin {
 		return RequestOTPOutput{}, apperror.ErrValidation("OTP purpose is required")
@@ -80,7 +97,7 @@ func (s *otpService) Verify(ctx context.Context, in VerifyOTPInput) (string, err
 	if err := s.repo.IncrementAttempts(ctx, o.ID); err != nil {
 		return "", err
 	}
-	if hashOTP(o.ID, strings.TrimSpace(in.Code), s.secret) != o.CodeHash {
+	if !hmac.Equal([]byte(hashOTP(o.ID, strings.TrimSpace(in.Code), s.secret)), []byte(o.CodeHash)) {
 		return "", apperror.ErrUnauthorized("invalid OTP")
 	}
 	if err := s.repo.Consume(ctx, o.ID); err != nil {

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
 	"strings"
 	"testing"
 	"time"
@@ -76,5 +77,19 @@ func TestAccessTokenInvalidSignature(t *testing.T) {
 	}
 	if _, err := ParseAndValidateAccessToken(raw, jwtTestSecret+"x"); err == nil {
 		t.Fatal("invalid signature accepted")
+	}
+}
+
+func TestAccessTokenCarriesRole(t *testing.T) {
+	tok, err := GenerateAccessTokenWithRole("user-1", entity.RoleAdmin, time.Minute, jwtTestSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := ParseAndValidateAccessTokenClaims(tok, jwtTestSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claims.UserID != "user-1" || claims.Role != entity.RoleAdmin {
+		t.Fatalf("claims = %+v, want user-1/admin", claims)
 	}
 }

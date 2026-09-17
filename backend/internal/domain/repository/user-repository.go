@@ -12,4 +12,5 @@ type UserRepository interface {
 	FindByID(context.Context, string) (*entity.User, error)
 	Update(context.Context, *entity.User) error
 	AddDevice(context.Context, string, string) error
+	UpdateRole(context.Context, string, entity.Role) error
 }

@@ -21,13 +21,14 @@ func Auth(secret string) func(http.Handler) http.Handler {
 			}
 
 			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-			userID, err := auth.ParseAndValidateAccessToken(tokenString, secret)
+			claims, err := auth.ParseAndValidateAccessTokenClaims(tokenString, secret)
 			if err != nil {
 				response.Error(w, apperror.ErrUnauthorized("Invalid or expired token"))
 				return
 			}
 
-			ctx := contextkeys.WithUserID(r.Context(), userID)
+			ctx := contextkeys.WithUserID(r.Context(), claims.UserID)
+			ctx = contextkeys.WithRole(ctx, string(claims.Role))
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

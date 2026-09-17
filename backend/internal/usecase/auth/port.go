@@ -14,15 +14,20 @@ type RegisterInput struct {
 }
 type RegisterOutput struct {
 	AccessToken, RefreshToken, KdfSalt, UserID string
+	Role                                       entity.Role
 	RecoveryRequired                           bool
 }
 type LoginInput struct{ Identifier, Password, DeviceID string }
 type LoginOutput struct {
 	AccessToken, RefreshToken, KdfSalt, UserID                                   string
+	Role                                                                         entity.Role
 	PasswordKeyEnvelope, PasswordKeyNonce, RecoveryKeyEnvelope, RecoveryKeyNonce []byte
 }
 type RefreshInput struct{ RefreshToken string }
-type RefreshOutput struct{ AccessToken, RefreshToken string }
+type RefreshOutput struct {
+	AccessToken, RefreshToken string
+	Role                      entity.Role
+}
 type RequestOTPInput struct {
 	Destination, Channel string
 	Purpose              entity.OTPPurpose
@@ -42,6 +47,7 @@ type ResetPasswordInput struct {
 }
 type ResetPasswordOutput struct {
 	AccessToken, RefreshToken, KdfSalt, UserID                                   string
+	Role                                                                         entity.Role
 	PasswordKeyEnvelope, PasswordKeyNonce, RecoveryKeyEnvelope, RecoveryKeyNonce []byte
 }
 type OTPService interface {

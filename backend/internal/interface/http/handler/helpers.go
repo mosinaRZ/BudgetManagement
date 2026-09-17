@@ -12,7 +12,7 @@ import (
 	"github.com/mosinaRZ/finance-sync-backend/internal/pkg/response"
 )
 
-const maxJSONBodyBytes = 5 * 1024 * 1024
+const maxJSONBodyBytes = 6 * 1024 * 1024
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)

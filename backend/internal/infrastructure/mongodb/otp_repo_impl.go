@@ -19,11 +19,39 @@ func NewOTPRepository(db *mongo.Database) *otpRepo {
 	return &otpRepo{c: db.Collection(otpCollectionName)}
 }
 func (r *otpRepo) Create(ctx context.Context, o *entity.OTPChallenge) error {
-	m := bson.M{"_id": primitive.NewObjectID(), "userId": o.UserID, "destinationHash": o.DestinationHash, "channel": o.Channel, "purpose": string(o.Purpose), "codeHash": o.CodeHash, "createdAt": o.CreatedAt, "expiresAt": o.ExpiresAt, "attempts": o.Attempts}
+	if o == nil {
+		return apperror.ErrValidation("OTP challenge is required")
+	}
+
+	var id primitive.ObjectID
+	var err error
+	if o.ID == "" {
+		id = primitive.NewObjectID()
+	} else {
+		id, err = primitive.ObjectIDFromHex(o.ID)
+		if err != nil {
+			return apperror.ErrValidation("invalid OTP challenge id")
+		}
+	}
+
+	m := bson.M{
+		"_id":             id,
+		"userId":          o.UserID,
+		"destinationHash": o.DestinationHash,
+		"channel":         o.Channel,
+		"purpose":         string(o.Purpose),
+		"codeHash":        o.CodeHash,
+		"createdAt":       o.CreatedAt,
+		"expiresAt":       o.ExpiresAt,
+		"attempts":        o.Attempts,
+	}
 	if _, err := r.c.InsertOne(ctx, m); err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return apperror.ErrConflict("OTP challenge already exists")
+		}
 		return apperror.ErrInternal("failed to create OTP", err)
 	}
-	o.ID = m["_id"].(primitive.ObjectID).Hex()
+	o.ID = id.Hex()
 	return nil
 }
 func (r *otpRepo) FindActive(ctx context.Context, id string) (*entity.OTPChallenge, error) {

@@ -1,5 +1,7 @@
 package dto
 
+import "github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
+
 type OTPRequest struct {
 	Destination string `json:"destination" validate:"required,max=320"`
 	Channel     string `json:"channel" validate:"required,oneof=sms email"`
@@ -26,11 +28,12 @@ type RegisterRequest struct {
 	RecoveryKeyNonce    string `json:"recovery_key_nonce,omitempty"`
 }
 type RegisterResponse struct {
-	AccessToken      string `json:"access_token"`
-	RefreshToken     string `json:"refresh_token"`
-	KdfSalt          string `json:"kdf_salt"`
-	UserID           string `json:"user_id"`
-	RecoveryRequired bool   `json:"recovery_required"`
+	AccessToken      string      `json:"access_token"`
+	RefreshToken     string      `json:"refresh_token"`
+	KdfSalt          string      `json:"kdf_salt"`
+	UserID           string      `json:"user_id"`
+	RecoveryRequired bool        `json:"recovery_required"`
+	Role             entity.Role `json:"role"`
 }
 type LoginRequest struct {
 	Identifier string `json:"identifier" validate:"required,max=320"`
@@ -38,21 +41,23 @@ type LoginRequest struct {
 	DeviceID   string `json:"device_id" validate:"required,max=128"`
 }
 type LoginResponse struct {
-	AccessToken         string `json:"access_token"`
-	RefreshToken        string `json:"refresh_token"`
-	KdfSalt             string `json:"kdf_salt"`
-	UserID              string `json:"user_id"`
-	PasswordKeyEnvelope string `json:"password_key_envelope,omitempty"`
-	PasswordKeyNonce    string `json:"password_key_nonce,omitempty"`
-	RecoveryKeyEnvelope string `json:"recovery_key_envelope,omitempty"`
-	RecoveryKeyNonce    string `json:"recovery_key_nonce,omitempty"`
+	AccessToken         string      `json:"access_token"`
+	RefreshToken        string      `json:"refresh_token"`
+	KdfSalt             string      `json:"kdf_salt"`
+	UserID              string      `json:"user_id"`
+	Role                entity.Role `json:"role"`
+	PasswordKeyEnvelope string      `json:"password_key_envelope,omitempty"`
+	PasswordKeyNonce    string      `json:"password_key_nonce,omitempty"`
+	RecoveryKeyEnvelope string      `json:"recovery_key_envelope,omitempty"`
+	RecoveryKeyNonce    string      `json:"recovery_key_nonce,omitempty"`
 }
 type RefreshRequest struct {
 	RefreshToken string `json:"refresh_token" validate:"required"`
 }
 type RefreshResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	AccessToken  string      `json:"access_token"`
+	RefreshToken string      `json:"refresh_token"`
+	Role         entity.Role `json:"role"`
 }
 type ResetPasswordRequest struct {
 	OTPChallengeID      string `json:"otp_challenge_id" validate:"required"`
@@ -64,16 +69,26 @@ type ResetPasswordRequest struct {
 	PasswordKeyNonce    string `json:"password_key_nonce" validate:"required"`
 }
 type ResetPasswordResponse struct {
-	AccessToken         string `json:"access_token"`
-	RefreshToken        string `json:"refresh_token"`
-	KdfSalt             string `json:"kdf_salt"`
-	UserID              string `json:"user_id"`
-	PasswordKeyEnvelope string `json:"password_key_envelope"`
-	PasswordKeyNonce    string `json:"password_key_nonce"`
-	RecoveryKeyEnvelope string `json:"recovery_key_envelope"`
-	RecoveryKeyNonce    string `json:"recovery_key_nonce"`
+	AccessToken         string      `json:"access_token"`
+	RefreshToken        string      `json:"refresh_token"`
+	KdfSalt             string      `json:"kdf_salt"`
+	UserID              string      `json:"user_id"`
+	Role                entity.Role `json:"role"`
+	PasswordKeyEnvelope string      `json:"password_key_envelope"`
+	PasswordKeyNonce    string      `json:"password_key_nonce"`
+	RecoveryKeyEnvelope string      `json:"recovery_key_envelope"`
+	RecoveryKeyNonce    string      `json:"recovery_key_nonce"`
 }
 
 type LogoutRequest struct {
 	RefreshToken string `json:"refresh_token" validate:"required"`
+}
+
+type UpdateUserRoleRequest struct {
+	Role entity.Role `json:"role" validate:"required"`
+}
+
+type UpdateUserRoleResponse struct {
+	UserID string      `json:"user_id"`
+	Role   entity.Role `json:"role"`
 }
