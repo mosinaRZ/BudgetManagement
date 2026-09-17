@@ -82,3 +82,7 @@ Thumbs.db
 # Misc
 *.swp
 *~
+# Environment variables
+.env
+.env.*
+!.env.example

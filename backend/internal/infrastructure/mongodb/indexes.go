@@ -42,7 +42,7 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	}
 	if _, err := db.Collection(otpCollectionName).Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{{Key: "expiresAt", Value: 1}}, Options: options.Index().SetExpireAfterSeconds(0).SetName("ttl_otp")},
-		{Keys: bson.D{{Key: "destinationHash", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_otp_rate")},
+		{Keys: bson.D{{Key: "destinationHash", Value: 1}, {Key: "channel", Value: 1}, {Key: "purpose", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_otp_rate")},
 	}); err != nil {
 		return fmt.Errorf("otp indexes: %w", err)
 	}

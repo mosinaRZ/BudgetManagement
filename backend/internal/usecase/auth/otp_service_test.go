@@ -32,8 +32,8 @@ func (r *otpRepoMock) RecentCount(context.Context, string, string, entity.OTPPur
 
 type deliveryMock struct{ code string }
 
-func (d *deliveryMock) Send(context.Context, string, string, string) error {
-	d.code = string("" + string([]byte{}))
+func (d *deliveryMock) Send(_ context.Context, _ string, _ string, code string) error {
+	d.code = code
 	return nil
 }
 func TestOTPCodeIsNotStoredPlaintext(t *testing.T) {
@@ -44,4 +44,39 @@ func TestOTPCodeIsNotStoredPlaintext(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, out.ChallengeID)
 	require.NotEmpty(t, repo.c.CodeHash)
+	require.NotEqual(t, d.code, repo.c.CodeHash)
+
+	got, err := s.Verify(context.Background(), VerifyOTPInput{
+		ChallengeID: out.ChallengeID,
+		Code:        d.code,
+		Purpose:     entity.OTPPurposePasswordReset,
+	})
+	require.NoError(t, err)
+	require.Equal(t, repo.c.DestinationHash, got)
+}
+
+func TestOTPCodeCannotBeReused(t *testing.T) {
+	repo := &otpRepoMock{}
+	d := &deliveryMock{}
+	s := NewOTPService(repo, d, "test-secret", 5*time.Minute)
+	out, err := s.Request(context.Background(), RequestOTPInput{
+		Destination: "a@example.com",
+		Channel:     "email",
+		Purpose:     entity.OTPPurposePasswordReset,
+	})
+	require.NoError(t, err)
+
+	_, err = s.Verify(context.Background(), VerifyOTPInput{
+		ChallengeID: out.ChallengeID,
+		Code:        d.code,
+		Purpose:     entity.OTPPurposePasswordReset,
+	})
+	require.NoError(t, err)
+
+	_, err = s.Verify(context.Background(), VerifyOTPInput{
+		ChallengeID: out.ChallengeID,
+		Code:        d.code,
+		Purpose:     entity.OTPPurposePasswordReset,
+	})
+	require.Error(t, err)
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/mosinaRZ/finance-sync-backend/internal/infrastructure/notification"
 	httpiface "github.com/mosinaRZ/finance-sync-backend/internal/interface/http"
 	"github.com/mosinaRZ/finance-sync-backend/internal/interface/http/handler"
+	adminUsecase "github.com/mosinaRZ/finance-sync-backend/internal/usecase/admin"
 	authUsecase "github.com/mosinaRZ/finance-sync-backend/internal/usecase/auth"
 	syncUsecase "github.com/mosinaRZ/finance-sync-backend/internal/usecase/sync"
 )
@@ -75,12 +76,14 @@ func run() error {
 	refreshRepo := mongodb.NewRefreshTokenRepository(db)
 	authUC := authUsecase.NewService(userRepo, refreshRepo, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL, otpUC)
 	authUC.SetDeviceRepository(deviceRepo)
+	roleUC := adminUsecase.NewRoleService(userRepo)
 	authHandler := handler.NewAuthHandler(authUC, validate, otpUC)
 
 	router := httpiface.NewRouter(httpiface.RouterDependencies{
-		AuthHandler: authHandler,
-		SyncHandler: syncHandler,
-		JWTSecret:   cfg.JWTSecret,
+		AuthHandler:  authHandler,
+		SyncHandler:  syncHandler,
+		AdminHandler: handler.NewAdminHandler(roleUC, validate),
+		JWTSecret:    cfg.JWTSecret,
 	})
 
 	srv := &http.Server{

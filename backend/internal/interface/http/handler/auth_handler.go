@@ -54,13 +54,39 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, err)
 		return
 	}
-	in := auth.RegisterInput{PhoneNumber: q.PhoneNumber, Email: q.Email, Password: q.Password, DeviceID: q.DeviceID, OTPChallengeID: q.OTPChallengeID, OTPCode: q.OTPCode, EmailOTPChallengeID: q.EmailOTPChallengeID, EmailOTPCode: q.EmailOTPCode, KdfSalt: q.KdfSalt, PasswordKeyEnvelope: decodeB64(q.PasswordKeyEnvelope), PasswordKeyNonce: decodeB64(q.PasswordKeyNonce), RecoveryKeyHash: []byte(q.RecoveryKeyHash), RecoveryKeyEnvelope: decodeB64(q.RecoveryKeyEnvelope), RecoveryKeyNonce: decodeB64(q.RecoveryKeyNonce)}
+	passwordKeyEnvelope, err := decodeB64(q.PasswordKeyEnvelope)
+	if err != nil {
+		response.Error(w, apperror.ErrValidation("password_key_envelope must be valid base64"))
+		return
+	}
+	passwordKeyNonce, err := decodeB64(q.PasswordKeyNonce)
+	if err != nil {
+		response.Error(w, apperror.ErrValidation("password_key_nonce must be valid base64"))
+		return
+	}
+	recoveryKeyEnvelope, err := decodeB64(q.RecoveryKeyEnvelope)
+	if err != nil {
+		response.Error(w, apperror.ErrValidation("recovery_key_envelope must be valid base64"))
+		return
+	}
+	recoveryKeyNonce, err := decodeB64(q.RecoveryKeyNonce)
+	if err != nil {
+		response.Error(w, apperror.ErrValidation("recovery_key_nonce must be valid base64"))
+		return
+	}
+	in := auth.RegisterInput{
+		PhoneNumber: q.PhoneNumber, Email: q.Email, Password: q.Password, DeviceID: q.DeviceID,
+		OTPChallengeID: q.OTPChallengeID, OTPCode: q.OTPCode,
+		EmailOTPChallengeID: q.EmailOTPChallengeID, EmailOTPCode: q.EmailOTPCode,
+		KdfSalt: q.KdfSalt, PasswordKeyEnvelope: passwordKeyEnvelope, PasswordKeyNonce: passwordKeyNonce,
+		RecoveryKeyHash: []byte(q.RecoveryKeyHash), RecoveryKeyEnvelope: recoveryKeyEnvelope, RecoveryKeyNonce: recoveryKeyNonce,
+	}
 	out, err := h.usecase.Register(r.Context(), in)
 	if err != nil {
 		response.Error(w, err)
 		return
 	}
-	response.JSON(w, http.StatusCreated, dto.RegisterResponse{AccessToken: out.AccessToken, RefreshToken: out.RefreshToken, KdfSalt: out.KdfSalt, UserID: out.UserID, RecoveryRequired: out.RecoveryRequired})
+	response.JSON(w, http.StatusCreated, dto.RegisterResponse{AccessToken: out.AccessToken, RefreshToken: out.RefreshToken, KdfSalt: out.KdfSalt, UserID: out.UserID, RecoveryRequired: out.RecoveryRequired, Role: out.Role})
 }
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var q dto.LoginRequest
@@ -77,7 +103,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, err)
 		return
 	}
-	response.JSON(w, http.StatusOK, dto.LoginResponse{AccessToken: out.AccessToken, RefreshToken: out.RefreshToken, KdfSalt: out.KdfSalt, UserID: out.UserID, PasswordKeyEnvelope: enc(out.PasswordKeyEnvelope), PasswordKeyNonce: enc(out.PasswordKeyNonce), RecoveryKeyEnvelope: enc(out.RecoveryKeyEnvelope), RecoveryKeyNonce: enc(out.RecoveryKeyNonce)})
+	response.JSON(w, http.StatusOK, dto.LoginResponse{AccessToken: out.AccessToken, RefreshToken: out.RefreshToken, KdfSalt: out.KdfSalt, UserID: out.UserID, PasswordKeyEnvelope: enc(out.PasswordKeyEnvelope), PasswordKeyNonce: enc(out.PasswordKeyNonce), RecoveryKeyEnvelope: enc(out.RecoveryKeyEnvelope), RecoveryKeyNonce: enc(out.RecoveryKeyNonce), Role: out.Role})
 }
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var q dto.RefreshRequest
@@ -94,7 +120,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, err)
 		return
 	}
-	response.JSON(w, http.StatusOK, dto.RefreshResponse{AccessToken: out.AccessToken, RefreshToken: out.RefreshToken})
+	response.JSON(w, http.StatusOK, dto.RefreshResponse{AccessToken: out.AccessToken, RefreshToken: out.RefreshToken, Role: out.Role})
 }
 func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	var q dto.ResetPasswordRequest
@@ -111,12 +137,26 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, apperror.ErrInternal("password reset service is not configured"))
 		return
 	}
-	out, err := extended.ResetPassword(r.Context(), auth.ResetPasswordInput{ChallengeID: q.OTPChallengeID, OTPCode: q.OTPCode, NewPassword: q.NewPassword, RecoveryKey: q.RecoveryKey, DeviceID: q.DeviceID, PasswordKeyEnvelope: decodeB64(q.PasswordKeyEnvelope), PasswordKeyNonce: decodeB64(q.PasswordKeyNonce)})
+	passwordKeyEnvelope, err := decodeB64(q.PasswordKeyEnvelope)
+	if err != nil {
+		response.Error(w, apperror.ErrValidation("password_key_envelope must be valid base64"))
+		return
+	}
+	passwordKeyNonce, err := decodeB64(q.PasswordKeyNonce)
+	if err != nil {
+		response.Error(w, apperror.ErrValidation("password_key_nonce must be valid base64"))
+		return
+	}
+	out, err := extended.ResetPassword(r.Context(), auth.ResetPasswordInput{
+		ChallengeID: q.OTPChallengeID, OTPCode: q.OTPCode, NewPassword: q.NewPassword,
+		RecoveryKey: q.RecoveryKey, DeviceID: q.DeviceID,
+		PasswordKeyEnvelope: passwordKeyEnvelope, PasswordKeyNonce: passwordKeyNonce,
+	})
 	if err != nil {
 		response.Error(w, err)
 		return
 	}
-	response.JSON(w, http.StatusOK, dto.ResetPasswordResponse{AccessToken: out.AccessToken, RefreshToken: out.RefreshToken, KdfSalt: out.KdfSalt, UserID: out.UserID, PasswordKeyEnvelope: enc(out.PasswordKeyEnvelope), PasswordKeyNonce: enc(out.PasswordKeyNonce), RecoveryKeyEnvelope: enc(out.RecoveryKeyEnvelope), RecoveryKeyNonce: enc(out.RecoveryKeyNonce)})
+	response.JSON(w, http.StatusOK, dto.ResetPasswordResponse{AccessToken: out.AccessToken, RefreshToken: out.RefreshToken, KdfSalt: out.KdfSalt, UserID: out.UserID, PasswordKeyEnvelope: enc(out.PasswordKeyEnvelope), PasswordKeyNonce: enc(out.PasswordKeyNonce), RecoveryKeyEnvelope: enc(out.RecoveryKeyEnvelope), RecoveryKeyNonce: enc(out.RecoveryKeyNonce), Role: out.Role})
 }
 func enc(b []byte) string {
 	if len(b) == 0 {
@@ -124,9 +164,16 @@ func enc(b []byte) string {
 	}
 	return base64.StdEncoding.EncodeToString(b)
 }
-func decodeB64(s string) []byte { b, _ := base64.StdEncoding.DecodeString(s); return b }
-
-var _ = apperror.CodeInternal
+func decodeB64(s string) ([]byte, error) {
+	if s == "" {
+		return nil, nil
+	}
+	b, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	var q dto.LogoutRequest

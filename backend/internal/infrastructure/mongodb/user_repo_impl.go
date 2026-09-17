@@ -9,7 +9,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"time"
 )
 
@@ -86,4 +85,20 @@ func (r *userRepo) AddDevice(ctx context.Context, userID, deviceID string) error
 	return nil
 }
 
-var _ = options.After
+func (r *userRepo) UpdateRole(ctx context.Context, userID string, role entity.Role) error {
+	if !role.Valid() {
+		return apperror.ErrValidation("invalid user role")
+	}
+	oid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return apperror.ErrNotFound("user not found")
+	}
+	res, err := r.c.UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$set": bson.M{"role": role, "updatedAt": time.Now().UTC()}})
+	if err != nil {
+		return apperror.ErrInternal("failed to update user role", err)
+	}
+	if res.MatchedCount == 0 {
+		return apperror.ErrNotFound("user not found")
+	}
+	return nil
+}

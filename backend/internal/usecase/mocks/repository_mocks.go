@@ -15,6 +15,7 @@ type MockUserRepository struct {
 	FindByIDFunc        func(ctx context.Context, id string) (*entity.User, error)
 	UpdateFunc          func(ctx context.Context, u *entity.User) error
 	AddDeviceFunc       func(ctx context.Context, userID, deviceID string) error
+	UpdateRoleFunc      func(ctx context.Context, userID string, role entity.Role) error
 }
 
 func (m *MockUserRepository) Create(ctx context.Context, u *entity.User) error {
@@ -48,6 +49,13 @@ func (m *MockUserRepository) FindByID(ctx context.Context, id string) (*entity.U
 func (m *MockUserRepository) Update(ctx context.Context, u *entity.User) error {
 	if m.UpdateFunc != nil {
 		return m.UpdateFunc(ctx, u)
+	}
+	return nil
+}
+
+func (m *MockUserRepository) UpdateRole(ctx context.Context, userID string, role entity.Role) error {
+	if m.UpdateRoleFunc != nil {
+		return m.UpdateRoleFunc(ctx, userID, role)
 	}
 	return nil
 }

@@ -46,7 +46,9 @@ func (u *SyncUsecase) Execute(ctx context.Context, userID string, req SyncInput)
 		if !ok {
 			return SyncOutput{}, apperror.ErrForbidden("device is not registered")
 		}
-		_ = u.devices.Touch(ctx, userID, req.DeviceID)
+		if err := u.devices.Touch(ctx, userID, req.DeviceID); err != nil {
+			return SyncOutput{}, err
+		}
 	}
 	if len(req.Changes) > MaxChangesPerRequest {
 		return SyncOutput{}, apperror.ErrValidation("too many sync changes")

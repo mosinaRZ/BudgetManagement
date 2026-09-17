@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
 )
 
 const (
@@ -17,18 +19,29 @@ const (
 	jwtIssuer       = "finance-sync-backend"
 )
 
+type AccessTokenClaims struct {
+	UserID string
+	Role   entity.Role
+}
+
 type accessClaims struct {
-	TokenType string `json:"token_type"`
+	TokenType string      `json:"token_type"`
+	Role      entity.Role `json:"role"`
 	jwt.RegisteredClaims
 }
 
 func GenerateAccessToken(userID string, ttl time.Duration, secret string) (string, error) {
-	if strings.TrimSpace(userID) == "" || ttl <= 0 || strings.TrimSpace(secret) == "" {
+	return GenerateAccessTokenWithRole(userID, entity.RoleUser, ttl, secret)
+}
+
+func GenerateAccessTokenWithRole(userID string, role entity.Role, ttl time.Duration, secret string) (string, error) {
+	if strings.TrimSpace(userID) == "" || !role.Valid() || ttl <= 0 || strings.TrimSpace(secret) == "" {
 		return "", errors.New("invalid access token parameters")
 	}
 	now := time.Now()
 	claims := accessClaims{
 		TokenType: accessTokenType,
+		Role:      role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    jwtIssuer,
 			Subject:   userID,
@@ -55,8 +68,16 @@ func HashRefreshToken(token string) string {
 }
 
 func ParseAndValidateAccessToken(tokenString, secret string) (string, error) {
+	claims, err := ParseAndValidateAccessTokenClaims(tokenString, secret)
+	if err != nil {
+		return "", err
+	}
+	return claims.UserID, nil
+}
+
+func ParseAndValidateAccessTokenClaims(tokenString, secret string) (AccessTokenClaims, error) {
 	if strings.TrimSpace(tokenString) == "" || strings.TrimSpace(secret) == "" {
-		return "", errors.New("invalid access token")
+		return AccessTokenClaims{}, errors.New("invalid access token")
 	}
 	var claims accessClaims
 	parser := jwt.NewParser(
@@ -71,10 +92,17 @@ func ParseAndValidateAccessToken(tokenString, secret string) (string, error) {
 		return []byte(secret), nil
 	})
 	if err != nil || token == nil || !token.Valid {
-		return "", errors.New("invalid access token")
+		return AccessTokenClaims{}, errors.New("invalid access token")
 	}
 	if claims.TokenType != accessTokenType || strings.TrimSpace(claims.Subject) == "" {
-		return "", errors.New("invalid access token claims")
+		return AccessTokenClaims{}, errors.New("invalid access token claims")
 	}
-	return claims.Subject, nil
+	role := claims.Role
+	if role == "" {
+		role = entity.RoleUser
+	}
+	if !role.Valid() {
+		return AccessTokenClaims{}, errors.New("invalid access token role")
+	}
+	return AccessTokenClaims{UserID: claims.Subject, Role: role}, nil
 }

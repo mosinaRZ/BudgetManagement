@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
 	"golang.org/x/time/rate"
 
 	"github.com/mosinaRZ/finance-sync-backend/internal/interface/http/handler"
@@ -15,9 +17,10 @@ import (
 // RouterDependencies contains all HTTP-layer dependencies created by startup.
 // The router owns no application state and does not construct repositories or usecases.
 type RouterDependencies struct {
-	AuthHandler *handler.AuthHandler
-	SyncHandler *handler.SyncHandler
-	JWTSecret   string
+	AuthHandler  *handler.AuthHandler
+	SyncHandler  *handler.SyncHandler
+	AdminHandler *handler.AdminHandler
+	JWTSecret    string
 }
 
 func NewRouter(deps RouterDependencies) *chi.Mux {
@@ -53,6 +56,12 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 
 		if deps.SyncHandler != nil {
 			r.Post("/api/v1/sync", deps.SyncHandler.HandleSync)
+		}
+		if deps.AdminHandler != nil {
+			r.Route("/api/v1/admin", func(r chi.Router) {
+				r.Use(middleware.RequireRoles(entity.RoleAdmin))
+				r.Put("/users/{userID}/role", deps.AdminHandler.UpdateUserRole)
+			})
 		}
 	})
 

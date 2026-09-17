@@ -68,15 +68,25 @@ func (s *ServiceImpl) Register(ctx context.Context, in RegisterInput) (RegisterO
 	if !hmac.Equal([]byte(dest), []byte(ph)) {
 		return RegisterOutput{}, apperror.ErrUnauthorized("OTP destination does not match account identifier")
 	}
-	if _, err := s.users.FindByPhoneHash(ctx, ph); err == nil {
+	if existing, err := s.users.FindByPhoneHash(ctx, ph); err == nil && existing != nil {
 		return RegisterOutput{}, apperror.ErrConflict("user already exists")
+	} else if err != nil {
+		code, ok := apperror.CodeOf(err)
+		if !ok || code != apperror.CodeNotFound {
+			return RegisterOutput{}, err
+		}
 	}
 	emailHash := ""
 	emailVerified := false
 	if strings.TrimSpace(in.Email) != "" {
 		emailHash = hashIdentifier(strings.ToLower(strings.TrimSpace(in.Email)), s.secret)
-		if _, err := s.users.FindByEmailHash(ctx, emailHash); err == nil {
+		if existing, err := s.users.FindByEmailHash(ctx, emailHash); err == nil && existing != nil {
 			return RegisterOutput{}, apperror.ErrConflict("email already exists")
+		} else if err != nil {
+			code, ok := apperror.CodeOf(err)
+			if !ok || code != apperror.CodeNotFound {
+				return RegisterOutput{}, err
+			}
 		}
 		if in.EmailOTPChallengeID == "" || in.EmailOTPCode == "" {
 			return RegisterOutput{}, apperror.ErrValidation("email OTP is required when email is provided")
@@ -90,15 +100,24 @@ func (s *ServiceImpl) Register(ctx context.Context, in RegisterInput) (RegisterO
 		}
 		emailVerified = true
 	}
-	salt, _ := infraauth.GenerateSalt()
-	passwordHash, _ := infraauth.HashPassword(in.Password, salt)
+	salt, err := infraauth.GenerateSalt()
+	if err != nil {
+		return RegisterOutput{}, apperror.ErrInternal("failed to generate password salt")
+	}
+	passwordHash, err := infraauth.HashPassword(in.Password, salt)
+	if err != nil {
+		return RegisterOutput{}, apperror.ErrInternal("failed to hash password")
+	}
 	kdfSalt := in.KdfSalt
 	if kdfSalt == "" {
-		b, _ := infraauth.GenerateSalt()
+		b, err := infraauth.GenerateSalt()
+		if err != nil {
+			return RegisterOutput{}, apperror.ErrInternal("failed to generate KDF salt")
+		}
 		kdfSalt = base64.RawStdEncoding.EncodeToString(b)
 	}
 	now := time.Now().UTC()
-	u := &entity.User{PhoneHash: ph, EmailHash: emailHash, PhoneVerified: true, EmailVerified: emailVerified, PasswordHash: passwordHash, AuthSalt: base64.RawStdEncoding.EncodeToString(salt), KdfSalt: kdfSalt, PasswordKeyEnvelope: in.PasswordKeyEnvelope, PasswordKeyNonce: in.PasswordKeyNonce, RecoveryKeyHash: string(in.RecoveryKeyHash), RecoveryKeyEnvelope: in.RecoveryKeyEnvelope, RecoveryKeyNonce: in.RecoveryKeyNonce, CreatedAt: now, UpdatedAt: now, Devices: []string{in.DeviceID}}
+	u := &entity.User{Role: entity.RoleUser, PhoneHash: ph, EmailHash: emailHash, PhoneVerified: true, EmailVerified: emailVerified, PasswordHash: passwordHash, AuthSalt: base64.RawStdEncoding.EncodeToString(salt), KdfSalt: kdfSalt, PasswordKeyEnvelope: in.PasswordKeyEnvelope, PasswordKeyNonce: in.PasswordKeyNonce, RecoveryKeyHash: string(in.RecoveryKeyHash), RecoveryKeyEnvelope: in.RecoveryKeyEnvelope, RecoveryKeyNonce: in.RecoveryKeyNonce, CreatedAt: now, UpdatedAt: now, Devices: []string{in.DeviceID}}
 	if err := s.users.Create(ctx, u); err != nil {
 		return RegisterOutput{}, err
 	}
@@ -149,7 +168,7 @@ func (s *ServiceImpl) Login(ctx context.Context, in LoginInput) (LoginOutput, er
 	if err != nil {
 		return LoginOutput{}, err
 	}
-	return LoginOutput{AccessToken: sess.AccessToken, RefreshToken: sess.RefreshToken, KdfSalt: u.KdfSalt, UserID: u.ID, PasswordKeyEnvelope: u.PasswordKeyEnvelope, PasswordKeyNonce: u.PasswordKeyNonce, RecoveryKeyEnvelope: u.RecoveryKeyEnvelope, RecoveryKeyNonce: u.RecoveryKeyNonce}, nil
+	return LoginOutput{AccessToken: sess.AccessToken, RefreshToken: sess.RefreshToken, Role: u.Role, KdfSalt: u.KdfSalt, UserID: u.ID, PasswordKeyEnvelope: u.PasswordKeyEnvelope, PasswordKeyNonce: u.PasswordKeyNonce, RecoveryKeyEnvelope: u.RecoveryKeyEnvelope, RecoveryKeyNonce: u.RecoveryKeyNonce}, nil
 }
 func (s *ServiceImpl) Refresh(ctx context.Context, in RefreshInput) (RefreshOutput, error) {
 	if strings.TrimSpace(in.RefreshToken) == "" {
@@ -184,7 +203,7 @@ func (s *ServiceImpl) Refresh(ctx context.Context, in RefreshInput) (RefreshOutp
 	if err != nil {
 		return RefreshOutput{}, err
 	}
-	return RefreshOutput{AccessToken: sess.AccessToken, RefreshToken: sess.RefreshToken}, nil
+	return RefreshOutput{AccessToken: sess.AccessToken, RefreshToken: sess.RefreshToken, Role: u.Role}, nil
 }
 func (s *ServiceImpl) Logout(ctx context.Context, raw string) error {
 	if strings.TrimSpace(raw) == "" {
@@ -210,8 +229,14 @@ func (s *ServiceImpl) ResetPassword(ctx context.Context, in ResetPasswordInput) 
 	if u.RecoveryKeyHash == "" || !hmac.Equal([]byte(u.RecoveryKeyHash), []byte(hashRecovery(in.RecoveryKey))) {
 		return ResetPasswordOutput{}, apperror.ErrUnauthorized("recovery key is invalid")
 	}
-	salt, _ := infraauth.GenerateSalt()
-	ph, _ := infraauth.HashPassword(in.NewPassword, salt)
+	salt, err := infraauth.GenerateSalt()
+	if err != nil {
+		return ResetPasswordOutput{}, apperror.ErrInternal("failed to generate password salt")
+	}
+	ph, err := infraauth.HashPassword(in.NewPassword, salt)
+	if err != nil {
+		return ResetPasswordOutput{}, apperror.ErrInternal("failed to hash password")
+	}
 	u.PasswordHash = ph
 	u.AuthSalt = base64.RawStdEncoding.EncodeToString(salt)
 	u.PasswordKeyEnvelope = in.PasswordKeyEnvelope
@@ -219,7 +244,9 @@ func (s *ServiceImpl) ResetPassword(ctx context.Context, in ResetPasswordInput) 
 	if err := s.users.Update(ctx, u); err != nil {
 		return ResetPasswordOutput{}, err
 	}
-	_ = s.refresh.RevokeAllForUser(ctx, u.ID)
+	if err := s.refresh.RevokeAllForUser(ctx, u.ID); err != nil {
+		return ResetPasswordOutput{}, err
+	}
 	if s.devices != nil {
 		now := time.Now().UTC()
 		if err := s.devices.Register(ctx, &entity.Device{ID: in.DeviceID, UserID: u.ID, CreatedAt: now, LastSeenAt: now}); err != nil {
@@ -230,12 +257,18 @@ func (s *ServiceImpl) ResetPassword(ctx context.Context, in ResetPasswordInput) 
 	if err != nil {
 		return ResetPasswordOutput{}, err
 	}
-	return ResetPasswordOutput{AccessToken: sess.AccessToken, RefreshToken: sess.RefreshToken, KdfSalt: u.KdfSalt, UserID: u.ID, PasswordKeyEnvelope: u.PasswordKeyEnvelope, PasswordKeyNonce: u.PasswordKeyNonce, RecoveryKeyEnvelope: u.RecoveryKeyEnvelope, RecoveryKeyNonce: u.RecoveryKeyNonce}, nil
+	return ResetPasswordOutput{AccessToken: sess.AccessToken, RefreshToken: sess.RefreshToken, Role: u.Role, KdfSalt: u.KdfSalt, UserID: u.ID, PasswordKeyEnvelope: u.PasswordKeyEnvelope, PasswordKeyNonce: u.PasswordKeyNonce, RecoveryKeyEnvelope: u.RecoveryKeyEnvelope, RecoveryKeyNonce: u.RecoveryKeyNonce}, nil
 }
 func (s *ServiceImpl) findByDestinationHash(ctx context.Context, h string) (*entity.User, error) {
-	if u, e := s.users.FindByPhoneHash(ctx, h); e == nil {
+	if u, err := s.users.FindByPhoneHash(ctx, h); err == nil {
 		return u, nil
+	} else {
+		code, ok := apperror.CodeOf(err)
+		if !ok || code != apperror.CodeNotFound {
+			return nil, err
+		}
 	}
+
 	return s.users.FindByEmailHash(ctx, h)
 }
 func (s *ServiceImpl) issueSession(ctx context.Context, u *entity.User, d string) (RegisterOutput, error) {
@@ -243,13 +276,13 @@ func (s *ServiceImpl) issueSession(ctx context.Context, u *entity.User, d string
 	if e != nil {
 		return RegisterOutput{}, e
 	}
-	return RegisterOutput{AccessToken: x.AccessToken, RefreshToken: x.RefreshToken, KdfSalt: u.KdfSalt, UserID: u.ID, RecoveryRequired: u.RecoveryKeyHash != ""}, nil
+	return RegisterOutput{AccessToken: x.AccessToken, RefreshToken: x.RefreshToken, Role: u.Role, KdfSalt: u.KdfSalt, UserID: u.ID, RecoveryRequired: u.RecoveryKeyHash != ""}, nil
 }
 
 type sessionOutput struct{ AccessToken, RefreshToken string }
 
 func (s *ServiceImpl) issueRefreshAndAccess(ctx context.Context, u *entity.User, d string) (sessionOutput, error) {
-	a, e := infraauth.GenerateAccessToken(u.ID, s.accessTTL, s.secret)
+	a, e := infraauth.GenerateAccessTokenWithRole(u.ID, u.Role, s.accessTTL, s.secret)
 	if e != nil {
 		return sessionOutput{}, apperror.ErrInternal("failed to create access token")
 	}

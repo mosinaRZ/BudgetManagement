@@ -51,7 +51,7 @@ func (h *SyncHandler) HandleSync(w http.ResponseWriter, r *http.Request) {
 	cursor := uint64(0)
 	if strings.TrimSpace(req.Cursor) != "" {
 		parsed, err := strconv.ParseUint(req.Cursor, 10, 64)
-		if err != nil {
+		if err != nil || parsed > uint64(^uint64(0)>>1) {
 			response.Error(w, apperror.ErrValidation("invalid cursor"))
 			return
 		}
