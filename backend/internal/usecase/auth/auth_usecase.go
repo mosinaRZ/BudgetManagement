@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -12,6 +13,16 @@ import (
 	infraauth "github.com/mosinaRZ/finance-sync-backend/internal/infrastructure/auth"
 	"strings"
 	"time"
+)
+
+const (
+	loginLockThreshold = 5
+	loginLockDuration  = 15 * time.Minute
+)
+
+var (
+	dummyAuthSalt    = base64.RawStdEncoding.EncodeToString(bytes.Repeat([]byte{0x42}, 16))
+	dummyAuthHash, _ = infraauth.HashPassword("cidna-invalid-user-dummy-password", bytes.Repeat([]byte{0x42}, 16))
 )
 
 type ServiceImpl struct {
@@ -140,17 +151,32 @@ func (s *ServiceImpl) Login(ctx context.Context, in LoginInput) (LoginOutput, er
 		u, err = s.users.FindByEmailHash(ctx, hashIdentifier(strings.ToLower(id), s.secret))
 	} else {
 		p, e := normalizePhone(id)
-		if e != nil {
+		if e == nil {
+			u, err = s.users.FindByPhoneHash(ctx, hashIdentifier(p, s.secret))
+		} else {
+			// Keep malformed identifiers on the same expensive password-verification path.
+			_, _ = infraauth.VerifyPassword(in.Password, dummyAuthSalt, dummyAuthHash)
 			return LoginOutput{}, apperror.ErrUnauthorized("invalid credentials")
 		}
-		u, err = s.users.FindByPhoneHash(ctx, hashIdentifier(p, s.secret))
 	}
-	if err != nil {
+	if err != nil || u == nil {
+		// Constant-cost dummy Argon2 verification prevents username/phone enumeration by timing.
+		_, _ = infraauth.VerifyPassword(in.Password, dummyAuthSalt, dummyAuthHash)
+		return LoginOutput{}, apperror.ErrUnauthorized("invalid credentials")
+	}
+	if u.LockedUntil != nil && u.LockedUntil.After(time.Now().UTC()) {
+		// Do not reveal account-lock state; preserve the same public login error.
 		return LoginOutput{}, apperror.ErrUnauthorized("invalid credentials")
 	}
 	ok, _ := infraauth.VerifyPassword(in.Password, u.AuthSalt, u.PasswordHash)
 	if !ok {
+		if err := s.users.RecordFailedLogin(ctx, u.ID, time.Now().UTC(), loginLockThreshold, loginLockDuration); err != nil {
+			return LoginOutput{}, err
+		}
 		return LoginOutput{}, apperror.ErrUnauthorized("invalid credentials")
+	}
+	if err := s.users.ResetFailedLogin(ctx, u.ID); err != nil {
+		return LoginOutput{}, err
 	}
 	if err := validDevice(in.DeviceID); err != nil {
 		return LoginOutput{}, err
@@ -241,6 +267,8 @@ func (s *ServiceImpl) ResetPassword(ctx context.Context, in ResetPasswordInput) 
 	u.AuthSalt = base64.RawStdEncoding.EncodeToString(salt)
 	u.PasswordKeyEnvelope = in.PasswordKeyEnvelope
 	u.PasswordKeyNonce = in.PasswordKeyNonce
+	u.FailedLoginAttempts = 0
+	u.LockedUntil = nil
 	if err := s.users.Update(ctx, u); err != nil {
 		return ResetPasswordOutput{}, err
 	}
@@ -324,3 +352,11 @@ func hashRecovery(v string) string {
 	h := sha256.Sum256([]byte(strings.TrimSpace(v)))
 	return base64.RawURLEncoding.EncodeToString(h[:])
 }
+
+// IdentifierHashForCLI hashes a normalized identifier using the same server secret used by authentication.
+func IdentifierHashForCLI(identifier, secret string) string {
+	return hashIdentifier(identifier, secret)
+}
+
+// NormalizePhoneForCLI exposes the same validation used by login/register to maintenance tooling.
+func NormalizePhoneForCLI(identifier string) (string, error) { return normalizePhone(identifier) }

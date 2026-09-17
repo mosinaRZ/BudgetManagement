@@ -9,10 +9,14 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"time"
 )
 
 const usersCollectionName = "users"
+
+// MaxUserDevices bounds per-user device fan-out and prevents unbounded document growth.
+const MaxUserDevices = 20
 
 type userRepo struct{ c *mongo.Collection }
 
@@ -75,12 +79,40 @@ func (r *userRepo) AddDevice(ctx context.Context, userID, deviceID string) error
 	if err != nil {
 		return apperror.ErrNotFound("user not found")
 	}
-	res, err := r.c.UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$addToSet": bson.M{"devices": deviceID}, "$set": bson.M{"updatedAt": time.Now().UTC()}})
+	// Count-and-add is performed as a single pipeline update so the cap cannot be bypassed by concurrent logins.
+	pipeline := mongo.Pipeline{
+		{{Key: "$set", Value: bson.M{"_deviceCount": bson.M{"$size": bson.M{"$ifNull": bson.A{"$devices", bson.A{}}}}}}},
+		{{Key: "$set", Value: bson.M{"devices": bson.M{"$cond": bson.A{
+			bson.M{"$in": bson.A{deviceID, bson.M{"$ifNull": bson.A{"$devices", bson.A{}}}}},
+			"$devices",
+			bson.M{"$cond": bson.A{
+				bson.M{"$gte": bson.A{"$_deviceCount", MaxUserDevices}},
+				"$devices",
+				bson.M{"$concatArrays": bson.A{bson.M{"$ifNull": bson.A{"$devices", bson.A{}}}, bson.A{deviceID}}},
+			}},
+		}}}}},
+		{{Key: "$set", Value: bson.M{"updatedAt": time.Now().UTC()}}},
+		{{Key: "$unset", Value: "_deviceCount"}},
+	}
+	res, err := r.c.UpdateOne(ctx, bson.M{"_id": oid}, pipeline)
 	if err != nil {
 		return apperror.ErrInternal("failed to add device", err)
 	}
 	if res.MatchedCount == 0 {
 		return apperror.ErrNotFound("user not found")
+	}
+	// Re-check the resulting size to return the documented validation error at the cap.
+	var current models.UserModel
+	if err := r.c.FindOne(ctx, bson.M{"_id": oid}, options.FindOne().SetProjection(bson.M{"devices": 1})).Decode(&current); err != nil {
+		return apperror.ErrInternal("failed to verify device limit", err)
+	}
+	if len(current.Devices) >= MaxUserDevices {
+		for _, d := range current.Devices {
+			if d == deviceID {
+				return nil
+			}
+		}
+		return apperror.ErrValidation("maximum number of devices reached")
 	}
 	return nil
 }
@@ -99,6 +131,56 @@ func (r *userRepo) UpdateRole(ctx context.Context, userID string, role entity.Ro
 	}
 	if res.MatchedCount == 0 {
 		return apperror.ErrNotFound("user not found")
+	}
+	return nil
+}
+
+func (r *userRepo) RecordFailedLogin(ctx context.Context, userID string, now time.Time, threshold int, lockDuration time.Duration) error {
+	// Atomic conditional update prevents concurrent login attempts from racing the lock threshold.
+	oid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return apperror.ErrNotFound("user not found")
+	}
+	filter := bson.M{"_id": oid}
+	update := bson.M{"$inc": bson.M{"failedLoginAttempts": 1}, "$set": bson.M{"updatedAt": now}}
+	res, err := r.c.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return apperror.ErrInternal("failed to record failed login", err)
+	}
+	if res.MatchedCount == 0 {
+		return apperror.ErrNotFound("user not found")
+	}
+
+	// Set the first lock atomically once the threshold is reached. The exponential duration is bounded.
+	var u models.UserModel
+	if err := r.c.FindOne(ctx, filter, options.FindOne().SetProjection(bson.M{"failedLoginAttempts": 1, "lockedUntil": 1})).Decode(&u); err != nil {
+		return apperror.ErrInternal("failed to read login state", err)
+	}
+	if u.FailedLoginAttempts >= threshold && (u.LockedUntil == nil || !u.LockedUntil.After(now)) {
+		exponent := u.FailedLoginAttempts - threshold
+		if exponent > 4 {
+			exponent = 4
+		}
+		d := lockDuration * time.Duration(1<<exponent)
+		_, err = r.c.UpdateOne(ctx, bson.M{"_id": oid, "$or": bson.A{
+			bson.M{"lockedUntil": bson.M{"$exists": false}},
+			bson.M{"lockedUntil": bson.M{"$lte": now}},
+		}}, bson.M{"$set": bson.M{"lockedUntil": now.Add(d), "updatedAt": now}})
+		if err != nil {
+			return apperror.ErrInternal("failed to lock account", err)
+		}
+	}
+	return nil
+}
+
+func (r *userRepo) ResetFailedLogin(ctx context.Context, userID string) error {
+	oid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return apperror.ErrNotFound("user not found")
+	}
+	_, err = r.c.UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$set": bson.M{"failedLoginAttempts": 0, "updatedAt": time.Now().UTC()}, "$unset": bson.M{"lockedUntil": ""}})
+	if err != nil {
+		return apperror.ErrInternal("failed to reset login state", err)
 	}
 	return nil
 }

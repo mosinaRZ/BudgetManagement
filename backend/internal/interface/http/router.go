@@ -1,6 +1,7 @@
 package http
 
 import (
+	"net"
 	"net/http"
 	"time"
 
@@ -17,10 +18,15 @@ import (
 // RouterDependencies contains all HTTP-layer dependencies created by startup.
 // The router owns no application state and does not construct repositories or usecases.
 type RouterDependencies struct {
-	AuthHandler  *handler.AuthHandler
-	SyncHandler  *handler.SyncHandler
-	AdminHandler *handler.AdminHandler
-	JWTSecret    string
+	AuthHandler        *handler.AuthHandler
+	SyncHandler        *handler.SyncHandler
+	AdminHandler       *handler.AdminHandler
+	DeviceHandler      *handler.DeviceHandler
+	JWTSecret          string
+	Env                string
+	TrustedProxyCIDRs  []*net.IPNet
+	CORSAllowedOrigins []string
+	RateLimitStore     middleware.RateLimitStore
 }
 
 func NewRouter(deps RouterDependencies) *chi.Mux {
@@ -29,9 +35,15 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logging)
 	r.Use(middleware.Recover)
+	r.Use(middleware.SecurityHeaders(deps.Env))
+	r.Use(middleware.CORS(deps.CORSAllowedOrigins))
 
-	publicRateLimiter := middleware.NewRateLimiter(rate.Every(3*time.Second), 20)
-	protectedRateLimiter := middleware.NewRateLimiter(rate.Every(6*time.Second), 10)
+	store := deps.RateLimitStore
+	if store == nil {
+		store = middleware.NewMemoryRateLimitStore()
+	}
+	publicRateLimiter := middleware.NewRateLimiterWithStoreAndProxies(store, rate.Every(3*time.Second), 20, deps.TrustedProxyCIDRs)
+	protectedRateLimiter := middleware.NewRateLimiterWithStoreAndProxies(store, rate.Every(6*time.Second), 10, deps.TrustedProxyCIDRs)
 
 	r.Group(func(r chi.Router) {
 		r.Use(publicRateLimiter.LimitByIP)
@@ -56,6 +68,10 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 
 		if deps.SyncHandler != nil {
 			r.Post("/api/v1/sync", deps.SyncHandler.HandleSync)
+		}
+		if deps.DeviceHandler != nil {
+			r.Get("/api/v1/devices", deps.DeviceHandler.List)
+			r.Delete("/api/v1/devices/{deviceID}", deps.DeviceHandler.Revoke)
 		}
 		if deps.AdminHandler != nil {
 			r.Route("/api/v1/admin", func(r chi.Router) {

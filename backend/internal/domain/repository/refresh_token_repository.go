@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
 )
 
@@ -10,4 +11,5 @@ type RefreshTokenRepository interface {
 	FindByHash(ctx context.Context, hash string) (*entity.RefreshToken, error)
 	Revoke(ctx context.Context, hash string) error
 	RevokeAllForUser(ctx context.Context, userID string) error
+	RevokeByUserAndDevice(ctx context.Context, userID, deviceID string) error
 }

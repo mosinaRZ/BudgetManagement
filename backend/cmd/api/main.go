@@ -4,11 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 
 	"github.com/go-playground/validator/v10"
 
@@ -18,8 +22,10 @@ import (
 	"github.com/mosinaRZ/finance-sync-backend/internal/infrastructure/notification"
 	httpiface "github.com/mosinaRZ/finance-sync-backend/internal/interface/http"
 	"github.com/mosinaRZ/finance-sync-backend/internal/interface/http/handler"
+	"github.com/mosinaRZ/finance-sync-backend/internal/interface/http/middleware"
 	adminUsecase "github.com/mosinaRZ/finance-sync-backend/internal/usecase/admin"
 	authUsecase "github.com/mosinaRZ/finance-sync-backend/internal/usecase/auth"
+	deviceUsecase "github.com/mosinaRZ/finance-sync-backend/internal/usecase/device"
 	syncUsecase "github.com/mosinaRZ/finance-sync-backend/internal/usecase/sync"
 )
 
@@ -76,14 +82,29 @@ func run() error {
 	refreshRepo := mongodb.NewRefreshTokenRepository(db)
 	authUC := authUsecase.NewService(userRepo, refreshRepo, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL, otpUC)
 	authUC.SetDeviceRepository(deviceRepo)
-	roleUC := adminUsecase.NewRoleService(userRepo)
+	auditRepo := mongodb.NewAuditLogRepository(db)
+	roleUC := adminUsecase.NewRoleService(userRepo, auditRepo)
+	deviceUC := deviceUsecase.NewService(deviceRepo, refreshRepo)
 	authHandler := handler.NewAuthHandler(authUC, validate, otpUC)
 
+	trustedProxies, err := parseCIDRs(cfg.TrustedProxyCIDRs)
+	if err != nil {
+		return fmt.Errorf("invalid TRUSTED_PROXY_CIDRS: %w", err)
+	}
+	var rateStore middleware.RateLimitStore = middleware.NewMemoryRateLimitStore()
+	if strings.TrimSpace(cfg.RedisURL) != "" {
+		rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisURL})
+		if err := rdb.Ping(startupCtx).Err(); err != nil {
+			return fmt.Errorf("redis configured but unavailable: %w", err)
+		}
+		defer rdb.Close()
+		rateStore = middleware.NewRedisRateLimitStore(rdb)
+	}
+	corsOrigins := splitCSV(cfg.CORSAllowedOrigins)
 	router := httpiface.NewRouter(httpiface.RouterDependencies{
-		AuthHandler:  authHandler,
-		SyncHandler:  syncHandler,
-		AdminHandler: handler.NewAdminHandler(roleUC, validate),
-		JWTSecret:    cfg.JWTSecret,
+		AuthHandler: authHandler, SyncHandler: syncHandler, AdminHandler: handler.NewAdminHandler(roleUC, validate),
+		DeviceHandler: handler.NewDeviceHandler(deviceUC), JWTSecret: cfg.JWTSecret, Env: cfg.Env,
+		TrustedProxyCIDRs: trustedProxies, CORSAllowedOrigins: corsOrigins, RateLimitStore: rateStore,
 	})
 
 	srv := &http.Server{
@@ -129,4 +150,25 @@ func run() error {
 	mongoConnected = false
 	log.Info("Server stopped")
 	return nil
+}
+
+func parseCIDRs(raw string) ([]*net.IPNet, error) {
+	var out []*net.IPNet
+	for _, item := range splitCSV(raw) {
+		_, n, err := net.ParseCIDR(item)
+		if err != nil {
+			return nil, fmt.Errorf("%q: %w", item, err)
+		}
+		out = append(out, n)
+	}
+	return out, nil
+}
+func splitCSV(raw string) []string {
+	var out []string
+	for _, v := range strings.Split(raw, ",") {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }

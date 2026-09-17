@@ -47,9 +47,11 @@ func (r *deviceRepo) List(ctx context.Context, userID string) ([]*entity.Device,
 	var out []*entity.Device
 	for cur.Next(ctx) {
 		var m struct {
-			ID                    primitive.ObjectID `bson:"_id"`
-			UserID, DeviceID      string
-			LastSeenAt, CreatedAt time.Time
+			ID         primitive.ObjectID `bson:"_id"`
+			UserID     string             `bson:"userId"`
+			DeviceID   string             `bson:"deviceId"`
+			LastSeenAt time.Time          `bson:"lastSeenAt"`
+			CreatedAt  time.Time          `bson:"createdAt"`
 		}
 		if err := cur.Decode(&m); err != nil {
 			return nil, apperror.ErrInternal("failed to decode device", err)
