@@ -35,6 +35,9 @@ func GenerateAccessToken(userID string, ttl time.Duration, secret string) (strin
 }
 
 func GenerateAccessTokenWithRole(userID string, role entity.Role, ttl time.Duration, secret string) (string, error) {
+	if role == "" {
+		role = entity.RoleUser
+	}
 	if strings.TrimSpace(userID) == "" || !role.Valid() || ttl <= 0 || strings.TrimSpace(secret) == "" {
 		return "", errors.New("invalid access token parameters")
 	}

@@ -2,6 +2,7 @@ package mongodb
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -79,4 +80,17 @@ func stringCode(err error) string {
 		}
 	}
 	return msg
+}
+
+func TestUserRepository_DeviceLimit(t *testing.T) {
+	db, done := authIntegrationDB(t)
+	defer done()
+	r := NewUserRepository(db)
+	u := &entity.User{PhoneHash: "device-limit", PasswordHash: "hash", AuthSalt: "salt", KdfSalt: "kdf", Devices: make([]string, 0, MaxUserDevices), CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	for i := 0; i < MaxUserDevices; i++ {
+		u.Devices = append(u.Devices, fmt.Sprintf("d-%d", i))
+	}
+	require.NoError(t, r.Create(context.Background(), u))
+	err := r.AddDevice(context.Background(), u.ID, "d-overflow")
+	assert.Equal(t, "VALIDATION_ERROR", stringCode(err))
 }

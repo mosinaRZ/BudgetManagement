@@ -6,7 +6,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 
+	"github.com/mosinaRZ/finance-sync-backend/internal/domain/apperror"
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
+	"github.com/mosinaRZ/finance-sync-backend/internal/interface/http/contextkeys"
 	"github.com/mosinaRZ/finance-sync-backend/internal/interface/http/dto"
 	"github.com/mosinaRZ/finance-sync-backend/internal/pkg/response"
 	adminusecase "github.com/mosinaRZ/finance-sync-backend/internal/usecase/admin"
@@ -35,7 +37,12 @@ func (h *AdminHandler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userID := chi.URLParam(r, "userID")
-	if err := h.roles.UpdateUserRole(r.Context(), userID, entity.Role(q.Role)); err != nil {
+	actorID, ok := contextkeys.UserID(r.Context())
+	if !ok || actorID == "" {
+		response.Error(w, apperror.ErrUnauthorized("authentication required"))
+		return
+	}
+	if err := h.roles.UpdateUserRole(r.Context(), actorID, userID, entity.Role(q.Role)); err != nil {
 		response.Error(w, err)
 		return
 	}

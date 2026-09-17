@@ -169,3 +169,66 @@ func TestRefreshReuseRevokesAllSessions(t *testing.T) {
 		t.Fatalf("err=%v revokedAll=%v", err, revokedAll)
 	}
 }
+
+func TestLoginLocksAfterThreshold(t *testing.T) {
+	salt, _ := infraauth.GenerateSalt()
+	hash, _ := infraauth.HashPassword("correct horse battery", salt)
+	user := &entity.User{ID: "u1", PasswordHash: hash, AuthSalt: encode(salt)}
+	attempts := 0
+	users := &mocks.MockUserRepository{
+		FindByPhoneHashFunc:   func(context.Context, string) (*entity.User, error) { return user, nil },
+		RecordFailedLoginFunc: func(context.Context, string, time.Time, int, time.Duration) error { attempts++; return nil },
+	}
+	s := newService(users, &mocks.MockRefreshTokenRepository{})
+	for i := 0; i < 5; i++ {
+		_, _ = s.Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: "wrong", DeviceID: "d"})
+	}
+	if attempts != 5 {
+		t.Fatalf("attempts=%d", attempts)
+	}
+}
+
+func TestLoginSkipsPasswordVerificationWhenLocked(t *testing.T) {
+	future := time.Now().Add(time.Minute)
+	users := &mocks.MockUserRepository{FindByPhoneHashFunc: func(context.Context, string) (*entity.User, error) {
+		return &entity.User{ID: "u1", AuthSalt: "invalid", PasswordHash: "invalid", LockedUntil: &future}, nil
+	}}
+	s := newService(users, &mocks.MockRefreshTokenRepository{})
+	_, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: "wrong", DeviceID: "d"})
+	code, _ := apperror.CodeOf(err)
+	if code != apperror.CodeUnauthorized {
+		t.Fatalf("code=%v err=%v", code, err)
+	}
+}
+
+func TestLoginSuccessResetsFailedAttempts(t *testing.T) {
+	salt, _ := infraauth.GenerateSalt()
+	hash, _ := infraauth.HashPassword("correct horse battery", salt)
+	user := &entity.User{ID: "u1", PasswordHash: hash, AuthSalt: encode(salt), FailedLoginAttempts: 4}
+	reset := false
+	users := &mocks.MockUserRepository{
+		FindByPhoneHashFunc:  func(context.Context, string) (*entity.User, error) { return user, nil },
+		ResetFailedLoginFunc: func(context.Context, string) error { reset = true; return nil },
+		AddDeviceFunc:        func(context.Context, string, string) error { return nil },
+	}
+	_, err := newService(users, &mocks.MockRefreshTokenRepository{}).Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: "correct horse battery", DeviceID: "d"})
+	if err != nil || !reset {
+		t.Fatalf("err=%v reset=%v", err, reset)
+	}
+}
+
+func TestLoginAllowsVerificationAfterLockExpiry(t *testing.T) {
+	past := time.Now().Add(-time.Minute)
+	salt, _ := infraauth.GenerateSalt()
+	hash, _ := infraauth.HashPassword("correct horse battery", salt)
+	user := &entity.User{ID: "u1", PasswordHash: hash, AuthSalt: encode(salt), LockedUntil: &past}
+	reset := false
+	users := &mocks.MockUserRepository{
+		FindByPhoneHashFunc:  func(context.Context, string) (*entity.User, error) { return user, nil },
+		ResetFailedLoginFunc: func(context.Context, string) error { reset = true; return nil },
+		AddDeviceFunc:        func(context.Context, string, string) error { return nil },
+	}
+	if _, err := newService(users, &mocks.MockRefreshTokenRepository{}).Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: "correct horse battery", DeviceID: "d"}); err != nil || !reset {
+		t.Fatalf("err=%v reset=%v", err, reset)
+	}
+}

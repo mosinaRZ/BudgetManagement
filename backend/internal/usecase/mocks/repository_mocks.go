@@ -2,6 +2,7 @@ package mocks
 
 import (
 	"context"
+	"time"
 
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/repository"
@@ -9,13 +10,15 @@ import (
 
 // MockUserRepository پیاده‌سازی دستی UserRepository برای تست‌ها
 type MockUserRepository struct {
-	CreateFunc          func(ctx context.Context, u *entity.User) error
-	FindByPhoneHashFunc func(ctx context.Context, phoneHash string) (*entity.User, error)
-	FindByEmailHashFunc func(ctx context.Context, emailHash string) (*entity.User, error)
-	FindByIDFunc        func(ctx context.Context, id string) (*entity.User, error)
-	UpdateFunc          func(ctx context.Context, u *entity.User) error
-	AddDeviceFunc       func(ctx context.Context, userID, deviceID string) error
-	UpdateRoleFunc      func(ctx context.Context, userID string, role entity.Role) error
+	CreateFunc            func(ctx context.Context, u *entity.User) error
+	FindByPhoneHashFunc   func(ctx context.Context, phoneHash string) (*entity.User, error)
+	FindByEmailHashFunc   func(ctx context.Context, emailHash string) (*entity.User, error)
+	FindByIDFunc          func(ctx context.Context, id string) (*entity.User, error)
+	UpdateFunc            func(ctx context.Context, u *entity.User) error
+	AddDeviceFunc         func(ctx context.Context, userID, deviceID string) error
+	UpdateRoleFunc        func(ctx context.Context, userID string, role entity.Role) error
+	RecordFailedLoginFunc func(ctx context.Context, userID string, now time.Time, threshold int, lockDuration time.Duration) error
+	ResetFailedLoginFunc  func(ctx context.Context, userID string) error
 }
 
 func (m *MockUserRepository) Create(ctx context.Context, u *entity.User) error {
@@ -60,6 +63,19 @@ func (m *MockUserRepository) UpdateRole(ctx context.Context, userID string, role
 	return nil
 }
 
+func (m *MockUserRepository) RecordFailedLogin(ctx context.Context, userID string, now time.Time, threshold int, lockDuration time.Duration) error {
+	if m.RecordFailedLoginFunc != nil {
+		return m.RecordFailedLoginFunc(ctx, userID, now, threshold, lockDuration)
+	}
+	return nil
+}
+func (m *MockUserRepository) ResetFailedLogin(ctx context.Context, userID string) error {
+	if m.ResetFailedLoginFunc != nil {
+		return m.ResetFailedLoginFunc(ctx, userID)
+	}
+	return nil
+}
+
 func (m *MockUserRepository) AddDevice(ctx context.Context, userID, deviceID string) error {
 	if m.AddDeviceFunc != nil {
 		return m.AddDeviceFunc(ctx, userID, deviceID)
@@ -80,10 +96,11 @@ func (m *MockSyncRepository) Sync(ctx context.Context, req repository.SyncReques
 }
 
 type MockRefreshTokenRepository struct {
-	CreateFunc           func(context.Context, *entity.RefreshToken) error
-	FindByHashFunc       func(context.Context, string) (*entity.RefreshToken, error)
-	RevokeFunc           func(context.Context, string) error
-	RevokeAllForUserFunc func(context.Context, string) error
+	CreateFunc                func(context.Context, *entity.RefreshToken) error
+	FindByHashFunc            func(context.Context, string) (*entity.RefreshToken, error)
+	RevokeFunc                func(context.Context, string) error
+	RevokeAllForUserFunc      func(context.Context, string) error
+	RevokeByUserAndDeviceFunc func(context.Context, string, string) error
 }
 
 func (m *MockRefreshTokenRepository) Create(ctx context.Context, t *entity.RefreshToken) error {
@@ -104,9 +121,49 @@ func (m *MockRefreshTokenRepository) Revoke(ctx context.Context, h string) error
 	}
 	return nil
 }
+func (m *MockRefreshTokenRepository) RevokeByUserAndDevice(ctx context.Context, userID, deviceID string) error {
+	if m.RevokeByUserAndDeviceFunc != nil {
+		return m.RevokeByUserAndDeviceFunc(ctx, userID, deviceID)
+	}
+	return nil
+}
 func (m *MockRefreshTokenRepository) RevokeAllForUser(ctx context.Context, id string) error {
 	if m.RevokeAllForUserFunc != nil {
 		return m.RevokeAllForUserFunc(ctx, id)
+	}
+	return nil
+}
+
+type MockDeviceRepository struct {
+	ListFunc   func(context.Context, string) ([]*entity.Device, error)
+	RevokeFunc func(context.Context, string, string) error
+}
+
+func (m *MockDeviceRepository) Register(context.Context, *entity.Device) error { return nil }
+func (m *MockDeviceRepository) List(ctx context.Context, id string) ([]*entity.Device, error) {
+	if m.ListFunc != nil {
+		return m.ListFunc(ctx, id)
+	}
+	return nil, nil
+}
+func (m *MockDeviceRepository) Revoke(ctx context.Context, u, d string) error {
+	if m.RevokeFunc != nil {
+		return m.RevokeFunc(ctx, u, d)
+	}
+	return nil
+}
+func (m *MockDeviceRepository) Exists(context.Context, string, string) (bool, error) {
+	return true, nil
+}
+func (m *MockDeviceRepository) Touch(context.Context, string, string) error { return nil }
+
+type MockAuditLogRepository struct {
+	CreateFunc func(context.Context, *entity.AuditLog) error
+}
+
+func (m *MockAuditLogRepository) Create(ctx context.Context, l *entity.AuditLog) error {
+	if m.CreateFunc != nil {
+		return m.CreateFunc(ctx, l)
 	}
 	return nil
 }

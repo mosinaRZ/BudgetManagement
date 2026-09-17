@@ -24,6 +24,8 @@ type UserModel struct {
 	CreatedAt           time.Time          `bson:"createdAt"`
 	UpdatedAt           time.Time          `bson:"updatedAt"`
 	Devices             []string           `bson:"devices"`
+	FailedLoginAttempts int                `bson:"failedLoginAttempts"`
+	LockedUntil         *time.Time         `bson:"lockedUntil,omitempty"`
 }
 
 func (m *UserModel) ToEntity() *entity.User {
@@ -34,14 +36,14 @@ func (m *UserModel) ToEntity() *entity.User {
 	if !role.Valid() {
 		role = entity.RoleUser
 	}
-	return &entity.User{ID: m.ID.Hex(), Role: role, PhoneHash: m.PhoneHash, EmailHash: m.EmailHash, PhoneVerified: m.PhoneVerified, EmailVerified: m.EmailVerified, PasswordHash: m.PasswordHash, AuthSalt: m.AuthSalt, KdfSalt: m.KdfSalt, PasswordKeyEnvelope: append([]byte(nil), m.PasswordKeyEnvelope...), PasswordKeyNonce: append([]byte(nil), m.PasswordKeyNonce...), RecoveryKeyHash: m.RecoveryKeyHash, RecoveryKeyEnvelope: append([]byte(nil), m.RecoveryKeyEnvelope...), RecoveryKeyNonce: append([]byte(nil), m.RecoveryKeyNonce...), CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt, Devices: append([]string(nil), m.Devices...)}
+	return &entity.User{ID: m.ID.Hex(), Role: role, PhoneHash: m.PhoneHash, EmailHash: m.EmailHash, PhoneVerified: m.PhoneVerified, EmailVerified: m.EmailVerified, PasswordHash: m.PasswordHash, AuthSalt: m.AuthSalt, KdfSalt: m.KdfSalt, PasswordKeyEnvelope: append([]byte(nil), m.PasswordKeyEnvelope...), PasswordKeyNonce: append([]byte(nil), m.PasswordKeyNonce...), RecoveryKeyHash: m.RecoveryKeyHash, RecoveryKeyEnvelope: append([]byte(nil), m.RecoveryKeyEnvelope...), RecoveryKeyNonce: append([]byte(nil), m.RecoveryKeyNonce...), CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt, Devices: append([]string(nil), m.Devices...), FailedLoginAttempts: m.FailedLoginAttempts, LockedUntil: m.LockedUntil}
 }
 func UserModelFromEntity(e *entity.User) *UserModel {
 	role := e.Role
 	if !role.Valid() {
 		role = entity.RoleUser
 	}
-	m := &UserModel{Role: role, PhoneHash: e.PhoneHash, EmailHash: e.EmailHash, PhoneVerified: e.PhoneVerified, EmailVerified: e.EmailVerified, PasswordHash: e.PasswordHash, AuthSalt: e.AuthSalt, KdfSalt: e.KdfSalt, PasswordKeyEnvelope: append([]byte(nil), e.PasswordKeyEnvelope...), PasswordKeyNonce: append([]byte(nil), e.PasswordKeyNonce...), RecoveryKeyHash: e.RecoveryKeyHash, RecoveryKeyEnvelope: append([]byte(nil), e.RecoveryKeyEnvelope...), RecoveryKeyNonce: append([]byte(nil), e.RecoveryKeyNonce...), CreatedAt: e.CreatedAt, UpdatedAt: e.UpdatedAt, Devices: append([]string(nil), e.Devices...)}
+	m := &UserModel{Role: role, PhoneHash: e.PhoneHash, EmailHash: e.EmailHash, PhoneVerified: e.PhoneVerified, EmailVerified: e.EmailVerified, PasswordHash: e.PasswordHash, AuthSalt: e.AuthSalt, KdfSalt: e.KdfSalt, PasswordKeyEnvelope: append([]byte(nil), e.PasswordKeyEnvelope...), PasswordKeyNonce: append([]byte(nil), e.PasswordKeyNonce...), RecoveryKeyHash: e.RecoveryKeyHash, RecoveryKeyEnvelope: append([]byte(nil), e.RecoveryKeyEnvelope...), RecoveryKeyNonce: append([]byte(nil), e.RecoveryKeyNonce...), CreatedAt: e.CreatedAt, UpdatedAt: e.UpdatedAt, Devices: append([]string(nil), e.Devices...), FailedLoginAttempts: e.FailedLoginAttempts, LockedUntil: e.LockedUntil}
 	if e.ID != "" {
 		if id, err := primitive.ObjectIDFromHex(e.ID); err == nil {
 			m.ID = id

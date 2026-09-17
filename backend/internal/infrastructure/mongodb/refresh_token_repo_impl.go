@@ -86,3 +86,13 @@ func (r *refreshTokenRepositoryImpl) RevokeAllForUser(ctx context.Context, userI
 	}
 	return nil
 }
+
+func (r *refreshTokenRepositoryImpl) RevokeByUserAndDevice(ctx context.Context, userID, deviceID string) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	_, err := r.collection.UpdateMany(ctx, bson.M{"userId": userID, "deviceId": deviceID, "revokedAt": bson.M{"$exists": false}}, bson.M{"$set": bson.M{"revokedAt": time.Now().UTC()}})
+	if err != nil {
+		return apperror.ErrInternal("failed to revoke device refresh tokens", err)
+	}
+	return nil
+}

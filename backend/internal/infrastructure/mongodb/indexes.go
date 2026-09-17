@@ -46,6 +46,11 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	}); err != nil {
 		return fmt.Errorf("otp indexes: %w", err)
 	}
+	if _, err := db.Collection(auditLogsCollectionName).Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "targetUserId", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_audit_target_created")},
+	}); err != nil {
+		return fmt.Errorf("audit_logs indexes: %w", err)
+	}
 	if _, err := db.Collection(devicesCollectionName).Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "deviceId", Value: 1}}, Options: options.Index().SetUnique(true).SetName("uniq_device")},
 		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "lastSeenAt", Value: -1}}, Options: options.Index().SetName("idx_device_last_seen")},

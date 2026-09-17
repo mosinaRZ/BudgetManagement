@@ -20,4 +20,6 @@ type User struct {
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 	Devices             []string
+	FailedLoginAttempts int
+	LockedUntil         *time.Time
 }
