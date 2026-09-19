@@ -416,14 +416,6 @@ fun HomeScreen(
                             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), balanceShape)
                             .clip(balanceShape)
                     ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.balancebanner),
-                            contentDescription = null,
-                            modifier = Modifier.matchParentSize(),
-                            contentScale = ContentScale.Crop,
-                            alpha = 0.15f
-                        )
-
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -525,7 +517,6 @@ fun HomeScreen(
                                 .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), summaryCardShape)
                                 .clip(summaryCardShape)
                         ) {
-                            Image(painter = painterResource(id = R.drawable.incomebanner), contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop, alpha = 0.12f)
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -565,7 +556,6 @@ fun HomeScreen(
                                 .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), summaryCardShape)
                                 .clip(summaryCardShape)
                         ) {
-                            Image(painter = painterResource(id = R.drawable.expensebanner), contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop, alpha = 0.12f)
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -609,7 +599,6 @@ fun HomeScreen(
                             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), piggyShape)
                             .clip(piggyShape)
                     ) {
-                        Image(painter = painterResource(id = R.drawable.goalbanner), contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop, alpha = 0.12f)
 
                         Column(
                             modifier = Modifier
@@ -682,8 +671,6 @@ fun HomeScreen(
                             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), budgetShape)
                             .clip(budgetShape)
                     ) {
-                        Image(painter = painterResource(id = R.drawable.limitbanner), contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop, alpha = 0.12f)
-
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -755,8 +742,6 @@ fun HomeScreen(
                             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), dueShape)
                             .clip(dueShape)
                     ) {
-                        Image(painter = painterResource(id = R.drawable.duebanner), contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop, alpha = 0.12f)
-
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()

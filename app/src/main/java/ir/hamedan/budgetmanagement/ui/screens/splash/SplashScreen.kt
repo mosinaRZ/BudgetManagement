@@ -35,7 +35,7 @@ import kotlinx.coroutines.delay
 fun SplashScreen(onAnimationFinished: () -> Unit) {
     val context = LocalContext.current
     val isPersian = isPersianLocale()
-    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.splash_anim))
+    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.welcoming))
 
     // گرفتن ورژن برنامه و تبدیل ارقام آن در صورت فارسی بودن زبان برنامه
     val versionName = remember(context, isPersian) {
@@ -72,7 +72,7 @@ fun SplashScreen(onAnimationFinished: () -> Unit) {
 
     // ۲. مدیریت زمان نمایش با استفاده از delay (به میلی‌ثانیه)
     LaunchedEffect(Unit) {
-        delay(3000) // تغییر این مقدار زمان نمایش را کم و زیاد می‌کند (۳۰۰۰ یعنی ۳ ثانیه)
+        delay(5000) // تغییر این مقدار زمان نمایش را کم و زیاد می‌کند (۳۰۰۰ یعنی ۳ ثانیه)
         onAnimationFinished()
     }
 
@@ -92,7 +92,7 @@ fun SplashScreen(onAnimationFinished: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White),
+            .background(Color(0xFF125251)),
         contentAlignment = Alignment.Center
     ) {
         LottieAnimation(
@@ -105,7 +105,7 @@ fun SplashScreen(onAnimationFinished: () -> Unit) {
         Text(
             text = if (isPersian) "نسخه $versionName" else "Version $versionName",
             style = MaterialTheme.typography.labelLarge,
-            color = Color.Gray.copy(alpha = 0.8f),
+            color = Color.White,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
