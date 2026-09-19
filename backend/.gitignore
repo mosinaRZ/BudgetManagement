@@ -1,0 +1,19 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# MongoDB replica-set keyfile
+deployments/mongo-keyfile
+
+# Go
+bin/
+*.test
+coverage.out
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

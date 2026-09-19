@@ -69,6 +69,10 @@ Thumbs.db
 # Log files
 *.log
 
+.env
+.env.*
+!.env.example
+
 # Capture folder
 /captures
 
@@ -78,3 +82,7 @@ Thumbs.db
 # Misc
 *.swp
 *~
+# Environment variables
+.env
+.env.*
+!.env.example
