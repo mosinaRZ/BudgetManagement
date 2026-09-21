@@ -94,7 +94,7 @@ class TransactionViewModel(
                 TransactionTypeFilter.INCOME -> transaction.type == "INCOME"
                 TransactionTypeFilter.EXPENSE -> transaction.type == "EXPENSE"
                 TransactionTypeFilter.UNCATEGORIZED -> {
-                    val category = transaction.category.trim()
+                    val category = transaction.categoryId.trim()
                     category.equals("UNCATEGORIZED", ignoreCase = true) ||
                             category == "دسته‌بندی نشده" ||
                             category == "دسته بندی نشده"
@@ -109,7 +109,7 @@ class TransactionViewModel(
 
             val matchesSearch = query.isBlank() ||
                     transaction.title.contains(query, ignoreCase = true) ||
-                    transaction.category.contains(query, ignoreCase = true)
+                    transaction.categoryId.contains(query, ignoreCase = true)
 
             matchesType && matchesTime && matchesSearch
         }

@@ -4,26 +4,39 @@ import ir.hamedan.budgetmanagement.data.local.dao.NotificationDao
 import ir.hamedan.budgetmanagement.data.local.models.NotificationEntity
 import kotlinx.coroutines.flow.Flow
 
+/** Device-local notification store; notifications are intentionally not cloud-synchronized. */
 class NotificationRepositoryImpl(
-    private val dao: NotificationDao
+    private val notificationDao: NotificationDao
 ) : NotificationRepository {
+    override fun getAllNotifications(): Flow<List<NotificationEntity>> = notificationDao.getAllNotifications()
+    override fun getUnreadCount(): Flow<Int> = notificationDao.getUnreadCount()
 
-    override fun getAllNotifications(): Flow<List<NotificationEntity>> = dao.getAllNotifications()
+    override suspend fun insert(notification: NotificationEntity) {
+        val now = System.currentTimeMillis()
 
-    override fun getUnreadCount(): Flow<Int> = dao.getUnreadCount()
-
-    override suspend fun addNotification(notification: NotificationEntity): Boolean {
-        if (notification.tag.isNotEmpty()) {
-            val existing = dao.countByTag(notification.tag)
-            if (existing > 0) return false
-        }
-        dao.insert(notification)
-        return true
+        notificationDao.insert(
+            notification.copy(
+                createdAt = if (notification.createdAt > 0L) {
+                    notification.createdAt
+                } else {
+                    now
+                },
+                updatedAt = now
+            )
+        )
     }
 
-    override suspend fun markAsRead(id: String) = dao.markAsRead(id)
+    override suspend fun markAsRead(id: String) {
+        notificationDao.markAsRead(id, System.currentTimeMillis())
+    }
 
-    override suspend fun markAllAsRead() = dao.markAllAsRead()
+    override suspend fun markAllAsRead() {
+        notificationDao.markAllAsRead(System.currentTimeMillis())
+    }
 
-    override suspend fun deleteById(id: String) = dao.deleteById(id)
-}
+    override suspend fun deleteById(id: String) {
+        notificationDao.deleteById(id)
+    }
+
+    override suspend fun countByTag(tag: String): Int =
+        notificationDao.countByTag(tag)}

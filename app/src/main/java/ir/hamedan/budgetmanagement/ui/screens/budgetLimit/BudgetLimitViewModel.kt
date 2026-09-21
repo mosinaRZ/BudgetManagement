@@ -3,10 +3,8 @@ package ir.hamedan.budgetmanagement.ui.screens.budget
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.BudgetLimitEntity
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
-import ir.hamedan.budgetmanagement.data.local.models.NotificationEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.data.repository.BudgetLimitRepository
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
@@ -14,6 +12,7 @@ import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.utils.NotificationHelper
+import ir.hamedan.budgetmanagement.data.money.MoneyContract
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -30,7 +29,7 @@ data class BudgetLimitUiModel(
         get() = entity.isActive && !isExpired
 
     val isSuccessful: Boolean
-        get() = currentSpent <= entity.maxLimit
+        get() = currentSpent <= entity.maxLimit.toDouble()
 }
 
 class BudgetLimitViewModel(
@@ -57,25 +56,22 @@ class BudgetLimitViewModel(
         expenseCategories
     ) { limits, transactions, categories ->
         limits.map { limit ->
-            // محاسبه هزینه‌ها تنها در صورتی که محدودیت فعال باشد و در بازه زمانی قرار گیرد
+            val category = categories.find { it.id == limit.categoryId }
             val spent = if (limit.isActive) {
                 transactions
                     .filter {
                         it.type == "EXPENSE" &&
-                                it.category == limit.categoryName &&
+                                it.categoryId == limit.categoryId &&
                                 it.timestamp in limit.startDate..limit.endDate
                     }
                     .sumOf { it.amount }
-            } else {
-                0.0
-            }
+                    .toDouble()
+            } else 0.0
 
-            // بعد از محاسبه spent برای هر limit:
-            val percentUsed = if (limit.maxLimit > 0) (spent / limit.maxLimit * 100) else 0.0
-
+            val percentUsed = if (limit.maxLimit > 0L) (spent / limit.maxLimit.toDouble() * 100.0) else 0.0
             listOf(50.0, 80.0, 100.0).forEach { threshold ->
                 if (percentUsed >= threshold) {
-                    val tag = "BUDGET_${threshold.toInt()}_${limit.categoryName}"
+                    val tag = "BUDGET_${threshold.toInt()}_${limit.id}"
                     viewModelScope.launch {
                         NotificationHelper.send(
                             context = context,
@@ -83,22 +79,20 @@ class BudgetLimitViewModel(
                             type = if (threshold >= 100.0) "ERROR" else "WARNING",
                             titleFa = "هشدار محدودیت بودجه",
                             titleEn = "Budget Limit Alert",
-                            descFa = "دسته «${limit.categoryName}» به ${threshold.toInt()}٪ سقف رسید.",
-                            descEn = "${limit.categoryName} reached ${threshold.toInt()}% of budget.",
+                            descFa = "دسته «${category?.title.orEmpty()}» به ${threshold.toInt()}٪ سقف رسید.",
+                            descEn = "${category?.title.orEmpty()} reached ${threshold.toInt()}% of budget.",
                             tag = tag
                         )
                     }
                 }
             }
 
-            val emoji = categories.find { it.title == limit.categoryName }?.iconEmoji ?: "💰"
-
             BudgetLimitUiModel(
                 entity = limit,
                 currentSpent = spent,
-                categoryEmoji = emoji
+                categoryEmoji = category?.iconEmoji ?: "💰"
             )
-        }
+        }.map { it }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -110,7 +104,7 @@ class BudgetLimitViewModel(
         maxLimit: Double,
         startDate: Long,
         endDate: Long,
-        limitId: Long? = null
+        limitId: String? = null
     ) {
         viewModelScope.launch {
             // برای ویرایش، رکورد قبلی باید با شناسه (id) پیدا شود، نه با نام دسته‌بندی؛
@@ -123,13 +117,16 @@ class BudgetLimitViewModel(
             // تنظیم تاریخ پایان تا آخرین میلی‌ثانیه همان روز (23:59:59.999)
             val adjustedEndDate = endDate + (24 * 60 * 60 * 1000L - 1)
 
+            val category = expenseCategories.value.firstOrNull { it.title == categoryName }
+                ?: throw IllegalArgumentException("Category not found: $categoryName")
             val limit = BudgetLimitEntity(
-                id = existingLimit?.id ?: 0L,
-                categoryName = categoryName,
-                maxLimit = maxLimit,
+                id = existingLimit?.id ?: java.util.UUID.randomUUID().toString(),
+                categoryId = category.id,
+                maxLimit = MoneyContract.fromInput(maxLimit),
                 isActive = existingLimit?.isActive ?: true,
                 startDate = startDate,
-                endDate = adjustedEndDate
+                endDate = adjustedEndDate,
+                createdAt = existingLimit?.createdAt ?: System.currentTimeMillis()
             )
             budgetLimitRepository.saveLimit(limit)
 
@@ -139,14 +136,14 @@ class BudgetLimitViewModel(
                 type = "SUCCESS",
                 titleFa = "محدودیت مالی جدید ثبت شد",
                 titleEn = "New Budget Limit Added",
-                descFa = "محدودیت مالی جدید برای دسته بندی «${limit.categoryName}» ثبت شد.",
-                descEn = "New budget limit added for category ${limit.categoryName}.",
-                tag = "BUDGET_${limit.categoryName}_${System.currentTimeMillis()}"
+                descFa = "محدودیت مالی جدید برای دسته بندی «${categoryName}» ثبت شد.",
+                descEn = "New budget limit added for category ${categoryName}.",
+                tag = "BUDGET_${categoryName}_${System.currentTimeMillis()}"
             )
         }
     }
 
-    fun updateLimitStatus(id: Long, isActive: Boolean) {
+    fun updateLimitStatus(id: String, isActive: Boolean) {
         viewModelScope.launch {
             val currentItem = budgetLimitsWithSpent.value.find { it.entity.id == id }?.entity
             currentItem?.let {
@@ -162,16 +159,16 @@ class BudgetLimitViewModel(
                     type = "WARNING",
                     titleFa = "محدودیت مالی به روزرسانی شد",
                     titleEn = "Budget Limit Status Updated",
-                    descFa = "محدودیت مالی دسته‌بندی «${it.categoryName}» $statusFa شد.",
-                    descEn = "Budget limit for category ${it.categoryName} was $statusEn.",
-                    tag = "BUDGET_STATUS_${it.categoryName}_${System.currentTimeMillis()}"
+                    descFa = "محدودیت مالی دسته‌بندی «${expenseCategories.value.firstOrNull { c -> c.id == it.categoryId }?.title.orEmpty()}» $statusFa شد.",
+                    descEn = "Budget limit for category ${expenseCategories.value.firstOrNull { c -> c.id == it.categoryId }?.title.orEmpty()} was $statusEn.",
+                    tag = "BUDGET_STATUS_${expenseCategories.value.firstOrNull { c -> c.id == it.categoryId }?.title.orEmpty()}_${System.currentTimeMillis()}"
                 )
             }
         }
     }
 
     // حذف اولیه از پایگاه داده (بدون ارسال نوتیفیکیشن)
-    fun deleteBudgetLimit(id: Long) {
+    fun deleteBudgetLimit(id: String) {
         viewModelScope.launch {
             budgetLimitRepository.deleteLimit(id)
         }
@@ -187,7 +184,7 @@ class BudgetLimitViewModel(
     // ارسال نوتیفیکیشن حذف قطعی (تنها در صورتی که کاربر Undo نکرده باشد)
     fun commitDeleteLimit(entity: BudgetLimitEntity) {
         viewModelScope.launch {
-            val mappedCategory = entity.categoryName
+            val mappedCategory = expenseCategories.value.firstOrNull { c -> c.id == entity.categoryId }?.title.orEmpty()
             NotificationHelper.send(
                 context = context,
                 notificationType = NotificationType.BUDGET_DELETE,

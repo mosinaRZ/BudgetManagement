@@ -10,18 +10,41 @@ import java.util.UUID
     indices = [
         Index(value = ["isRead"]),
         Index(value = ["timestamp"]),
-        Index(value = ["tag"])
+        Index(value = ["tag"]),
+        Index(value = ["updatedAt"])
     ]
 )
 data class NotificationEntity(
+
     @PrimaryKey
     val id: String = UUID.randomUUID().toString(),
+
     val type: String = "SYSTEM",
+
     val titleFa: String = "",
+
     val titleEn: String = "",
+
     val descFa: String = "",
+
     val descEn: String = "",
+
+    /**
+     * Notification/event time.
+     */
     val timestamp: Long = System.currentTimeMillis(),
+
     val isRead: Boolean = false,
-    val tag: String = ""
+
+    val tag: String = "",
+
+    /**
+     * Record creation time.
+     */
+    val createdAt: Long = System.currentTimeMillis(),
+
+    /**
+     * Last modification time.
+     */
+    val updatedAt: Long = System.currentTimeMillis()
 )

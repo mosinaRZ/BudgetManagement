@@ -200,6 +200,7 @@ fun BudgetLimitScreen(
                             isPersian = isPersian,
                             currencyUnit = currencyUnit,
                             numberFormatter = numberFormatter,
+                            categoryName = categories.find { it.id == item.entity.categoryId }?.title.orEmpty(),
                             onToggleActive = { isActive ->
                                 viewModel.updateLimitStatus(item.entity.id, isActive)
                             },
@@ -324,7 +325,7 @@ fun BudgetLimitScreen(
 
         // ------------------ Delete Dialog (Hold to Delete) ------------------
         limitToDelete?.let { item ->
-            val mappedCategoryName = StringMapper.getCategoryName(item.entity.categoryName, isPersian)
+            val mappedCategoryName = StringMapper.getCategoryName(categories.find { it.id == item.entity.categoryId }?.title.orEmpty(), isPersian)
             var isPressed by remember { mutableStateOf(false) }
             val dialogShape = RoundedCornerShape(28.dp)
 
@@ -603,6 +604,7 @@ fun BudgetLimitItemCard(
     isPersian: Boolean,
     currencyUnit: String,
     numberFormatter: NumberFormat,
+    categoryName: String,
     onToggleActive: (Boolean) -> Unit,
     onEditClick: () -> Unit,
     onDeleteClick: () -> Unit
@@ -625,7 +627,7 @@ fun BudgetLimitItemCard(
     val spentDisp = if (currencyUnit == "IRR") item.currentSpent * 10 else item.currentSpent
     val maxDisp = if (currencyUnit == "IRR") item.entity.maxLimit * 10 else item.entity.maxLimit
 
-    val categoryDisplayName = StringMapper.getCategoryName(item.entity.categoryName, isPersian)
+    val categoryDisplayName = StringMapper.getCategoryName(categoryName, isPersian)
 
     val startDateFormatted = DateUtils.formatTimestamp(item.entity.startDate, isPersian)
     val endDateFormatted = DateUtils.formatTimestamp(item.entity.endDate, isPersian)
@@ -764,14 +766,14 @@ fun AddOrEditLimitDialog(
     val maxDigitsLength = 12
 
     var selectedCategoryKey by remember {
-        mutableStateOf(limitToEdit?.entity?.categoryName ?: categories.firstOrNull()?.title ?: "")
+        mutableStateOf(categories.firstOrNull { it.id == limitToEdit?.entity?.categoryId }?.title ?: categories.firstOrNull()?.title ?: "")
     }
     var expanded by remember { mutableStateOf(false) }
 
     val initialRawDigits = remember(limitToEdit, currencyUnit) {
         if (limitToEdit == null) ""
         else {
-            val amount = if (currencyUnit == "IRR") (limitToEdit.entity.maxLimit * 10).toLong() else limitToEdit.entity.maxLimit.toLong()
+            val amount = if (currencyUnit == "IRR") limitToEdit.entity.maxLimit * 10L else limitToEdit.entity.maxLimit
             amount.toString().take(maxDigitsLength)
         }
     }

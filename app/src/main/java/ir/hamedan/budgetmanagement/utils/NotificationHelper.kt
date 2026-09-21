@@ -41,13 +41,11 @@ object NotificationHelper {
         )
 
         CoroutineScope(Dispatchers.IO).launch {
-            // اول در دیتابیس ذخیره می‌شود (اعلان درون‌برنامه‌ای)
-            val wasInserted = repository.addNotification(entity)
+            val alreadyExists = repository.countByTag(entity.tag) > 0
 
-            // اعلان سیستمی فقط زمانی ارسال می‌شود که رکورد جدیدی واقعاً ثبت شده باشد؛
-            // در غیر این صورت (تگ تکراری) اعلان سیستمی بدون داشتن رکورد متناظر در
-            // لیست درون‌برنامه‌ای، به‌طور مکرر ارسال می‌شد (فقط صدا، بدون نمایش در لیست).
-            if (wasInserted) {
+            if (!alreadyExists) {
+                repository.insert(entity)
+
                 AppNotificationManager.sendPushIfAllowed(
                     context = context.applicationContext,
                     titleFa = titleFa,

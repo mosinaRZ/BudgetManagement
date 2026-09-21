@@ -200,9 +200,9 @@ object PdfExporter {
             rowNumber.toString(),
             DateUtils.formatTimestamp(tx.timestamp, isPersian),
             tx.title.take(16),
-            tx.category.take(13),
+            tx.categoryId.take(13),
             if (tx.type == "INCOME") (if (isPersian) "درآمد" else "Income") else (if (isPersian) "هزینه" else "Expense"),
-            formatAmount(tx.amount, currency, isPersian),
+            formatAmount(tx.amount.toDouble(), currency, isPersian),
             tx.note.take(18)
         )
 

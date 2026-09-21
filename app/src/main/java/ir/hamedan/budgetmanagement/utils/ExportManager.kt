@@ -21,10 +21,10 @@ object ExportManager {
 
         val range = ExportPeriodCalculator.resolve(period)
         val transactions = repo.getTransactionsBetween(range.startMillis, range.endMillis)
-        val openingBalance = repo.getBalanceBefore(range.startMillis)
+        val openingBalance = repo.getBalanceBefore(range.startMillis).toDouble()
 
-        val income = transactions.filter { it.type == "INCOME" }.sumOf { it.amount }
-        val expense = transactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }
+        val income = transactions.filter { it.type == "INCOME" }.sumOf { it.amount }.toDouble()
+        val expense = transactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }.toDouble()
         val balance = openingBalance + income - expense
 
         // معدل موجودی: میانگین موجودی روزانه در طول بازه
@@ -63,7 +63,7 @@ object ExportManager {
         for (tx in transactions) {
             val days = (tx.timestamp - lastTimestamp) / 86_400_000.0
             weightedSum += running * days
-            running += if (tx.type == "INCOME") tx.amount else -tx.amount
+            running += if (tx.type == "INCOME") tx.amount.toDouble() else -tx.amount.toDouble()
             lastTimestamp = tx.timestamp
         }
         weightedSum += running * ((end - lastTimestamp) / 86_400_000.0)

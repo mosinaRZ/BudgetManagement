@@ -77,7 +77,7 @@ class BalanceWidget : GlanceAppWidget() {
 
     @Composable
     private fun BalanceWidgetContent(
-        balance: Double,
+        balance: Long,
         currencyUnit: String,
         isPersian: Boolean,
         colors: WidgetColors
@@ -86,8 +86,12 @@ class BalanceWidget : GlanceAppWidget() {
             if (isPersian) Locale("fa", "IR") else Locale.US
         )
 
-        val displayAmount = if (currencyUnit == "IRR") balance * 10.0 else balance
-        val formattedAmount = numberFormatter.format(abs(displayAmount.toLong()))
+        val displayAmount = if (currencyUnit == "IRR") {
+            balance * 10L
+        } else {
+            balance
+        }
+        val formattedAmount = numberFormatter.format(abs(displayAmount))
         val sign = if (balance < 0) "-" else ""
 
         val unitText = if (isPersian) {

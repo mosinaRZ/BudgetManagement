@@ -4,10 +4,26 @@ import ir.hamedan.budgetmanagement.data.local.models.PendingTransactionEntity
 import kotlinx.coroutines.flow.Flow
 
 interface PendingTransactionRepository {
+
     fun getPendingTransactions(): Flow<List<PendingTransactionEntity>>
+
     fun getPendingCount(): Flow<Int>
-    suspend fun addPending(pending: PendingTransactionEntity): Boolean
-    suspend fun confirm(id: String)
-    suspend fun ignore(id: String)
-    suspend fun delete(id: String)
+
+    suspend fun insert(
+        pending: PendingTransactionEntity
+    )
+
+    suspend fun updateStatus(
+        id: String,
+        status: String
+    )
+
+    suspend fun deleteById(
+        id: String
+    )
+
+    suspend fun countRecentDuplicates(
+        rawMessage: String,
+        sinceTimestamp: Long
+    ): Int
 }

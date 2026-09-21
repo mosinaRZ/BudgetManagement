@@ -5,9 +5,11 @@ import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.models.DebtCreditEntity
+import ir.hamedan.budgetmanagement.data.money.MoneyContract
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.repository.DebtCreditRepository
+import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.ui.components.BalanceWidget
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
@@ -19,6 +21,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -28,11 +31,12 @@ import kotlin.math.ceil
 class DebtCreditViewModel(
     private val debtCreditRepository: DebtCreditRepository,
     private val transactionRepository: TransactionRepository,
+    private val categoryRepository: CategoryRepository,
     private val context: Context,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
-    val debtCreditList: StateFlow<List<DebtCreditEntity>> = debtCreditRepository.allDebtCredits
+    val debtCreditList: StateFlow<List<DebtCreditEntity>> = debtCreditRepository.getAllDebtCredits()
         .map { list ->
             list.map { item ->
                 checkDueDateNotifications(item)
@@ -70,7 +74,7 @@ class DebtCreditViewModel(
 
             if (!isEdit && type == "CREDIT" && addToBalance) {
                 val currentBalance = transactionRepository.getCurrentBalance()
-                if (currentBalance < totalAmount) {
+                if (currentBalance < MoneyContract.fromInput(totalAmount)) {
                     val isPersian = LocaleHelper.getLanguage(context) == "fa"
                     val msg = if (isPersian) {
                         "موجودی کافی نیست! موجودی فعلی: ${currentBalance.toLong()}"
@@ -84,20 +88,23 @@ class DebtCreditViewModel(
 
             val existingEntity = if (isEdit) debtCreditList.value.find { it.id == id } else null
 
+            val categoryId = categoryRepository.getAllCategories().first().firstOrNull { it.title == if (type == "DEBT") "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE" }?.id
+                ?: throw IllegalStateException("Required debt/credit category is missing.")
+
             val entity = DebtCreditEntity(
                 id = id ?: java.util.UUID.randomUUID().toString(),
                 type = type,
                 personName = personName,
-                totalAmount = totalAmount,
-                paidAmount = existingEntity?.paidAmount ?: 0.0,
+                totalAmount = MoneyContract.fromInput(totalAmount),
+                paidAmount = existingEntity?.paidAmount ?: 0L,
                 isMonthly = isMonthly,
-                monthlyAmount = if (isMonthly) monthlyAmount else 0.0,
+                monthlyAmount = if (isMonthly) MoneyContract.fromInput(monthlyAmount) else 0L,
                 dueDay = dueDay,
                 dueDateMillis = calculatedDueDate,
                 note = note,
                 isSettled = existingEntity?.isSettled ?: false
             )
-            debtCreditRepository.insertOrUpdateDebtCredit(entity)
+            debtCreditRepository.insertOrUpdate(entity)
 
             if (!isEdit && addToBalance) {
                 val isDebt = type == "DEBT"
@@ -108,8 +115,8 @@ class DebtCreditViewModel(
                 transactionRepository.insertTransaction(
                     TransactionEntity(
                         title = "$titlePrefix: $personName",
-                        amount = totalAmount,
-                        category = if (isDebt) "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE",
+                        amount = MoneyContract.fromInput(totalAmount),
+                        categoryId = categoryId,
                         type = txType,
                         note = note ?: "ثبت اولیه $personName",
                         timestamp = System.currentTimeMillis()
@@ -137,7 +144,7 @@ class DebtCreditViewModel(
         }
     }
 
-    fun deposit(id: String, amount: Double) {
+    fun deposit(id: String, amount: Long) {
         viewModelScope.launch(ioDispatcher) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
             val isDebt = item.type == "DEBT"
@@ -156,11 +163,12 @@ class DebtCreditViewModel(
                 }
             }
 
-            val newPaid = (item.paidAmount + amount).coerceAtMost(item.totalAmount)
+            val newPaid = (item.paidAmount + amount)
+                .coerceAtMost(item.totalAmount)
             val isSettled = newPaid >= item.totalAmount
 
             val updated = item.copy(paidAmount = newPaid, isSettled = isSettled)
-            debtCreditRepository.insertOrUpdateDebtCredit(updated)
+            debtCreditRepository.insertOrUpdate(updated)
 
             val txType = if (isDebt) "EXPENSE" else "INCOME"
             val txTitle = if (isDebt) "پرداخت بدهی به: ${item.personName}" else "دریافت طلب از: ${item.personName}"
@@ -169,7 +177,8 @@ class DebtCreditViewModel(
                 TransactionEntity(
                     title = txTitle,
                     amount = amount,
-                    category = if (isDebt) "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE",
+                    categoryId = categoryRepository.getAllCategories().first().firstOrNull { it.title == if (isDebt) "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE" }?.id
+                        ?: throw IllegalStateException("Required debt/credit category is missing."),
                     type = txType,
                     note = "ثبت واریزی/پرداختی بدهی و طلب"
                 )
@@ -194,16 +203,18 @@ class DebtCreditViewModel(
         }
     }
 
-    fun withdraw(id: String, amount: Double) {
+    fun withdraw(id: String, amount: Long) {
         viewModelScope.launch(ioDispatcher) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
             val isDebt = item.type == "DEBT"
 
-            val newPaid = (item.paidAmount - amount).coerceAtLeast(0.0)
+            val newPaid =
+                (item.paidAmount - amount)
+                    .coerceAtLeast(0L)
             val isSettled = newPaid >= item.totalAmount
 
             val updated = item.copy(paidAmount = newPaid, isSettled = isSettled)
-            debtCreditRepository.insertOrUpdateDebtCredit(updated)
+            debtCreditRepository.insertOrUpdate(updated)
 
             val txType = if (isDebt) "INCOME" else "EXPENSE"
             val txTitle = if (isDebt) "اصلاح/برداشت از پرداخت بدهی: ${item.personName}" else "اصلاح/برداشت از دریافت طلب: ${item.personName}"
@@ -212,7 +223,8 @@ class DebtCreditViewModel(
                 TransactionEntity(
                     title = txTitle,
                     amount = amount,
-                    category = if (isDebt) "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE",
+                    categoryId = categoryRepository.getAllCategories().first().firstOrNull { it.title == if (isDebt) "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE" }?.id
+                        ?: throw IllegalStateException("Required debt/credit category is missing."),
                     type = txType,
                     note = "اصلاح واریزی بدهی و طلب"
                 )
@@ -234,13 +246,13 @@ class DebtCreditViewModel(
 
     fun softDelete(item: DebtCreditEntity) {
         viewModelScope.launch(ioDispatcher) {
-            debtCreditRepository.deleteDebtCredit(item.id)
+            debtCreditRepository.deleteById(item.id)
         }
     }
 
     fun restore(item: DebtCreditEntity) {
         viewModelScope.launch(ioDispatcher) {
-            debtCreditRepository.insertOrUpdateDebtCredit(item)
+            debtCreditRepository.insertOrUpdate(item)
         }
     }
 
@@ -263,10 +275,10 @@ class DebtCreditViewModel(
         viewModelScope.launch(ioDispatcher) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
             val newStatus = !currentStatus
-            val newPaid = if (newStatus) item.totalAmount else 0.0
+            val newPaid = if (newStatus) item.totalAmount else 0L
 
             val updated = item.copy(isSettled = newStatus, paidAmount = newPaid)
-            debtCreditRepository.insertOrUpdateDebtCredit(updated)
+            debtCreditRepository.insertOrUpdate(updated)
 
             val statusFa = if (newStatus) "تسویه شد" else "از حالت تسویه خارج شد"
             val statusEn = if (newStatus) "Settled" else "Unsettled"
@@ -287,17 +299,17 @@ class DebtCreditViewModel(
     fun settleDueReminder(id: String) {
         viewModelScope.launch(ioDispatcher) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
-            val remaining = (item.totalAmount - item.paidAmount).coerceAtLeast(0.0)
-            if (remaining <= 0.0) {
+            val remaining = (item.totalAmount - item.paidAmount).coerceAtLeast(0L)
+            if (remaining <= 0L) {
                 if (!item.isSettled) {
-                    debtCreditRepository.insertOrUpdateDebtCredit(item.copy(isSettled = true))
+                    debtCreditRepository.insertOrUpdate(item.copy(isSettled = true))
                 }
                 return@launch
             }
 
             val isDebt = item.type == "DEBT"
             val updated = item.copy(paidAmount = item.totalAmount, isSettled = true)
-            debtCreditRepository.insertOrUpdateDebtCredit(updated)
+            debtCreditRepository.insertOrUpdate(updated)
 
             val txType = if (isDebt) "EXPENSE" else "INCOME"
             val txTitle = if (isDebt) "پرداخت بدهی به: ${item.personName}" else "دریافت طلب از: ${item.personName}"
@@ -306,7 +318,8 @@ class DebtCreditViewModel(
                 TransactionEntity(
                     title = txTitle,
                     amount = remaining,
-                    category = if (isDebt) "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE",
+                    categoryId = categoryRepository.getAllCategories().first().firstOrNull { it.title == if (isDebt) "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE" }?.id
+                        ?: throw IllegalStateException("Required debt/credit category is missing."),
                     type = txType,
                     note = "تسویه از طریق یادآوری سررسید"
                 )
@@ -335,7 +348,7 @@ class DebtCreditViewModel(
         viewModelScope.launch(ioDispatcher) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
             val updated = item.copy(dueDateMillis = newDueDateMillis)
-            debtCreditRepository.insertOrUpdateDebtCredit(updated)
+            debtCreditRepository.insertOrUpdate(updated)
 
             NotificationHelper.send(
                 context = context,

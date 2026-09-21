@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
+import ir.hamedan.budgetmanagement.data.money.MoneyContract
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepository
@@ -36,19 +37,19 @@ class SavingGoalsViewModel(
     private val _depositError = MutableSharedFlow<String>()
     val depositError: SharedFlow<String> = _depositError
 
-    fun addGoal(title: String, targetAmount: Double, monthlyAmount: Double, icon: String) {
+    fun addGoal(title: String, targetAmount: Long, monthlyAmount: Long, icon: String) {
         viewModelScope.launch(Dispatchers.IO) {
             val newGoal = SavingGoalEntity(
                 id = UUID.randomUUID().toString(),
                 title = title,
                 targetAmount = targetAmount,
-                currentAmount = 0.0,
+                currentAmount = 0L,
                 monthlyAmount = monthlyAmount,
                 icon = icon
             )
+
             repository.insertGoal(newGoal)
 
-            // ارسال اعلان ایجاد هدف
             NotificationHelper.send(
                 context = context,
                 notificationType = NotificationType.GOAL_ADD,
@@ -78,7 +79,7 @@ class SavingGoalsViewModel(
         }
     }
 
-    fun deposit(goalId: String, amount: Double) {
+    fun deposit(goalId: String, amount: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             if (amount <= 0) {
                 val isPersian = LocaleHelper.getLanguage(context) == "fa"
@@ -88,7 +89,6 @@ class SavingGoalsViewModel(
             }
 
             repository.depositToGoal(goalId, amount)
-
             // یافتن هدف برای محاسبه درصد پیشرفت و ارسال اعلان
             val currentGoal = savingGoals.value?.find { it.id == goalId }
             val goalTitle = currentGoal?.title ?: ""
@@ -106,7 +106,7 @@ class SavingGoalsViewModel(
             // بررسی درصد پیشرفت پس از واریز
             if (currentGoal != null && currentGoal.targetAmount > 0) {
                 val newAmount = currentGoal.currentAmount + amount
-                val newRatio = newAmount / currentGoal.targetAmount
+                val newRatio = newAmount.toDouble() / currentGoal.targetAmount.toDouble()
 
                 val (percentageTag, percentageText) = when {
                     newRatio >= 1.0 -> "100" to "۱۰۰٪"
@@ -131,11 +131,10 @@ class SavingGoalsViewModel(
         }
     }
 
-    fun withdraw(goalId: String, amount: Double) {
+    fun withdraw(goalId: String, amount: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             if (amount <= 0) return@launch
             repository.withdrawFromGoal(goalId, amount)
-
             val goalTitle = savingGoals.value?.find { it.id == goalId }?.title ?: ""
 
             NotificationHelper.send(

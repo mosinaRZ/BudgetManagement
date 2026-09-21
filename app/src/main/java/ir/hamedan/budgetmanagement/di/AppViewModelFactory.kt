@@ -79,13 +79,15 @@ class AppViewModelFactory(
             }
             modelClass.isAssignableFrom(AnalyticsViewModel::class.java) -> {
                 AnalyticsViewModel(
-                    repository = container.transactionRepository
+                    repository = container.transactionRepository,
+                    categoryRepository = container.categoryRepository
                 ) as T
             }
             modelClass.isAssignableFrom(DebtCreditViewModel::class.java) -> {
                 DebtCreditViewModel(
                     debtCreditRepository = container.debtCreditRepository,
                     transactionRepository = container.transactionRepository,
+                    categoryRepository = container.categoryRepository,
                     context = appContext
                 ) as T
             }

@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
+import ir.hamedan.budgetmanagement.data.money.MoneyContract
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
@@ -13,6 +14,7 @@ import ir.hamedan.budgetmanagement.ui.components.BalanceWidget
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.utils.NotificationHelper
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -32,10 +34,12 @@ class AddViewModel(
 
     fun addTransaction(title: String, amount: Double, categoryKey: String, isExpense: Boolean, note: String = "") {
         viewModelScope.launch {
+            val categoryId = categoryRepository.getAllCategories().first().firstOrNull { it.id == categoryKey || it.title == categoryKey }?.id
+                ?: throw IllegalArgumentException("Category not found: $categoryKey")
             val newTransaction = TransactionEntity(
                 title = title,
-                amount = amount,
-                category = categoryKey,
+                amount = MoneyContract.fromInput(amount),
+                categoryId = categoryId,
                 type = if (isExpense) "EXPENSE" else "INCOME",
                 note = note
             )

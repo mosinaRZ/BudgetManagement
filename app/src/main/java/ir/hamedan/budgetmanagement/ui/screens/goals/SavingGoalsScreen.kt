@@ -419,8 +419,14 @@ fun SavingGoalsScreen(
                             )
                         )
                     } else {
-                        viewModel.addGoal(title, targetAmount, monthlyAmount, icon)
+                        viewModel.addGoal(
+                            title,
+                            targetAmount,
+                            monthlyAmount,
+                            icon
+                        )
                     }
+
                     showAddDialog = false
                     goalToEdit = null
                 }
@@ -747,7 +753,7 @@ fun SavingGoalItemCard(
 ) {
     val cardShape = RoundedCornerShape(20.dp)
 
-    val progress = if (goal.targetAmount > 0) (goal.currentAmount / goal.targetAmount).toFloat().coerceIn(0f, 1f) else 0f
+    val progress = if (goal.targetAmount > 0L) (goal.currentAmount.toDouble() / goal.targetAmount.toDouble()).toFloat().coerceIn(0f, 1f) else 0f
     val animatedProgress by animateFloatAsState(targetValue = progress, label = "GoalProgress")
     val percentText = (progress * 100).toInt()
 
@@ -878,8 +884,8 @@ fun AddOrEditGoalDialog(
     isPersian: Boolean,
     currencyUnit: String,
     onDismiss: () -> Unit,
-    onConfirm: (title: String, targetAmount: Double, monthlyAmount: Double, icon: String) -> Unit
-) {
+    onConfirm: (title: String, targetAmount: Long, monthlyAmount: Long, icon: String) -> Unit)
+{
     val maxTitleLength = 25
     val maxDigits = 12
 
@@ -1063,13 +1069,23 @@ fun AddOrEditGoalDialog(
 
                     Button(
                         onClick = {
-                            val cleanTarget = rawTargetAmount.toDoubleOrNull() ?: 0.0
-                            val finalTargetInToman = if (currencyUnit == "IRR") cleanTarget / 10.0 else cleanTarget
-                            val cleanMonthly = rawMonthlyAmount.toDoubleOrNull() ?: 0.0
-                            val finalMonthlyInToman = if (currencyUnit == "IRR") cleanMonthly / 10.0 else cleanMonthly
-                            onConfirm(title.trim(), finalTargetInToman, finalMonthlyInToman, selectedIcon)
+                            val inputTarget = rawTargetAmount.toLongOrNull() ?: 0L
+                            val finalTargetInToman =
+                                if (currencyUnit == "IRR") inputTarget / 10L else inputTarget
+
+                            val inputMonthly = rawMonthlyAmount.toLongOrNull() ?: 0L
+                            val finalMonthlyInToman =
+                                if (currencyUnit == "IRR") inputMonthly / 10L else inputMonthly
+
+                            onConfirm(
+                                title.trim(),
+                                finalTargetInToman,
+                                finalMonthlyInToman,
+                                selectedIcon
+                            )
                         },
-                        enabled = title.isNotBlank() && (rawTargetAmount.toDoubleOrNull() ?: 0.0) > 0,
+                        enabled = title.isNotBlank() &&
+                                (rawTargetAmount.toLongOrNull() ?: 0L) > 0L,
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp),
@@ -1102,10 +1118,10 @@ fun AmountActionDialog(
     isPersian: Boolean,
     currencyUnit: String,
     isDeposit: Boolean,
-    initialAmount: Double = 0.0,
+    initialAmount: Long = 0L,
     onDismiss: () -> Unit,
-    onConfirm: (amount: Double) -> Unit
-) {
+    onConfirm: (amount: Long) -> Unit)
+{
     val maxDigits = 12
     val initialRaw = remember(initialAmount, currencyUnit) {
         if (initialAmount <= 0) ""
@@ -1202,8 +1218,10 @@ fun AmountActionDialog(
 
                     Button(
                         onClick = {
-                            val cleanNumber = rawAmount.toDoubleOrNull() ?: 0.0
-                            val finalAmountInToman = if (currencyUnit == "IRR") cleanNumber / 10.0 else cleanNumber
+                            val inputAmount = rawAmount.toLongOrNull() ?: 0L
+                            val finalAmountInToman =
+                                if (currencyUnit == "IRR") inputAmount / 10L else inputAmount
+
                             onConfirm(finalAmountInToman)
                         },
                         enabled = (rawAmount.toDoubleOrNull() ?: 0.0) > 0,

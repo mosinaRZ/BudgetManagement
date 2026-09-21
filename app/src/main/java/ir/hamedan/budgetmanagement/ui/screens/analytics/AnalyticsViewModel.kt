@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
+import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TimeFilter
 import ir.hamedan.budgetmanagement.utils.DateUtils
 import kotlinx.coroutines.flow.*
@@ -16,7 +17,8 @@ import java.util.Locale
 import kotlin.math.abs
 
 class AnalyticsViewModel(
-    private val repository: TransactionRepository
+    private val repository: TransactionRepository,
+    private val categoryRepository: CategoryRepository
 ) : ViewModel() {
 
     val selectedTimeFilter = MutableStateFlow(TimeFilter.ALL)
@@ -33,30 +35,31 @@ class AnalyticsViewModel(
 
     val uiState: StateFlow<AnalyticsUiState> = combine(
         repository.getAllTransactions(),
+        categoryRepository.getAllCategories(),
         selectedTimeFilter,
         isPersianState,
         isIncomeChartSelectedState
-    ) { allTransactions, timeFilter, isPersian, isIncomeChartSelected ->
+    ) { allTransactions, categories, timeFilter, isPersian, isIncomeChartSelected ->
 
         val hasAnyTransaction = allTransactions.isNotEmpty()
 
         val filteredTransactions = filterTransactionsByTime(allTransactions, timeFilter, isPersian)
 
-        val totalIncome = filteredTransactions.filter { it.type == "INCOME" }.sumOf { it.amount }
+        val totalIncome = filteredTransactions.filter { it.type == "INCOME" }.sumOf { it.amount }.toDouble()
         val expensesList = filteredTransactions.filter { it.type == "EXPENSE" }
-        val totalExpense = expensesList.sumOf { it.amount }
+        val totalExpense = expensesList.sumOf { it.amount }.toDouble()
         val balance = totalIncome - totalExpense
 
         val categoryExpenses = expensesList
-            .groupBy { it.category }
+            .groupBy { it.categoryId }
             .map { (category, list) ->
-                val sum = list.sumOf { it.amount }
+                val sum = list.sumOf { it.amount }.toDouble()
                 val percent = if (totalExpense > 0) (sum / totalExpense * 100).toFloat() else 0f
                 CategoryExpenseModel(
-                    categoryName = category,
+                    categoryName = categories.firstOrNull { it.id == category }?.title ?: category,
                     totalAmount = sum,
                     percentage = percent,
-                    color = generateColorForCategory(category)
+                    color = generateColorForCategory(categories.firstOrNull { it.id == category }?.title ?: category)
                 )
             }
             .sortedByDescending { it.totalAmount }
@@ -169,7 +172,7 @@ class AnalyticsViewModel(
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         val (_, _, day) = DateUtils.toJalali(txDate)
                         if (day in 1..daysInMonth) {
-                            dailySums[day - 1] += tx.amount
+                            dailySums[day - 1] += tx.amount.toDouble()
                         }
                     }
 
@@ -195,10 +198,10 @@ class AnalyticsViewModel(
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         val (_, _, day) = DateUtils.toJalali(txDate)
                         when {
-                            day in 1..7 -> weeks[0] += tx.amount
-                            day in 8..14 -> weeks[1] += tx.amount
-                            day in 15..21 -> weeks[2] += tx.amount
-                            day >= 22 -> weeks[3] += tx.amount
+                            day in 1..7 -> weeks[0] += tx.amount.toDouble()
+                            day in 8..14 -> weeks[1] += tx.amount.toDouble()
+                            day in 15..21 -> weeks[2] += tx.amount.toDouble()
+                            day >= 22 -> weeks[3] += tx.amount.toDouble()
                         }
                     }
 
@@ -224,7 +227,7 @@ class AnalyticsViewModel(
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         val (_, jMonth, _) = DateUtils.toJalali(txDate)
                         if (jMonth in 1..12) {
-                            months[jMonth - 1] += tx.amount
+                            months[jMonth - 1] += tx.amount.toDouble()
                         }
                     }
 
@@ -249,7 +252,7 @@ class AnalyticsViewModel(
                         listOf(TimeExpenseModel(currentJalaliYear.toString(), currentJalaliYear.toString(), 0.0, isCurrent = true))
                     } else {
                         yearGrouped.keys.sorted().map { year ->
-                            val sum = yearGrouped[year]?.sumOf { it.amount } ?: 0.0
+                            val sum = (yearGrouped[year]?.sumOf { it.amount } ?: 0L).toDouble()
                             TimeExpenseModel(
                                 labelFa = year.toString(),
                                 labelEn = year.toString(),
@@ -278,7 +281,7 @@ class AnalyticsViewModel(
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         val day = txDate.dayOfMonth
                         if (day in 1..daysInMonth) {
-                            dailySums[day - 1] += tx.amount
+                            dailySums[day - 1] += tx.amount.toDouble()
                         }
                     }
 
@@ -303,10 +306,10 @@ class AnalyticsViewModel(
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         val day = txDate.dayOfMonth
                         when {
-                            day in 1..7 -> weeks[0] += tx.amount
-                            day in 8..14 -> weeks[1] += tx.amount
-                            day in 15..21 -> weeks[2] += tx.amount
-                            day >= 22 -> weeks[3] += tx.amount
+                            day in 1..7 -> weeks[0] += tx.amount.toDouble()
+                            day in 8..14 -> weeks[1] += tx.amount.toDouble()
+                            day in 15..21 -> weeks[2] += tx.amount.toDouble()
+                            day >= 22 -> weeks[3] += tx.amount.toDouble()
                         }
                     }
 
@@ -331,7 +334,7 @@ class AnalyticsViewModel(
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         val gMonth = txDate.monthValue
                         if (gMonth in 1..12) {
-                            months[gMonth - 1] += tx.amount
+                            months[gMonth - 1] += tx.amount.toDouble()
                         }
                     }
 
@@ -355,7 +358,7 @@ class AnalyticsViewModel(
                         listOf(TimeExpenseModel(currentGYear.toString(), currentGYear.toString(), 0.0, isCurrent = true))
                     } else {
                         yearGrouped.keys.sorted().map { year ->
-                            val sum = yearGrouped[year]?.sumOf { it.amount } ?: 0.0
+                            val sum = (yearGrouped[year]?.sumOf { it.amount } ?: 0L).toDouble()
                             TimeExpenseModel(
                                 labelFa = year.toString(),
                                 labelEn = year.toString(),
@@ -442,7 +445,11 @@ class AnalyticsViewModel(
     ): List<Float> {
         val now = LocalDate.now()
         val netAmount: (TransactionEntity) -> Double = { tx ->
-            if (tx.type == "INCOME") tx.amount else -tx.amount
+            if (tx.type == "INCOME") {
+                tx.amount.toDouble()
+            } else {
+                -tx.amount.toDouble()
+            }
         }
 
         if (isPersian) {

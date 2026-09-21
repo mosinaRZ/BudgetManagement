@@ -752,7 +752,7 @@ fun DebtCreditItemCard(
 ) {
     val cardShape = RoundedCornerShape(20.dp)
     val isDebt = item.type == "DEBT"
-    val remainingAmount = (item.totalAmount - item.paidAmount).coerceAtLeast(0.0)
+    val remainingAmount = (item.totalAmount - item.paidAmount).coerceAtLeast(0L)
 
     Box(
         modifier = Modifier
@@ -817,12 +817,12 @@ fun DebtCreditItemCard(
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(text = if (isPersian) "مبلغ کل:" else "Total Amount:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(text = "%,.0f".format(item.totalAmount), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text(text = "%,.0f".format(item.totalAmount.toDouble()), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
             }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(text = if (isPersian) "پرداخت/دریافت شده:" else "Paid/Received:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(text = "%,.0f".format(item.paidAmount), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text(text = "%,.0f".format(item.paidAmount.toDouble()), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

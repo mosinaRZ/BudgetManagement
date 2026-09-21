@@ -1,81 +1,78 @@
 package ir.hamedan.budgetmanagement.data.repository
 
+import ir.hamedan.budgetmanagement.data.local.SyncLocalDataSource
+import ir.hamedan.budgetmanagement.data.local.dao.BudgetLimitDao
 import ir.hamedan.budgetmanagement.data.local.dao.CategoryDao
 import ir.hamedan.budgetmanagement.data.local.dao.TransactionDao
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
+import ir.hamedan.budgetmanagement.data.sync.SyncEntityType
 import kotlinx.coroutines.flow.Flow
 
 class CategoryRepositoryImpl(
     private val categoryDao: CategoryDao,
     private val transactionDao: TransactionDao,
-    private val budgetLimitRepository: BudgetLimitRepository
+    private val budgetLimitDao: BudgetLimitDao,
+    private val syncLocalDataSource: SyncLocalDataSource
 ) : CategoryRepository {
+    override fun getAllCategories(): Flow<List<CategoryEntity>> = categoryDao.getAllCategories()
 
-    override fun getAllCategories(): Flow<List<CategoryEntity>> {
-        return categoryDao.getAllCategories()
-    }
-
-    override suspend fun insertCategory(category: CategoryEntity): Long {
-        return categoryDao.insert(category)
+    override suspend fun insertCategory(category: CategoryEntity) {
+        val now = System.currentTimeMillis()
+        val updated = category.copy(createdAt = if (category.createdAt > 0L) category.createdAt else now, updatedAt = now)
+        syncLocalDataSource.mutate(SyncEntityType.CATEGORY, updated.id, now) { categoryDao.insert(updated) }
     }
 
     override suspend fun updateCategory(category: CategoryEntity, newTitle: String, newEmoji: String) {
-        val updatedCategory = category.copy(
-            title = newTitle,
-            iconEmoji = newEmoji
-        )
-        if (category.title != newTitle) {
-            transactionDao.reassignCategoryForTransactions(
-                oldCategoryTitle = category.title,
-                newCategoryTitle = newTitle
-            )
-            // هم‌گام‌سازی محدودیت‌های بودجه با عنوان جدید دسته‌بندی
-            budgetLimitRepository.reassignCategoryForLimits(
-                oldCategoryTitle = category.title,
-                newCategoryTitle = newTitle
-            )
-        }
-        categoryDao.update(updatedCategory)
+        val now = System.currentTimeMillis()
+        val updated = category.copy(title = newTitle, iconEmoji = newEmoji, updatedAt = now)
+        syncLocalDataSource.mutate(SyncEntityType.CATEGORY, updated.id, now) { categoryDao.update(updated) }
     }
 
-    override fun getCategoriesByExpenseStatus(isExpense: Boolean): Flow<List<CategoryEntity>> {
-        return categoryDao.getCategoriesByExpenseStatus(isExpense)
-    }
+    override fun getCategoriesByExpenseStatus(isExpense: Boolean): Flow<List<CategoryEntity>> =
+        categoryDao.getCategoriesByExpenseStatus(isExpense)
 
-    override suspend fun getTransactionCount(categoryTitle: String): Int {
-        return transactionDao.getTransactionCountForCategory(categoryTitle)
-    }
+    override suspend fun getTransactionCount(categoryId: String): Int = transactionDao.getTransactionCountForCategory(categoryId)
+    override suspend fun getBudgetLimitCount(categoryId: String): Int = budgetLimitDao.getLimitCountForCategory(categoryId)
 
-    override suspend fun getBudgetLimitCount(categoryTitle: String): Int {
-        return budgetLimitRepository.getLimitCountForCategory(categoryTitle)
-    }
-
+    /**
+     * Category deletion is one Room transaction: category, transaction references,
+     * budget limits, and all corresponding sync metadata/tombstones commit together.
+     */
     override suspend fun deleteCategoryWithReassignment(category: CategoryEntity): Int {
-        val defaultKey = "UNCATEGORIZED"
-        val affectedCount = transactionDao.getTransactionCountForCategory(category.title)
+        val defaultCategoryTitle = "UNCATEGORIZED"
+        val now = System.currentTimeMillis()
 
-        val uncategorized = categoryDao.getCategoryByTitle(defaultKey)
-        if (uncategorized == null) {
-            categoryDao.insert(
-                CategoryEntity(
-                    title = defaultKey,
+        return syncLocalDataSource.transaction {
+            val transactions = transactionDao.getByCategoryId(category.id)
+            val budgets = budgetLimitDao.getByCategoryId(category.id)
+
+            var uncategorized = categoryDao.getCategoryByTitle(defaultCategoryTitle)
+            if (uncategorized == null) {
+                uncategorized = CategoryEntity(
+                    title = defaultCategoryTitle,
                     iconEmoji = "📦",
-                    isExpense = category.isExpense
+                    isExpense = category.isExpense,
+                    isSystem = true,
+                    createdAt = now,
+                    updatedAt = now
                 )
-            )
+                categoryDao.insert(uncategorized)
+                syncLocalDataSource.recordMutationInTransaction(SyncEntityType.CATEGORY, uncategorized.id, now)
+            }
+
+            transactionDao.reassignCategoryForTransactions(category.id, uncategorized.id, now)
+            transactions.forEach { transaction ->
+                syncLocalDataSource.recordMutationInTransaction(SyncEntityType.TRANSACTION, transaction.id, now)
+            }
+
+            budgets.forEach { budget ->
+                budgetLimitDao.delete(budget)
+                syncLocalDataSource.recordMutationInTransaction(SyncEntityType.BUDGET_LIMIT, budget.id, now, true)
+            }
+
+            categoryDao.delete(category)
+            syncLocalDataSource.recordMutationInTransaction(SyncEntityType.CATEGORY, category.id, now, true)
+            transactions.size
         }
-
-        if (affectedCount > 0) {
-            transactionDao.reassignCategoryForTransactions(
-                oldCategoryTitle = category.title,
-                newCategoryTitle = defaultKey
-            )
-        }
-
-        // حذف محدودیت‌های بودجه متصل به این دسته‌بندی، چون بعد از حذف دسته دیگر معنایی ندارند
-        budgetLimitRepository.deleteLimitsByCategory(category.title)
-
-        categoryDao.delete(category)
-        return affectedCount
     }
 }

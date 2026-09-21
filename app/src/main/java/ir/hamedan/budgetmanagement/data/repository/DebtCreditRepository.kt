@@ -4,8 +4,28 @@ import ir.hamedan.budgetmanagement.data.local.models.DebtCreditEntity
 import kotlinx.coroutines.flow.Flow
 
 interface DebtCreditRepository {
-    val allDebtCredits: Flow<List<DebtCreditEntity>>
-    suspend fun insertOrUpdateDebtCredit(debtCredit: DebtCreditEntity)
-    suspend fun deleteDebtCredit(id: String)
-    suspend fun toggleSettledStatus(id: String, currentStatus: Boolean)
+
+    fun getAllDebtCredits(): Flow<List<DebtCreditEntity>>
+
+    suspend fun insertOrUpdate(
+        debtCredit: DebtCreditEntity
+    )
+
+    suspend fun update(
+        debtCredit: DebtCreditEntity
+    )
+
+    suspend fun deleteById(
+        id: String
+    )
+
+    suspend fun updateSettledStatus(
+        id: String,
+        isSettled: Boolean,
+        paidAmount: Long
+    )
+
+    suspend fun getById(
+        id: String
+    ): DebtCreditEntity?
 }

@@ -1228,7 +1228,7 @@ private fun TopExpensesCard(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = item.title.ifEmpty { StringMapper.getCategoryName(item.category, isPersian) },
+                                        text = item.title.ifEmpty { StringMapper.getCategoryName(item.categoryId, isPersian) },
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface,

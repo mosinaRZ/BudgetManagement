@@ -25,9 +25,11 @@ class NotificationViewModel(
 
     fun addNotification(notification: NotificationEntity) {
         viewModelScope.launch {
-            val wasInserted = repository.addNotification(notification)
-            // اعلان سیستمی فقط وقتی ارسال می‌شود که رکورد جدیدی واقعاً ثبت شده باشد
-            if (wasInserted) {
+            val alreadyExists = repository.countByTag(notification.tag) > 0
+
+            if (!alreadyExists) {
+                repository.insert(notification)
+
                 AppNotificationManager.sendPushIfAllowed(
                     context = context,
                     titleFa = notification.titleFa,

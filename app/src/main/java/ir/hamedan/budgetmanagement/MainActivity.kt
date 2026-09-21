@@ -29,7 +29,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -195,6 +197,21 @@ class MainActivity : FragmentActivity() {
     ) {
 
         val navController = rememberNavController()
+        val app = LocalContext.current.applicationContext as BudgetApp
+        val authScope = rememberCoroutineScope()
+        val sessionAuthenticated by app.container.authSessionStore.authenticated.collectAsState()
+        val currentRouteEntry by navController.currentBackStackEntryAsState()
+
+//        LaunchedEffect(sessionAuthenticated, currentRouteEntry) {
+//            if (!sessionAuthenticated && currentRouteEntry?.destination?.route != null) {
+//                val route = currentRouteEntry?.destination?.route.orEmpty()
+//                if (!route.contains("Login") && !route.contains("Splash")) {
+//                    navController.navigate(AppRoute.Login) {
+//                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
+//                    }
+//                }
+//            }
+//        }
 
         NavHost(
             navController = navController,
@@ -373,8 +390,11 @@ class MainActivity : FragmentActivity() {
                                     navController.navigate(AppRoute.NotificationCalibration)
                                 },
                                 onLoginClick = {
-                                    navController.navigate(AppRoute.Login) {
-                                        popUpTo(AppRoute.MainStructure) { inclusive = true }
+                                    authScope.launch {
+                                        app.container.authRepository.logout()
+                                        navController.navigate(AppRoute.Login) {
+                                            popUpTo(AppRoute.MainStructure) { inclusive = true }
+                                        }
                                     }
                                 }
                             )

@@ -29,6 +29,11 @@ class BudgetApp : Application() {
         AppNotificationManager.createChannel(this)
         AppUsagePreferences.updateLastOpen(this)
         seedDefaultCategoriesIfNeeded()
+        if (container.authRepository.isAuthenticated()) {
+            CoroutineScope(Dispatchers.IO).launch {
+                runCatching { container.syncEngine.sync() }
+            }
+        }
         scheduleWorkers()
     }
 

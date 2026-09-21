@@ -90,7 +90,7 @@ fun PendingTransactionsBottomSheet(
     isPersian: Boolean,
     currencyUnit: String,
     onDismiss: () -> Unit,
-    onConfirmFinal: (pending: PendingTransactionEntity, title: String, amount: Double, category: String, isExpense: Boolean, note: String) -> Unit,
+    onConfirmFinal: (pending: PendingTransactionEntity, title: String, amount: Long, category: String, isExpense: Boolean, note: String) -> Unit,
     onIgnore: (pending: PendingTransactionEntity) -> Unit,
     onCategoriesClick: () -> Unit = {}
 ) {
@@ -312,7 +312,7 @@ fun PendingConfirmBottomSheet(
     currencyUnit: String,
     onDismiss: () -> Unit,
     onCategoriesClick: () -> Unit = {},
-    onConfirmFinal: (title: String, amount: Double, category: String, isExpense: Boolean, note: String) -> Unit
+    onConfirmFinal: (title: String, amount: Long, category: String, isExpense: Boolean, note: String) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -710,11 +710,17 @@ fun PendingConfirmBottomSheet(
                 isPersian = isPersian,
                 resetTrigger = swipeResetTrigger,
                 onConfirm = {
-                    val parsedAmount = transactionAmount.toDoubleOrNull() ?: 0.0
-                    val amount = if (currencyUnit == "IRR") parsedAmount / 10.0 else parsedAmount
+                    val parsedAmount = transactionAmount.toLongOrNull() ?: 0L
+
+                    val amount: Long =
+                        if (currencyUnit == "IRR") {
+                            parsedAmount / 10L
+                        } else {
+                            parsedAmount
+                        }
 
                     titleError = transactionTitle.isBlank()
-                    amountError = parsedAmount <= 0.0
+                    amountError = amount <= 0L
                     categoryError = selectedCategoryKey.isBlank()
 
                     val isFormValid = !titleError && !amountError && !categoryError
@@ -722,10 +728,12 @@ fun PendingConfirmBottomSheet(
                     if (isFormValid) {
                         scope.launch {
                             showSuccessAnimation = true
-                            delay(4000) // مکث برای نمایش انیمیشن
+                            delay(4000)
+
                             showSuccessAnimation = false
 
                             sheetState.hide()
+
                             onConfirmFinal(
                                 transactionTitle.trim(),
                                 amount,
@@ -735,7 +743,6 @@ fun PendingConfirmBottomSheet(
                             )
                         }
                     } else {
-                        // در صورت نامعتبر بودن فرم، سوییپ به حالت اول برمی‌گردد
                         swipeResetTrigger = !swipeResetTrigger
                     }
                 },

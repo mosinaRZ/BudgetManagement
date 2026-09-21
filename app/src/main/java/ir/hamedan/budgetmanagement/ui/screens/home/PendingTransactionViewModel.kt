@@ -6,12 +6,14 @@ import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.PendingTransactionEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
+import ir.hamedan.budgetmanagement.data.money.MoneyContract
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.PendingTransactionRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.utils.NotificationHelper
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -42,25 +44,37 @@ class PendingTransactionViewModel(
     fun confirmTransaction(
         pending: PendingTransactionEntity,
         title: String,
-        amount: Double,
+        amount: Long,
         category: String,
         isExpense: Boolean,
         note: String = ""
     ) {
         viewModelScope.launch {
+            val categoryId =
+                categoryRepository.getAllCategories()
+                    .first()
+                    .firstOrNull {
+                        it.id == category || it.title == category
+                    }
+                    ?.id
+                    ?: throw IllegalArgumentException("Category not found: $category")
+
             transactionRepository.insertTransaction(
                 TransactionEntity(
                     title = title,
                     amount = amount,
-                    category = category,
+                    categoryId = categoryId,
                     type = if (isExpense) "EXPENSE" else "INCOME",
                     note = note,
-                    timestamp = pending.timestamp // ثبت زمان واقعی پیامک در تراکنش نهایی
+                    timestamp = pending.timestamp
                 )
             )
-            pendingRepository.confirm(pending.id)
 
-            // ارسال اعلان اصلاح‌شده با NotificationType مربوطه
+            pendingRepository.updateStatus(
+                id = pending.id,
+                status = "CONFIRMED"
+            )
+
             NotificationHelper.send(
                 context = context,
                 notificationType = NotificationType.SMS_CONFIRMED,
@@ -74,7 +88,14 @@ class PendingTransactionViewModel(
         }
     }
 
-    fun ignoreTransaction(pending: PendingTransactionEntity) {
-        viewModelScope.launch { pendingRepository.ignore(pending.id) }
+    fun ignoreTransaction(
+        pending: PendingTransactionEntity
+    ) {
+        viewModelScope.launch {
+            pendingRepository.updateStatus(
+                id = pending.id,
+                status = "IGNORED"
+            )
+        }
     }
 }

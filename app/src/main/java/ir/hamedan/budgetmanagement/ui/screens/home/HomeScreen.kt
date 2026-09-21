@@ -84,7 +84,7 @@ import kotlin.math.abs
 data class HomeDueItem(
     val id: String,
     val title: String,
-    val amount: Double,
+    val amount: Long,
     val daysLeft: Int,
     val type: String
 )
@@ -463,7 +463,7 @@ fun HomeScreen(
 
                             Spacer(Modifier.height(24.dp))
 
-                            val displayBalance = if (currencyUnit == "IRR") (totalBalance * 10).toLong() else totalBalance.toLong()
+                            val displayBalance = if (currencyUnit == "IRR") totalBalance * 10L else totalBalance
                             val currencyText = if (isPersian) {
                                 if (currencyUnit == "IRR") "ریال" else "تومان"
                             } else {
@@ -526,7 +526,7 @@ fun HomeScreen(
                             ) {
                                 Text(text = if (isPersian) "درآمد" else "Income", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Spacer(Modifier.height(8.dp))
-                                val displayIncome = if (currencyUnit == "IRR") (income * 10).toLong() else income.toLong()
+                                val displayIncome = if (currencyUnit == "IRR") income * 10L else income
                                 val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")
                                 val formattedIncome = numberFormatter.format(displayIncome)
                                 AnimatedContent(
@@ -565,7 +565,7 @@ fun HomeScreen(
                             ) {
                                 Text(text = if (isPersian) "هزینه" else "Expense", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Spacer(Modifier.height(8.dp))
-                                val displayExpense = if (currencyUnit == "IRR") (expense * 10).toLong() else expense.toLong()
+                                val displayExpense = if (currencyUnit == "IRR") expense * 10L else expense
                                 val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")
                                 val formattedExpense = numberFormatter.format(displayExpense)
                                 AnimatedContent(
@@ -623,7 +623,7 @@ fun HomeScreen(
                             Spacer(Modifier.height(20.dp))
 
                             allGoals.forEach { goal ->
-                                val progress = if (goal.targetAmount > 0) (goal.currentAmount / goal.targetAmount).toFloat() else 0f
+                                val progress = if (goal.targetAmount > 0L) (goal.currentAmount.toDouble() / goal.targetAmount.toDouble()).toFloat() else 0f
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
@@ -631,8 +631,8 @@ fun HomeScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(text = "${goal.icon} ${goal.title} (${(progress * 100).toInt()}%)", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
-                                        val curr = if (currencyUnit == "IRR") 10 else 1
-                                        Text(text = "${numberFormatter.format((goal.currentAmount * curr).toLong())} / ${numberFormatter.format((goal.targetAmount * curr).toLong())} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                        val curr = if (currencyUnit == "IRR") 10L else 1L
+                                        Text(text = "${numberFormatter.format(goal.currentAmount * curr)} / ${numberFormatter.format(goal.targetAmount * curr)} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                     }
                                     Spacer(Modifier.height(8.dp))
                                     LinearProgressIndicator(
@@ -694,16 +694,32 @@ fun HomeScreen(
                             Spacer(Modifier.height(20.dp))
 
                             allLimits.forEach { limit ->
-                                val progress = if (limit.entity.maxLimit > 0) (limit.currentSpent / limit.entity.maxLimit).toFloat() else 0f
+                                val progress = if (limit.entity.maxLimit > 0L) (limit.currentSpent.toDouble() / limit.entity.maxLimit.toDouble()).toFloat() else 0f
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(text = "${limit.categoryEmoji} ${StringMapper.getCategoryName(limit.entity.categoryName, isPersian)} (${(progress * 100).toInt()}%)", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
-                                        val curr = if (currencyUnit == "IRR") 10 else 1
-                                        Text(text = "${numberFormatter.format((limit.currentSpent * curr).toLong())} / ${numberFormatter.format((limit.entity.maxLimit * curr).toLong())} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}", style = MaterialTheme.typography.labelMedium, color = if (progress > 0.8f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                        val categories = categoriesList.orEmpty()
+
+                                        val categoryTitle = categories
+                                            .find { it.id == limit.entity.categoryId }
+                                            ?.title
+                                            .orEmpty()
+
+                                        val categoryName = StringMapper.getCategoryName(
+                                            categoryTitle,
+                                            isPersian
+                                        )
+                                        Text(
+                                            text = "${limit.categoryEmoji} $categoryName (${(progress * 100).toInt()}%)",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        val curr = if (currencyUnit == "IRR") 10L else 1L
+                                        Text(text = "${numberFormatter.format(limit.currentSpent * curr)} / ${numberFormatter.format(limit.entity.maxLimit * curr)} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}", style = MaterialTheme.typography.labelMedium, color = if (progress > 0.8f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                     }
                                     Spacer(Modifier.height(8.dp))
                                     LinearProgressIndicator(
@@ -860,8 +876,8 @@ fun HomeScreen(
 
                                             Spacer(Modifier.height(2.dp))
 
-                                            val curr = if (currencyUnit == "IRR") 10 else 1
-                                            Text(text = "${numberFormatter.format((dueItem.amount * curr).toLong())} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium)
+                                            val curr = if (currencyUnit == "IRR") 10L else 1L
+                                            Text(text = "${numberFormatter.format(dueItem.amount * curr)} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium)
 
                                             if (daysLeft > 0) {
                                                 Text(text = if (isPersian) "${dueItem.daysLeft} روز مونده" else "${dueItem.daysLeft}d left", style = MaterialTheme.typography.labelSmall, color = if (daysLeft <= 7) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
@@ -903,9 +919,14 @@ fun HomeScreen(
                     }
 
                     items(recentTransactions, key = { it.id }) { transaction ->
-                        val emoji = getCategoryEmoji(transaction.category, categoriesList)
+                        val categories = categoriesList.orEmpty()
+
+                        val emoji = getCategoryEmoji(
+                            categories.find { it.id == transaction.categoryId }?.title.orEmpty(),
+                            categories
+                        )
                         val isExpense = transaction.type == "EXPENSE"
-                        val displayAmount = if (currencyUnit == "IRR") (transaction.amount * 10).toLong() else transaction.amount.toLong()
+                        val displayAmount = if (currencyUnit == "IRR") transaction.amount * 10L else transaction.amount
                         val rowShape = RoundedCornerShape(20.dp)
 
                         Row(
@@ -926,8 +947,11 @@ fun HomeScreen(
                             }
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
+                                val categories = categoriesList.orEmpty()
                                 Text(
-                                    text = transaction.title.ifEmpty { transaction.category },
+                                    text = transaction.title.ifEmpty {
+                                        categories.find { it.id == transaction.categoryId }?.title.orEmpty()
+                                    },
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface,
@@ -1341,8 +1365,8 @@ private fun DueDateReminderDialog(
     onDismiss: () -> Unit
 ) {
     val isDebt = item.type == "DEBT"
-    val remaining = (item.totalAmount - item.paidAmount).coerceAtLeast(0.0)
-    val curr = if (currencyUnit == "IRR") 10 else 1
+    val remaining = (item.totalAmount - item.paidAmount).coerceAtLeast(0L)
+    val curr = if (currencyUnit == "IRR") 10L else 1L
     val currencyText = if (isPersian) {
         if (currencyUnit == "IRR") "ریال" else "تومان"
     } else {
@@ -1442,11 +1466,11 @@ private fun DueDateReminderDialog(
                     )
                     DueReminderInfoRow(
                         label = if (isPersian) "مبلغ کل" else "Total Amount",
-                        value = "${numberFormatter.format((item.totalAmount * curr).toLong())} $currencyText"
+                        value = "${numberFormatter.format(item.totalAmount * curr)} $currencyText"
                     )
                     DueReminderInfoRow(
                         label = if (isPersian) "مانده قابل پرداخت" else "Remaining",
-                        value = "${numberFormatter.format((remaining * curr).toLong())} $currencyText"
+                        value = "${numberFormatter.format(remaining * curr)} $currencyText"
                     )
                     DueReminderInfoRow(
                         label = if (isPersian) "تاریخ سررسید" else "Due Date",

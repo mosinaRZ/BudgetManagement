@@ -81,9 +81,9 @@ object XlsxExporter {
             transactions.forEach { tx ->
                 ws.value(row, 0, DateUtils.formatTimestamp(tx.timestamp, isPersian))
                 ws.value(row, 1, tx.title)
-                ws.value(row, 2, tx.category)
+                ws.value(row, 2, tx.categoryId)
                 ws.value(row, 3, if (tx.type == "INCOME") (if (isPersian) "درآمد" else "Income") else (if (isPersian) "هزینه" else "Expense"))
-                ws.value(row, 4, toDisplayAmount(tx.amount, stats.currency))
+                ws.value(row, 4, toDisplayAmount(tx.amount.toDouble(), stats.currency))
                 ws.value(row, 5, tx.note)
                 row++
             }

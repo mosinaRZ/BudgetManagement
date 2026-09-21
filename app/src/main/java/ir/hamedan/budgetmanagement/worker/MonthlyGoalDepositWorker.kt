@@ -24,6 +24,7 @@ class MonthlyGoalDepositWorker(
         val app = applicationContext as BudgetApp
         val goalRepository = app.container.savingGoalRepository
         val transactionRepository = app.container.transactionRepository
+        val categoryRepository = app.container.categoryRepository
         val isPersian = LocaleHelper.getLanguage(applicationContext) == "fa"
 
         val goals = goalRepository.getAllGoals().first()
@@ -68,7 +69,8 @@ class MonthlyGoalDepositWorker(
                     title = if (isPersian) "واریز خودکار ماهانه به قلک: ${goal.title}"
                     else "Auto Monthly Deposit to: ${goal.title}",
                     amount = goal.monthlyAmount,
-                    category = "قلک",
+                    categoryId = categoryRepository.getAllCategories().first().firstOrNull { it.title == "SAVING_GOAL" }?.id
+                        ?: continue,
                     type = "EXPENSE",
                     note = if (isPersian) "واریز خودکار ماهانه" else "Automatic monthly deposit"
                 )

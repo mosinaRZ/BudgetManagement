@@ -516,7 +516,7 @@ fun TransactionsScreen(
 
                     coroutineScope.launch {
                         val displayTitle = deletedTx.title.ifEmpty {
-                            StringMapper.getCategoryName(deletedTx.category, isPersian)
+                            "تراکنش"
                         }
                         val result = snackbarHostState.showSnackbar(
                             message = if (isPersian) "تراکنش «$displayTitle» حذف شد" else "Transaction \"$displayTitle\" deleted",
@@ -1104,7 +1104,7 @@ private fun EditTransactionBottomSheet(
     }
     var rawAmountText by remember { mutableStateOf(initialAmount) }
     var note by remember { mutableStateOf(transaction.note ?: "") }
-    var category by remember { mutableStateOf(transaction.category) }
+    var category by remember { mutableStateOf(transaction.categoryId) }
     var type by remember { mutableStateOf(transaction.type) } // "EXPENSE" or "INCOME"
 
     val maxTitleLength = 40
@@ -1130,11 +1130,11 @@ private fun EditTransactionBottomSheet(
         }
     }
 
-    val selectedCategoryObj = currentCategories.find { it.title == category }
+    val selectedCategoryObj = currentCategories.find { it.id == category }
 
     LaunchedEffect(type, currentCategories) {
-        if (currentCategories.isNotEmpty() && currentCategories.none { it.title == category }) {
-            category = currentCategories.first().title
+        if (currentCategories.isNotEmpty() && currentCategories.none { it.id == category }) {
+            category = currentCategories.first().id
         }
     }
 
@@ -1297,7 +1297,7 @@ private fun EditTransactionBottomSheet(
                 onExpandedChange = { isCategoryDropdownExpanded = !isCategoryDropdownExpanded }
             ) {
                 OutlinedTextField(
-                    value = StringMapper.getCategoryName(category, isPersian),
+                    value = StringMapper.getCategoryName(selectedCategoryObj?.title.orEmpty(), isPersian),
                     onValueChange = {},
                     readOnly = true,
                     label = { Text(if (isPersian) "انتخاب دسته‌بندی" else "Select Category") },
@@ -1361,7 +1361,7 @@ private fun EditTransactionBottomSheet(
                                     }
                                 },
                                 onClick = {
-                                    category = catItem.title
+                                    category = catItem.id
                                     isCategoryDropdownExpanded = false
                                     categoryError = false
                                 },
@@ -1427,8 +1427,8 @@ private fun EditTransactionBottomSheet(
 
                         val updatedTransaction = transaction.copy(
                             title = title.trim(),
-                            amount = finalAmountInToman,
-                            category = category,
+                            amount = ir.hamedan.budgetmanagement.data.money.MoneyContract.inputToStorage(parsedAmount, currencyUnit),
+                            categoryId = category,
                             type = type,
                             note = note.trim()
                         )
@@ -1584,7 +1584,7 @@ private fun TransactionRow(
         SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(transaction.timestamp))
     }
 
-    val categoryTitle = StringMapper.getCategoryName(transaction.category, isPersian)
+    val categoryTitle = StringMapper.getCategoryName(transaction.categoryId, isPersian)
 
     Box(
         modifier = Modifier

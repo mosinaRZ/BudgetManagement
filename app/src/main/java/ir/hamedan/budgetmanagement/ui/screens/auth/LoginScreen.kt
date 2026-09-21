@@ -43,10 +43,10 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import ir.hamedan.budgetmanagement.data.preferences.SharedPreferences
+import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -56,6 +56,9 @@ fun LoginScreen(
     val context = LocalContext.current
     val isPersian = isPersianLocale()
     val scope = rememberCoroutineScope()
+    val authRepository = remember {
+        (context.applicationContext as BudgetApp).container.authRepository
+    }
 
     // فیلدهای متنی ورودی
     var username by remember { mutableStateOf("") }
@@ -81,8 +84,12 @@ fun LoginScreen(
                 object : BiometricPrompt.AuthenticationCallback() {
                     override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                         super.onAuthenticationSucceeded(result)
-                        // در صورت موفقیت، لودینگ فعال می‌ماند تا صفحه تغییر کند
-                        onLoginSuccess()
+                        if (authRepository.isAuthenticated()) {
+                            onLoginSuccess()
+                        } else {
+                            isLoggingIn = false
+                            errorMessage = if (isPersian) "ابتدا یک بار با گذرواژه وارد شوید" else "Sign in with your password first"
+                        }
                     }
 
                     override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
@@ -107,10 +114,9 @@ fun LoginScreen(
             biometricPrompt.authenticate(promptInfo)
         }
     }
+    // حالت موقت توسعه: ورود خودکار بیومتریک غیرفعال است.
     LaunchedEffect(Unit) {
-        if (SharedPreferences.getBiometricEnabled(context)) {
-            showBiometricPrompt()
-        }
+        // intentionally disabled
     }
 
     var lastBackPressTime by remember { mutableLongStateOf(0L) }
@@ -165,7 +171,7 @@ fun LoginScreen(
                         username = it
                         errorMessage = null
                     },
-                    label = { Text(if (isPersian) "نام کاربری" else "Username") },
+                    label = { Text(if (isPersian) "شماره موبایل یا ایمیل" else "Phone or email") },
                     leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
@@ -206,17 +212,13 @@ fun LoginScreen(
                                 errorMessage = null
 
                                 scope.launch {
-                                    delay(800)
-//                                    if (username.trim() == validUsername && password == validPassword) {
-                                        isLoggingIn = false
+                                    val result = authRepository.login(username.trim(), password)
+                                    isLoggingIn = false
+                                    result.onSuccess {
                                         onLoginSuccess()
-//                                    } else {
-//                                        isLoggingIn = false
-//                                        errorMessage = if (isPersian)
-//                                            "نام کاربری یا رمز عبور اشتباه است"
-//                                        else
-//                                            "Invalid username or password"
-//                                    }
+                                    }.onFailure { error ->
+                                        errorMessage = error.message ?: if (isPersian) "ورود ناموفق بود" else "Login failed"
+                                    }
                                 }
                             }
                         }
@@ -239,23 +241,10 @@ fun LoginScreen(
                     text = if (isPersian) "ورود به حساب" else "Sign In",
                     isLoading = isLoggingIn,
                     onClick = {
-                        isLoggingIn = true
+                        // حالت موقت توسعه: بدون دریافت نام کاربری/رمز عبور مستقیماً وارد برنامه شو.
+                        isLoggingIn = false
                         errorMessage = null
-
-                        scope.launch {
-                            delay(800) // مکث کوتاه برای نمایش انیمیشن درخشش شیمر دکمه
-
-//                            if (username.trim() == validUsername && password == validPassword) {
-                                isLoggingIn = false
-                                onLoginSuccess()
-//                            } else {
-//                                isLoggingIn = false
-//                                errorMessage = if (isPersian)
-//                                    "نام کاربری یا رمز عبور اشتباه است"
-//                                else
-//                                    "Invalid username or password"
-//                            }
-                        }
+                        onLoginSuccess()
                     }
                 )
 
