@@ -1,328 +1,304 @@
 # Cidna — Personal Finance Management
+# سیدنا — مدیریت امور مالی شخصی
 
-Cidna is a personal finance management application built for Android, with a Go backend designed to provide secure authentication, synchronization, and multi-device support.
+> A privacy-focused personal finance application for Android, backed by a Go service for authentication and multi-device synchronization.
+>
+> یک اپلیکیشن مدیریت امور مالی شخصی برای اندروید با تمرکز بر حریم خصوصی، همراه با بک‌اند Go برای احراز هویت و همگام‌سازی چنددستگاهی.
 
-The project consists of two main parts:
+## 🇬🇧 English
 
-* Android client built with Kotlin and Jetpack Compose
-* Go backend providing authentication, OTP, synchronization, and secure account services
+### Overview
 
----
+Cidna is a local-first personal finance application. Financial records are primarily managed on-device and synchronized through an encrypted protocol with the Go backend.
 
-## Android Application
+### Technology
 
-Cidna is a modern personal finance management application focused on helping users track, analyze, and manage their personal finances.
+- Android: Kotlin, Jetpack Compose, Material 3
+- Local data: Room + SQLCipher
+- Background work: WorkManager
+- Secure local storage: Android Keystore-backed encrypted preferences
+- Backend: Go
+- Database: MongoDB
+- Auth: OTP, Argon2id, JWT access tokens, rotating refresh tokens
+- Sync: cursor-based, revisioned, idempotent and conflict-aware
+- Export: PDF and XLSX
+- Localization: Persian and English
+- Optional features: SMS parsing, notifications, widget, speech input and biometrics
+
+### Android Structure
+
+```text
+app/src/main/java/ir/hamedan/budgetmanagement/
+├── data/
+│   ├── local/
+│   ├── network/
+│   ├── repository/
+│   ├── security/
+│   ├── sync/
+│   └── time/
+├── di/
+├── ui/
+│   ├── components/
+│   ├── navigation/
+│   ├── screens/
+│   └── theme/
+├── utils/
+└── worker/
+```
+
+The current implementation uses a manual `AppContainer`; it does **not** currently use Hilt.
+
+### Go Backend Structure
+
+```text
+backend/
+├── cmd/
+├── internal/
+│   ├── domain/
+│   ├── infrastructure/
+│   ├── interface/http/
+│   ├── pkg/
+│   └── usecase/
+└── deployments/
+```
 
 ### Main Features
 
-* Income and expense transaction management
-* Categories
-* Budget limits
-* Saving goals
-* Automatic detection of bank transactions from SMS
-* Balance widget and notifications
-* Speech-to-text transaction input
-* Excel (XLSX) and PDF export
-* Persian and English language support
-* Light and dark themes
-* Secure local data storage
-* Biometric authentication
-
-### Android Architecture
-
-The Android application is built using:
-
-* Kotlin
-* Jetpack Compose
-* Clean Architecture
-* Hilt
-* Room
-* WorkManager
-* SQLCipher
-* Android Security APIs
-
-### Project Structure
-
-```text
-app/
-├── data/          # Room, Preferences, Repositories and security
-├── ui/            # Compose screens, components and theme
-├── di/            # Hilt and dependency injection
-├── utils/         # SMS parser, export manager, biometric utilities
-├── worker/        # WorkManager workers
-└── security/      # Database key provider and biometric managers
-```
+- Income and expense transactions
+- Categories
+- Budget limits
+- Saving goals
+- Debts and receivables
+- Analytics
+- Bank-SMS transaction parsing
+- Notifications and widget
+- Speech-to-text transaction input
+- PDF/XLSX export
+- Persian/Jalali and English date presentation
+- Light/dark themes
+- Biometric authentication
+- Encrypted local database
+- Encrypted multi-device synchronization
 
 ### Security
 
-The Android application includes several security mechanisms:
+Backend protections include Argon2id, short-lived JWT access tokens, rotating refresh tokens, reuse detection, session-version invalidation, rate limiting, validation and security headers.
 
-* SQLCipher encrypted database
-* Secure storage for sensitive application data
-* Password hashing
-* Biometric authentication
-* End-to-end encryption support for synchronized financial data
+Android protections include SQLCipher, encrypted preferences, installation-scoped device identity, AES-GCM sync payload encryption and biometric authentication.
 
-### Data Export
+### E2EE / Recovery
 
-Users can export financial information in:
+The client maintains a data encryption key (DEK). The DEK can be wrapped using a password-derived key and a recovery key. The backend stores opaque envelopes and encrypted records.
 
-* Excel (XLSX)
-* PDF
+Losing the recovery material may make historical encrypted data unrecoverable after password reset or device loss. Production UX should therefore provide a clear recovery-key backup/export flow.
 
-Exports can include information such as:
+### Synchronization
 
-* Balance
-* Income
-* Expenses
-* Daily averages
-* Financial statistics
+Synchronized entity types:
 
----
+```text
+TRANSACTION
+CATEGORY
+BUDGET_LIMIT
+DEBT_CREDIT
+SAVING_GOAL
+SAVING_GOAL_OPERATION
+DEBT_PAYMENT
+```
 
-# Go Backend
+The protocol uses UUID/string logical IDs, entity versions, server revisions, cursors, request IDs, request fingerprints, tombstones, conflict reporting and MongoDB transactions.
 
-The backend provides the server-side foundation for authentication, account management, OTP delivery, and synchronization between multiple Android devices.
+Money should use integer minor/base units (`Long`) rather than `Double`.
 
-The backend is implemented in Go with a production-oriented architecture.
+### API
 
-## Backend Features
-
-* Argon2id password hashing
-* Short-lived JWT access tokens
-* Rotating refresh tokens with reuse detection
-* Phone and email identifiers stored as keyed hashes rather than plaintext
-* OTP request and verification
-* OTP expiry and attempt limits
-* Rate limiting
-* Email delivery through SMTP
-* SMS delivery through a configurable HTTP webhook
-* Mandatory phone OTP during registration
-* Optional email OTP when an email is provided
-* Password reset using OTP and E2EE recovery key
-* Multi-device registration and device validation
-* Incremental cursor-based synchronization
-* Server revisions
-* Idempotent request replay
-* Conflict reporting
-* Soft-delete / tombstone synchronization records
-* MongoDB unique indexes
-* TTL cleanup for OTP, refresh-token and synchronization records
-* Request body limits
-* Unknown JSON-field rejection
-* Panic recovery
-* Graceful shutdown
-
----
-
-## E2EE Recovery Contract
-
-The Android client generates a random Data Encryption Key (DEK).
-
-Two envelopes are maintained:
-
-1. `password_key_envelope`
-
-   The DEK encrypted or wrapped using a key derived from the user's password.
-
-2. `recovery_key_envelope`
-
-   The DEK encrypted or wrapped using a randomly generated recovery key.
-
-The backend stores only these opaque envelopes.
-
-The raw DEK is never sent to the server.
-
-The recovery key is never stored by the backend.
-
-During password reset, the client must prove possession of the recovery key and submit a newly generated `password_key_envelope` for the same DEK.
-
-Without the recovery key, an OTP-based password reset cannot decrypt historical encrypted financial data.
-
-This is an intentional property of end-to-end encryption.
-
-The Android application should display or export the recovery key during account creation and clearly warn the user that losing it may make encrypted historical financial data unrecoverable.
-
----
-
-## API
-
-### Public Endpoints
+Public:
 
 ```text
 GET  /health
-
 POST /auth/otp/request
 POST /auth/register
 POST /auth/login
 POST /auth/refresh
+POST /auth/recovery/prepare
 POST /auth/password/reset
 POST /auth/logout
 ```
 
-### Authenticated Endpoints
+Authenticated:
 
 ```text
-POST /api/v1/sync
+POST   /api/v1/sync
+GET    /api/v1/devices
+DELETE /api/v1/devices/{deviceID}
 ```
 
----
-
-## Synchronization
-
-The backend provides incremental synchronization between multiple devices.
-
-The synchronization system supports:
-
-* Cursor-based synchronization
-* Server-side revisions
-* Idempotent requests
-* Conflict detection and reporting
-* Soft deletes / tombstones
-* Device validation
-* Multi-device registration
-
-### Android Compatibility
-
-All synchronized entities should use a string UUID as their logical `entityId`.
-
-In particular, `BudgetLimit` should not use a local auto-increment `Long` ID if it participates in the shared synchronization protocol.
-
-Money values should be represented as integer minor/base units (`Long`) rather than `Double` to avoid floating-point currency errors.
-
----
-
-## Production Configuration
-
-For production environments:
-
-```env
-ENV=prod
-DEV_LOG_OTP=false
-```
-
-Configure:
-
-* MongoDB
-* JWT secret
-* SMTP provider
-* SMS webhook
-* TLS / reverse proxy
-* Backups
-* Monitoring
-* Provider credentials
-* Operational security controls
-
-MongoDB should run as a replica set because synchronization uses MongoDB transactions.
-
-The generic SMS webhook expects:
-
-```json
-{
-  "to": "+989...",
-  "code": "123456",
-  "message": "Cidna verification code: 123456"
-}
-```
-
-An optional authorization header can also be provided:
+Admin:
 
 ```text
-Authorization: Bearer <token>
+PUT /api/v1/admin/users/{userID}/role
 ```
 
----
-
-## Development
-
-Copy the environment template:
+### Development
 
 ```bash
-cp .env.example .env
-```
-
-Configure MongoDB and an OTP delivery method.
-
-Then run:
-
-```bash
+cd backend
 go mod download
 go test ./...
 go run ./cmd/api
 ```
 
-For local MongoDB replica-set testing:
-
 ```bash
 docker compose -f deployments/docker-compose.yml up --build
 ```
 
-MongoDB integration tests require `MONGO_TEST_URI` and a MongoDB replica set.
+Android:
 
-Without a configured MongoDB test environment, those tests intentionally skip instead of falsely reporting success.
+```bash
+./gradlew assembleDebug
+./gradlew test
+```
 
----
+### Production Checklist
 
-## Verification
+- [ ] Remove all authentication bypasses.
+- [ ] Verify register/OTP/login/recovery/reset end-to-end.
+- [ ] Verify multi-device sync and conflicts.
+- [ ] Verify offline behavior and account switching.
+- [ ] Run unit/instrumentation/integration tests.
+- [ ] Run dependency vulnerability scans.
+- [ ] Configure release signing and secret management.
+- [ ] Configure TLS, CORS and rate limiting.
+- [ ] Configure backups and restore drills.
+- [ ] Add monitoring/crash reporting.
+- [ ] Security-review exported Android components and SMS parsing.
 
-The current backend includes fixes for the remaining unit-test contract mismatches from the previous phase:
+### License
 
-* Registration tests inject a deterministic OTP service instead of bypassing the mandatory registration OTP flow.
-* Login tests use the current `identifier` contract.
-* Authentication handlers avoid exposing internal error details.
-* Refresh-token rotation treats concurrent revoke conflicts as refresh-token reuse and invalidates all sessions for the user.
-
-The Go source code is formatted with `gofmt`.
-
----
-
-## Android Requirements
-
-* Android Studio Ladybug or newer
-* JDK 11+
-* minSdk 26
-
----
-
-## Current Project Status
-
-The Android application and Go backend are under active development.
-
-The backend currently provides the foundation required for:
-
-* Secure authentication
-* OTP verification
-* Account recovery
-* Multi-device synchronization
-* Secure financial data synchronization
-
-The system should not be considered production-ready without proper deployment configuration, secrets management, TLS, backups, monitoring, provider configuration, and operational security controls.
+See `LICENSE`.
 
 ---
 
-## Roadmap
+## 🇮🇷 فارسی
 
-* [ ] Complete Go backend integration with Android
-* [ ] Complete end-to-end synchronization
-* [ ] Expand unit and UI test coverage
-* [ ] CI/CD with GitHub Actions
-* [ ] Production infrastructure
-* [ ] Google Play release
-* [ ] Additional financial analysis features
+### معرفی
 
----
+Cidna یک اپلیکیشن مدیریت امور مالی شخصی با معماری local-first است. اطلاعات مالی روی دستگاه مدیریت می‌شوند و از طریق یک پروتکل رمزنگاری‌شده با بک‌اند Go همگام می‌شوند.
 
-## Contributing
+### فناوری‌ها
 
-1. Fork the repository.
-2. Create a new branch.
-3. Make your changes.
-4. Run the tests.
-5. Create a Pull Request.
+- Kotlin و Jetpack Compose
+- Room و SQLCipher
+- WorkManager
+- Android Keystore و Encrypted Preferences
+- Go و MongoDB
+- Argon2id، JWT و Refresh Token چرخشی
+- OTP و recovery
+- همگام‌سازی cursor-based و revision-based
+- PDF و XLSX
+- فارسی و انگلیسی
+- تقویم جلالی
+- SMS parser، اعلان، widget، ورود صوتی و biometric
 
----
+### معماری اندروید
 
-## License
+```text
+data/local        → Room، Entity و DAO
+data/network      → HTTP و API
+data/repository   → Repository
+data/security     → Session، Device Identity و Sync Key
+data/sync         → Sync Engine
+di                → AppContainer
+ui                → Compose UI
+utils             → ابزارهای قابل استفاده مجدد
+worker            → WorkManager
+```
 
-See the `LICENSE` file for licensing information.
-See the `LICENSE` file for licensing information.
+> در وضعیت فعلی پروژه Hilt استفاده نمی‌شود و Dependency Injection توسط `AppContainer` انجام می‌شود.
+
+### معماری بک‌اند
+
+```text
+domain             → Entity و Repository Contract
+usecase            → منطق کسب‌وکار
+infrastructure     → MongoDB، Auth، JWT، Config و Logging
+interface/http     → Handler، DTO، Middleware و Router
+cmd                → Entry Point
+deployments        → Docker
+```
+
+### قابلیت‌ها
+
+- درآمد و هزینه
+- دسته‌بندی
+- محدودیت خرج
+- اهداف و قلک
+- بدهی و طلب
+- تحلیل مالی
+- تشخیص تراکنش از SMS بانکی
+- اعلان و widget
+- ورود صوتی
+- خروجی PDF/Excel
+- فارسی/انگلیسی
+- تم روشن/تیره
+- biometric
+- دیتابیس رمزنگاری‌شده
+- همگام‌سازی رمزنگاری‌شده و چنددستگاهی
+
+### امنیت و E2EE
+
+داده‌های مالی قبل از sync رمزنگاری می‌شوند. کلید داده با کلید مشتق‌شده از گذرواژه و recovery key محافظت می‌شود و backend نباید plaintext مالی را نیاز داشته باشد.
+
+از دست دادن recovery material می‌تواند بازیابی داده‌های رمزنگاری‌شده را پس از reset رمز عبور یا تعویض دستگاه غیرممکن کند؛ بنابراین backup آن باید در UX به‌صورت واضح طراحی شود.
+
+### قرارداد Sync
+
+```text
+TRANSACTION
+CATEGORY
+BUDGET_LIMIT
+DEBT_CREDIT
+SAVING_GOAL
+SAVING_GOAL_OPERATION
+DEBT_PAYMENT
+```
+
+شناسه entityهای sync باید UUID/string باشند و مقادیر مالی باید با `Long` و واحد پایه/خرد پولی ذخیره شوند.
+
+### API
+
+```text
+GET  /health
+POST /auth/otp/request
+POST /auth/register
+POST /auth/login
+POST /auth/refresh
+POST /auth/recovery/prepare
+POST /auth/password/reset
+POST /auth/logout
+
+POST   /api/v1/sync
+GET    /api/v1/devices
+DELETE /api/v1/devices/{deviceID}
+
+PUT /api/v1/admin/users/{userID}/role
+```
+
+### قبل از انتشار
+
+- حذف کامل auth bypass
+- تکمیل register/OTP/recovery/reset
+- تست اتصال Kotlin ↔ Go
+- تست multi-device
+- تست conflict و offline
+- تست logout و account switching
+- تست SMS receiver
+- تست release build
+- مدیریت secrets
+- TLS/CORS/rate limiting
+- backup/restore
+- monitoring/crash reporting
+
+### License
+
+فایل `LICENSE` شرایط استفاده از پروژه را مشخص می‌کند.
