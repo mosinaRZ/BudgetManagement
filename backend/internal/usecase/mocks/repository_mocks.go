@@ -10,15 +10,17 @@ import (
 
 // MockUserRepository پیاده‌سازی دستی UserRepository برای تست‌ها
 type MockUserRepository struct {
-	CreateFunc            func(ctx context.Context, u *entity.User) error
-	FindByPhoneHashFunc   func(ctx context.Context, phoneHash string) (*entity.User, error)
-	FindByEmailHashFunc   func(ctx context.Context, emailHash string) (*entity.User, error)
-	FindByIDFunc          func(ctx context.Context, id string) (*entity.User, error)
-	UpdateFunc            func(ctx context.Context, u *entity.User) error
-	AddDeviceFunc         func(ctx context.Context, userID, deviceID string) error
-	UpdateRoleFunc        func(ctx context.Context, userID string, role entity.Role) error
-	RecordFailedLoginFunc func(ctx context.Context, userID string, now time.Time, threshold int, lockDuration time.Duration) error
-	ResetFailedLoginFunc  func(ctx context.Context, userID string) error
+	CreateFunc                  func(ctx context.Context, u *entity.User) error
+	FindByPhoneHashFunc         func(ctx context.Context, phoneHash string) (*entity.User, error)
+	FindByEmailHashFunc         func(ctx context.Context, emailHash string) (*entity.User, error)
+	FindByIDFunc                func(ctx context.Context, id string) (*entity.User, error)
+	UpdateFunc                  func(ctx context.Context, u *entity.User) error
+	AddDeviceFunc               func(ctx context.Context, userID, deviceID string) error
+	UpdateRoleFunc              func(ctx context.Context, userID string, role entity.Role) error
+	RecordFailedLoginFunc       func(ctx context.Context, userID string, now time.Time, threshold int, lockDuration time.Duration) error
+	ResetFailedLoginFunc        func(ctx context.Context, userID string) error
+	GetSessionVersionFunc       func(ctx context.Context, userID string) (uint64, error)
+	IncrementSessionVersionFunc func(ctx context.Context, userID string) (uint64, error)
 }
 
 func (m *MockUserRepository) Create(ctx context.Context, u *entity.User) error {
@@ -56,6 +58,13 @@ func (m *MockUserRepository) Update(ctx context.Context, u *entity.User) error {
 	return nil
 }
 
+func (m *MockUserRepository) UpdateCredentials(ctx context.Context, userID, passwordHash, authSalt, kdfSalt string, passwordKeyEnvelope, passwordKeyNonce []byte) error {
+	if m.UpdateCredentialsFunc != nil {
+		return m.UpdateCredentialsFunc(ctx, userID, passwordHash, authSalt, kdfSalt, passwordKeyEnvelope, passwordKeyNonce)
+	}
+	return nil
+}
+
 func (m *MockUserRepository) UpdateRole(ctx context.Context, userID string, role entity.Role) error {
 	if m.UpdateRoleFunc != nil {
 		return m.UpdateRoleFunc(ctx, userID, role)
@@ -74,6 +83,19 @@ func (m *MockUserRepository) ResetFailedLogin(ctx context.Context, userID string
 		return m.ResetFailedLoginFunc(ctx, userID)
 	}
 	return nil
+}
+
+func (m *MockUserRepository) GetSessionVersion(ctx context.Context, userID string) (uint64, error) {
+	if m.GetSessionVersionFunc != nil {
+		return m.GetSessionVersionFunc(ctx, userID)
+	}
+	return 0, nil
+}
+func (m *MockUserRepository) IncrementSessionVersion(ctx context.Context, userID string) (uint64, error) {
+	if m.IncrementSessionVersionFunc != nil {
+		return m.IncrementSessionVersionFunc(ctx, userID)
+	}
+	return 0, nil
 }
 
 func (m *MockUserRepository) AddDevice(ctx context.Context, userID, deviceID string) error {

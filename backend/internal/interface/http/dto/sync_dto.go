@@ -3,13 +3,14 @@ package dto
 import "time"
 
 type SyncChangeDTO struct {
-	EntityType string    `json:"entityType" validate:"required,oneof=TRANSACTION CATEGORY BUDGET_LIMIT DEBT_CREDIT SAVING_GOAL NOTIFICATION PENDING_TRANSACTION"`
-	EntityID   string    `json:"entityId" validate:"required,uuid,max=128"`
-	Ciphertext string    `json:"ciphertext"`
-	Nonce      string    `json:"nonce"`
-	Version    int       `json:"version" validate:"required,min=1"`
-	IsDeleted  bool      `json:"isDeleted"`
-	UpdatedAt  time.Time `json:"updatedAt" validate:"required"`
+	EntityType     string    `json:"entityType" validate:"required,oneof=TRANSACTION CATEGORY BUDGET_LIMIT DEBT_CREDIT SAVING_GOAL SAVING_GOAL_OPERATION DEBT_PAYMENT"`
+	EntityID       string    `json:"entityId" validate:"required,uuid,max=128"`
+	Ciphertext     string    `json:"ciphertext"`
+	Nonce          string    `json:"nonce"`
+	Version        int       `json:"version" validate:"required,min=1"`
+	IsDeleted      bool      `json:"isDeleted"`
+	UpdatedAt      time.Time `json:"updatedAt" validate:"required"`
+	ServerRevision uint64    `json:"serverRevision"`
 }
 
 type SyncRequest struct {

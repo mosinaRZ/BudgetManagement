@@ -46,6 +46,24 @@ func rec(id string, version int, ts time.Time, deleted bool, device string) *ent
 	return &entity.SyncRecord{UserID: "user-test", EntityType: entity.EntityTypeTransaction, EntityID: id, Ciphertext: []byte("cipher-" + id), Nonce: []byte("nonce"), Version: version, UpdatedAt: ts, IsDeleted: deleted, DeviceID: device}
 }
 
+func TestSyncRepository_OperationRecordsFromTwoDevicesAreIndependent(t *testing.T) {
+	r, done := integrationRepo(t)
+	defer done()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	a := rec("op-a", 1, now, false, "device-a")
+	a.EntityType = entity.EntityTypeSavingGoalOperation
+	b := rec("op-b", 1, now.Add(time.Nanosecond), false, "device-b")
+	b.EntityType = entity.EntityTypeSavingGoalOperation
+	first, err := r.Sync(ctx, syncReq("op-a-request", "device-a", 0, a))
+	require.NoError(t, err)
+	second, err := r.Sync(ctx, syncReq("op-b-request", "device-b", uint64(first.NextCursor), b))
+	require.NoError(t, err)
+	assert.Empty(t, first.Conflicts)
+	assert.Empty(t, second.Conflicts)
+	assert.NotEqual(t, first.ServerChanges[0].ServerRevision, second.ServerChanges[0].ServerRevision)
+}
+
 func TestSyncRepository_TwoSameTimestampsUseVersion(t *testing.T) {
 	r, done := integrationRepo(t)
 	defer done()
@@ -228,6 +246,40 @@ func TestSyncRepository_RequestIDDifferentContentIsConflict(t *testing.T) {
 	request.DeviceID = "B"
 	_, err = r.Sync(ctx, request)
 	require.Error(t, err)
+}
+
+func TestSyncRepository_RevisionsAreScopedPerUser(t *testing.T) {
+	r, done := integrationRepo(t)
+	defer done()
+	ctx := context.Background()
+	a := syncReq("user-a-1", "A", 0, rec("a", 1, time.Now().UTC(), false, "A"))
+	a.UserID = "user-a"
+	b := syncReq("user-b-1", "B", 0, rec("b", 1, time.Now().UTC(), false, "B"))
+	b.UserID = "user-b"
+	firstA, err := r.Sync(ctx, a)
+	require.NoError(t, err)
+	firstB, err := r.Sync(ctx, b)
+	require.NoError(t, err)
+	require.Len(t, firstA.ServerChanges, 1)
+	require.Len(t, firstB.ServerChanges, 1)
+	assert.Equal(t, uint64(1), firstA.ServerChanges[0].ServerRevision)
+	assert.Equal(t, uint64(1), firstB.ServerChanges[0].ServerRevision)
+}
+
+func TestSyncRepository_TombstoneWinsAndRemainsPullable(t *testing.T) {
+	r, done := integrationRepo(t)
+	defer done()
+	ctx := context.Background()
+	ts := time.Now().UTC()
+	_, err := r.Sync(ctx, syncReq("create", "A", 0, rec("x", 1, ts, false, "A")))
+	require.NoError(t, err)
+	_, err = r.Sync(ctx, syncReq("delete", "A", 1, rec("x", 2, ts.Add(time.Second), true, "A")))
+	require.NoError(t, err)
+	out, err := r.Sync(ctx, syncReq("pull", "B", 0))
+	require.NoError(t, err)
+	require.Len(t, out.ServerChanges, 1)
+	assert.True(t, out.ServerChanges[0].IsDeleted)
+	assert.Equal(t, 2, out.ServerChanges[0].Version)
 }
 
 func TestSyncRepository_ConcurrentWritesSameRecordRemainConsistent(t *testing.T) {

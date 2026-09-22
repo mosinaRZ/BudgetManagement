@@ -28,12 +28,16 @@ type RegisterRequest struct {
 	RecoveryKeyNonce    string `json:"recovery_key_nonce,omitempty"`
 }
 type RegisterResponse struct {
-	AccessToken      string      `json:"access_token"`
-	RefreshToken     string      `json:"refresh_token"`
-	KdfSalt          string      `json:"kdf_salt"`
-	UserID           string      `json:"user_id"`
-	RecoveryRequired bool        `json:"recovery_required"`
-	Role             entity.Role `json:"role"`
+	AccessToken         string      `json:"access_token"`
+	RefreshToken        string      `json:"refresh_token"`
+	KdfSalt             string      `json:"kdf_salt"`
+	UserID              string      `json:"user_id"`
+	RecoveryRequired    bool        `json:"recovery_required"`
+	PasswordKeyEnvelope string      `json:"password_key_envelope,omitempty"`
+	PasswordKeyNonce    string      `json:"password_key_nonce,omitempty"`
+	RecoveryKeyEnvelope string      `json:"recovery_key_envelope,omitempty"`
+	RecoveryKeyNonce    string      `json:"recovery_key_nonce,omitempty"`
+	Role                entity.Role `json:"role"`
 }
 type LoginRequest struct {
 	Identifier string `json:"identifier" validate:"required,max=320"`

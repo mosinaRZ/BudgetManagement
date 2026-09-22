@@ -71,10 +71,20 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
+	cryptoMaterial, err := auth.CreateClientKeyMaterial(*password)
+	if err != nil {
+		fail(err)
+	}
 	now := time.Now().UTC()
 	u = &entity.User{
 		Role: entity.RoleAdmin, PasswordHash: passwordHash, AuthSalt: authSalt(salt),
-		CreatedAt: now, UpdatedAt: now, Devices: []string{},
+		KdfSalt:             cryptoMaterial.KdfSalt,
+		PasswordKeyEnvelope: mustDecodeRawBase64(cryptoMaterial.PasswordEnvelope),
+		PasswordKeyNonce:    mustDecodeRawBase64(cryptoMaterial.PasswordNonce),
+		RecoveryKeyHash:     cryptoMaterial.RecoveryKeyHash,
+		RecoveryKeyEnvelope: mustDecodeRawBase64(cryptoMaterial.RecoveryEnvelope),
+		RecoveryKeyNonce:    mustDecodeRawBase64(cryptoMaterial.RecoveryNonce),
+		CreatedAt:           now, UpdatedAt: now, Devices: []string{},
 	}
 	if strings.Contains(id, "@") {
 		u.EmailHash = authusecase.IdentifierHashForCLI(strings.ToLower(id), cfg.JWTSecret)
@@ -88,7 +98,15 @@ func main() {
 		fail(err)
 	}
 	fmt.Printf("created admin user %s; change the temporary bootstrap password immediately\n", u.ID)
+	fmt.Printf("recovery key (store offline securely): %s\n", cryptoMaterial.RecoveryKey)
 }
 
 func authSalt(b []byte) string { return base64.RawStdEncoding.EncodeToString(b) }
-func fail(err error)           { fmt.Fprintln(os.Stderr, "seed-admin:", err); os.Exit(1) }
+func mustDecodeRawBase64(v string) []byte {
+	b, err := base64.RawStdEncoding.DecodeString(v)
+	if err != nil {
+		fail(err)
+	}
+	return b
+}
+func fail(err error) { fmt.Fprintln(os.Stderr, "seed-admin:", err); os.Exit(1) }

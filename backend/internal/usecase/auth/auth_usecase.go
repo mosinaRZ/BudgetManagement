@@ -7,12 +7,13 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"strings"
+	"time"
+
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/apperror"
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/repository"
 	infraauth "github.com/mosinaRZ/finance-sync-backend/internal/infrastructure/auth"
-	"strings"
-	"time"
 )
 
 const (
@@ -29,6 +30,7 @@ type ServiceImpl struct {
 	users                 repository.UserRepository
 	refresh               repository.RefreshTokenRepository
 	devices               repository.DeviceRepository
+	recoverySessions      repository.RecoverySessionRepository
 	otp                   OTPService
 	secret                string
 	accessTTL, refreshTTL time.Duration
@@ -57,6 +59,9 @@ func NewService(
 	}
 }
 func (s *ServiceImpl) SetDeviceRepository(d repository.DeviceRepository) { s.devices = d }
+func (s *ServiceImpl) SetRecoverySessionRepository(r repository.RecoverySessionRepository) {
+	s.recoverySessions = r
+}
 func (s *ServiceImpl) Register(ctx context.Context, in RegisterInput) (RegisterOutput, error) {
 	phone, err := normalizePhone(in.PhoneNumber)
 	if err != nil {
@@ -120,12 +125,20 @@ func (s *ServiceImpl) Register(ctx context.Context, in RegisterInput) (RegisterO
 		return RegisterOutput{}, apperror.ErrInternal("failed to hash password")
 	}
 	kdfSalt := in.KdfSalt
-	if kdfSalt == "" {
+	if kdfSalt != "" {
+		decoded, decodeErr := decodeBase64Flexible(kdfSalt)
+		if decodeErr != nil || len(decoded) != 16 {
+			return RegisterOutput{}, apperror.ErrValidation("invalid KDF salt")
+		}
+	} else {
 		b, err := infraauth.GenerateSalt()
 		if err != nil {
 			return RegisterOutput{}, apperror.ErrInternal("failed to generate KDF salt")
 		}
 		kdfSalt = base64.RawStdEncoding.EncodeToString(b)
+	}
+	if err := validateClientKeyMaterial(kdfSalt, in.PasswordKeyEnvelope, in.PasswordKeyNonce, in.RecoveryKeyHash, in.RecoveryKeyEnvelope, in.RecoveryKeyNonce); err != nil {
+		return RegisterOutput{}, err
 	}
 	now := time.Now().UTC()
 	u := &entity.User{Role: entity.RoleUser, PhoneHash: ph, EmailHash: emailHash, PhoneVerified: true, EmailVerified: emailVerified, PasswordHash: passwordHash, AuthSalt: base64.RawStdEncoding.EncodeToString(salt), KdfSalt: kdfSalt, PasswordKeyEnvelope: in.PasswordKeyEnvelope, PasswordKeyNonce: in.PasswordKeyNonce, RecoveryKeyHash: string(in.RecoveryKeyHash), RecoveryKeyEnvelope: in.RecoveryKeyEnvelope, RecoveryKeyNonce: in.RecoveryKeyNonce, CreatedAt: now, UpdatedAt: now, Devices: []string{in.DeviceID}}
@@ -207,6 +220,7 @@ func (s *ServiceImpl) Refresh(ctx context.Context, in RefreshInput) (RefreshOutp
 	}
 	if old.RevokedAt != nil {
 		_ = s.refresh.RevokeAllForUser(ctx, old.UserID)
+		_ = s.users.IncrementSessionVersion(ctx, old.UserID)
 		return RefreshOutput{}, apperror.ErrUnauthorized("refresh token reuse detected")
 	}
 	if !time.Now().Before(old.ExpiresAt) {
@@ -221,6 +235,7 @@ func (s *ServiceImpl) Refresh(ctx context.Context, in RefreshInput) (RefreshOutp
 		// Treat that as refresh-token reuse and invalidate every session.
 		if code, ok := apperror.CodeOf(err); ok && code == apperror.CodeConflict {
 			_ = s.refresh.RevokeAllForUser(ctx, old.UserID)
+			_ = s.users.IncrementSessionVersion(ctx, old.UserID)
 			return RefreshOutput{}, apperror.ErrUnauthorized("refresh token reuse detected")
 		}
 		return RefreshOutput{}, err
@@ -235,25 +250,77 @@ func (s *ServiceImpl) Logout(ctx context.Context, raw string) error {
 	if strings.TrimSpace(raw) == "" {
 		return apperror.ErrUnauthorized("invalid refresh token")
 	}
-	return s.refresh.Revoke(ctx, infraauth.HashRefreshToken(raw))
+	hash := infraauth.HashRefreshToken(raw)
+	token, err := s.refresh.FindByHash(ctx, hash)
+	if err != nil {
+		return apperror.ErrUnauthorized("invalid refresh token")
+	}
+	if err := s.refresh.Revoke(ctx, hash); err != nil {
+		if code, ok := apperror.CodeOf(err); !ok || code != apperror.CodeConflict {
+			return err
+		}
+	}
+	if _, err := s.users.IncrementSessionVersion(ctx, token.UserID); err != nil {
+		return err
+	}
+	return nil
 }
+func (s *ServiceImpl) PrepareRecovery(ctx context.Context, in PrepareRecoveryInput) (PrepareRecoveryOutput, error) {
+	if s.recoverySessions == nil || s.otp == nil {
+		return PrepareRecoveryOutput{}, apperror.ErrInternal("recovery service is not configured")
+	}
+	dest, err := s.otp.Verify(ctx, VerifyOTPInput{ChallengeID: in.ChallengeID, Code: in.OTPCode, Purpose: entity.OTPPurposePasswordReset})
+	if err != nil {
+		return PrepareRecoveryOutput{}, err
+	}
+	u, err := s.findByDestinationHash(ctx, dest)
+	if err != nil {
+		return PrepareRecoveryOutput{}, apperror.ErrUnauthorized("invalid recovery request")
+	}
+	if u.RecoveryKeyHash == "" || !hmac.Equal([]byte(u.RecoveryKeyHash), []byte(hashRecovery(in.RecoveryKey))) {
+		return PrepareRecoveryOutput{}, apperror.ErrUnauthorized("recovery key is invalid")
+	}
+	raw, err := infraauth.GenerateRefreshToken()
+	if err != nil {
+		return PrepareRecoveryOutput{}, apperror.ErrInternal("failed to create recovery session")
+	}
+	now := time.Now().UTC()
+	if err := s.recoverySessions.Create(ctx, &entity.RecoverySession{TokenHash: infraauth.HashRefreshToken(raw), UserID: u.ID, CreatedAt: now, ExpiresAt: now.Add(5 * time.Minute)}); err != nil {
+		return PrepareRecoveryOutput{}, err
+	}
+	return PrepareRecoveryOutput{
+		RecoverySessionToken: raw,
+		KdfSalt:              u.KdfSalt,
+		UserID:               u.ID,
+		RecoveryKeyEnvelope:  append([]byte(nil), u.RecoveryKeyEnvelope...),
+		RecoveryKeyNonce:     append([]byte(nil), u.RecoveryKeyNonce...),
+	}, nil
+}
+
 func (s *ServiceImpl) ResetPassword(ctx context.Context, in ResetPasswordInput) (ResetPasswordOutput, error) {
+	if s.recoverySessions == nil {
+		return ResetPasswordOutput{}, apperror.ErrInternal("recovery service is not configured")
+	}
 	if len(in.NewPassword) < 8 || len(in.NewPassword) > 256 {
 		return ResetPasswordOutput{}, apperror.ErrValidation("password must be between 8 and 256 characters")
 	}
 	if err := validDevice(in.DeviceID); err != nil {
 		return ResetPasswordOutput{}, err
 	}
-	dest, err := s.otp.Verify(ctx, VerifyOTPInput{ChallengeID: in.ChallengeID, Code: in.OTPCode, Purpose: entity.OTPPurposePasswordReset})
+	newKdfSalt, err := decodeAndValidateKdfSalt(in.KdfSalt)
+	if err != nil {
+		return ResetPasswordOutput{}, apperror.ErrValidation("invalid KDF salt")
+	}
+	if err := validatePasswordKeyMaterial(in.PasswordKeyEnvelope, in.PasswordKeyNonce); err != nil {
+		return ResetPasswordOutput{}, err
+	}
+	recoverySession, err := s.recoverySessions.Consume(ctx, infraauth.HashRefreshToken(in.RecoverySessionToken), time.Now().UTC())
 	if err != nil {
 		return ResetPasswordOutput{}, err
 	}
-	u, err := s.findByDestinationHash(ctx, dest)
+	u, err := s.users.FindByID(ctx, recoverySession.UserID)
 	if err != nil {
 		return ResetPasswordOutput{}, apperror.ErrUnauthorized("invalid recovery request")
-	}
-	if u.RecoveryKeyHash == "" || !hmac.Equal([]byte(u.RecoveryKeyHash), []byte(hashRecovery(in.RecoveryKey))) {
-		return ResetPasswordOutput{}, apperror.ErrUnauthorized("recovery key is invalid")
 	}
 	salt, err := infraauth.GenerateSalt()
 	if err != nil {
@@ -263,15 +330,24 @@ func (s *ServiceImpl) ResetPassword(ctx context.Context, in ResetPasswordInput) 
 	if err != nil {
 		return ResetPasswordOutput{}, apperror.ErrInternal("failed to hash password")
 	}
-	u.PasswordHash = ph
-	u.AuthSalt = base64.RawStdEncoding.EncodeToString(salt)
-	u.PasswordKeyEnvelope = in.PasswordKeyEnvelope
-	u.PasswordKeyNonce = in.PasswordKeyNonce
-	u.FailedLoginAttempts = 0
-	u.LockedUntil = nil
-	if err := s.users.Update(ctx, u); err != nil {
+	if err := s.users.AddDevice(ctx, u.ID, in.DeviceID); err != nil {
 		return ResetPasswordOutput{}, err
 	}
+	newAuthSalt := base64.RawStdEncoding.EncodeToString(salt)
+	newKdfSaltB64 := base64.RawStdEncoding.EncodeToString(newKdfSalt)
+	if err := s.users.UpdateCredentials(ctx, u.ID, ph, newAuthSalt, newKdfSaltB64, in.PasswordKeyEnvelope, in.PasswordKeyNonce); err != nil {
+		return ResetPasswordOutput{}, err
+	}
+	u.PasswordHash = ph
+	u.AuthSalt = newAuthSalt
+	u.KdfSalt = newKdfSaltB64
+	u.PasswordKeyEnvelope = in.PasswordKeyEnvelope
+	u.PasswordKeyNonce = in.PasswordKeyNonce
+	newSessionVersion, err := s.users.IncrementSessionVersion(ctx, u.ID)
+	if err != nil {
+		return ResetPasswordOutput{}, err
+	}
+	u.SessionVersion = newSessionVersion
 	if err := s.refresh.RevokeAllForUser(ctx, u.ID); err != nil {
 		return ResetPasswordOutput{}, err
 	}
@@ -304,13 +380,13 @@ func (s *ServiceImpl) issueSession(ctx context.Context, u *entity.User, d string
 	if e != nil {
 		return RegisterOutput{}, e
 	}
-	return RegisterOutput{AccessToken: x.AccessToken, RefreshToken: x.RefreshToken, Role: u.Role, KdfSalt: u.KdfSalt, UserID: u.ID, RecoveryRequired: u.RecoveryKeyHash != ""}, nil
+	return RegisterOutput{AccessToken: x.AccessToken, RefreshToken: x.RefreshToken, Role: u.Role, KdfSalt: u.KdfSalt, UserID: u.ID, RecoveryRequired: u.RecoveryKeyHash != "", PasswordKeyEnvelope: u.PasswordKeyEnvelope, PasswordKeyNonce: u.PasswordKeyNonce, RecoveryKeyEnvelope: u.RecoveryKeyEnvelope, RecoveryKeyNonce: u.RecoveryKeyNonce}, nil
 }
 
 type sessionOutput struct{ AccessToken, RefreshToken string }
 
 func (s *ServiceImpl) issueRefreshAndAccess(ctx context.Context, u *entity.User, d string) (sessionOutput, error) {
-	a, e := infraauth.GenerateAccessTokenWithRole(u.ID, u.Role, s.accessTTL, s.secret)
+	a, e := infraauth.GenerateAccessTokenWithRoleAndSession(u.ID, u.Role, u.SessionVersion, s.accessTTL, s.secret)
 	if e != nil {
 		return sessionOutput{}, apperror.ErrInternal("failed to create access token")
 	}
@@ -324,6 +400,56 @@ func (s *ServiceImpl) issueRefreshAndAccess(ctx context.Context, u *entity.User,
 	}
 	return sessionOutput{a, raw}, nil
 }
+func validateClientKeyMaterial(kdfSalt, passwordEnvelope, passwordNonce, recoveryHash, recoveryEnvelope, recoveryNonce string) error {
+	if _, err := decodeAndValidateKdfSalt(kdfSalt); err != nil {
+		return apperror.ErrValidation("invalid KDF salt")
+	}
+	if err := validatePasswordKeyMaterial(passwordEnvelope, passwordNonce); err != nil {
+		return err
+	}
+	h, err := decodeBase64Flexible(strings.TrimSpace(recoveryHash))
+	if err != nil || len(h) != 32 {
+		return apperror.ErrValidation("invalid recovery key hash")
+	}
+	recoveryEnvelopeBytes, err := decodeBase64Flexible(strings.TrimSpace(recoveryEnvelope))
+	if err != nil || len(recoveryEnvelopeBytes) != 48 {
+		return apperror.ErrValidation("invalid recovery key envelope")
+	}
+	recoveryNonceBytes, err := decodeBase64Flexible(strings.TrimSpace(recoveryNonce))
+	if err != nil || len(recoveryNonceBytes) != 12 {
+		return apperror.ErrValidation("invalid recovery key nonce")
+	}
+	return nil
+}
+
+func validatePasswordKeyMaterial(envelope, nonce string) error {
+	e, err := decodeBase64Flexible(strings.TrimSpace(envelope))
+	if err != nil || len(e) != 48 {
+		return apperror.ErrValidation("invalid password key envelope")
+	}
+	n, err := decodeBase64Flexible(strings.TrimSpace(nonce))
+	if err != nil || len(n) != 12 {
+		return apperror.ErrValidation("invalid password key nonce")
+	}
+	return nil
+}
+
+func decodeBase64Flexible(value string) ([]byte, error) {
+	v := strings.TrimSpace(value)
+	if b, err := base64.StdEncoding.DecodeString(v); err == nil {
+		return b, nil
+	}
+	return base64.RawStdEncoding.DecodeString(v)
+}
+
+func decodeAndValidateKdfSalt(value string) ([]byte, error) {
+	b, err := decodeBase64Flexible(value)
+	if err != nil || len(b) != 16 {
+		return nil, errors.New("invalid KDF salt")
+	}
+	return b, nil
+}
+
 func validDevice(v string) error {
 	v = strings.TrimSpace(v)
 	if v == "" || len(v) > 128 {

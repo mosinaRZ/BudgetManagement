@@ -50,8 +50,9 @@ func (s *Service) UpdateUserRole(ctx context.Context, actorUserID, userID string
 			ActorUserID: actorUserID, TargetUserID: userID, Action: "user_role_updated",
 			OldValue: string(oldRole), NewValue: string(role), CreatedAt: time.Now().UTC(),
 		}); err != nil {
-			// Role changes remain successful if the deployment cannot provide transactional audit writes.
-			return nil
+			// Never silently report an administrative change as fully successful when
+			// its audit trail could not be persisted. The caller can retry/reconcile.
+			return apperror.ErrInternal("role changed but audit log could not be persisted", err)
 		}
 	}
 	return nil
