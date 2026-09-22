@@ -38,7 +38,7 @@ class SyncApi(private val client: AuthenticatedApiClient) {
 
         val response = client.request("POST", "/api/v1/sync", body)
         if (response.statusCode !in 200..299) {
-            throw ApiException(response.statusCode, response.errorMessage("همگام‌سازی ناموفق بود."))
+            throw ApiException(response.statusCode, response.errorCode(), response.errorMessage("همگام‌سازی ناموفق بود."))
         }
 
         val json = response.json()

@@ -77,12 +77,12 @@ fun PasswordResetScreen(
                     challengeId = response.challengeId
                 }
                 .onFailure { throwable ->
-                    error = throwable.message
-                        ?: if (isPersian) {
-                            "ارسال کد ناموفق بود"
-                        } else {
-                            "Failed to send code"
-                        }
+                    error = (throwable as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(isPersian) ?: throwable.message
+                            ?: if (isPersian) {
+                        "ارسال کد ناموفق بود"
+                    } else {
+                        "Failed to send code"
+                    }
                 }
 
             loading = false
@@ -151,21 +151,21 @@ fun PasswordResetScreen(
                             onResetSuccess()
                         }
                         .onFailure { throwable ->
-                            error = throwable.message
-                                ?: if (isPersian) {
-                                    "بازیابی ناموفق بود"
-                                } else {
-                                    "Reset failed"
-                                }
+                            error = (throwable as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(isPersian) ?: throwable.message
+                                    ?: if (isPersian) {
+                                "بازیابی ناموفق بود"
+                            } else {
+                                "Reset failed"
+                            }
                         }
                 }
                 .onFailure { throwable ->
-                    error = throwable.message
-                        ?: if (isPersian) {
-                            "تأیید اطلاعات بازیابی ناموفق بود"
-                        } else {
-                            "Recovery verification failed"
-                        }
+                    error = (throwable as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(isPersian) ?: throwable.message
+                            ?: if (isPersian) {
+                        "تأیید اطلاعات بازیابی ناموفق بود"
+                    } else {
+                        "Recovery verification failed"
+                    }
                 }
 
             loading = false

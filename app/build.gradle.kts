@@ -5,6 +5,22 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+val configuredBackendBaseUrl = providers.gradleProperty("backendBaseUrl")
+    .orElse(providers.environmentVariable("BACKEND_BASE_URL"))
+    .orElse("https://api.example.com/")
+    .get()
+
+fun requireProductionBackendUrl(url: String): String {
+    val normalized = url.trim().trimEnd('/') + "/"
+    require(normalized != "https://api.example.com/") {
+        "Release builds require a real HTTPS backend URL. Set -PbackendBaseUrl or BACKEND_BASE_URL."
+    }
+    require(normalized.startsWith("https://")) {
+        "Release backend URL must use HTTPS."
+    }
+    return normalized
+}
+
 android {
     namespace = "ir.hamedan.budgetmanagement"
     compileSdk {
@@ -39,7 +55,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            buildConfigField("String", "BASE_URL", "\"https://api.example.com/\"")
+            buildConfigField("String", "BASE_URL", "\"${requireProductionBackendUrl(configuredBackendBaseUrl)}\"")
             buildConfigField("Boolean", "ENABLE_LOGS", "false")
         }
     }

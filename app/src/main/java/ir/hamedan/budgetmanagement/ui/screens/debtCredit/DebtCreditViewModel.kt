@@ -97,7 +97,7 @@ class DebtCreditViewModel(
                     )
                     if (!isEdit && addToBalance) BalanceWidget().updateAll(context)
                 }
-                .onFailure { _errorMessage.emit(it.message.orEmpty()) }
+                .onFailure { _errorMessage.emit((it as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(LocaleHelper.getLanguage(context) == "fa") ?: it.message.orEmpty()) }
         }
     }
 
@@ -111,7 +111,7 @@ class DebtCreditViewModel(
             }
             runCatching { useCase.deposit(item, amount) }
                 .onSuccess { BalanceWidget().updateAll(context) }
-                .onFailure { _errorMessage.emit(it.message.orEmpty()) }
+                .onFailure { _errorMessage.emit((it as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(LocaleHelper.getLanguage(context) == "fa") ?: it.message.orEmpty()) }
         }
     }
 
@@ -120,7 +120,7 @@ class DebtCreditViewModel(
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
             runCatching { useCase.withdraw(item, amount) }
                 .onSuccess { BalanceWidget().updateAll(context) }
-                .onFailure { _errorMessage.emit(it.message.orEmpty()) }
+                .onFailure { _errorMessage.emit((it as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(LocaleHelper.getLanguage(context) == "fa") ?: it.message.orEmpty()) }
         }
     }
 

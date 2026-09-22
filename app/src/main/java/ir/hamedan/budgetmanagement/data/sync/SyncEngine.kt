@@ -69,7 +69,7 @@ class SyncEngine(
             val response = try {
                 syncApi.sync(requestId, deviceId, cursor, changes)
             } catch (e: ir.hamedan.budgetmanagement.data.network.ApiException) {
-                if (e.statusCode == 401) {
+                if (e.code == "UNAUTHORIZED" || e.statusCode == 401) {
                     sessionStore.clearSession()
                     syncKeyManager.clear()
                     return SyncResult.ReauthenticationRequired

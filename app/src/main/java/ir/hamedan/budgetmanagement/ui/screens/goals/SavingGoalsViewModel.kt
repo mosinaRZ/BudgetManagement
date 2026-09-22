@@ -39,7 +39,7 @@ class SavingGoalsViewModel(
                 .onSuccess {
                     NotificationHelper.send(context, NotificationType.GOAL_ADD, "GOALS", "هدف پس‌انداز جدید", "New Saving Goal", "هدف «$title» با موفقیت ایجاد شد.", "Saving goal '$title' was created successfully.")
                 }
-                .onFailure { _depositError.emit(it.message.orEmpty()) }
+                .onFailure { _depositError.emit((it as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(LocaleHelper.getLanguage(context) == "fa") ?: it.message.orEmpty()) }
         }
     }
 
@@ -49,7 +49,7 @@ class SavingGoalsViewModel(
                 .onSuccess {
                     NotificationHelper.send(context, NotificationType.GOAL_UPDATE, "GOALS", "ویرایش هدف پس‌انداز", "Saving Goal Updated", "اطلاعات هدف «${goal.title}» به‌روزرسانی شد.", "Goal '${goal.title}' details were updated.")
                 }
-                .onFailure { _depositError.emit(it.message.orEmpty()) }
+                .onFailure { _depositError.emit((it as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(LocaleHelper.getLanguage(context) == "fa") ?: it.message.orEmpty()) }
         }
     }
 

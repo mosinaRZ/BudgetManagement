@@ -95,9 +95,10 @@ fun LoginScreen(
                 onLoginSuccess()
             }.onFailure { error ->
                 isLoggingIn = false
-                errorMessage = error.message
-                    ?.takeIf { it.isNotBlank() }
-                    ?: if (isPersian) "ورود ناموفق بود" else "Login failed"
+                errorMessage = (error as? ir.hamedan.budgetmanagement.data.network.ApiException)
+                    ?.userMessage(isPersian)
+                    ?: error.message?.takeIf { it.isNotBlank() }
+                            ?: if (isPersian) "ورود ناموفق بود" else "Login failed"
             }
         }
     }
