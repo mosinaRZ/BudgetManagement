@@ -30,7 +30,7 @@ func TestRouterProtectsSyncEndpoint(t *testing.T) {
 	validate := validator.New()
 	syncUC := syncUsecase.NewSyncUsecase(&mocks.MockSyncRepository{})
 	syncHandler := handler.NewSyncHandler(syncUC, validate)
-	r := httpiface.NewRouter(httpiface.RouterDependencies{SyncHandler: syncHandler, JWTSecret: secret})
+	r := httpiface.NewRouter(httpiface.RouterDependencies{SyncHandler: syncHandler, JWTSecret: secret, UserRepository: &mocks.MockUserRepository{}})
 
 	unauthenticated := httptest.NewRequest(http.MethodPost, "/api/v1/sync", nil)
 	unauthenticatedRec := httptest.NewRecorder()

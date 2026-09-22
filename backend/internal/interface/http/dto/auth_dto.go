@@ -28,12 +28,16 @@ type RegisterRequest struct {
 	RecoveryKeyNonce    string `json:"recovery_key_nonce,omitempty"`
 }
 type RegisterResponse struct {
-	AccessToken      string      `json:"access_token"`
-	RefreshToken     string      `json:"refresh_token"`
-	KdfSalt          string      `json:"kdf_salt"`
-	UserID           string      `json:"user_id"`
-	RecoveryRequired bool        `json:"recovery_required"`
-	Role             entity.Role `json:"role"`
+	AccessToken         string      `json:"access_token"`
+	RefreshToken        string      `json:"refresh_token"`
+	KdfSalt             string      `json:"kdf_salt"`
+	UserID              string      `json:"user_id"`
+	RecoveryRequired    bool        `json:"recovery_required"`
+	PasswordKeyEnvelope string      `json:"password_key_envelope,omitempty"`
+	PasswordKeyNonce    string      `json:"password_key_nonce,omitempty"`
+	RecoveryKeyEnvelope string      `json:"recovery_key_envelope,omitempty"`
+	RecoveryKeyNonce    string      `json:"recovery_key_nonce,omitempty"`
+	Role                entity.Role `json:"role"`
 }
 type LoginRequest struct {
 	Identifier string `json:"identifier" validate:"required,max=320"`
@@ -59,14 +63,27 @@ type RefreshResponse struct {
 	RefreshToken string      `json:"refresh_token"`
 	Role         entity.Role `json:"role"`
 }
+type PrepareRecoveryRequest struct {
+	OTPChallengeID string `json:"otp_challenge_id" validate:"required"`
+	OTPCode        string `json:"otp_code" validate:"required,len=6,numeric"`
+	RecoveryKey    string `json:"recovery_key" validate:"required,min=16,max=512"`
+}
+
+type PrepareRecoveryResponse struct {
+	RecoverySessionToken string `json:"recovery_session_token"`
+	KdfSalt              string `json:"kdf_salt"`
+	UserID               string `json:"user_id"`
+	RecoveryKeyEnvelope  string `json:"recovery_key_envelope"`
+	RecoveryKeyNonce     string `json:"recovery_key_nonce"`
+}
+
 type ResetPasswordRequest struct {
-	OTPChallengeID      string `json:"otp_challenge_id" validate:"required"`
-	OTPCode             string `json:"otp_code" validate:"required,len=6,numeric"`
-	NewPassword         string `json:"new_password" validate:"required,min=8,max=256"`
-	RecoveryKey         string `json:"recovery_key" validate:"required,min=16,max=512"`
-	DeviceID            string `json:"device_id" validate:"required,max=128"`
-	PasswordKeyEnvelope string `json:"password_key_envelope" validate:"required"`
-	PasswordKeyNonce    string `json:"password_key_nonce" validate:"required"`
+	RecoverySessionToken string `json:"recovery_session_token" validate:"required"`
+	NewPassword          string `json:"new_password" validate:"required,min=8,max=256"`
+	DeviceID             string `json:"device_id" validate:"required,max=128"`
+	KdfSalt              string `json:"kdf_salt" validate:"required,max=256"`
+	PasswordKeyEnvelope  string `json:"password_key_envelope" validate:"required"`
+	PasswordKeyNonce     string `json:"password_key_nonce" validate:"required"`
 }
 type ResetPasswordResponse struct {
 	AccessToken         string      `json:"access_token"`

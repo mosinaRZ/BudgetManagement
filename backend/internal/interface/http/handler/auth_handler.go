@@ -2,13 +2,14 @@ package handler
 
 import (
 	"encoding/base64"
+	"net/http"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/apperror"
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
 	"github.com/mosinaRZ/finance-sync-backend/internal/interface/http/dto"
 	"github.com/mosinaRZ/finance-sync-backend/internal/pkg/response"
 	"github.com/mosinaRZ/finance-sync-backend/internal/usecase/auth"
-	"net/http"
 )
 
 type AuthHandler struct {
@@ -86,7 +87,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, err)
 		return
 	}
-	response.JSON(w, http.StatusCreated, dto.RegisterResponse{AccessToken: out.AccessToken, RefreshToken: out.RefreshToken, KdfSalt: out.KdfSalt, UserID: out.UserID, RecoveryRequired: out.RecoveryRequired, Role: out.Role})
+	response.JSON(w, http.StatusCreated, dto.RegisterResponse{AccessToken: out.AccessToken, RefreshToken: out.RefreshToken, KdfSalt: out.KdfSalt, UserID: out.UserID, RecoveryRequired: out.RecoveryRequired, PasswordKeyEnvelope: enc(out.PasswordKeyEnvelope), PasswordKeyNonce: enc(out.PasswordKeyNonce), RecoveryKeyEnvelope: enc(out.RecoveryKeyEnvelope), RecoveryKeyNonce: enc(out.RecoveryKeyNonce), Role: out.Role})
 }
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var q dto.LoginRequest
@@ -122,6 +123,29 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 	response.JSON(w, http.StatusOK, dto.RefreshResponse{AccessToken: out.AccessToken, RefreshToken: out.RefreshToken, Role: out.Role})
 }
+func (h *AuthHandler) PrepareRecovery(w http.ResponseWriter, r *http.Request) {
+	var q dto.PrepareRecoveryRequest
+	if err := decodeJSON(w, r, &q); err != nil {
+		response.Error(w, err)
+		return
+	}
+	if err := validateRequest(h.validate, q); err != nil {
+		response.Error(w, err)
+		return
+	}
+	extended, ok := h.usecase.(auth.ExtendedService)
+	if !ok {
+		response.Error(w, apperror.ErrInternal("recovery service is not configured"))
+		return
+	}
+	out, err := extended.PrepareRecovery(r.Context(), auth.PrepareRecoveryInput{ChallengeID: q.OTPChallengeID, OTPCode: q.OTPCode, RecoveryKey: q.RecoveryKey})
+	if err != nil {
+		response.Error(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, dto.PrepareRecoveryResponse{RecoverySessionToken: out.RecoverySessionToken, KdfSalt: out.KdfSalt, UserID: out.UserID, RecoveryKeyEnvelope: enc(out.RecoveryKeyEnvelope), RecoveryKeyNonce: enc(out.RecoveryKeyNonce)})
+}
+
 func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	var q dto.ResetPasswordRequest
 	if err := decodeJSON(w, r, &q); err != nil {
@@ -147,11 +171,7 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, apperror.ErrValidation("password_key_nonce must be valid base64"))
 		return
 	}
-	out, err := extended.ResetPassword(r.Context(), auth.ResetPasswordInput{
-		ChallengeID: q.OTPChallengeID, OTPCode: q.OTPCode, NewPassword: q.NewPassword,
-		RecoveryKey: q.RecoveryKey, DeviceID: q.DeviceID,
-		PasswordKeyEnvelope: passwordKeyEnvelope, PasswordKeyNonce: passwordKeyNonce,
-	})
+	out, err := extended.ResetPassword(r.Context(), auth.ResetPasswordInput{RecoverySessionToken: q.RecoverySessionToken, NewPassword: q.NewPassword, DeviceID: q.DeviceID, KdfSalt: q.KdfSalt, PasswordKeyEnvelope: passwordKeyEnvelope, PasswordKeyNonce: passwordKeyNonce})
 	if err != nil {
 		response.Error(w, err)
 		return

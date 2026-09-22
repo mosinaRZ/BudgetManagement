@@ -22,4 +22,5 @@ type User struct {
 	Devices             []string
 	FailedLoginAttempts int
 	LockedUntil         *time.Time
+	SessionVersion      uint64
 }

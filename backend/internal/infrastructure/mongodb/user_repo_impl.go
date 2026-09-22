@@ -3,6 +3,8 @@ package mongodb
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/apperror"
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
 	"github.com/mosinaRZ/finance-sync-backend/internal/infrastructure/mongodb/models"
@@ -10,7 +12,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"time"
 )
 
 const usersCollectionName = "users"
@@ -74,6 +75,29 @@ func (r *userRepo) Update(ctx context.Context, u *entity.User) error {
 	}
 	return nil
 }
+func (r *userRepo) UpdateCredentials(ctx context.Context, userID, passwordHash, authSalt, kdfSalt string, passwordKeyEnvelope, passwordKeyNonce []byte) error {
+	oid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return apperror.ErrNotFound("user not found")
+	}
+	res, err := r.c.UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$set": bson.M{
+		"passwordHash":        passwordHash,
+		"authSalt":            authSalt,
+		"kdfSalt":             kdfSalt,
+		"passwordKeyEnvelope": append([]byte(nil), passwordKeyEnvelope...),
+		"passwordKeyNonce":    append([]byte(nil), passwordKeyNonce...),
+		"failedLoginAttempts": 0,
+		"updatedAt":           time.Now().UTC(),
+	}, "$unset": bson.M{"lockedUntil": ""}})
+	if err != nil {
+		return apperror.ErrInternal("failed to update credentials", err)
+	}
+	if res.MatchedCount == 0 {
+		return apperror.ErrNotFound("user not found")
+	}
+	return nil
+}
+
 func (r *userRepo) AddDevice(ctx context.Context, userID, deviceID string) error {
 	oid, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
@@ -125,7 +149,7 @@ func (r *userRepo) UpdateRole(ctx context.Context, userID string, role entity.Ro
 	if err != nil {
 		return apperror.ErrNotFound("user not found")
 	}
-	res, err := r.c.UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$set": bson.M{"role": role, "updatedAt": time.Now().UTC()}})
+	res, err := r.c.UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$set": bson.M{"role": role, "updatedAt": time.Now().UTC()}, "$inc": bson.M{"sessionVersion": 1}})
 	if err != nil {
 		return apperror.ErrInternal("failed to update user role", err)
 	}
@@ -183,4 +207,35 @@ func (r *userRepo) ResetFailedLogin(ctx context.Context, userID string) error {
 		return apperror.ErrInternal("failed to reset login state", err)
 	}
 	return nil
+}
+
+func (r *userRepo) GetSessionVersion(ctx context.Context, userID string) (uint64, error) {
+	oid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return 0, apperror.ErrNotFound("user not found")
+	}
+	var m models.UserModel
+	if err := r.c.FindOne(ctx, bson.M{"_id": oid}, options.FindOne().SetProjection(bson.M{"sessionVersion": 1})).Decode(&m); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return 0, apperror.ErrNotFound("user not found")
+		}
+		return 0, apperror.ErrInternal("failed to read session version", err)
+	}
+	return m.SessionVersion, nil
+}
+
+func (r *userRepo) IncrementSessionVersion(ctx context.Context, userID string) (uint64, error) {
+	oid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return 0, apperror.ErrNotFound("user not found")
+	}
+	var m models.UserModel
+	err = r.c.FindOneAndUpdate(ctx, bson.M{"_id": oid}, bson.M{"$inc": bson.M{"sessionVersion": 1}, "$set": bson.M{"updatedAt": time.Now().UTC()}}, options.FindOneAndUpdate().SetReturnDocument(options.After).SetProjection(bson.M{"sessionVersion": 1})).Decode(&m)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return 0, apperror.ErrNotFound("user not found")
+	}
+	if err != nil {
+		return 0, apperror.ErrInternal("failed to revoke access sessions", err)
+	}
+	return m.SessionVersion, nil
 }

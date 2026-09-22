@@ -59,6 +59,7 @@ func (h *SyncHandler) HandleSync(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input := syncUsecase.SyncInput{
+		ProtocolVersion: req.ProtocolVersion, SchemaVersion: req.SchemaVersion,
 		RequestID: req.RequestID,
 		DeviceID:  req.DeviceID,
 		Cursor:    cursor,
@@ -90,7 +91,7 @@ func dtoToUsecaseChange(c dto.SyncChangeDTO) (syncUsecase.SyncChange, error) {
 	if err != nil {
 		return syncUsecase.SyncChange{}, apperror.ErrValidation("nonce must be base64")
 	}
-	return syncUsecase.SyncChange{EntityType: c.EntityType, EntityID: c.EntityID, Ciphertext: ciphertext, Nonce: nonce, Version: c.Version, IsDeleted: c.IsDeleted, UpdatedAt: c.UpdatedAt}, nil
+	return syncUsecase.SyncChange{EntityType: c.EntityType, EntityID: c.EntityID, Ciphertext: ciphertext, Nonce: nonce, Version: c.Version, IsDeleted: c.IsDeleted, UpdatedAt: c.UpdatedAt, ServerRevision: 0, EncryptionKeyVersion: c.EncryptionKeyVersion}, nil
 }
 
 func usecaseToDTO(result syncUsecase.SyncOutput) dto.SyncResponse {
@@ -105,5 +106,5 @@ func usecaseToDTO(result syncUsecase.SyncOutput) dto.SyncResponse {
 }
 
 func changeToDTO(c syncUsecase.SyncChange) dto.SyncChangeDTO {
-	return dto.SyncChangeDTO{EntityType: c.EntityType, EntityID: c.EntityID, Ciphertext: base64.StdEncoding.EncodeToString(c.Ciphertext), Nonce: base64.StdEncoding.EncodeToString(c.Nonce), Version: c.Version, IsDeleted: c.IsDeleted, UpdatedAt: c.UpdatedAt}
+	return dto.SyncChangeDTO{EntityType: c.EntityType, EntityID: c.EntityID, Ciphertext: base64.StdEncoding.EncodeToString(c.Ciphertext), Nonce: base64.StdEncoding.EncodeToString(c.Nonce), Version: c.Version, IsDeleted: c.IsDeleted, UpdatedAt: c.UpdatedAt, ServerRevision: c.ServerRevision, EncryptionKeyVersion: c.EncryptionKeyVersion}
 }

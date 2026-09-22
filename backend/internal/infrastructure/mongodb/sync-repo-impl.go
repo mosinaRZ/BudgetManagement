@@ -23,8 +23,10 @@ const (
 	syncRecordsCollectionName          = "sync_records"
 	syncOperationsCollectionName       = "sync_operations"
 	syncRevisionCountersCollectionName = "sync_revision_counters"
-	maxPullBatchSize                   = 100
-	maxPullPayloadBytes                = 4 * 1024 * 1024
+	// Revisions are allocated per user. This prevents unrelated users from
+	// contending on one global counter and keeps cursors scoped to a user.
+	maxPullBatchSize    = 100
+	maxPullPayloadBytes = 4 * 1024 * 1024
 )
 
 type syncRepositoryImpl struct {
@@ -118,6 +120,8 @@ func syncRequestFingerprint(req repository.SyncRequest) string {
 		writeBytes(r.Ciphertext)
 		writeBytes(r.Nonce)
 		var x [8]byte
+		binary.BigEndian.PutUint64(x[:], uint64(r.EncryptionKeyVersion))
+		h.Write(x[:])
 		binary.BigEndian.PutUint64(x[:], uint64(r.Version))
 		h.Write(x[:])
 		binary.BigEndian.PutUint64(x[:], uint64(r.UpdatedAt.UnixNano()))
@@ -185,7 +189,7 @@ func (r *syncRepositoryImpl) applyRecords(ctx mongo.SessionContext, req reposito
 		return conflicts, nil
 	}
 
-	start, err := r.allocateRevisions(ctx, len(toWrite))
+	start, err := r.allocateRevisions(ctx, req.UserID, len(toWrite))
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +201,7 @@ func (r *syncRepositoryImpl) applyRecords(ctx mongo.SessionContext, req reposito
 			return nil, apperror.ErrInternal("invalid sync record", err)
 		}
 		filter := bson.M{"userId": model.UserID, "entityType": model.EntityType, "entityId": model.EntityID}
-		update := bson.M{"$set": bson.M{"ciphertext": model.Ciphertext, "nonce": model.Nonce, "version": model.Version, "updatedAt": model.UpdatedAt, "isDeleted": model.IsDeleted, "deviceId": model.DeviceID, "serverRevision": model.ServerRevision}, "$setOnInsert": bson.M{"userId": model.UserID, "entityType": model.EntityType, "entityId": model.EntityID}}
+		update := bson.M{"$set": bson.M{"ciphertext": model.Ciphertext, "nonce": model.Nonce, "version": model.Version, "updatedAt": model.UpdatedAt, "isDeleted": model.IsDeleted, "deviceId": model.DeviceID, "serverRevision": model.ServerRevision, "encryptionKeyVersion": model.EncryptionKeyVersion}, "$setOnInsert": bson.M{"userId": model.UserID, "entityType": model.EntityType, "entityId": model.EntityID}}
 		writes = append(writes, mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true))
 	}
 	if _, err := r.collection.BulkWrite(ctx, writes, options.BulkWrite().SetOrdered(true)); err != nil {
@@ -219,14 +223,30 @@ func (r *syncRepositoryImpl) findExisting(ctx mongo.SessionContext, userID strin
 }
 
 func samePayload(existing *models.SyncRecordModel, incoming *entity.SyncRecord) bool {
-	return existing.IsDeleted == incoming.IsDeleted && existing.UpdatedAt.Equal(incoming.UpdatedAt) && existing.DeviceID == incoming.DeviceID && string(existing.Ciphertext) == string(incoming.Ciphertext) && string(existing.Nonce) == string(incoming.Nonce)
+	return existing.IsDeleted == incoming.IsDeleted && existing.UpdatedAt.Equal(incoming.UpdatedAt) && existing.DeviceID == incoming.DeviceID && existing.EncryptionKeyVersion == incoming.EncryptionKeyVersion && string(existing.Ciphertext) == string(incoming.Ciphertext) && string(existing.Nonce) == string(incoming.Nonce)
 }
 
-func (r *syncRepositoryImpl) allocateRevisions(ctx mongo.SessionContext, n int) (uint64, error) {
+func (r *syncRepositoryImpl) allocateRevisions(ctx mongo.SessionContext, userID string, n int) (uint64, error) {
+	if userID == "" || n <= 0 {
+		return 0, apperror.ErrValidation("invalid sync revision allocation")
+	}
 	var doc struct {
 		Value int64 `bson:"value"`
 	}
-	err := r.db.Collection(syncRevisionCountersCollectionName).FindOneAndUpdate(ctx, bson.M{"_id": "global"}, bson.M{"$inc": bson.M{"value": int64(n)}}, options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)).Decode(&doc)
+	counter := r.db.Collection(syncRevisionCountersCollectionName)
+	// Existing installations may already contain records written by the former
+	// global counter. Seed the per-user counter lazily from that user's highest
+	// revision; this is deliberately done inside the normal sync transaction and
+	// does not require a database migration or a Room schema change.
+	var maxExisting struct {
+		ServerRevision int64 `bson:"serverRevision"`
+	}
+	if err := r.collection.FindOne(ctx, bson.M{"userId": userID}, options.FindOne().SetSort(bson.D{{Key: "serverRevision", Value: -1}}).SetProjection(bson.M{"serverRevision": 1})).Decode(&maxExisting); err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+		return 0, apperror.ErrInternal("failed to inspect sync revision state", err)
+	}
+	filter := bson.M{"_id": userID}
+	update := mongo.Pipeline{{{Key: "$set", Value: bson.M{"value": bson.M{"$add": bson.A{bson.M{"$max": bson.A{bson.M{"$ifNull": bson.A{"$value", 0}}, maxExisting.ServerRevision}}, int64(n)}}}}}}
+	err := counter.FindOneAndUpdate(ctx, filter, update, options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)).Decode(&doc)
 	if err != nil {
 		return 0, apperror.ErrInternal("failed to allocate sync revisions", err)
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
+	"github.com/mosinaRZ/finance-sync-backend/internal/domain/repository"
 	"golang.org/x/time/rate"
 
 	"github.com/mosinaRZ/finance-sync-backend/internal/interface/http/handler"
@@ -23,6 +24,7 @@ type RouterDependencies struct {
 	AdminHandler       *handler.AdminHandler
 	DeviceHandler      *handler.DeviceHandler
 	JWTSecret          string
+	UserRepository     repository.UserRepository
 	Env                string
 	TrustedProxyCIDRs  []*net.IPNet
 	CORSAllowedOrigins []string
@@ -57,13 +59,14 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 			r.Post("/auth/register", deps.AuthHandler.Register)
 			r.Post("/auth/login", deps.AuthHandler.Login)
 			r.Post("/auth/refresh", deps.AuthHandler.Refresh)
+			r.Post("/auth/recovery/prepare", deps.AuthHandler.PrepareRecovery)
 			r.Post("/auth/password/reset", deps.AuthHandler.ResetPassword)
 			r.Post("/auth/logout", deps.AuthHandler.Logout)
 		}
 	})
 
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Auth(deps.JWTSecret))
+		r.Use(middleware.Auth(deps.JWTSecret, deps.UserRepository))
 		r.Use(protectedRateLimiter.LimitByUser)
 
 		if deps.SyncHandler != nil {

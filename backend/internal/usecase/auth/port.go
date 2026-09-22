@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
 )
 
@@ -13,9 +14,10 @@ type RegisterInput struct {
 	PasswordKeyEnvelope, PasswordKeyNonce, RecoveryKeyHash, RecoveryKeyEnvelope, RecoveryKeyNonce []byte
 }
 type RegisterOutput struct {
-	AccessToken, RefreshToken, KdfSalt, UserID string
-	Role                                       entity.Role
-	RecoveryRequired                           bool
+	AccessToken, RefreshToken, KdfSalt, UserID                                   string
+	Role                                                                         entity.Role
+	RecoveryRequired                                                             bool
+	PasswordKeyEnvelope, PasswordKeyNonce, RecoveryKeyEnvelope, RecoveryKeyNonce []byte
 }
 type LoginInput struct{ Identifier, Password, DeviceID string }
 type LoginOutput struct {
@@ -40,10 +42,18 @@ type VerifyOTPInput struct {
 	ChallengeID, Code string
 	Purpose           entity.OTPPurpose
 }
+type PrepareRecoveryInput struct {
+	ChallengeID, OTPCode, RecoveryKey string
+}
+type PrepareRecoveryOutput struct {
+	RecoverySessionToken, KdfSalt, UserID string
+	RecoveryKeyEnvelope, RecoveryKeyNonce []byte
+}
 type ResetPasswordInput struct {
-	ChallengeID, OTPCode, NewPassword, RecoveryKey string
-	DeviceID                                       string
-	PasswordKeyEnvelope, PasswordKeyNonce          []byte
+	RecoverySessionToken, NewPassword     string
+	DeviceID                              string
+	KdfSalt                               string
+	PasswordKeyEnvelope, PasswordKeyNonce []byte
 }
 type ResetPasswordOutput struct {
 	AccessToken, RefreshToken, KdfSalt, UserID                                   string
@@ -62,5 +72,6 @@ type Service interface {
 type ExtendedService interface {
 	Service
 	Logout(context.Context, string) error
+	PrepareRecovery(context.Context, PrepareRecoveryInput) (PrepareRecoveryOutput, error)
 	ResetPassword(context.Context, ResetPasswordInput) (ResetPasswordOutput, error)
 }

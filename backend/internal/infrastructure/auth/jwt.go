@@ -20,24 +20,27 @@ const (
 )
 
 type AccessTokenClaims struct {
-	UserID string
-	Role   entity.Role
+	UserID         string
+	Role           entity.Role
+	SessionVersion uint64
 }
 
 type accessClaims struct {
-	TokenType string      `json:"token_type"`
-	Role      entity.Role `json:"role"`
+	TokenType      string      `json:"token_type"`
+	Role           entity.Role `json:"role"`
+	SessionVersion uint64      `json:"session_version"`
 	jwt.RegisteredClaims
 }
 
 func GenerateAccessToken(userID string, ttl time.Duration, secret string) (string, error) {
-	return GenerateAccessTokenWithRole(userID, entity.RoleUser, ttl, secret)
+	return GenerateAccessTokenWithRoleAndSession(userID, entity.RoleUser, 0, ttl, secret)
 }
 
 func GenerateAccessTokenWithRole(userID string, role entity.Role, ttl time.Duration, secret string) (string, error) {
-	if role == "" {
-		role = entity.RoleUser
-	}
+	return GenerateAccessTokenWithRoleAndSession(userID, role, 0, ttl, secret)
+}
+
+func GenerateAccessTokenWithRoleAndSession(userID string, role entity.Role, sessionVersion uint64, ttl time.Duration, secret string) (string, error) {
 	if strings.TrimSpace(userID) == "" || !role.Valid() || ttl <= 0 || strings.TrimSpace(secret) == "" {
 		return "", errors.New("invalid access token parameters")
 	}
@@ -107,5 +110,5 @@ func ParseAndValidateAccessTokenClaims(tokenString, secret string) (AccessTokenC
 	if !role.Valid() {
 		return AccessTokenClaims{}, errors.New("invalid access token role")
 	}
-	return AccessTokenClaims{UserID: claims.Subject, Role: role}, nil
+	return AccessTokenClaims{UserID: claims.Subject, Role: role, SessionVersion: claims.SessionVersion}, nil
 }

@@ -8,35 +8,35 @@ import (
 type EntityType string
 
 const (
-	EntityTypeTransaction        EntityType = "TRANSACTION"
-	EntityTypeCategory           EntityType = "CATEGORY"
-	EntityTypeBudgetLimit        EntityType = "BUDGET_LIMIT"
-	EntityTypeDebtCredit         EntityType = "DEBT_CREDIT"
-	EntityTypeSavingGoal         EntityType = "SAVING_GOAL"
-	EntityTypeNotification       EntityType = "NOTIFICATION"
-	EntityTypePendingTransaction EntityType = "PENDING_TRANSACTION"
+	EntityTypeTransaction         EntityType = "TRANSACTION"
+	EntityTypeCategory            EntityType = "CATEGORY"
+	EntityTypeBudgetLimit         EntityType = "BUDGET_LIMIT"
+	EntityTypeDebtCredit          EntityType = "DEBT_CREDIT"
+	EntityTypeSavingGoal          EntityType = "SAVING_GOAL"
+	EntityTypeSavingGoalOperation EntityType = "SAVING_GOAL_OPERATION"
+	EntityTypeDebtPayment         EntityType = "DEBT_PAYMENT"
 )
 
 var validEntityTypes = map[EntityType]struct{}{
 	EntityTypeTransaction: {}, EntityTypeCategory: {}, EntityTypeBudgetLimit: {},
-	EntityTypeDebtCredit: {}, EntityTypeSavingGoal: {}, EntityTypeNotification: {},
-	EntityTypePendingTransaction: {},
+	EntityTypeDebtCredit: {}, EntityTypeSavingGoal: {}, EntityTypeSavingGoalOperation: {}, EntityTypeDebtPayment: {},
 }
 
 func (e EntityType) IsValid() bool { _, ok := validEntityTypes[e]; return ok }
 
 type SyncRecord struct {
-	ID             string
-	UserID         string
-	EntityType     EntityType
-	EntityID       string
-	Ciphertext     []byte
-	Nonce          []byte
-	Version        int
-	UpdatedAt      time.Time
-	IsDeleted      bool
-	DeviceID       string
-	ServerRevision uint64
+	ID                   string
+	UserID               string
+	EntityType           EntityType
+	EntityID             string
+	Ciphertext           []byte
+	Nonce                []byte
+	Version              int
+	UpdatedAt            time.Time
+	IsDeleted            bool
+	DeviceID             string
+	ServerRevision       uint64
+	EncryptionKeyVersion int
 }
 
 func (s *SyncRecord) Validate() error {
@@ -54,6 +54,9 @@ func (s *SyncRecord) Validate() error {
 	}
 	if s.Version < 1 {
 		return fmt.Errorf("sync record: version must be at least 1")
+	}
+	if s.EncryptionKeyVersion < 1 {
+		return fmt.Errorf("sync record: encryption key version must be at least 1")
 	}
 	if !s.IsDeleted {
 		if len(s.Ciphertext) == 0 {

@@ -1,0 +1,43 @@
+CIDNA — PROPRIETARY SOFTWARE LICENSE
+Copyright (c) 2026 Cidna Project. All rights reserved.
+
+1. Ownership
+The software, source code, documentation, assets, designs, and other materials
+in this repository (the "Software") are proprietary to the copyright holder,
+unless a particular file states otherwise.
+
+2. Permission
+No permission is granted to copy, modify, merge, publish, distribute,
+sublicense, sell, rent, lease, publicly display, publicly perform, or create
+derivative works from the Software, in whole or in part, except with prior
+written permission from the copyright holder.
+
+3. Personal Evaluation
+A recipient may inspect and run the Software solely for private evaluation and
+development purposes, provided that the Software is not redistributed or used
+as part of a commercial product or service without written permission.
+
+4. Third-Party Components
+Third-party dependencies remain subject to their respective licenses. Nothing
+in this license changes rights granted by those licenses.
+
+5. Trademarks
+"Cidna", "Budget Management", logos, product names, and related branding may
+not be used without prior written permission.
+
+6. No Warranty
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE, AND NONINFRINGEMENT.
+
+7. Limitation of Liability
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE COPYRIGHT HOLDER SHALL
+NOT BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM OR IN
+CONNECTION WITH THE SOFTWARE OR ITS USE.
+
+8. Changes
+The copyright holder may replace this license for future versions or grant
+additional permissions in writing.
+
+If the project is intentionally published as open source, replace this file
+with an OSI-approved license and update README.md accordingly.

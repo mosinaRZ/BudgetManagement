@@ -65,9 +65,6 @@ func run() error {
 	if err := mongodb.EnsureIndexes(startupCtx, db); err != nil {
 		return fmt.Errorf("failed to ensure database indexes: %w", err)
 	}
-	if err := mongodb.BackfillSyncRevisions(startupCtx, db); err != nil {
-		return fmt.Errorf("failed to backfill sync revisions: %w", err)
-	}
 
 	validate := validator.New()
 	syncRepo := mongodb.NewSyncRepository(mongoClient, db)
@@ -80,8 +77,10 @@ func run() error {
 
 	userRepo := mongodb.NewUserRepository(db)
 	refreshRepo := mongodb.NewRefreshTokenRepository(db)
+	recoverySessionRepo := mongodb.NewRecoverySessionRepository(db)
 	authUC := authUsecase.NewService(userRepo, refreshRepo, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL, otpUC)
 	authUC.SetDeviceRepository(deviceRepo)
+	authUC.SetRecoverySessionRepository(recoverySessionRepo)
 	auditRepo := mongodb.NewAuditLogRepository(db)
 	roleUC := adminUsecase.NewRoleService(userRepo, auditRepo)
 	deviceUC := deviceUsecase.NewService(deviceRepo, refreshRepo)
@@ -103,7 +102,7 @@ func run() error {
 	corsOrigins := splitCSV(cfg.CORSAllowedOrigins)
 	router := httpiface.NewRouter(httpiface.RouterDependencies{
 		AuthHandler: authHandler, SyncHandler: syncHandler, AdminHandler: handler.NewAdminHandler(roleUC, validate),
-		DeviceHandler: handler.NewDeviceHandler(deviceUC), JWTSecret: cfg.JWTSecret, Env: cfg.Env,
+		DeviceHandler: handler.NewDeviceHandler(deviceUC), JWTSecret: cfg.JWTSecret, UserRepository: userRepo, Env: cfg.Env,
 		TrustedProxyCIDRs: trustedProxies, CORSAllowedOrigins: corsOrigins, RateLimitStore: rateStore,
 	})
 
@@ -118,7 +117,11 @@ func run() error {
 
 	serverErrors := make(chan error, 1)
 	go func() {
-		log.Info("HTTP server is listening", "address", srv.Addr)
+		log.Info("HTTP server is listening", "address", srv.Addr, "tls", cfg.Env == "prod")
+		if cfg.Env == "prod" {
+			serverErrors <- srv.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile)
+			return
+		}
 		serverErrors <- srv.ListenAndServe()
 	}()
 

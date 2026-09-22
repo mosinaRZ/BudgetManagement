@@ -1,10 +1,11 @@
 package auth
 
 import (
-	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -91,5 +92,19 @@ func TestAccessTokenCarriesRole(t *testing.T) {
 	}
 	if claims.UserID != "user-1" || claims.Role != entity.RoleAdmin {
 		t.Fatalf("claims = %+v, want user-1/admin", claims)
+	}
+}
+
+func TestAccessTokenCarriesSessionVersion(t *testing.T) {
+	tok, err := GenerateAccessTokenWithRoleAndSession("user-1", entity.RoleUser, 7, time.Minute, jwtTestSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := ParseAndValidateAccessTokenClaims(tok, jwtTestSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claims.SessionVersion != 7 {
+		t.Fatalf("session version=%d, want 7", claims.SessionVersion)
 	}
 }
