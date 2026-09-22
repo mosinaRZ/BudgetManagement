@@ -7,12 +7,13 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"strings"
+	"time"
+
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/apperror"
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/repository"
 	infraauth "github.com/mosinaRZ/finance-sync-backend/internal/infrastructure/auth"
-	"strings"
-	"time"
 )
 
 const (
@@ -269,6 +270,9 @@ func (s *ServiceImpl) ResetPassword(ctx context.Context, in ResetPasswordInput) 
 	u.PasswordKeyNonce = in.PasswordKeyNonce
 	u.FailedLoginAttempts = 0
 	u.LockedUntil = nil
+	if err := s.users.AddDevice(ctx, u.ID, in.DeviceID); err != nil {
+		return ResetPasswordOutput{}, err
+	}
 	if err := s.users.Update(ctx, u); err != nil {
 		return ResetPasswordOutput{}, err
 	}

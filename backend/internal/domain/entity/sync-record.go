@@ -8,19 +8,19 @@ import (
 type EntityType string
 
 const (
-	EntityTypeTransaction        EntityType = "TRANSACTION"
-	EntityTypeCategory           EntityType = "CATEGORY"
-	EntityTypeBudgetLimit        EntityType = "BUDGET_LIMIT"
-	EntityTypeDebtCredit         EntityType = "DEBT_CREDIT"
-	EntityTypeSavingGoal         EntityType = "SAVING_GOAL"
-	EntityTypeNotification       EntityType = "NOTIFICATION"
-	EntityTypePendingTransaction EntityType = "PENDING_TRANSACTION"
+	EntityTypeTransaction         EntityType = "TRANSACTION"
+	EntityTypeCategory            EntityType = "CATEGORY"
+	EntityTypeBudgetLimit         EntityType = "BUDGET_LIMIT"
+	EntityTypeDebtCredit          EntityType = "DEBT_CREDIT"
+	EntityTypeSavingGoal          EntityType = "SAVING_GOAL"
+	EntityTypeSavingGoalOperation EntityType = "SAVING_GOAL_OPERATION"
+	EntityTypeDebtPayment         EntityType = "DEBT_PAYMENT"
 )
 
 var validEntityTypes = map[EntityType]struct{}{
 	EntityTypeTransaction: {}, EntityTypeCategory: {}, EntityTypeBudgetLimit: {},
-	EntityTypeDebtCredit: {}, EntityTypeSavingGoal: {}, EntityTypeNotification: {},
-	EntityTypePendingTransaction: {},
+	EntityTypeDebtCredit: {}, EntityTypeSavingGoal: {}, EntityTypeSavingGoalOperation: {},
+	EntityTypeDebtPayment: {},
 }
 
 func (e EntityType) IsValid() bool { _, ok := validEntityTypes[e]; return ok }

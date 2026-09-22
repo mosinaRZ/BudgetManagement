@@ -105,5 +105,5 @@ func usecaseToDTO(result syncUsecase.SyncOutput) dto.SyncResponse {
 }
 
 func changeToDTO(c syncUsecase.SyncChange) dto.SyncChangeDTO {
-	return dto.SyncChangeDTO{EntityType: c.EntityType, EntityID: c.EntityID, Ciphertext: base64.StdEncoding.EncodeToString(c.Ciphertext), Nonce: base64.StdEncoding.EncodeToString(c.Nonce), Version: c.Version, IsDeleted: c.IsDeleted, UpdatedAt: c.UpdatedAt}
+	return dto.SyncChangeDTO{EntityType: c.EntityType, EntityID: c.EntityID, Ciphertext: base64.StdEncoding.EncodeToString(c.Ciphertext), Nonce: base64.StdEncoding.EncodeToString(c.Nonce), Version: c.Version, IsDeleted: c.IsDeleted, UpdatedAt: c.UpdatedAt, ServerRevision: c.ServerRevision}
 }
