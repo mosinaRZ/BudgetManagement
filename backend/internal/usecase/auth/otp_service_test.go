@@ -2,10 +2,11 @@ package auth
 
 import (
 	"context"
-	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
+	"github.com/stretchr/testify/require"
 )
 
 type otpRepoMock struct {
@@ -17,14 +18,30 @@ func (r *otpRepoMock) Create(_ context.Context, o *entity.OTPChallenge) error { 
 func (r *otpRepoMock) FindActive(_ context.Context, _ string) (*entity.OTPChallenge, error) {
 	return r.c, nil
 }
-func (r *otpRepoMock) Consume(_ context.Context, _ string) error {
-	now := time.Now()
-	r.c.ConsumedAt = &now
+func (r *otpRepoMock) InvalidateActive(_ context.Context, _ string, _ string, _ entity.OTPPurpose) error {
+	if r.c != nil {
+		r.c.ConsumedAt = nil
+	}
 	return nil
 }
-func (r *otpRepoMock) IncrementAttempts(_ context.Context, _ string) error {
-	r.c.Attempts++
+func (r *otpRepoMock) InvalidateByID(_ context.Context, _ string) error {
+	if r.c != nil {
+		now := time.Now()
+		r.c.ConsumedAt = &now
+	}
 	return nil
+}
+func (r *otpRepoMock) VerifyAndConsume(_ context.Context, _ string, codeHash string, _ time.Time, maxAttempts int) (bool, error) {
+	if r.c == nil || r.c.ConsumedAt != nil || r.c.Attempts >= maxAttempts {
+		return false, nil
+	}
+	if r.c.CodeHash != codeHash {
+		r.c.Attempts++
+		return false, nil
+	}
+	now := time.Now()
+	r.c.ConsumedAt = &now
+	return true, nil
 }
 func (r *otpRepoMock) RecentCount(context.Context, string, string, entity.OTPPurpose, int) (int, error) {
 	return r.count, nil
@@ -79,4 +96,16 @@ func TestOTPCodeCannotBeReused(t *testing.T) {
 		Purpose:     entity.OTPPurposePasswordReset,
 	})
 	require.Error(t, err)
+}
+
+func TestOTPWrongCodeConsumesAttempt(t *testing.T) {
+	repo := &otpRepoMock{}
+	d := &deliveryMock{}
+	s := NewOTPService(repo, d, "test-secret", 5*time.Minute)
+	out, err := s.Request(context.Background(), RequestOTPInput{Destination: "a@example.com", Channel: "email", Purpose: entity.OTPPurposePasswordReset})
+	require.NoError(t, err)
+
+	_, err = s.Verify(context.Background(), VerifyOTPInput{ChallengeID: out.ChallengeID, Code: "000000", Purpose: entity.OTPPurposePasswordReset})
+	require.Error(t, err)
+	require.Equal(t, 1, repo.c.Attempts)
 }

@@ -46,6 +46,7 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 	}
 	publicRateLimiter := middleware.NewRateLimiterWithStoreAndProxies(store, rate.Every(3*time.Second), 20, deps.TrustedProxyCIDRs)
 	protectedRateLimiter := middleware.NewRateLimiterWithStoreAndProxies(store, rate.Every(6*time.Second), 10, deps.TrustedProxyCIDRs)
+	otpRateLimiter := middleware.NewRateLimiterWithStoreAndProxies(store, rate.Every(30*time.Second), 3, deps.TrustedProxyCIDRs)
 
 	r.Group(func(r chi.Router) {
 		r.Use(publicRateLimiter.LimitByIP)
@@ -55,7 +56,7 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 		})
 
 		if deps.AuthHandler != nil {
-			r.Post("/auth/otp/request", deps.AuthHandler.RequestOTP)
+			r.With(otpRateLimiter.LimitByIP).Post("/auth/otp/request", deps.AuthHandler.RequestOTP)
 			r.Post("/auth/register", deps.AuthHandler.Register)
 			r.Post("/auth/login", deps.AuthHandler.Login)
 			r.Post("/auth/refresh", deps.AuthHandler.Refresh)

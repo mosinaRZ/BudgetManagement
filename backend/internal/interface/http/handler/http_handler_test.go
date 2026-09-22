@@ -53,6 +53,17 @@ func TestAuthHandlerMapsUsecaseError(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
+	var payload struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("invalid error response: %v", err)
+	}
+	if payload.Error.Code != string(apperror.CodeUnauthorized) {
+		t.Fatalf("error code = %q, want %q", payload.Error.Code, apperror.CodeUnauthorized)
+	}
 }
 
 func TestAuthHandlerDoesNotExposeUnexpectedError(t *testing.T) {

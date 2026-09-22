@@ -31,7 +31,7 @@ func Load() (*Config, error) {
 	if env != "dev" && env != "test" && env != "prod" {
 		return nil, fmt.Errorf("ENV must be one of: dev, test, prod")
 	}
-	c := &Config{Env: env, HTTPPort: os.Getenv("HTTP_PORT"), MongoURI: secretValue("MONGO_URI"), MongoDBName: os.Getenv("MONGO_DB_NAME"), JWTSecret: secretValue("JWT_SECRET"), SMSWebhookURL: os.Getenv("SMS_WEBHOOK_URL"), SMSAuthToken: secretValue("SMS_AUTH_TOKEN"), SMTPHost: os.Getenv("SMTP_HOST"), SMTPPort: get("SMTP_PORT", "587"), SMTPUser: os.Getenv("SMTP_USER"), SMTPPassword: secretValue("SMTP_PASSWORD"), EmailFrom: os.Getenv("EMAIL_FROM"), RedisURL: secretValue("REDIS_URL"), TrustedProxyCIDRs: os.Getenv("TRUSTED_PROXY_CIDRS"), CORSAllowedOrigins: os.Getenv("CORS_ALLOWED_ORIGINS"), DevLogOTP: strings.EqualFold(get("DEV_LOG_OTP", "false"), "true")}
+	c := &Config{Env: env, HTTPPort: os.Getenv("HTTP_PORT"), MongoURI: secretValue("MONGO_URI"), MongoDBName: os.Getenv("MONGO_DB_NAME"), JWTSecret: secretValue("JWT_SECRET"), SMSWebhookURL: os.Getenv("SMS_WEBHOOK_URL"), SMSAuthToken: secretValue("SMS_AUTH_TOKEN"), SMTPHost: os.Getenv("SMTP_HOST"), SMTPPort: get("SMTP_PORT", "587"), SMTPUser: os.Getenv("SMTP_USER"), SMTPPassword: secretValue("SMTP_PASSWORD"), EmailFrom: os.Getenv("EMAIL_FROM"), RedisURL: secretValue("REDIS_URL"), TrustedProxyCIDRs: os.Getenv("TRUSTED_PROXY_CIDRS"), CORSAllowedOrigins: os.Getenv("CORS_ALLOWED_ORIGINS"), TLSCertFile: os.Getenv("TLS_CERT_FILE"), TLSKeyFile: os.Getenv("TLS_KEY_FILE"), DevLogOTP: strings.EqualFold(get("DEV_LOG_OTP", "false"), "true")}
 	for _, k := range []string{"HTTP_PORT", "MONGO_DB_NAME", "JWT_ACCESS_TTL_MINUTES", "JWT_REFRESH_TTL_DAYS"} {
 		if strings.TrimSpace(os.Getenv(k)) == "" {
 			return nil, fmt.Errorf("configuration incomplete: missing %s", k)
@@ -90,8 +90,18 @@ func Load() (*Config, error) {
 		if _, err := os.Stat(c.TLSKeyFile); err != nil {
 			return nil, fmt.Errorf("TLS key file is not readable: %w", err)
 		}
-		if !strings.Contains(strings.ToLower(c.MongoURI), "tls=true") {
-			return nil, fmt.Errorf("MONGO_URI must enable tls=true in production")
+		mongoURI := strings.ToLower(strings.TrimSpace(c.MongoURI))
+		if !strings.HasPrefix(mongoURI, "mongodb+srv://") && !strings.Contains(mongoURI, "tls=true") {
+			return nil, fmt.Errorf("MONGO_URI must use TLS in production")
+		}
+		if strings.TrimSpace(c.RedisURL) == "" {
+			return nil, fmt.Errorf("REDIS_URL is required in production for distributed rate limiting")
+		}
+		if strings.TrimSpace(c.SMSWebhookURL) == "" {
+			return nil, fmt.Errorf("SMS_WEBHOOK_URL is required in production")
+		}
+		if strings.TrimSpace(c.SMTPHost) == "" || strings.TrimSpace(c.EmailFrom) == "" {
+			return nil, fmt.Errorf("SMTP_HOST and EMAIL_FROM are required in production because email OTP is enabled")
 		}
 	}
 	return &Config{Env: c.Env, HTTPPort: c.HTTPPort, MongoURI: c.MongoURI, MongoDBName: c.MongoDBName, JWTSecret: c.JWTSecret, RedisURL: c.RedisURL, TrustedProxyCIDRs: c.TrustedProxyCIDRs, CORSAllowedOrigins: c.CORSAllowedOrigins, TLSCertFile: c.TLSCertFile, TLSKeyFile: c.TLSKeyFile, JWTAccessTTL: time.Duration(a) * time.Minute, JWTRefreshTTL: time.Duration(d) * 24 * time.Hour, OTPExpiry: time.Duration(o) * time.Minute, SMSWebhookURL: c.SMSWebhookURL, SMSAuthToken: c.SMSAuthToken, SMTPHost: c.SMTPHost, SMTPPort: c.SMTPPort, SMTPUser: c.SMTPUser, SMTPPassword: c.SMTPPassword, EmailFrom: c.EmailFrom, DevLogOTP: c.DevLogOTP}, nil
