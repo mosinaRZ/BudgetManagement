@@ -14,7 +14,16 @@ sealed interface AppRoute {
     data object Login : AppRoute
 
     @Serializable
+    data object Register : AppRoute
+
+    @Serializable
+    data object PasswordReset : AppRoute
+
+    @Serializable
     data object MainStructure : AppRoute
+
+    @Serializable
+    data object Devices : AppRoute
 
     @Serializable
     data class AddScreen(

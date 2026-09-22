@@ -77,6 +77,7 @@ private val ALL_SETTINGS_ITEMS = listOf(
     SettingsSearchItem("تنظیمات اعلان‌ها", "Notification Settings", "کنترل نحوه دریافت اعلان‌های برنامه", "Control how you receive app notifications"),
     SettingsSearchItem("مدیریت دسته‌بندی‌ها", "Manage Categories", "ویرایش، حذف یا ایجاد دسته‌های خرید و فروش", "Edit, delete, or create transaction categories"),
     SettingsSearchItem("امنیت برنامه", "App Security", "تنظیم رمز ورود و ویژگی‌های بیومتریک", "Configure passcode and biometric login"),
+    SettingsSearchItem("دستگاه‌های حساب", "Account Devices", "مدیریت دستگاه‌های متصل به حساب", "Manage devices connected to your account"),
     SettingsSearchItem("دریافت اطلاعات و گزارش‌ها", "Export Data & Reports", "خروجی گرفتن از تراکنش‌ها در قالب PDF یا Excel", "Export transactions to PDF or Excel formats"),
     SettingsSearchItem("درباره ما و پشتیبانی", "About Us & Support", "راه‌های ارتباطی، واتس‌اپ و ایمیل", "Contact channels, Gmail, WhatsApp & Support")
 )
@@ -88,7 +89,8 @@ fun SettingsScreen(
     onLoginClick: () -> Unit = {},
     onAddScreenClick: () -> Unit = {},
     onThemeToggle: () -> Unit = {},
-    onNotificationCalibrationClick: () -> Unit = {}
+    onNotificationCalibrationClick: () -> Unit = {},
+    onDevicesClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val isPersian = isPersianLocale()
@@ -399,6 +401,17 @@ fun SettingsScreen(
                         subtitle = if (isPersian) "ویرایش، حذف یا ایجاد دسته‌های خرید و فروش" else "Edit, delete, or create transaction categories",
                         icon = Icons.Default.Category,
                         onClick = { onAddScreenClick() }
+                    )
+                }
+            }
+
+            if (matchesSearch("دستگاه‌های حساب", "Account Devices", "مدیریت دستگاه‌های متصل به حساب", "Manage devices connected to your account")) {
+                item {
+                    SettingsSimpleItem(
+                        title = if (isPersian) "دستگاه‌های حساب" else "Account Devices",
+                        subtitle = if (isPersian) "مدیریت دستگاه‌های متصل به حساب" else "Manage devices connected to your account",
+                        icon = Icons.Default.Devices,
+                        onClick = onDevicesClick
                     )
                 }
             }

@@ -5,6 +5,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.UUID
 
 class ApiHttpClient(
     private val baseUrl: String = BackendConfig.BASE_URL
@@ -23,6 +24,7 @@ class ApiHttpClient(
             doInput = true
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("X-Request-ID", UUID.randomUUID().toString())
             if (!bearerToken.isNullOrBlank()) {
                 setRequestProperty("Authorization", "Bearer $bearerToken")
             }

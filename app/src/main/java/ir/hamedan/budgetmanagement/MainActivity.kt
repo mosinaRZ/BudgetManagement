@@ -202,16 +202,17 @@ class MainActivity : FragmentActivity() {
         val sessionAuthenticated by app.container.authSessionStore.authenticated.collectAsState()
         val currentRouteEntry by navController.currentBackStackEntryAsState()
 
-//        LaunchedEffect(sessionAuthenticated, currentRouteEntry) {
-//            if (!sessionAuthenticated && currentRouteEntry?.destination?.route != null) {
-//                val route = currentRouteEntry?.destination?.route.orEmpty()
-//                if (!route.contains("Login") && !route.contains("Splash")) {
-//                    navController.navigate(AppRoute.Login) {
-//                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
-//                    }
-//                }
-//            }
-//        }
+        LaunchedEffect(sessionAuthenticated, currentRouteEntry?.destination?.route) {
+            val route = currentRouteEntry?.destination?.route.orEmpty()
+            if (!sessionAuthenticated && route.isNotBlank() &&
+                !route.contains("Login") && !route.contains("Splash")
+            ) {
+                navController.navigate(AppRoute.Login) {
+                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+        }
 
         NavHost(
             navController = navController,
@@ -222,8 +223,14 @@ class MainActivity : FragmentActivity() {
             composable<AppRoute.Splash> {
                 SplashScreen(
                     onAnimationFinished = {
-                        navController.navigate(AppRoute.Login) {
+                        val destination = if (sessionAuthenticated) {
+                            AppRoute.MainStructure
+                        } else {
+                            AppRoute.Login
+                        }
+                        navController.navigate(destination) {
                             popUpTo(AppRoute.Splash) { inclusive = true }
+                            launchSingleTop = true
                         }
                     }
                 )

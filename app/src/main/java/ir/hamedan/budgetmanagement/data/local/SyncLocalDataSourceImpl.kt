@@ -4,10 +4,12 @@ import androidx.room.withTransaction
 import ir.hamedan.budgetmanagement.data.local.models.SyncMetadataEntity
 import ir.hamedan.budgetmanagement.data.local.models.SyncStateEntity
 import ir.hamedan.budgetmanagement.data.security.DeviceIdentityStore
+import ir.hamedan.budgetmanagement.data.security.SyncKeyManager
 
 class SyncLocalDataSourceImpl(
     private val database: AppDatabase,
-    private val deviceIdentityStore: DeviceIdentityStore
+    private val deviceIdentityStore: DeviceIdentityStore,
+    private val syncKeyManager: SyncKeyManager
 ) : SyncLocalDataSource {
 
     override suspend fun <T> transaction(block: suspend () -> T): T =
@@ -61,7 +63,8 @@ class SyncLocalDataSourceImpl(
                 updatedAt = updatedAt,
                 isDeleted = isDeleted,
                 deviceId = state.deviceId,
-                serverRevision = existing?.serverRevision ?: 0L
+                serverRevision = existing?.serverRevision ?: 0L,
+                encryptionKeyVersion = existing?.encryptionKeyVersion ?: syncKeyManager.currentKeyVersion()
             )
         )
         stateDao.markSyncRequired()

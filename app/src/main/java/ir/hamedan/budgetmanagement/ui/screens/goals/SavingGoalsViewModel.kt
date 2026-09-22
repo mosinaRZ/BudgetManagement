@@ -4,11 +4,9 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
-import ir.hamedan.budgetmanagement.data.money.MoneyContract
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
-import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepository
-import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
+import ir.hamedan.budgetmanagement.domain.usecase.SavingGoalUseCase
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.NotificationHelper
 import kotlinx.coroutines.Dispatchers
@@ -18,13 +16,11 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.util.UUID
 
 class SavingGoalsViewModel(
     private val repository: SavingGoalRepository,
-    private val transactionRepository: TransactionRepository,
-    private val notificationRepository: NotificationRepository,
-    private val context: Context
+    private val context: Context,
+    private val useCase: SavingGoalUseCase
 ) : ViewModel() {
 
     val savingGoals: StateFlow<List<SavingGoalEntity>?> = repository.getAllGoals()
@@ -39,43 +35,21 @@ class SavingGoalsViewModel(
 
     fun addGoal(title: String, targetAmount: Long, monthlyAmount: Long, icon: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            val newGoal = SavingGoalEntity(
-                id = UUID.randomUUID().toString(),
-                title = title,
-                targetAmount = targetAmount,
-                currentAmount = 0L,
-                monthlyAmount = monthlyAmount,
-                icon = icon
-            )
-
-            repository.insertGoal(newGoal)
-
-            NotificationHelper.send(
-                context = context,
-                notificationType = NotificationType.GOAL_ADD,
-                type = "GOALS",
-                titleFa = "هدف پس‌انداز جدید",
-                titleEn = "New Saving Goal",
-                descFa = "هدف «$title» با موفقیت ایجاد شد.",
-                descEn = "Saving goal '$title' was created successfully."
-            )
+            runCatching { useCase.create(title, targetAmount, monthlyAmount, icon) }
+                .onSuccess {
+                    NotificationHelper.send(context, NotificationType.GOAL_ADD, "GOALS", "هدف پس‌انداز جدید", "New Saving Goal", "هدف «$title» با موفقیت ایجاد شد.", "Saving goal '$title' was created successfully.")
+                }
+                .onFailure { _depositError.emit(it.message.orEmpty()) }
         }
     }
 
     fun updateGoal(goal: SavingGoalEntity) {
         viewModelScope.launch(Dispatchers.IO) {
-            repository.updateGoal(goal)
-
-            // ارسال اعلان ویرایش هدف
-            NotificationHelper.send(
-                context = context,
-                notificationType = NotificationType.GOAL_UPDATE,
-                type = "GOALS",
-                titleFa = "ویرایش هدف پس‌انداز",
-                titleEn = "Saving Goal Updated",
-                descFa = "اطلاعات هدف «${goal.title}» به‌روزرسانی شد.",
-                descEn = "Goal '${goal.title}' details were updated."
-            )
+            runCatching { useCase.update(goal) }
+                .onSuccess {
+                    NotificationHelper.send(context, NotificationType.GOAL_UPDATE, "GOALS", "ویرایش هدف پس‌انداز", "Saving Goal Updated", "اطلاعات هدف «${goal.title}» به‌روزرسانی شد.", "Goal '${goal.title}' details were updated.")
+                }
+                .onFailure { _depositError.emit(it.message.orEmpty()) }
         }
     }
 
@@ -88,7 +62,7 @@ class SavingGoalsViewModel(
                 return@launch
             }
 
-            repository.depositToGoal(goalId, amount)
+            useCase.deposit(goalId, amount)
             // یافتن هدف برای محاسبه درصد پیشرفت و ارسال اعلان
             val currentGoal = savingGoals.value?.find { it.id == goalId }
             val goalTitle = currentGoal?.title ?: ""
@@ -134,7 +108,7 @@ class SavingGoalsViewModel(
     fun withdraw(goalId: String, amount: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             if (amount <= 0) return@launch
-            repository.withdrawFromGoal(goalId, amount)
+            useCase.withdraw(goalId, amount)
             val goalTitle = savingGoals.value?.find { it.id == goalId }?.title ?: ""
 
             NotificationHelper.send(
@@ -151,20 +125,20 @@ class SavingGoalsViewModel(
 
     fun softDelete(goal: SavingGoalEntity) {
         viewModelScope.launch(Dispatchers.IO) {
-            repository.deleteGoal(goal)
+            useCase.delete(goal)
             sendDeleteNotification(goal.title)
         }
     }
 
     fun restore(goal: SavingGoalEntity) {
         viewModelScope.launch(Dispatchers.IO) {
-            repository.insertGoal(goal)
+            useCase.restore(goal)
         }
     }
 
     fun commitDelete(goal: SavingGoalEntity) {
         viewModelScope.launch(Dispatchers.IO) {
-            repository.deleteGoal(goal)
+            useCase.delete(goal)
             sendDeleteNotification(goal.title)
         }
     }
@@ -183,7 +157,7 @@ class SavingGoalsViewModel(
 
     fun updateLastAutoDepositTimestamp(goalId: String, timestamp: Long) {
         viewModelScope.launch(Dispatchers.IO) {
-            repository.updateLastAutoDepositTimestamp(goalId, timestamp)
+            useCase.updateAutoDeposit(goalId, timestamp)
         }
     }
 }

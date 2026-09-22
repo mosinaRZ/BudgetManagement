@@ -5,6 +5,7 @@ import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.SyncLocalDataSource
 import ir.hamedan.budgetmanagement.data.local.SyncLocalDataSourceImpl
 import ir.hamedan.budgetmanagement.data.network.ApiHttpClient
+import ir.hamedan.budgetmanagement.data.network.AuthenticatedApiClient
 import ir.hamedan.budgetmanagement.data.network.AuthApi
 import ir.hamedan.budgetmanagement.data.network.DeviceApi
 import ir.hamedan.budgetmanagement.data.network.SyncApi
@@ -22,8 +23,6 @@ import ir.hamedan.budgetmanagement.data.repository.PendingTransactionRepository
 import ir.hamedan.budgetmanagement.data.repository.PendingTransactionRepositoryImpl
 import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepository
 import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepositoryImpl
-import ir.hamedan.budgetmanagement.data.repository.SyncMetadataRepository
-import ir.hamedan.budgetmanagement.data.repository.SyncMetadataRepositoryImpl
 import ir.hamedan.budgetmanagement.data.repository.SyncStateRepository
 import ir.hamedan.budgetmanagement.data.repository.SyncStateRepositoryImpl
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
@@ -37,19 +36,21 @@ class AppContainer(context: Context) {
     val appContext: Context = context.applicationContext
     val database: AppDatabase = AppDatabase.getInstance(appContext)
 
-    val syncLocalDataSource: SyncLocalDataSource by lazy { SyncLocalDataSourceImpl(database, deviceIdentityStore) }
+    val syncLocalDataSource: SyncLocalDataSource by lazy { SyncLocalDataSourceImpl(database, deviceIdentityStore, syncKeyManager) }
     val syncStateRepository: SyncStateRepository by lazy { SyncStateRepositoryImpl(database.syncStateDao(), deviceIdentityStore) }
-    val syncMetadataRepository: SyncMetadataRepository by lazy { SyncMetadataRepositoryImpl(database.syncMetadataDao()) }
 
     private val apiHttpClient: ApiHttpClient by lazy { ApiHttpClient() }
-    val authApi: AuthApi by lazy { AuthApi(apiHttpClient) }
-    val deviceApi: DeviceApi by lazy { DeviceApi(apiHttpClient) }
-    val syncApi: SyncApi by lazy { SyncApi(apiHttpClient) }
     val authSessionStore: AuthSessionStore by lazy { AuthSessionStore(appContext) }
+    val authApi: AuthApi by lazy { AuthApi(apiHttpClient) }
+    private val authenticatedApiClient: AuthenticatedApiClient by lazy {
+        AuthenticatedApiClient(apiHttpClient, authApi, authSessionStore)
+    }
+    val deviceApi: DeviceApi by lazy { DeviceApi(authenticatedApiClient) }
+    val syncApi: SyncApi by lazy { SyncApi(authenticatedApiClient) }
     val deviceIdentityStore: DeviceIdentityStore by lazy { DeviceIdentityStore(appContext) }
     val syncKeyManager: SyncKeyManager by lazy { SyncKeyManager(appContext) }
     val syncEngine: SyncEngine by lazy {
-        SyncEngine(database, syncApi, authApi, authSessionStore, syncKeyManager)
+        SyncEngine(database, syncApi, authSessionStore, syncKeyManager)
     }
 
     val authRepository: AuthRepository by lazy {

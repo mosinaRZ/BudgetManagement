@@ -5,6 +5,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import android.util.Base64
 import java.security.SecureRandom
+import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.SecretKey
 import javax.crypto.SecretKeyFactory
@@ -39,10 +40,23 @@ class SyncKeyManager(private val context: Context) {
         cipher.init(Cipher.ENCRYPT_MODE, wrappingKey, GCMParameterSpec(128, nonce))
         val envelope = cipher.doFinal(dataKey)
         storeDataKey(dataKey)
+        val recoveryBytes = ByteArray(32).also { SecureRandom().nextBytes(it) }
+        val recoveryKey = Base64.encodeToString(recoveryBytes, Base64.NO_WRAP)
+        val recoveryHash = MessageDigest.getInstance("SHA-256").digest(recoveryBytes)
+        val recoveryWrappingKey = deriveWrappingKey(recoveryKey.toCharArray(), salt)
+        val recoveryNonce = ByteArray(12).also { SecureRandom().nextBytes(it) }
+        val recoveryCipher = Cipher.getInstance("AES/GCM/NoPadding")
+        recoveryCipher.init(Cipher.ENCRYPT_MODE, recoveryWrappingKey, GCMParameterSpec(128, recoveryNonce))
+        val recoveryEnvelope = recoveryCipher.doFinal(dataKey)
+
         return RegistrationMaterial(
             kdfSalt = Base64.encodeToString(salt, Base64.NO_WRAP),
             passwordKeyEnvelope = Base64.encodeToString(envelope, Base64.NO_WRAP),
-            passwordKeyNonce = Base64.encodeToString(nonce, Base64.NO_WRAP)
+            passwordKeyNonce = Base64.encodeToString(nonce, Base64.NO_WRAP),
+            recoveryKey = recoveryKey,
+            recoveryKeyHash = Base64.encodeToString(recoveryHash, Base64.NO_WRAP or Base64.URL_SAFE),
+            recoveryKeyEnvelope = Base64.encodeToString(recoveryEnvelope, Base64.NO_WRAP),
+            recoveryKeyNonce = Base64.encodeToString(recoveryNonce, Base64.NO_WRAP)
         )
     }
 
@@ -67,6 +81,47 @@ class SyncKeyManager(private val context: Context) {
             val generated = ByteArray(32).also { SecureRandom().nextBytes(it) }
             storeDataKey(generated)
         }
+    }
+
+
+    /** Re-wraps the existing data key for a new password during account recovery. */
+    fun createPasswordResetMaterial(
+        newPassword: CharArray,
+        kdfSaltB64: String,
+        recoveryKey: String,
+        recoveryKeyEnvelopeB64: String,
+        recoveryKeyNonceB64: String
+    ): PasswordResetMaterial {
+        val salt = Base64.decode(kdfSaltB64, Base64.DEFAULT)
+        require(salt.size == 16) { "Invalid KDF salt." }
+        val recoveryWrappingKey = deriveWrappingKey(recoveryKey.toCharArray(), salt)
+        val dataKey = decrypt(
+            recoveryWrappingKey,
+            Base64.decode(recoveryKeyEnvelopeB64, Base64.DEFAULT),
+            Base64.decode(recoveryKeyNonceB64, Base64.DEFAULT)
+        )
+        require(dataKey.size == 32) { "Invalid recovered sync data key." }
+
+        // The recovery envelope is also derived with the account KDF salt.
+        // Reusing that salt keeps the recovery envelope decryptable after a
+        // password reset because the backend does not know the raw recovery key.
+        val newSalt = salt
+        val passwordWrappingKey = deriveWrappingKey(newPassword, newSalt)
+        val nonce = ByteArray(12).also { SecureRandom().nextBytes(it) }
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, passwordWrappingKey, GCMParameterSpec(128, nonce))
+        val envelope = cipher.doFinal(dataKey)
+        return PasswordResetMaterial(
+            dataKey = dataKey,
+            kdfSalt = Base64.encodeToString(newSalt, Base64.NO_WRAP),
+            passwordKeyEnvelope = Base64.encodeToString(envelope, Base64.NO_WRAP),
+            passwordKeyNonce = Base64.encodeToString(nonce, Base64.NO_WRAP)
+        )
+    }
+
+    fun storeRecoveredDataKey(dataKey: ByteArray) {
+        require(dataKey.size == 32) { "Invalid sync data key length." }
+        storeDataKey(dataKey.copyOf())
     }
 
     fun encrypt(plaintext: ByteArray): EncryptedPayload {
@@ -119,6 +174,17 @@ class SyncKeyManager(private val context: Context) {
     data class EncryptedPayload(val ciphertext: ByteArray, val nonce: ByteArray)
 
     data class RegistrationMaterial(
+        val kdfSalt: String,
+        val passwordKeyEnvelope: String,
+        val passwordKeyNonce: String,
+        val recoveryKey: String,
+        val recoveryKeyHash: String,
+        val recoveryKeyEnvelope: String,
+        val recoveryKeyNonce: String
+    )
+
+    data class PasswordResetMaterial(
+        val dataKey: ByteArray,
         val kdfSalt: String,
         val passwordKeyEnvelope: String,
         val passwordKeyNonce: String

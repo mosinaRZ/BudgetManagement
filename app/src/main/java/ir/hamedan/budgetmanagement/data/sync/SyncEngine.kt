@@ -5,8 +5,6 @@ import androidx.room.withTransaction
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.dao.*
 import ir.hamedan.budgetmanagement.data.local.models.*
-import ir.hamedan.budgetmanagement.data.network.ApiException
-import ir.hamedan.budgetmanagement.data.network.AuthApi
 import ir.hamedan.budgetmanagement.data.network.SyncApi
 import ir.hamedan.budgetmanagement.data.security.AuthSessionStore
 import ir.hamedan.budgetmanagement.data.security.SyncKeyManager
@@ -30,7 +28,6 @@ import java.util.UUID
 class SyncEngine(
     private val database: AppDatabase,
     private val syncApi: SyncApi,
-    private val authApi: AuthApi,
     private val sessionStore: AuthSessionStore,
     private val syncKeyManager: SyncKeyManager
 ) {
@@ -38,7 +35,6 @@ class SyncEngine(
         val initialAccess = sessionStore.accessToken() ?: return SyncResult.NotAuthenticated
         ensureAggregateBaselines()
 
-        var access = initialAccess
         var cursor = database.syncStateDao().get()?.lastServerRevision ?: 0L
         var totalApplied = 0
         var totalConflicts = 0
@@ -62,7 +58,8 @@ class SyncEngine(
                     nonce = encrypted.nonce,
                     version = metadata.version,
                     isDeleted = metadata.isDeleted,
-                    updatedAt = metadata.updatedAt
+                    updatedAt = metadata.updatedAt,
+                    encryptionKeyVersion = metadata.encryptionKeyVersion
                 )
             }
 
@@ -70,35 +67,14 @@ class SyncEngine(
             val deviceId = sessionStore.deviceId() ?: database.syncStateDao().get()?.deviceId
             ?: error("Device identity is not initialized.")
             val response = try {
-                syncApi.sync(access, requestId, deviceId, cursor, changes)
-            } catch (e: ApiException) {
-                if (e.statusCode != 401) throw e
-                val refresh = sessionStore.refreshToken()
-                if (refresh.isNullOrBlank()) {
+                syncApi.sync(requestId, deviceId, cursor, changes)
+            } catch (e: ir.hamedan.budgetmanagement.data.network.ApiException) {
+                if (e.statusCode == 401) {
                     sessionStore.clearSession()
                     syncKeyManager.clear()
                     return SyncResult.ReauthenticationRequired
                 }
-                val refreshed = try {
-                    authApi.refresh(refresh)
-                } catch (refreshError: ApiException) {
-                    sessionStore.clearSession()
-                    syncKeyManager.clear()
-                    return SyncResult.ReauthenticationRequired
-                }
-                sessionStore.save(
-                    accessToken = refreshed.accessToken,
-                    refreshToken = refreshed.refreshToken,
-                    userId = sessionStore.userId().orEmpty(),
-                    deviceId = sessionStore.deviceId() ?: deviceId,
-                    kdfSalt = sessionStore.kdfSalt().orEmpty(),
-                    passwordKeyEnvelope = sessionStore.passwordKeyEnvelope().orEmpty(),
-                    passwordKeyNonce = sessionStore.passwordKeyNonce().orEmpty(),
-                    recoveryKeyEnvelope = sessionStore.recoveryKeyEnvelope().orEmpty(),
-                    recoveryKeyNonce = sessionStore.recoveryKeyNonce().orEmpty()
-                )
-                access = refreshed.accessToken
-                syncApi.sync(access, requestId, deviceId, cursor, changes)
+                throw e
             }
 
             database.withTransaction {
@@ -206,7 +182,8 @@ class SyncEngine(
                 updatedAt = updatedAt,
                 isDeleted = isDeleted,
                 deviceId = state.deviceId,
-                serverRevision = existing?.serverRevision ?: 0L
+                serverRevision = existing?.serverRevision ?: 0L,
+                encryptionKeyVersion = existing?.encryptionKeyVersion ?: syncKeyManager.currentKeyVersion()
             )
         )
         stateDao.markSyncRequired()
@@ -257,6 +234,9 @@ class SyncEngine(
     private suspend fun applyServerChange(change: SyncApi.SyncChange, forceServerState: Boolean) {
         val metadata = database.syncMetadataDao().get(change.entityType, change.entityId)
         if (!forceServerState && metadata != null && metadata.version > change.version) return
+        require(change.encryptionKeyVersion == syncKeyManager.currentKeyVersion()) {
+            "Unsupported sync encryption key version: ${change.encryptionKeyVersion}"
+        }
 
         if (change.isDeleted) {
             deleteLocalEntity(change.entityType, change.entityId)
@@ -269,7 +249,8 @@ class SyncEngine(
                     updatedAt = change.updatedAt,
                     isDeleted = true,
                     deviceId = metadata?.deviceId.orEmpty(),
-                    serverRevision = change.serverRevision
+                    serverRevision = change.serverRevision,
+                    encryptionKeyVersion = change.encryptionKeyVersion
                 )
             )
             return
@@ -294,7 +275,8 @@ class SyncEngine(
                 updatedAt = change.updatedAt,
                 isDeleted = false,
                 deviceId = metadata?.deviceId.orEmpty(),
-                serverRevision = change.serverRevision
+                serverRevision = change.serverRevision,
+                encryptionKeyVersion = change.encryptionKeyVersion
             )
         )
     }

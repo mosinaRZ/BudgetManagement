@@ -72,6 +72,36 @@ fun LoginScreen(
     val passwordFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
 
+    fun submitLogin() {
+        if (isLoggingIn) return
+
+        val validationError = LoginInputValidator.validate(
+            identifier = username,
+            password = password,
+            isPersian = isPersian
+        )
+        if (validationError != null) {
+            errorMessage = validationError
+            return
+        }
+
+        isLoggingIn = true
+        errorMessage = null
+
+        scope.launch {
+            val result = authRepository.login(username.trim(), password)
+            result.onSuccess {
+                password = ""
+                onLoginSuccess()
+            }.onFailure { error ->
+                isLoggingIn = false
+                errorMessage = error.message
+                    ?.takeIf { it.isNotBlank() }
+                    ?: if (isPersian) "ورود ناموفق بود" else "Login failed"
+            }
+        }
+    }
+
     val showBiometricPrompt = {
         val activity = context as? FragmentActivity
         if (activity != null) {
@@ -114,11 +144,6 @@ fun LoginScreen(
             biometricPrompt.authenticate(promptInfo)
         }
     }
-    // حالت موقت توسعه: ورود خودکار بیومتریک غیرفعال است.
-    LaunchedEffect(Unit) {
-        // intentionally disabled
-    }
-
     var lastBackPressTime by remember { mutableLongStateOf(0L) }
     BackHandler {
         val currentTime = System.currentTimeMillis()
@@ -205,22 +230,8 @@ fun LoginScreen(
                     ),
                     keyboardActions = KeyboardActions(
                         onDone = {
-                            focusManager.clearFocus() // بستن کیبورد
-                            if (!isLoggingIn && username.isNotBlank() && password.isNotBlank()) {
-                                // 🚀 اجرای منطق دکمه ورود با زدن Enter/Done کیبورد
-                                isLoggingIn = true
-                                errorMessage = null
-
-                                scope.launch {
-                                    val result = authRepository.login(username.trim(), password)
-                                    isLoggingIn = false
-                                    result.onSuccess {
-                                        onLoginSuccess()
-                                    }.onFailure { error ->
-                                        errorMessage = error.message ?: if (isPersian) "ورود ناموفق بود" else "Login failed"
-                                    }
-                                }
-                            }
+                            focusManager.clearFocus()
+                            submitLogin()
                         }
                     ),
                     visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
@@ -236,16 +247,10 @@ fun LoginScreen(
                         .fillMaxWidth()
                         .focusRequester(passwordFocusRequester) // 👈 دریافت فوکوس
                 )
-                // 🚀 مشکل دوم: پیاده‌سازی منطق دکمه ورود و بررسی صحت اطلاعات هاردکد شده
                 LoadingButton(
                     text = if (isPersian) "ورود به حساب" else "Sign In",
                     isLoading = isLoggingIn,
-                    onClick = {
-                        // حالت موقت توسعه: بدون دریافت نام کاربری/رمز عبور مستقیماً وارد برنامه شو.
-                        isLoggingIn = false
-                        errorMessage = null
-                        onLoginSuccess()
-                    }
+                    onClick = ::submitLogin
                 )
 
                 if (SharedPreferences.getBiometricEnabled(context)) {

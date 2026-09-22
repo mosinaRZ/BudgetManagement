@@ -8,6 +8,9 @@ import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsViewModel
 import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitViewModel
 import ir.hamedan.budgetmanagement.ui.screens.categories.CategoriesViewModel
 import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsViewModel
+import ir.hamedan.budgetmanagement.ui.screens.devices.DevicesViewModel
+import ir.hamedan.budgetmanagement.domain.usecase.SavingGoalUseCase
+import ir.hamedan.budgetmanagement.domain.usecase.DebtCreditUseCase
 import ir.hamedan.budgetmanagement.ui.screens.home.PendingTransactionViewModel
 import ir.hamedan.budgetmanagement.ui.screens.notification.NotificationViewModel
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
@@ -49,9 +52,8 @@ class AppViewModelFactory(
             modelClass.isAssignableFrom(SavingGoalsViewModel::class.java) -> {
                 SavingGoalsViewModel(
                     repository = container.savingGoalRepository,
-                    transactionRepository = container.transactionRepository,
-                    notificationRepository = container.notificationRepository,
-                    context = appContext
+                    context = appContext,
+                    useCase = SavingGoalUseCase(container.savingGoalRepository)
                 ) as T
             }
             modelClass.isAssignableFrom(BudgetLimitViewModel::class.java) -> {
@@ -83,12 +85,19 @@ class AppViewModelFactory(
                     categoryRepository = container.categoryRepository
                 ) as T
             }
+            modelClass.isAssignableFrom(DevicesViewModel::class.java) -> {
+                DevicesViewModel(
+                    deviceApi = container.deviceApi,
+                    deviceIdentityStore = container.deviceIdentityStore
+                ) as T
+            }
             modelClass.isAssignableFrom(DebtCreditViewModel::class.java) -> {
                 DebtCreditViewModel(
                     debtCreditRepository = container.debtCreditRepository,
                     transactionRepository = container.transactionRepository,
                     categoryRepository = container.categoryRepository,
-                    context = appContext
+                    context = appContext,
+                    useCase = DebtCreditUseCase(container.debtCreditRepository, container.transactionRepository, container.categoryRepository)
                 ) as T
             }
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")

@@ -32,7 +32,8 @@ class AuthSessionStore(context: Context) {
         passwordKeyEnvelope: String,
         passwordKeyNonce: String,
         recoveryKeyEnvelope: String,
-        recoveryKeyNonce: String
+        recoveryKeyNonce: String,
+        role: String? = null
     ) {
         check(prefs.edit()
             .putString(KEY_ACCESS, accessToken)
@@ -44,6 +45,7 @@ class AuthSessionStore(context: Context) {
             .putString(KEY_PASSWORD_KEY_NONCE, passwordKeyNonce)
             .putString(KEY_RECOVERY_KEY_ENVELOPE, recoveryKeyEnvelope)
             .putString(KEY_RECOVERY_KEY_NONCE, recoveryKeyNonce)
+            .putString(KEY_ROLE, role?.takeIf { it.isNotBlank() })
             .commit()) { "Unable to persist authentication session." }
         _authenticated.value = true
     }
@@ -57,6 +59,7 @@ class AuthSessionStore(context: Context) {
     fun passwordKeyNonce(): String? = prefs.getString(KEY_PASSWORD_KEY_NONCE, null)
     fun recoveryKeyEnvelope(): String? = prefs.getString(KEY_RECOVERY_KEY_ENVELOPE, null)
     fun recoveryKeyNonce(): String? = prefs.getString(KEY_RECOVERY_KEY_NONCE, null)
+    fun role(): String? = prefs.getString(KEY_ROLE, null)
 
     fun isAuthenticated(): Boolean = readAuthenticated()
 
@@ -71,6 +74,7 @@ class AuthSessionStore(context: Context) {
             .remove(KEY_PASSWORD_KEY_NONCE)
             .remove(KEY_RECOVERY_KEY_ENVELOPE)
             .remove(KEY_RECOVERY_KEY_NONCE)
+            .remove(KEY_ROLE)
             .commit()
         _authenticated.value = false
     }
@@ -93,5 +97,6 @@ class AuthSessionStore(context: Context) {
         private const val KEY_PASSWORD_KEY_NONCE = "password_key_nonce"
         private const val KEY_RECOVERY_KEY_ENVELOPE = "recovery_key_envelope"
         private const val KEY_RECOVERY_KEY_NONCE = "recovery_key_nonce"
+        private const val KEY_ROLE = "role"
     }
 }

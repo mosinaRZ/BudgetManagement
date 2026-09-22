@@ -5,11 +5,11 @@ import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.models.DebtCreditEntity
-import ir.hamedan.budgetmanagement.data.money.MoneyContract
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.repository.DebtCreditRepository
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
+import ir.hamedan.budgetmanagement.domain.usecase.DebtCreditUseCase
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.ui.components.BalanceWidget
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
@@ -26,14 +26,14 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
-import kotlin.math.ceil
 
 class DebtCreditViewModel(
     private val debtCreditRepository: DebtCreditRepository,
     private val transactionRepository: TransactionRepository,
     private val categoryRepository: CategoryRepository,
     private val context: Context,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val useCase: DebtCreditUseCase
 ) : ViewModel() {
 
     val debtCreditList: StateFlow<List<DebtCreditEntity>> = debtCreditRepository.getAllDebtCredits()
@@ -53,206 +53,86 @@ class DebtCreditViewModel(
     val errorMessage: SharedFlow<String> = _errorMessage
 
     fun saveOrUpdate(
-        id: String? = null,
-        type: String, // "DEBT" یا "CREDIT"
-        personName: String,
-        totalAmount: Double,
-        isMonthly: Boolean,
-        monthlyAmount: Double,
-        dueDay: Int,
-        oneTimeDueDateMillis: Long,
-        note: String?,
-        addToBalance: Boolean = true
+        id: String? = null, type: String, personName: String, totalAmount: Double,
+        isMonthly: Boolean, monthlyAmount: Double, dueDay: Int, oneTimeDueDateMillis: Long,
+        note: String?, addToBalance: Boolean = true
     ) {
         viewModelScope.launch(ioDispatcher) {
             val isEdit = id != null
-            val calculatedDueDate = if (isMonthly && monthlyAmount > 0) {
-                calculateExpirationDate(totalAmount, monthlyAmount, dueDay)
-            } else {
-                oneTimeDueDateMillis
-            }
-
             if (!isEdit && type == "CREDIT" && addToBalance) {
                 val currentBalance = transactionRepository.getCurrentBalance()
-                if (currentBalance < MoneyContract.fromInput(totalAmount)) {
+                if (currentBalance < ir.hamedan.budgetmanagement.data.money.MoneyContract.fromInput(
+                        totalAmount
+                    )
+                ) {
                     val isPersian = LocaleHelper.getLanguage(context) == "fa"
-                    val msg = if (isPersian) {
-                        "موجودی کافی نیست! موجودی فعلی: ${currentBalance.toLong()}"
-                    } else {
-                        "Insufficient balance! Current balance: ${currentBalance.toLong()}"
-                    }
-                    _errorMessage.emit(msg)
+                    _errorMessage.emit(if (isPersian) "موجودی کافی نیست! موجودی فعلی: ${currentBalance.toLong()}" else "Insufficient balance! Current balance: ${currentBalance.toLong()}")
                     return@launch
                 }
             }
-
-            val existingEntity = if (isEdit) debtCreditList.value.find { it.id == id } else null
-
-            val categoryId = categoryRepository.getAllCategories().first().firstOrNull { it.title == if (type == "DEBT") "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE" }?.id
-                ?: throw IllegalStateException("Required debt/credit category is missing.")
-
-            val entity = DebtCreditEntity(
-                id = id ?: java.util.UUID.randomUUID().toString(),
-                type = type,
-                personName = personName,
-                totalAmount = MoneyContract.fromInput(totalAmount),
-                paidAmount = existingEntity?.paidAmount ?: 0L,
-                isMonthly = isMonthly,
-                monthlyAmount = if (isMonthly) MoneyContract.fromInput(monthlyAmount) else 0L,
-                dueDay = dueDay,
-                dueDateMillis = calculatedDueDate,
-                note = note,
-                isSettled = existingEntity?.isSettled ?: false
-            )
-            debtCreditRepository.insertOrUpdate(entity)
-
-            if (!isEdit && addToBalance) {
-                val isDebt = type == "DEBT"
-
-                val txType = if (isDebt) "INCOME" else "EXPENSE"
-                val titlePrefix = if (isDebt) "دریافت وام/بدهی" else "پرداخت وام/طلب"
-
-                transactionRepository.insertTransaction(
-                    TransactionEntity(
-                        title = "$titlePrefix: $personName",
-                        amount = MoneyContract.fromInput(totalAmount),
-                        categoryId = categoryId,
-                        type = txType,
-                        note = note ?: "ثبت اولیه $personName",
-                        timestamp = System.currentTimeMillis()
-                    )
+            runCatching {
+                useCase.saveOrUpdate(
+                    id,
+                    type,
+                    personName,
+                    totalAmount,
+                    isMonthly,
+                    monthlyAmount,
+                    dueDay,
+                    oneTimeDueDateMillis,
+                    note,
+                    addToBalance
                 )
-                BalanceWidget().updateAll(context)
             }
-
-            val notifType = if (isEdit) "WARNING" else "SUCCESS"
-            val titleFa = if (isEdit) "ویرایش بدهی/طلب" else "ثبت بدهی/طلب جدید"
-            val titleEn = if (isEdit) "Record Updated" else "New Record Added"
-            val descFa = if (isEdit) "اطلاعات «$personName» ویرایش شد." else "مورد جدید برای «$personName» ثبت گردید."
-            val descEn = if (isEdit) "Record for '$personName' updated." else "New record for '$personName' created."
-
-            NotificationHelper.send(
-                context = context,
-                notificationType = NotificationType.DEBT_ADD,
-                type = notifType,
-                titleFa = titleFa,
-                titleEn = titleEn,
-                descFa = descFa,
-                descEn = descEn,
-                tag = "DEBT_SAVE_${entity.id}_${System.currentTimeMillis()}"
-            )
+                .onSuccess { entity ->
+                    NotificationHelper.send(
+                        context,
+                        NotificationType.DEBT_ADD,
+                        if (isEdit) "WARNING" else "SUCCESS",
+                        if (isEdit) "ویرایش بدهی/طلب" else "ثبت بدهی/طلب جدید",
+                        if (isEdit) "Record Updated" else "New Record Added",
+                        if (isEdit) "اطلاعات «$personName» ویرایش شد." else "مورد جدید برای «$personName» ثبت گردید.",
+                        if (isEdit) "Record for '$personName' updated." else "New record for '$personName' created.",
+                        "DEBT_SAVE_${entity.id}_${System.currentTimeMillis()}"
+                    )
+                    if (!isEdit && addToBalance) BalanceWidget().updateAll(context)
+                }
+                .onFailure { _errorMessage.emit(it.message.orEmpty()) }
         }
     }
 
     fun deposit(id: String, amount: Long) {
         viewModelScope.launch(ioDispatcher) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
-            val isDebt = item.type == "DEBT"
-
-            if (isDebt) {
-                val currentBalance = transactionRepository.getCurrentBalance()
-                if (currentBalance < amount) {
-                    val isPersian = LocaleHelper.getLanguage(context) == "fa"
-                    val msg = if (isPersian) {
-                        "موجودی حساب برای پرداخت این بدهی کافی نیست! بالانس فعلی: ${currentBalance.toLong()}"
-                    } else {
-                        "Insufficient balance for debt payment! Current balance: ${currentBalance.toLong()}"
-                    }
-                    _errorMessage.emit(msg)
-                    return@launch
-                }
+            if (item.type == "DEBT" && transactionRepository.getCurrentBalance() < amount) {
+                val isPersian = LocaleHelper.getLanguage(context) == "fa"
+                _errorMessage.emit(if (isPersian) "موجودی حساب برای پرداخت این بدهی کافی نیست!" else "Insufficient balance for debt payment!")
+                return@launch
             }
-
-            val newPaid = (item.paidAmount + amount)
-                .coerceAtMost(item.totalAmount)
-            val isSettled = newPaid >= item.totalAmount
-
-            val updated = item.copy(paidAmount = newPaid, isSettled = isSettled)
-            debtCreditRepository.insertOrUpdate(updated)
-
-            val txType = if (isDebt) "EXPENSE" else "INCOME"
-            val txTitle = if (isDebt) "پرداخت بدهی به: ${item.personName}" else "دریافت طلب از: ${item.personName}"
-
-            transactionRepository.insertTransaction(
-                TransactionEntity(
-                    title = txTitle,
-                    amount = amount,
-                    categoryId = categoryRepository.getAllCategories().first().firstOrNull { it.title == if (isDebt) "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE" }?.id
-                        ?: throw IllegalStateException("Required debt/credit category is missing."),
-                    type = txType,
-                    note = "ثبت واریزی/پرداختی بدهی و طلب"
-                )
-            )
-            BalanceWidget().updateAll(context)
-
-            val titleFa = if (isDebt) "پرداخت بدهی" else "دریافت طلب"
-            val titleEn = if (isDebt) "Debt Payment" else "Credit Received"
-            val descFa = "مبلغ $amount به حساب «${item.personName}» ثبت شد."
-            val descEn = "Amount $amount registered for '${item.personName}'."
-
-            NotificationHelper.send(
-                context = context,
-                notificationType = NotificationType.DEBT_PAYMENT,
-                type = "SUCCESS",
-                titleFa = titleFa,
-                titleEn = titleEn,
-                descFa = descFa,
-                descEn = descEn,
-                tag = "DEBT_DEPOSIT_${id}_${System.currentTimeMillis()}"
-            )
+            runCatching { useCase.deposit(item, amount) }
+                .onSuccess { BalanceWidget().updateAll(context) }
+                .onFailure { _errorMessage.emit(it.message.orEmpty()) }
         }
     }
 
     fun withdraw(id: String, amount: Long) {
         viewModelScope.launch(ioDispatcher) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
-            val isDebt = item.type == "DEBT"
-
-            val newPaid =
-                (item.paidAmount - amount)
-                    .coerceAtLeast(0L)
-            val isSettled = newPaid >= item.totalAmount
-
-            val updated = item.copy(paidAmount = newPaid, isSettled = isSettled)
-            debtCreditRepository.insertOrUpdate(updated)
-
-            val txType = if (isDebt) "INCOME" else "EXPENSE"
-            val txTitle = if (isDebt) "اصلاح/برداشت از پرداخت بدهی: ${item.personName}" else "اصلاح/برداشت از دریافت طلب: ${item.personName}"
-
-            transactionRepository.insertTransaction(
-                TransactionEntity(
-                    title = txTitle,
-                    amount = amount,
-                    categoryId = categoryRepository.getAllCategories().first().firstOrNull { it.title == if (isDebt) "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE" }?.id
-                        ?: throw IllegalStateException("Required debt/credit category is missing."),
-                    type = txType,
-                    note = "اصلاح واریزی بدهی و طلب"
-                )
-            )
-            BalanceWidget().updateAll(context)
-
-            NotificationHelper.send(
-                context = context,
-                notificationType = NotificationType.DEBT_ADJUSTMENT,
-                type = "WARNING",
-                titleFa = "اصلاح واریزی بدهی/طلب",
-                titleEn = "Payment Adjustment",
-                descFa = "مبلغ $amount از تراکنش‌های «${item.personName}» کسر شد.",
-                descEn = "Amount $amount adjusted for '${item.personName}'.",
-                tag = "DEBT_WITHDRAW_${id}_${System.currentTimeMillis()}"
-            )
+            runCatching { useCase.withdraw(item, amount) }
+                .onSuccess { BalanceWidget().updateAll(context) }
+                .onFailure { _errorMessage.emit(it.message.orEmpty()) }
         }
     }
 
     fun softDelete(item: DebtCreditEntity) {
         viewModelScope.launch(ioDispatcher) {
-            debtCreditRepository.deleteById(item.id)
+            useCase.delete(item)
         }
     }
 
     fun restore(item: DebtCreditEntity) {
         viewModelScope.launch(ioDispatcher) {
-            debtCreditRepository.insertOrUpdate(item)
+            useCase.restore(item)
         }
     }
 
@@ -275,10 +155,7 @@ class DebtCreditViewModel(
         viewModelScope.launch(ioDispatcher) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
             val newStatus = !currentStatus
-            val newPaid = if (newStatus) item.totalAmount else 0L
-
-            val updated = item.copy(isSettled = newStatus, paidAmount = newPaid)
-            debtCreditRepository.insertOrUpdate(updated)
+            useCase.toggleSettled(item, newStatus)
 
             val statusFa = if (newStatus) "تسویه شد" else "از حالت تسویه خارج شد"
             val statusEn = if (newStatus) "Settled" else "Unsettled"
@@ -312,13 +189,15 @@ class DebtCreditViewModel(
             debtCreditRepository.insertOrUpdate(updated)
 
             val txType = if (isDebt) "EXPENSE" else "INCOME"
-            val txTitle = if (isDebt) "پرداخت بدهی به: ${item.personName}" else "دریافت طلب از: ${item.personName}"
+            val txTitle =
+                if (isDebt) "پرداخت بدهی به: ${item.personName}" else "دریافت طلب از: ${item.personName}"
 
             transactionRepository.insertTransaction(
                 TransactionEntity(
                     title = txTitle,
                     amount = remaining,
-                    categoryId = categoryRepository.getAllCategories().first().firstOrNull { it.title == if (isDebt) "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE" }?.id
+                    categoryId = categoryRepository.getAllCategories().first()
+                        .firstOrNull { it.title == if (isDebt) "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE" }?.id
                         ?: throw IllegalStateException("Required debt/credit category is missing."),
                     type = txType,
                     note = "تسویه از طریق یادآوری سررسید"
@@ -347,8 +226,7 @@ class DebtCreditViewModel(
     fun updateDueDate(id: String, newDueDateMillis: Long) {
         viewModelScope.launch(ioDispatcher) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
-            val updated = item.copy(dueDateMillis = newDueDateMillis)
-            debtCreditRepository.insertOrUpdate(updated)
+            useCase.updateDueDate(item, newDueDateMillis)
 
             NotificationHelper.send(
                 context = context,
@@ -397,17 +275,38 @@ class DebtCreditViewModel(
         }
     }
 
-    fun calculateExpirationDate(totalAmount: Double, monthlyAmount: Double, dueDay: Int): Long {
-        if (monthlyAmount <= 0) return System.currentTimeMillis()
-        val monthsRequired = ceil(totalAmount / monthlyAmount).toInt()
-        val calendar = Calendar.getInstance().apply {
-            val currentDay = get(Calendar.DAY_OF_MONTH)
-            if (currentDay > dueDay) {
-                add(Calendar.MONTH, 1)
-            }
-            set(Calendar.DAY_OF_MONTH, dueDay.coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH)))
-            add(Calendar.MONTH, monthsRequired - 1)
+    fun calculateExpirationDate(
+        totalAmount: Long,
+        monthlyAmount: Long,
+        dueDay: Int
+    ): Long {
+        if (totalAmount <= 0L || monthlyAmount <= 0L) {
+            return System.currentTimeMillis()
         }
+
+        val monthsRequired =
+            ((totalAmount + monthlyAmount - 1L) / monthlyAmount).coerceAtLeast(1L)
+
+        val calendar = Calendar.getInstance()
+
+        // اولین سررسید
+        val currentDay = calendar.get(Calendar.DAY_OF_MONTH)
+
+        if (currentDay > dueDay) {
+            calendar.add(Calendar.MONTH, 1)
+        }
+
+        // تعداد ماه‌های باقی‌مانده تا آخرین قسط
+        calendar.add(Calendar.MONTH, monthsRequired.toInt() - 1)
+
+        // حالا که ماه مقصد مشخص است، آخرین روز مجاز همان ماه را محاسبه می‌کنیم
+        val lastDayOfMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+
+        calendar.set(
+            Calendar.DAY_OF_MONTH,
+            dueDay.coerceIn(1, lastDayOfMonth)
+        )
+
         return calendar.timeInMillis
     }
 }

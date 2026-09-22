@@ -2,9 +2,9 @@ package ir.hamedan.budgetmanagement.data.network
 
 import org.json.JSONObject
 
-class DeviceApi(private val client: ApiHttpClient) {
-    fun list(accessToken: String): List<Device> {
-        val response = client.request("GET", "/api/v1/devices", null, accessToken)
+class DeviceApi(private val client: AuthenticatedApiClient) {
+    fun list(): List<Device> {
+        val response = client.request("GET", "/api/v1/devices")
         if (response.statusCode !in 200..299) {
             throw ApiException(response.statusCode, response.errorMessage("دریافت دستگاه‌ها ناموفق بود."))
         }
@@ -23,9 +23,9 @@ class DeviceApi(private val client: ApiHttpClient) {
         }
     }
 
-    fun revoke(accessToken: String, deviceId: String) {
+    fun revoke(deviceId: String) {
         require(deviceId.isNotBlank()) { "Device id cannot be blank." }
-        val response = client.request("DELETE", "/api/v1/devices/${deviceId.urlEncode()}", null, accessToken)
+        val response = client.request("DELETE", "/api/v1/devices/${deviceId.urlEncode()}")
         if (response.statusCode !in 200..299 && response.statusCode != 204) {
             throw ApiException(response.statusCode, response.errorMessage("لغو دستگاه ناموفق بود."))
         }

@@ -5,16 +5,17 @@ import org.json.JSONArray
 import org.json.JSONObject
 import ir.hamedan.budgetmanagement.data.time.ApiTime
 
-class SyncApi(private val client: ApiHttpClient) {
+class SyncApi(private val client: AuthenticatedApiClient) {
 
     fun sync(
-        accessToken: String,
         requestId: String,
         deviceId: String,
         cursor: Long,
         changes: List<SyncChange>
     ): SyncResponse {
         val body = JSONObject()
+            .put("protocolVersion", SyncContract.PROTOCOL_VERSION)
+            .put("schemaVersion", SyncContract.SCHEMA_VERSION)
             .put("requestId", requestId)
             .put("deviceId", deviceId)
             .put("cursor", if (cursor == 0L) "" else cursor.toString())
@@ -30,11 +31,12 @@ class SyncApi(private val client: ApiHttpClient) {
                     .put("version", change.version)
                     .put("isDeleted", change.isDeleted)
                     .put("updatedAt", ApiTime.toApi(change.updatedAt))
+                    .put("encryptionKeyVersion", change.encryptionKeyVersion)
             )
         }
         body.put("changes", array)
 
-        val response = client.request("POST", "/api/v1/sync", body, accessToken)
+        val response = client.request("POST", "/api/v1/sync", body)
         if (response.statusCode !in 200..299) {
             throw ApiException(response.statusCode, response.errorMessage("همگام‌سازی ناموفق بود."))
         }
@@ -62,7 +64,8 @@ class SyncApi(private val client: ApiHttpClient) {
                         version = item.getInt("version"),
                         isDeleted = item.getBoolean("isDeleted"),
                         updatedAt = ApiTime.fromApi(item.getString("updatedAt")),
-                        serverRevision = item.optLong("serverRevision", 0L)
+                        serverRevision = item.optLong("serverRevision", 0L),
+                        encryptionKeyVersion = item.optInt("encryptionKeyVersion", SyncContract.DEFAULT_KEY_VERSION)
                     )
                 )
             }
@@ -77,7 +80,8 @@ class SyncApi(private val client: ApiHttpClient) {
         val version: Int,
         val isDeleted: Boolean,
         val updatedAt: Long,
-        val serverRevision: Long = 0L
+        val serverRevision: Long = 0L,
+        val encryptionKeyVersion: Int = SyncContract.DEFAULT_KEY_VERSION
     )
 
     data class SyncResponse(

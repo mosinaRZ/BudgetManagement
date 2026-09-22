@@ -37,8 +37,13 @@ class SavingGoalRepositoryImpl(
 
     override suspend fun updateGoal(goal: SavingGoalEntity) {
         val now = System.currentTimeMillis()
-        val updated = goal.copy(updatedAt = now)
-        syncLocalDataSource.mutate(SyncEntityType.SAVING_GOAL, updated.id, now) { savingGoalDao.updateGoal(updated) }
+        val current = savingGoalDao.getById(goal.id) ?: return
+        // currentAmount is an aggregate derived from immutable operations. A normal
+        // goal edit must never overwrite it, otherwise a second device can lose ledger data.
+        val updated = goal.copy(currentAmount = current.currentAmount, updatedAt = now)
+        syncLocalDataSource.mutate(SyncEntityType.SAVING_GOAL, updated.id, now) {
+            savingGoalDao.updateGoal(updated)
+        }
     }
 
     override suspend fun deleteGoal(goal: SavingGoalEntity) {
