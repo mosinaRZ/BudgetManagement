@@ -6,7 +6,7 @@ class DeviceApi(private val client: AuthenticatedApiClient) {
     fun list(): List<Device> {
         val response = client.request("GET", "/api/v1/devices")
         if (response.statusCode !in 200..299) {
-            throw ApiException(response.statusCode, response.errorMessage("دریافت دستگاه‌ها ناموفق بود."))
+            throw ApiException(response.statusCode, response.errorCode(), response.errorMessage("دریافت دستگاه‌ها ناموفق بود."))
         }
         val array = response.json().optJSONArray("devices") ?: return emptyList()
         return buildList(array.length()) {
@@ -27,7 +27,7 @@ class DeviceApi(private val client: AuthenticatedApiClient) {
         require(deviceId.isNotBlank()) { "Device id cannot be blank." }
         val response = client.request("DELETE", "/api/v1/devices/${deviceId.urlEncode()}")
         if (response.statusCode !in 200..299 && response.statusCode != 204) {
-            throw ApiException(response.statusCode, response.errorMessage("لغو دستگاه ناموفق بود."))
+            throw ApiException(response.statusCode, response.errorCode(), response.errorMessage("لغو دستگاه ناموفق بود."))
         }
     }
 

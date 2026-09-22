@@ -14,19 +14,19 @@ class AuthenticatedApiClient(
     @Synchronized
     fun request(method: String, path: String, body: org.json.JSONObject? = null): ApiHttpClient.ApiResponse {
         val access = sessionStore.accessToken()
-            ?: throw ApiException(401, "نشست احراز هویت وجود ندارد.")
+            ?: throw ApiException(401, "UNAUTHORIZED", "نشست احراز هویت وجود ندارد.")
 
         var response = client.request(method, path, body, access)
         if (response.statusCode != 401) return response
 
         val refresh = sessionStore.refreshToken()
-            ?: throw ApiException(401, "نشست احراز هویت منقضی شده است.")
+            ?: throw ApiException(401, "UNAUTHORIZED", "نشست احراز هویت منقضی شده است.")
 
         val refreshed = try {
             authApi.refresh(refresh)
-        } catch (e: AuthApi.ApiException) {
+        } catch (e: ApiException) {
             sessionStore.clearSession()
-            throw ApiException(401, "نشست احراز هویت منقضی شده است.")
+            throw ApiException(401, "UNAUTHORIZED", "نشست احراز هویت منقضی شده است.")
         }
 
         sessionStore.save(

@@ -88,7 +88,8 @@ class AppViewModelFactory(
             modelClass.isAssignableFrom(DevicesViewModel::class.java) -> {
                 DevicesViewModel(
                     deviceApi = container.deviceApi,
-                    deviceIdentityStore = container.deviceIdentityStore
+                    deviceIdentityStore = container.deviceIdentityStore,
+                    context = appContext
                 ) as T
             }
             modelClass.isAssignableFrom(DebtCreditViewModel::class.java) -> {

@@ -108,7 +108,7 @@ class AuthApi(private val client: ApiHttpClient) {
     fun logout(refreshToken: String) {
         val response = client.request("POST", "/auth/logout", JSONObject().put("refresh_token", refreshToken))
         if (response.statusCode !in 200..299 && response.statusCode != 204) {
-            throw ApiException(response.statusCode, response.errorMessage("خروج ناموفق بود."))
+            throw ApiException(response.statusCode, response.errorCode(), response.errorMessage("خروج ناموفق بود."))
         }
     }
 
@@ -139,7 +139,7 @@ class AuthApi(private val client: ApiHttpClient) {
 
     private fun ensureSuccess(response: ApiHttpClient.ApiResponse, defaultMessage: String) {
         if (response.statusCode !in 200..299) {
-            throw ApiException(response.statusCode, response.errorMessage(defaultMessage))
+            throw ApiException(response.statusCode, response.errorCode(), response.errorMessage(defaultMessage))
         }
     }
 
@@ -222,5 +222,4 @@ class AuthApi(private val client: ApiHttpClient) {
         val recoveryKeyNonce: String
     )
 
-    class ApiException(val statusCode: Int, override val message: String) : RuntimeException(message)
 }

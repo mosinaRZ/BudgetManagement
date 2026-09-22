@@ -2,7 +2,10 @@ package ir.hamedan.budgetmanagement.ui.screens.devices
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.content.Context
+import ir.hamedan.budgetmanagement.data.network.ApiException
 import ir.hamedan.budgetmanagement.data.network.DeviceApi
+import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.data.security.DeviceIdentityStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,7 +15,8 @@ import kotlinx.coroutines.launch
 
 class DevicesViewModel(
     private val deviceApi: DeviceApi,
-    private val deviceIdentityStore: DeviceIdentityStore
+    private val deviceIdentityStore: DeviceIdentityStore,
+    private val context: Context
 ) : ViewModel() {
     private val _devices = MutableStateFlow<List<DeviceApi.Device>>(emptyList())
     val devices: StateFlow<List<DeviceApi.Device>> = _devices.asStateFlow()
@@ -26,7 +30,7 @@ class DevicesViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { deviceApi.list() }
                 .onSuccess { _devices.value = it; _error.value = null }
-                .onFailure { _error.value = it.message }
+                .onFailure { _error.value = (it as? ApiException)?.userMessage(LocaleHelper.getLanguage(context) == "fa") ?: it.message }
         }
     }
 
@@ -35,7 +39,7 @@ class DevicesViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { deviceApi.revoke(deviceId) }
                 .onSuccess { refresh() }
-                .onFailure { _error.value = it.message }
+                .onFailure { _error.value = (it as? ApiException)?.userMessage(LocaleHelper.getLanguage(context) == "fa") ?: it.message }
         }
     }
 }

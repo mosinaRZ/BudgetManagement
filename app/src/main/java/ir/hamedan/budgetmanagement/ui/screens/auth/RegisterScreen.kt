@@ -38,7 +38,6 @@ fun RegisterScreen(
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as BudgetApp
-    val authApi = app.container.authApi
     val authRepository = app.container.authRepository
     val scope = rememberCoroutineScope()
     val isPersian = isPersianLocale()
@@ -59,9 +58,9 @@ fun RegisterScreen(
         loading = true
         error = null
         scope.launch {
-            runCatching { authApi.requestOtp(destination, channel, "REGISTER") }
+            authRepository.requestOtp(destination, channel, "REGISTER")
                 .onSuccess { onSuccess(it.challengeId) }
-                .onFailure { error = it.message ?: if (isPersian) "ارسال کد ناموفق بود" else "Failed to send code" }
+                .onFailure { error = (it as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(isPersian) ?: it.message ?: if (isPersian) "ارسال کد ناموفق بود" else "Failed to send code" }
             loading = false
         }
     }
