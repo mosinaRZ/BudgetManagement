@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -9,11 +10,12 @@ import (
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
 	infraauth "github.com/mosinaRZ/finance-sync-backend/internal/infrastructure/auth"
 	"github.com/mosinaRZ/finance-sync-backend/internal/interface/http/contextkeys"
+	"github.com/mosinaRZ/finance-sync-backend/internal/usecase/mocks"
 )
 
 func TestAuthMiddlewareRejectsMissingToken(t *testing.T) {
 	nextCalled := false
-	h := Auth("01234567890123456789012345678901")(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { nextCalled = true }))
+	h := Auth("01234567890123456789012345678901", &mocks.MockUserRepository{})(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { nextCalled = true }))
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/sync", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -29,7 +31,7 @@ func TestAuthMiddlewareRejectsExpiredToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.Sleep(2 * time.Millisecond)
-	h := Auth(secret)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Fatal("next should not be called") }))
+	h := Auth(secret, &mocks.MockUserRepository{})(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Fatal("next should not be called") }))
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/sync", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
@@ -46,7 +48,7 @@ func TestAuthMiddlewareStoresOnlyValidatedUserIDInContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got string
-	h := Auth(secret)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := Auth(secret, &mocks.MockUserRepository{})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got, _ = contextkeys.UserID(r.Context())
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -71,9 +73,26 @@ func TestRequireRolesRejectsNonAdmin(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
-	Auth(secret)(RequireRoles(entity.RoleAdmin)(r)).ServeHTTP(rec, req)
+	Auth(secret, &mocks.MockUserRepository{})(RequireRoles(entity.RoleAdmin)(r)).ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestAuthMiddlewareRejectsRevokedSessionVersion(t *testing.T) {
+	secret := "01234567890123456789012345678901"
+	token, err := infraauth.GenerateAccessTokenWithRoleAndSession("user-1", entity.RoleUser, 4, time.Minute, secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	users := &mocks.MockUserRepository{GetSessionVersionFunc: func(context.Context, string) (uint64, error) { return 5, nil }}
+	h := Auth(secret, users)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Fatal("revoked token reached handler") }))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sync", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d, want 401", rec.Code)
 	}
 }
 
@@ -92,7 +111,7 @@ func TestRequireRolesAllowsAdmin(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
-	Auth(secret)(RequireRoles(entity.RoleAdmin)(r)).ServeHTTP(rec, req)
+	Auth(secret, &mocks.MockUserRepository{})(RequireRoles(entity.RoleAdmin)(r)).ServeHTTP(rec, req)
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204", rec.Code)
 	}

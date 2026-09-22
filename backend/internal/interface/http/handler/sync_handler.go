@@ -90,7 +90,7 @@ func dtoToUsecaseChange(c dto.SyncChangeDTO) (syncUsecase.SyncChange, error) {
 	if err != nil {
 		return syncUsecase.SyncChange{}, apperror.ErrValidation("nonce must be base64")
 	}
-	return syncUsecase.SyncChange{EntityType: c.EntityType, EntityID: c.EntityID, Ciphertext: ciphertext, Nonce: nonce, Version: c.Version, IsDeleted: c.IsDeleted, UpdatedAt: c.UpdatedAt}, nil
+	return syncUsecase.SyncChange{EntityType: c.EntityType, EntityID: c.EntityID, Ciphertext: ciphertext, Nonce: nonce, Version: c.Version, IsDeleted: c.IsDeleted, UpdatedAt: c.UpdatedAt, ServerRevision: 0}, nil
 }
 
 func usecaseToDTO(result syncUsecase.SyncOutput) dto.SyncResponse {

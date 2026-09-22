@@ -3,10 +3,11 @@ package mongodb
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"time"
 )
 
 func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
@@ -46,6 +47,12 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	}); err != nil {
 		return fmt.Errorf("otp indexes: %w", err)
 	}
+	if _, err := db.Collection(recoverySessionsCollectionName).Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "tokenHash", Value: 1}}, Options: options.Index().SetUnique(true).SetName("uniq_recovery_session_token")},
+		{Keys: bson.D{{Key: "expiresAt", Value: 1}}, Options: options.Index().SetExpireAfterSeconds(0).SetName("ttl_recovery_sessions")},
+	}); err != nil {
+		return fmt.Errorf("recovery_sessions indexes: %w", err)
+	}
 	if _, err := db.Collection(auditLogsCollectionName).Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{{Key: "targetUserId", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_audit_target_created")},
 	}); err != nil {
@@ -59,4 +66,3 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	}
 	return nil
 }
-func BackfillSyncRevisions(ctx context.Context, db *mongo.Database) error { return nil }

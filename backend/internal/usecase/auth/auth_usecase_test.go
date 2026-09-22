@@ -29,6 +29,17 @@ func (f fakeOTPService) Verify(ctx context.Context, in VerifyOTPInput) (string, 
 	return "", apperror.ErrUnauthorized("invalid OTP")
 }
 
+func validRegistrationMaterial() RegisterInput {
+	return RegisterInput{
+		KdfSalt:             encode(make([]byte, 16)),
+		PasswordKeyEnvelope: make([]byte, 48),
+		PasswordKeyNonce:    make([]byte, 12),
+		RecoveryKeyHash:     []byte(encode(make([]byte, 32))),
+		RecoveryKeyEnvelope: make([]byte, 48),
+		RecoveryKeyNonce:    make([]byte, 12),
+	}
+}
+
 func testRegisterOTPService() OTPService {
 	return fakeOTPService{verify: func(_ context.Context, in VerifyOTPInput) (string, error) {
 		if in.Purpose != entity.OTPPurposeRegister {
@@ -59,7 +70,9 @@ func TestRegisterSuccess(t *testing.T) {
 		return nil
 	}}
 	s := NewService(users, refresh, testSecret, time.Minute, 24*time.Hour, testRegisterOTPService())
-	out, err := s.Register(context.Background(), RegisterInput{PhoneNumber: "+989121234567", Password: "correct horse battery", DeviceID: "device-1", OTPChallengeID: "challenge-1", OTPCode: "123456"})
+	in := validRegistrationMaterial()
+	in.PhoneNumber, in.Password, in.DeviceID, in.OTPChallengeID, in.OTPCode = "+989121234567", "correct horse battery", "device-1", "challenge-1", "123456"
+	out, err := s.Register(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,10 +87,25 @@ func TestRegisterSuccess(t *testing.T) {
 func TestRegisterDuplicate(t *testing.T) {
 	users := &mocks.MockUserRepository{FindByPhoneHashFunc: func(context.Context, string) (*entity.User, error) { return &entity.User{ID: "u1"}, nil }}
 	s := NewService(users, &mocks.MockRefreshTokenRepository{}, testSecret, time.Minute, 24*time.Hour, testRegisterOTPService())
-	_, err := s.Register(context.Background(), RegisterInput{PhoneNumber: "+989121234567", Password: "correct horse battery", DeviceID: "d", OTPChallengeID: "challenge-1", OTPCode: "123456"})
+	in := validRegistrationMaterial()
+	in.PhoneNumber, in.Password, in.DeviceID, in.OTPChallengeID, in.OTPCode = "+989121234567", "correct horse battery", "d", "challenge-1", "123456"
+	_, err := s.Register(context.Background(), in)
 	code, _ := apperror.CodeOf(err)
 	if code != apperror.CodeConflict {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestLogoutRevokesRefreshAndAccessSessions(t *testing.T) {
+	raw := "logout-refresh-token"
+	versionIncremented := false
+	users := &mocks.MockUserRepository{IncrementSessionVersionFunc: func(context.Context, string) (uint64, error) { versionIncremented = true; return 2, nil }}
+	refresh := &mocks.MockRefreshTokenRepository{FindByHashFunc: func(context.Context, string) (*entity.RefreshToken, error) {
+		return &entity.RefreshToken{UserID: "u1", TokenHash: infraauth.HashRefreshToken(raw)}, nil
+	}}
+	s := newService(users, refresh)
+	if err := s.Logout(context.Background(), raw); err != nil || !versionIncremented {
+		t.Fatalf("err=%v versionIncremented=%v", err, versionIncremented)
 	}
 }
 

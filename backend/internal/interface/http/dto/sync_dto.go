@@ -10,7 +10,7 @@ type SyncChangeDTO struct {
 	Version        int       `json:"version" validate:"required,min=1"`
 	IsDeleted      bool      `json:"isDeleted"`
 	UpdatedAt      time.Time `json:"updatedAt" validate:"required"`
-	ServerRevision uint64    `json:"serverRevision,omitempty"`
+	ServerRevision uint64    `json:"serverRevision"`
 }
 
 type SyncRequest struct {

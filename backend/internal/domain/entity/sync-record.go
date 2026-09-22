@@ -19,8 +19,7 @@ const (
 
 var validEntityTypes = map[EntityType]struct{}{
 	EntityTypeTransaction: {}, EntityTypeCategory: {}, EntityTypeBudgetLimit: {},
-	EntityTypeDebtCredit: {}, EntityTypeSavingGoal: {}, EntityTypeSavingGoalOperation: {},
-	EntityTypeDebtPayment: {},
+	EntityTypeDebtCredit: {}, EntityTypeSavingGoal: {}, EntityTypeSavingGoalOperation: {}, EntityTypeDebtPayment: {},
 }
 
 func (e EntityType) IsValid() bool { _, ok := validEntityTypes[e]; return ok }
