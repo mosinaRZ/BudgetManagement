@@ -43,7 +43,7 @@ func syncReq(id, device string, cursor uint64, records ...*entity.SyncRecord) re
 	return repository.SyncRequest{RequestID: id, UserID: "user-test", DeviceID: device, Cursor: repository.SyncCursor(cursor), Records: records}
 }
 func rec(id string, version int, ts time.Time, deleted bool, device string) *entity.SyncRecord {
-	return &entity.SyncRecord{UserID: "user-test", EntityType: entity.EntityTypeTransaction, EntityID: id, Ciphertext: []byte("cipher-" + id), Nonce: []byte("nonce"), Version: version, UpdatedAt: ts, IsDeleted: deleted, DeviceID: device}
+	return &entity.SyncRecord{UserID: "user-test", EntityType: entity.EntityTypeTransaction, EntityID: id, Ciphertext: []byte("cipher-" + id), Nonce: []byte("nonce"), Version: version, UpdatedAt: ts, IsDeleted: deleted, DeviceID: device, EncryptionKeyVersion: 1}
 }
 
 func TestSyncRepository_OperationRecordsFromTwoDevicesAreIndependent(t *testing.T) {

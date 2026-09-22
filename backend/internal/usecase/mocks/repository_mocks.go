@@ -15,6 +15,7 @@ type MockUserRepository struct {
 	FindByEmailHashFunc         func(ctx context.Context, emailHash string) (*entity.User, error)
 	FindByIDFunc                func(ctx context.Context, id string) (*entity.User, error)
 	UpdateFunc                  func(ctx context.Context, u *entity.User) error
+	UpdateCredentialsFunc       func(ctx context.Context, userID, passwordHash, authSalt, kdfSalt string, passwordKeyEnvelope, passwordKeyNonce []byte) error
 	AddDeviceFunc               func(ctx context.Context, userID, deviceID string) error
 	UpdateRoleFunc              func(ctx context.Context, userID string, role entity.Role) error
 	RecordFailedLoginFunc       func(ctx context.Context, userID string, now time.Time, threshold int, lockDuration time.Duration) error
@@ -157,11 +158,43 @@ func (m *MockRefreshTokenRepository) RevokeAllForUser(ctx context.Context, id st
 }
 
 type MockDeviceRepository struct {
-	ListFunc   func(context.Context, string) ([]*entity.Device, error)
-	RevokeFunc func(context.Context, string, string) error
+	RegisterFunc func(context.Context, *entity.Device) error
+	ListFunc     func(context.Context, string) ([]*entity.Device, error)
+	RevokeFunc   func(context.Context, string, string) error
+	ExistsFunc   func(context.Context, string, string) (bool, error)
+	TouchFunc    func(context.Context, string, string) error
 }
 
-func (m *MockDeviceRepository) Register(context.Context, *entity.Device) error { return nil }
+func (m *MockDeviceRepository) Register(
+	ctx context.Context,
+	device *entity.Device,
+) error {
+	if m.RegisterFunc != nil {
+		return m.RegisterFunc(ctx, device)
+	}
+	return nil
+}
+
+func (m *MockDeviceRepository) Exists(
+	ctx context.Context,
+	userID, deviceID string,
+) (bool, error) {
+	if m.ExistsFunc != nil {
+		return m.ExistsFunc(ctx, userID, deviceID)
+	}
+	return false, nil
+}
+
+func (m *MockDeviceRepository) Touch(
+	ctx context.Context,
+	userID, deviceID string,
+) error {
+	if m.TouchFunc != nil {
+		return m.TouchFunc(ctx, userID, deviceID)
+	}
+	return nil
+}
+
 func (m *MockDeviceRepository) List(ctx context.Context, id string) ([]*entity.Device, error) {
 	if m.ListFunc != nil {
 		return m.ListFunc(ctx, id)
@@ -174,10 +207,6 @@ func (m *MockDeviceRepository) Revoke(ctx context.Context, u, d string) error {
 	}
 	return nil
 }
-func (m *MockDeviceRepository) Exists(context.Context, string, string) (bool, error) {
-	return true, nil
-}
-func (m *MockDeviceRepository) Touch(context.Context, string, string) error { return nil }
 
 type MockAuditLogRepository struct {
 	CreateFunc func(context.Context, *entity.AuditLog) error

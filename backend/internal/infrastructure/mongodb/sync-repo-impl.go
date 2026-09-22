@@ -120,6 +120,8 @@ func syncRequestFingerprint(req repository.SyncRequest) string {
 		writeBytes(r.Ciphertext)
 		writeBytes(r.Nonce)
 		var x [8]byte
+		binary.BigEndian.PutUint64(x[:], uint64(r.EncryptionKeyVersion))
+		h.Write(x[:])
 		binary.BigEndian.PutUint64(x[:], uint64(r.Version))
 		h.Write(x[:])
 		binary.BigEndian.PutUint64(x[:], uint64(r.UpdatedAt.UnixNano()))
@@ -199,7 +201,7 @@ func (r *syncRepositoryImpl) applyRecords(ctx mongo.SessionContext, req reposito
 			return nil, apperror.ErrInternal("invalid sync record", err)
 		}
 		filter := bson.M{"userId": model.UserID, "entityType": model.EntityType, "entityId": model.EntityID}
-		update := bson.M{"$set": bson.M{"ciphertext": model.Ciphertext, "nonce": model.Nonce, "version": model.Version, "updatedAt": model.UpdatedAt, "isDeleted": model.IsDeleted, "deviceId": model.DeviceID, "serverRevision": model.ServerRevision}, "$setOnInsert": bson.M{"userId": model.UserID, "entityType": model.EntityType, "entityId": model.EntityID}}
+		update := bson.M{"$set": bson.M{"ciphertext": model.Ciphertext, "nonce": model.Nonce, "version": model.Version, "updatedAt": model.UpdatedAt, "isDeleted": model.IsDeleted, "deviceId": model.DeviceID, "serverRevision": model.ServerRevision, "encryptionKeyVersion": model.EncryptionKeyVersion}, "$setOnInsert": bson.M{"userId": model.UserID, "entityType": model.EntityType, "entityId": model.EntityID}}
 		writes = append(writes, mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true))
 	}
 	if _, err := r.collection.BulkWrite(ctx, writes, options.BulkWrite().SetOrdered(true)); err != nil {
@@ -221,7 +223,7 @@ func (r *syncRepositoryImpl) findExisting(ctx mongo.SessionContext, userID strin
 }
 
 func samePayload(existing *models.SyncRecordModel, incoming *entity.SyncRecord) bool {
-	return existing.IsDeleted == incoming.IsDeleted && existing.UpdatedAt.Equal(incoming.UpdatedAt) && existing.DeviceID == incoming.DeviceID && string(existing.Ciphertext) == string(incoming.Ciphertext) && string(existing.Nonce) == string(incoming.Nonce)
+	return existing.IsDeleted == incoming.IsDeleted && existing.UpdatedAt.Equal(incoming.UpdatedAt) && existing.DeviceID == incoming.DeviceID && existing.EncryptionKeyVersion == incoming.EncryptionKeyVersion && string(existing.Ciphertext) == string(incoming.Ciphertext) && string(existing.Nonce) == string(incoming.Nonce)
 }
 
 func (r *syncRepositoryImpl) allocateRevisions(ctx mongo.SessionContext, userID string, n int) (uint64, error) {

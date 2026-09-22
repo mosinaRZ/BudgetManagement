@@ -50,6 +50,9 @@ func (u *SyncUsecase) Execute(ctx context.Context, userID string, req SyncInput)
 			return SyncOutput{}, err
 		}
 	}
+	if req.ProtocolVersion != 1 || req.SchemaVersion != 1 {
+		return SyncOutput{}, apperror.ErrValidation("unsupported sync protocol or schema version")
+	}
 	if len(req.Changes) > MaxChangesPerRequest {
 		return SyncOutput{}, apperror.ErrValidation("too many sync changes")
 	}
@@ -64,7 +67,7 @@ func (u *SyncUsecase) Execute(ctx context.Context, userID string, req SyncInput)
 		if totalCiphertextSize > MaxRequestCiphertextSize || len(change.EntityType) > MaxEntityTypeLength || len(change.EntityID) > MaxEntityIDLength || len(change.Ciphertext) > MaxCiphertextSize || len(change.Nonce) > MaxNonceSize {
 			return SyncOutput{}, apperror.ErrValidation("sync change exceeds size limits")
 		}
-		rec := &entity.SyncRecord{UserID: userID, EntityType: entity.EntityType(change.EntityType), EntityID: change.EntityID, Ciphertext: append([]byte(nil), change.Ciphertext...), Nonce: append([]byte(nil), change.Nonce...), Version: change.Version, IsDeleted: change.IsDeleted, UpdatedAt: change.UpdatedAt, DeviceID: req.DeviceID}
+		rec := &entity.SyncRecord{UserID: userID, EntityType: entity.EntityType(change.EntityType), EntityID: change.EntityID, Ciphertext: append([]byte(nil), change.Ciphertext...), Nonce: append([]byte(nil), change.Nonce...), Version: change.Version, IsDeleted: change.IsDeleted, UpdatedAt: change.UpdatedAt, DeviceID: req.DeviceID, EncryptionKeyVersion: change.EncryptionKeyVersion}
 		if err := rec.Validate(); err != nil {
 			return SyncOutput{}, apperror.ErrValidation(err.Error())
 		}
@@ -91,5 +94,5 @@ func (u *SyncUsecase) Execute(ctx context.Context, userID string, req SyncInput)
 }
 
 func mapEntityToChange(e *entity.SyncRecord) SyncChange {
-	return SyncChange{EntityType: string(e.EntityType), EntityID: e.EntityID, Ciphertext: append([]byte(nil), e.Ciphertext...), Nonce: append([]byte(nil), e.Nonce...), Version: e.Version, IsDeleted: e.IsDeleted, UpdatedAt: e.UpdatedAt, ServerRevision: e.ServerRevision}
+	return SyncChange{EntityType: string(e.EntityType), EntityID: e.EntityID, Ciphertext: append([]byte(nil), e.Ciphertext...), Nonce: append([]byte(nil), e.Nonce...), Version: e.Version, IsDeleted: e.IsDeleted, UpdatedAt: e.UpdatedAt, ServerRevision: e.ServerRevision, EncryptionKeyVersion: e.EncryptionKeyVersion}
 }

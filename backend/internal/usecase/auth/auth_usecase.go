@@ -210,41 +210,65 @@ func (s *ServiceImpl) Login(ctx context.Context, in LoginInput) (LoginOutput, er
 	return LoginOutput{AccessToken: sess.AccessToken, RefreshToken: sess.RefreshToken, Role: u.Role, KdfSalt: u.KdfSalt, UserID: u.ID, PasswordKeyEnvelope: u.PasswordKeyEnvelope, PasswordKeyNonce: u.PasswordKeyNonce, RecoveryKeyEnvelope: u.RecoveryKeyEnvelope, RecoveryKeyNonce: u.RecoveryKeyNonce}, nil
 }
 func (s *ServiceImpl) Refresh(ctx context.Context, in RefreshInput) (RefreshOutput, error) {
+
 	if strings.TrimSpace(in.RefreshToken) == "" {
 		return RefreshOutput{}, apperror.ErrUnauthorized("invalid refresh token")
 	}
+
 	h := infraauth.HashRefreshToken(in.RefreshToken)
+
 	old, err := s.refresh.FindByHash(ctx, h)
 	if err != nil {
 		return RefreshOutput{}, apperror.ErrUnauthorized("invalid refresh token")
 	}
+
 	if old.RevokedAt != nil {
 		_ = s.refresh.RevokeAllForUser(ctx, old.UserID)
-		_ = s.users.IncrementSessionVersion(ctx, old.UserID)
-		return RefreshOutput{}, apperror.ErrUnauthorized("refresh token reuse detected")
+		_, _ = s.users.IncrementSessionVersion(ctx, old.UserID)
+
+		return RefreshOutput{}, apperror.ErrUnauthorized(
+			"refresh token reuse detected",
+		)
 	}
+
 	if !time.Now().Before(old.ExpiresAt) {
-		return RefreshOutput{}, apperror.ErrUnauthorized("refresh token expired")
+		return RefreshOutput{}, apperror.ErrUnauthorized(
+			"refresh token expired",
+		)
 	}
+
 	u, err := s.users.FindByID(ctx, old.UserID)
 	if err != nil {
-		return RefreshOutput{}, apperror.ErrUnauthorized("invalid refresh token")
+		return RefreshOutput{}, apperror.ErrUnauthorized(
+			"invalid refresh token",
+		)
 	}
+
 	if err := s.refresh.Revoke(ctx, h); err != nil {
 		// A concurrent refresh may have revoked the same token after our read.
 		// Treat that as refresh-token reuse and invalidate every session.
 		if code, ok := apperror.CodeOf(err); ok && code == apperror.CodeConflict {
 			_ = s.refresh.RevokeAllForUser(ctx, old.UserID)
-			_ = s.users.IncrementSessionVersion(ctx, old.UserID)
-			return RefreshOutput{}, apperror.ErrUnauthorized("refresh token reuse detected")
+			_, _ = s.users.IncrementSessionVersion(ctx, old.UserID)
+
+			return RefreshOutput{}, apperror.ErrUnauthorized(
+				"refresh token reuse detected",
+			)
 		}
+
 		return RefreshOutput{}, err
 	}
+
 	sess, err := s.issueRefreshAndAccess(ctx, u, old.DeviceID)
 	if err != nil {
 		return RefreshOutput{}, err
 	}
-	return RefreshOutput{AccessToken: sess.AccessToken, RefreshToken: sess.RefreshToken, Role: u.Role}, nil
+
+	return RefreshOutput{
+		AccessToken:  sess.AccessToken,
+		RefreshToken: sess.RefreshToken,
+		Role:         u.Role,
+	}, nil
 }
 func (s *ServiceImpl) Logout(ctx context.Context, raw string) error {
 	if strings.TrimSpace(raw) == "" {
@@ -321,6 +345,10 @@ func (s *ServiceImpl) ResetPassword(ctx context.Context, in ResetPasswordInput) 
 	u, err := s.users.FindByID(ctx, recoverySession.UserID)
 	if err != nil {
 		return ResetPasswordOutput{}, apperror.ErrUnauthorized("invalid recovery request")
+	}
+	storedKdfSalt, err := decodeAndValidateKdfSalt(u.KdfSalt)
+	if err != nil || !bytes.Equal(storedKdfSalt, newKdfSalt) {
+		return ResetPasswordOutput{}, apperror.ErrValidation("recovery KDF salt must match the account salt")
 	}
 	salt, err := infraauth.GenerateSalt()
 	if err != nil {
@@ -400,46 +428,61 @@ func (s *ServiceImpl) issueRefreshAndAccess(ctx context.Context, u *entity.User,
 	}
 	return sessionOutput{a, raw}, nil
 }
-func validateClientKeyMaterial(kdfSalt, passwordEnvelope, passwordNonce, recoveryHash, recoveryEnvelope, recoveryNonce string) error {
+func validateClientKeyMaterial(
+	kdfSalt string,
+	passwordEnvelope []byte,
+	passwordNonce []byte,
+	recoveryHash []byte,
+	recoveryEnvelope []byte,
+	recoveryNonce []byte,
+) error {
 	if _, err := decodeAndValidateKdfSalt(kdfSalt); err != nil {
 		return apperror.ErrValidation("invalid KDF salt")
 	}
+
 	if err := validatePasswordKeyMaterial(passwordEnvelope, passwordNonce); err != nil {
 		return err
 	}
-	h, err := decodeBase64Flexible(strings.TrimSpace(recoveryHash))
-	if err != nil || len(h) != 32 {
+
+	if len(recoveryHash) != 32 {
 		return apperror.ErrValidation("invalid recovery key hash")
 	}
-	recoveryEnvelopeBytes, err := decodeBase64Flexible(strings.TrimSpace(recoveryEnvelope))
-	if err != nil || len(recoveryEnvelopeBytes) != 48 {
+
+	if len(recoveryEnvelope) != 48 {
 		return apperror.ErrValidation("invalid recovery key envelope")
 	}
-	recoveryNonceBytes, err := decodeBase64Flexible(strings.TrimSpace(recoveryNonce))
-	if err != nil || len(recoveryNonceBytes) != 12 {
+
+	if len(recoveryNonce) != 12 {
 		return apperror.ErrValidation("invalid recovery key nonce")
 	}
+
 	return nil
 }
 
-func validatePasswordKeyMaterial(envelope, nonce string) error {
-	e, err := decodeBase64Flexible(strings.TrimSpace(envelope))
-	if err != nil || len(e) != 48 {
+func validatePasswordKeyMaterial(
+	envelope []byte,
+	nonce []byte,
+) error {
+	if len(envelope) != 48 {
 		return apperror.ErrValidation("invalid password key envelope")
 	}
-	n, err := decodeBase64Flexible(strings.TrimSpace(nonce))
-	if err != nil || len(n) != 12 {
+
+	if len(nonce) != 12 {
 		return apperror.ErrValidation("invalid password key nonce")
 	}
+
 	return nil
 }
 
 func decodeBase64Flexible(value string) ([]byte, error) {
 	v := strings.TrimSpace(value)
-	if b, err := base64.StdEncoding.DecodeString(v); err == nil {
-		return b, nil
+	decoders := []*base64.Encoding{base64.StdEncoding, base64.RawStdEncoding, base64.URLEncoding, base64.RawURLEncoding}
+	for _, decoder := range decoders {
+		if b, err := decoder.DecodeString(v); err == nil {
+			return b, nil
+		}
 	}
-	return base64.RawStdEncoding.DecodeString(v)
+	return nil, errors.New("invalid base64")
 }
 
 func decodeAndValidateKdfSalt(value string) ([]byte, error) {
@@ -475,7 +518,16 @@ func hashIdentifier(v, secret string) string {
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 func hashRecovery(v string) string {
-	h := sha256.Sum256([]byte(strings.TrimSpace(v)))
+	v = strings.TrimSpace(v)
+	// Recovery keys generated by the client are base64-encoded random bytes.
+	// Hash the decoded bytes so the stored registration hash and recovery check
+	// use the same canonical representation. Keep a string fallback for legacy
+	// installations that may have stored the old representation.
+	if raw, err := base64.RawStdEncoding.DecodeString(v); err == nil && len(raw) > 0 {
+		h := sha256.Sum256(raw)
+		return base64.RawURLEncoding.EncodeToString(h[:])
+	}
+	h := sha256.Sum256([]byte(v))
 	return base64.RawURLEncoding.EncodeToString(h[:])
 }
 
