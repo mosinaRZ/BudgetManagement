@@ -63,6 +63,7 @@ func (s *ServiceImpl) SetRecoverySessionRepository(r repository.RecoverySessionR
 	s.recoverySessions = r
 }
 func (s *ServiceImpl) Register(ctx context.Context, in RegisterInput) (RegisterOutput, error) {
+
 	phone, err := normalizePhone(in.PhoneNumber)
 	if err != nil {
 		return RegisterOutput{}, apperror.ErrValidation("invalid phone number")
@@ -414,20 +415,41 @@ func (s *ServiceImpl) issueSession(ctx context.Context, u *entity.User, d string
 type sessionOutput struct{ AccessToken, RefreshToken string }
 
 func (s *ServiceImpl) issueRefreshAndAccess(ctx context.Context, u *entity.User, d string) (sessionOutput, error) {
-	a, e := infraauth.GenerateAccessTokenWithRoleAndSession(u.ID, u.Role, u.SessionVersion, s.accessTTL, s.secret)
+	role := u.Role
+	if role == "" {
+		role = entity.RoleUser
+	}
+
+	a, e := infraauth.GenerateAccessTokenWithRoleAndSession(
+		u.ID,
+		role,
+		u.SessionVersion,
+		s.accessTTL,
+		s.secret,
+	)
 	if e != nil {
 		return sessionOutput{}, apperror.ErrInternal("failed to create access token")
 	}
+
 	raw, e := infraauth.GenerateRefreshToken()
 	if e != nil {
 		return sessionOutput{}, apperror.ErrInternal("failed to create refresh token")
 	}
+
 	now := time.Now().UTC()
-	if e = s.refresh.Create(ctx, &entity.RefreshToken{TokenHash: infraauth.HashRefreshToken(raw), UserID: u.ID, DeviceID: d, CreatedAt: now, ExpiresAt: now.Add(s.refreshTTL)}); e != nil {
+	if e = s.refresh.Create(ctx, &entity.RefreshToken{
+		TokenHash: infraauth.HashRefreshToken(raw),
+		UserID:    u.ID,
+		DeviceID:  d,
+		CreatedAt: now,
+		ExpiresAt: now.Add(s.refreshTTL),
+	}); e != nil {
 		return sessionOutput{}, e
 	}
+
 	return sessionOutput{a, raw}, nil
 }
+
 func validateClientKeyMaterial(
 	kdfSalt string,
 	passwordEnvelope []byte,
