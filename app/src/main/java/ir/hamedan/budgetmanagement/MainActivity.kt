@@ -64,6 +64,7 @@ import ir.hamedan.budgetmanagement.ui.screens.add.AddScreen
 import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsScreen
 import ir.hamedan.budgetmanagement.ui.screens.home.HomeScreen
 import ir.hamedan.budgetmanagement.ui.screens.auth.LoginScreen
+import ir.hamedan.budgetmanagement.ui.screens.auth.RegisterScreen
 import ir.hamedan.budgetmanagement.ui.screens.budgetLimit.BudgetLimitScreen
 import ir.hamedan.budgetmanagement.ui.screens.categories.CategoriesScreen
 import ir.hamedan.budgetmanagement.ui.screens.debtCredit.DebtCreditScreen
@@ -204,11 +205,17 @@ class MainActivity : FragmentActivity() {
 
         LaunchedEffect(sessionAuthenticated, currentRouteEntry?.destination?.route) {
             val route = currentRouteEntry?.destination?.route.orEmpty()
-            if (!sessionAuthenticated && route.isNotBlank() &&
-                !route.contains("Login") && !route.contains("Splash")
+
+            if (!sessionAuthenticated &&
+                route.isNotBlank() &&
+                !route.contains("Login") &&
+                !route.contains("Register") &&
+                !route.contains("Splash")
             ) {
                 navController.navigate(AppRoute.Login) {
-                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                    popUpTo(navController.graph.startDestinationId) {
+                        inclusive = true
+                    }
                     launchSingleTop = true
                 }
             }
@@ -243,6 +250,9 @@ class MainActivity : FragmentActivity() {
                         navController.navigate(AppRoute.MainStructure) {
                             popUpTo(AppRoute.Login) { inclusive = true }
                         }
+                    },
+                    onRegister = {
+                        navController.navigate(AppRoute.Register)
                     }
                 )
             }
@@ -304,6 +314,21 @@ class MainActivity : FragmentActivity() {
             composable<AppRoute.NotificationCalibration> {
                 NotificationCalibrationScreen(
                     onBackClick = { navController.popBackStack() }
+                )
+            }
+
+            composable<AppRoute.Register> {
+                RegisterScreen(
+                    onRegistered = {
+                        navController.navigate(AppRoute.Login) {
+                            popUpTo(AppRoute.Register) {
+                                inclusive = true
+                            }
+                        }
+                    },
+                    onBack = {
+                        navController.popBackStack()
+                    }
                 )
             }
 

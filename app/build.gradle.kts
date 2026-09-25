@@ -45,9 +45,10 @@ android {
     buildTypes {
         debug {
             isMinifyEnabled = false
-            buildConfigField("String", "BASE_URL", "\"https://dev-api.example.com/\"")
+            buildConfigField("String", "BASE_URL", "\"http://192.168.248.17:8080/\"")
             buildConfigField("Boolean", "ENABLE_LOGS", "true")
         }
+
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -55,7 +56,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            buildConfigField("String", "BASE_URL", "\"${requireProductionBackendUrl(configuredBackendBaseUrl)}\"")
+
+            buildConfigField(
+                "String",
+                "BASE_URL",
+                "\"${configuredBackendBaseUrl.trim().trimEnd('/') + "/"}\""
+            )
             buildConfigField("Boolean", "ENABLE_LOGS", "false")
         }
     }
@@ -81,6 +87,20 @@ android {
                 "META-INF/LGPL2.1"
             )
         }
+    }
+}
+
+// Do not validate the production backend during Gradle configuration/sync.
+// Android Studio evaluates the release build type while importing the project,
+// even when you are only running the Debug variant on a physical device.
+// Validate HTTPS only when a Release-related task is actually requested.
+gradle.taskGraph.whenReady {
+    val releaseRequested = allTasks.any { task ->
+        task.name.contains("Release", ignoreCase = true)
+    }
+
+    if (releaseRequested) {
+        requireProductionBackendUrl(configuredBackendBaseUrl)
     }
 }
 

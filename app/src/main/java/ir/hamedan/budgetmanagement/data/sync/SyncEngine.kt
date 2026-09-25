@@ -32,7 +32,7 @@ class SyncEngine(
     private val syncKeyManager: SyncKeyManager
 ) {
     suspend fun sync(): SyncResult {
-        val initialAccess = sessionStore.accessToken() ?: return SyncResult.NotAuthenticated
+        sessionStore.accessToken() ?: return SyncResult.NotAuthenticated
         ensureAggregateBaselines()
 
         var cursor = database.syncStateDao().get()?.lastServerRevision ?: 0L
@@ -69,9 +69,8 @@ class SyncEngine(
             val response = try {
                 syncApi.sync(requestId, deviceId, cursor, changes)
             } catch (e: ir.hamedan.budgetmanagement.data.network.ApiException) {
-                if (e.code == "UNAUTHORIZED" || e.statusCode == 401) {
+                if (e.code == "UNAUTHORIZED" || e.statusCode == 401 || e.statusCode == 403) {
                     sessionStore.clearSession()
-                    syncKeyManager.clear()
                     return SyncResult.ReauthenticationRequired
                 }
                 throw e

@@ -58,7 +58,7 @@ fun RegisterScreen(
         loading = true
         error = null
         scope.launch {
-            authRepository.requestOtp(destination, channel, "REGISTER")
+            authRepository.requestOtp(destination, channel, if (channel == "email") "EMAIL_VERIFICATION" else "REGISTER")
                 .onSuccess { onSuccess(it.challengeId) }
                 .onFailure { error = (it as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(isPersian) ?: it.message ?: if (isPersian) "ارسال کد ناموفق بود" else "Failed to send code" }
             loading = false

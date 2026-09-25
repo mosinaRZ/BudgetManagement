@@ -13,6 +13,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -51,7 +52,8 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(
-    onLoginSuccess: () -> Unit
+    onLoginSuccess: () -> Unit,
+    onRegister: () -> Unit
 ) {
     val context = LocalContext.current
     val isPersian = isPersianLocale()
@@ -253,6 +255,51 @@ fun LoginScreen(
                     isLoading = isLoggingIn,
                     onClick = ::submitLogin
                 )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (isPersian) {
+                                "حساب کاربری ندارید؟"
+                            } else {
+                                "Don't have an account?"
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        TextButton(
+                            onClick = onRegister,
+                            enabled = !isLoggingIn,
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                        ) {
+                            Text(
+                                text = if (isPersian) "ثبت‌نام کنید" else "Create one",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
 
                 if (SharedPreferences.getBiometricEnabled(context)) {
                     // بررسی وجود سخت‌افزار حسگر اثر انگشت/بیومتریک

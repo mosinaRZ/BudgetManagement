@@ -54,7 +54,7 @@ class SyncKeyManager(private val context: Context) {
             passwordKeyEnvelope = Base64.encodeToString(envelope, Base64.NO_WRAP),
             passwordKeyNonce = Base64.encodeToString(nonce, Base64.NO_WRAP),
             recoveryKey = recoveryKey,
-            recoveryKeyHash = Base64.encodeToString(recoveryHash, Base64.NO_WRAP or Base64.URL_SAFE),
+            recoveryKeyHash = Base64.encodeToString(recoveryHash, Base64.NO_WRAP),
             recoveryKeyEnvelope = Base64.encodeToString(recoveryEnvelope, Base64.NO_WRAP),
             recoveryKeyNonce = Base64.encodeToString(recoveryNonce, Base64.NO_WRAP)
         )

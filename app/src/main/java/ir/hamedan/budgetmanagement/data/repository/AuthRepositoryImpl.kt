@@ -11,6 +11,7 @@ import ir.hamedan.budgetmanagement.data.security.SyncKeyManager
 import ir.hamedan.budgetmanagement.data.sync.SyncEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import ir.hamedan.budgetmanagement.worker.SyncScheduler
 
 class AuthRepositoryImpl(
     private val authApi: AuthApi,
@@ -20,7 +21,8 @@ class AuthRepositoryImpl(
     private val syncKeyManager: SyncKeyManager,
     private val syncEngine: SyncEngine,
     private val syncLocalDataSource: SyncLocalDataSource,
-    private val deviceIdentityStore: DeviceIdentityStore
+    private val deviceIdentityStore: DeviceIdentityStore,
+    private val syncScheduler: SyncScheduler
 ) : AuthRepository {
 
     override suspend fun requestOtp(destination: String, channel: String, purpose: String): Result<AuthApi.OtpResponse> =
@@ -128,7 +130,6 @@ class AuthRepositoryImpl(
                 // Offline/re-authentication failure must not destroy unsynced local data.
                 // Clear only credentials; the next login can resume sync for the same account.
                 syncStateRepository.markSyncRequired()
-                syncKeyManager.clear()
             }
             sessionStore.clear()
         }
@@ -177,6 +178,7 @@ class AuthRepositoryImpl(
         )
         val state = syncStateRepository.get()
         syncStateRepository.save(state.copy(deviceId = deviceId, accountUserId = response.userId, syncRequired = true))
+        syncScheduler.enqueueNow()
     }
 
     private suspend fun persistSession(

@@ -5,11 +5,13 @@ import ir.hamedan.budgetmanagement.data.local.models.SyncMetadataEntity
 import ir.hamedan.budgetmanagement.data.local.models.SyncStateEntity
 import ir.hamedan.budgetmanagement.data.security.DeviceIdentityStore
 import ir.hamedan.budgetmanagement.data.security.SyncKeyManager
+import ir.hamedan.budgetmanagement.worker.SyncScheduler
 
 class SyncLocalDataSourceImpl(
     private val database: AppDatabase,
     private val deviceIdentityStore: DeviceIdentityStore,
-    private val syncKeyManager: SyncKeyManager
+    private val syncKeyManager: SyncKeyManager,
+    private val syncScheduler: SyncScheduler
 ) : SyncLocalDataSource {
 
     override suspend fun <T> transaction(block: suspend () -> T): T =
@@ -68,6 +70,7 @@ class SyncLocalDataSourceImpl(
             )
         )
         stateDao.markSyncRequired()
+        syncScheduler.enqueueNow()
     }
 
     override suspend fun getMetadata(entityType: String, entityId: String): SyncMetadataEntity? =

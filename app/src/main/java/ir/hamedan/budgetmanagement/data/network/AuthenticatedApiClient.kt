@@ -25,8 +25,14 @@ class AuthenticatedApiClient(
         val refreshed = try {
             authApi.refresh(refresh)
         } catch (e: ApiException) {
-            sessionStore.clearSession()
-            throw ApiException(401, "UNAUTHORIZED", "نشست احراز هویت منقضی شده است.")
+            // Only definitive refresh-token failures invalidate the local session.
+            // Transient 429/5xx/network failures must preserve credentials so the
+            // next request/worker can retry without forcing a needless logout.
+            if (e.statusCode in setOf(400, 401, 403)) {
+                sessionStore.clearSession()
+                throw ApiException(401, "UNAUTHORIZED", "نشست احراز هویت منقضی شده است.", e)
+            }
+            throw e
         }
 
         sessionStore.save(

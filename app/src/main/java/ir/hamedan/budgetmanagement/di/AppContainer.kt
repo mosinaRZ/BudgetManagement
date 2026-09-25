@@ -31,12 +31,14 @@ import ir.hamedan.budgetmanagement.data.security.AuthSessionStore
 import ir.hamedan.budgetmanagement.data.security.DeviceIdentityStore
 import ir.hamedan.budgetmanagement.data.security.SyncKeyManager
 import ir.hamedan.budgetmanagement.data.sync.SyncEngine
+import ir.hamedan.budgetmanagement.worker.SyncScheduler
 
 class AppContainer(context: Context) {
     val appContext: Context = context.applicationContext
+    val syncScheduler: SyncScheduler by lazy { SyncScheduler(appContext) }
     val database: AppDatabase = AppDatabase.getInstance(appContext)
 
-    val syncLocalDataSource: SyncLocalDataSource by lazy { SyncLocalDataSourceImpl(database, deviceIdentityStore, syncKeyManager) }
+    val syncLocalDataSource: SyncLocalDataSource by lazy { SyncLocalDataSourceImpl(database, deviceIdentityStore, syncKeyManager, syncScheduler) }
     val syncStateRepository: SyncStateRepository by lazy { SyncStateRepositoryImpl(database.syncStateDao(), deviceIdentityStore) }
 
     private val apiHttpClient: ApiHttpClient by lazy { ApiHttpClient() }
@@ -62,7 +64,8 @@ class AppContainer(context: Context) {
             syncKeyManager = syncKeyManager,
             syncEngine = syncEngine,
             syncLocalDataSource = syncLocalDataSource,
-            deviceIdentityStore = deviceIdentityStore
+            deviceIdentityStore = deviceIdentityStore,
+            syncScheduler = syncScheduler
         )
     }
 

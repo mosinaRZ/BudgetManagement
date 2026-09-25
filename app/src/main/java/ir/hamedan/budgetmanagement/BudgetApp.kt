@@ -35,6 +35,7 @@ class BudgetApp : Application() {
             }
         }
         scheduleWorkers()
+        container.syncScheduler.schedulePeriodic()
     }
 
     // ساخت دسته‌بندی‌های پیش‌فرض، فقط یک‌بار در طول عمر نصب اپ.
