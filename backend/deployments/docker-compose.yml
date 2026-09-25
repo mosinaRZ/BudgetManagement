@@ -72,5 +72,11 @@ services:
       timeout: 10s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      default: null
+
 volumes:
   mongo_data:

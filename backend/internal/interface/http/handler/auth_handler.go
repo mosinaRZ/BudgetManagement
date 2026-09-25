@@ -75,7 +75,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, apperror.ErrValidation("recovery_key_nonce must be valid base64"))
 		return
 	}
-	recoveryKeyHash, err := decodeB64(q.RecoveryKeyHash)
+	recoveryKeyHash, err := decodeRecoveryHash(q.RecoveryKeyHash)
 	if err != nil {
 		response.Error(w, apperror.ErrValidation("recovery_key_hash must be valid base64"))
 		return
@@ -208,6 +208,16 @@ func decodeB64(s string) ([]byte, error) {
 		return nil, err
 	}
 	return b, nil
+}
+
+func decodeRecoveryHash(s string) ([]byte, error) {
+	if s == "" {
+		return nil, nil
+	}
+	if b, err := base64.StdEncoding.DecodeString(s); err == nil {
+		return b, nil
+	}
+	return base64.RawURLEncoding.DecodeString(s)
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {

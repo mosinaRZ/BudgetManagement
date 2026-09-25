@@ -260,3 +260,29 @@ func TestLoginAllowsVerificationAfterLockExpiry(t *testing.T) {
 		t.Fatalf("err=%v reset=%v", err, reset)
 	}
 }
+
+func TestRecoveryKeyHashCanonicalRepresentation(t *testing.T) {
+	raw := []byte("01234567890123456789012345678901")
+	keyStd := base64.StdEncoding.EncodeToString(raw)
+	keyRaw := base64.RawStdEncoding.EncodeToString(raw)
+
+	canonical := hashRecovery(keyStd)
+	if canonical != hashRecovery(keyRaw) {
+		t.Fatal("padded and raw standard Base64 recovery keys must hash identically")
+	}
+	if !verifyRecoveryKeyHash(canonical, keyStd) {
+		t.Fatal("canonical recovery hash must verify")
+	}
+	if !verifyRecoveryKeyHash(string(mustDecodeRawURL(t, canonical)), keyStd) {
+		t.Fatal("legacy raw 32-byte recovery hash must remain verifiable")
+	}
+}
+
+func mustDecodeRawURL(t *testing.T, value string) []byte {
+	t.Helper()
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return decoded
+}
