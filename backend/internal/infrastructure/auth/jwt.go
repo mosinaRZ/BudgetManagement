@@ -46,8 +46,9 @@ func GenerateAccessTokenWithRoleAndSession(userID string, role entity.Role, sess
 	}
 	now := time.Now()
 	claims := accessClaims{
-		TokenType: accessTokenType,
-		Role:      role,
+		TokenType:      accessTokenType,
+		Role:           role,
+		SessionVersion: sessionVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    jwtIssuer,
 			Subject:   userID,

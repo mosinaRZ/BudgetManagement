@@ -92,7 +92,16 @@ func run() error {
 	}
 	var rateStore middleware.RateLimitStore = middleware.NewMemoryRateLimitStore()
 	if strings.TrimSpace(cfg.RedisURL) != "" {
-		rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisURL})
+		var redisOptions *redis.Options
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(cfg.RedisURL)), "redis://") || strings.HasPrefix(strings.ToLower(strings.TrimSpace(cfg.RedisURL)), "rediss://") {
+			redisOptions, err = redis.ParseURL(cfg.RedisURL)
+			if err != nil {
+				return fmt.Errorf("invalid REDIS_URL: %w", err)
+			}
+		} else {
+			redisOptions = &redis.Options{Addr: cfg.RedisURL}
+		}
+		rdb := redis.NewClient(redisOptions)
 		if err := rdb.Ping(startupCtx).Err(); err != nil {
 			return fmt.Errorf("redis configured but unavailable: %w", err)
 		}

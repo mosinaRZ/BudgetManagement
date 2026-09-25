@@ -25,15 +25,6 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAIL_FROM: ${EMAIL_FROM:-}
-      OTP_EXPIRY_MINUTES: ${OTP_EXPIRY_MINUTES:-5}
-      DEV_LOG_OTP: ${DEV_LOG_OTP:-false}
-      SMS_WEBHOOK_URL: ${SMS_WEBHOOK_URL:-}
-      SMS_AUTH_TOKEN: ${SMS_AUTH_TOKEN:-}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      EMAIL_FROM: ${EMAIL_FROM:-}
     depends_on:
       mongo:
         condition: service_healthy
@@ -44,8 +35,17 @@ services:
       retries: 3
 
   mongo:
-    image: mongo:7
-    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    build:
+      context: .
+      dockerfile: Mongo.Dockerfile
+    image: cidna-mongo:dev
+    command:
+      - mongod
+      - --replSet
+      - rs0
+      - --bind_ip_all
+      - --keyFile
+      - /etc/mongo-keyfile
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:?MONGO_INITDB_ROOT_USERNAME must be set}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:?MONGO_INITDB_ROOT_PASSWORD must be set}
@@ -55,13 +55,28 @@ services:
       test:
         - CMD-SHELL
         - >-
-          mongosh --quiet --eval
-          "try { rs.status().ok } catch (e) {
-          rs.initiate({_id:'rs0', members:[{_id:0, host:'mongo:27017'}]}).ok
+          mongosh --quiet
+          --username "$$MONGO_INITDB_ROOT_USERNAME"
+          --password "$$MONGO_INITDB_ROOT_PASSWORD"
+          --authenticationDatabase admin
+          --eval
+          "try {
+            rs.status().ok
+          } catch (e) {
+            rs.initiate({
+              _id:'rs0',
+              members:[{_id:0, host:'mongo:27017'}]
+            }).ok
           }"
       interval: 10s
       timeout: 10s
       retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      default: null
 
 volumes:
   mongo_data:

@@ -34,7 +34,7 @@ func validRegistrationMaterial() RegisterInput {
 		KdfSalt:             encode(make([]byte, 16)),
 		PasswordKeyEnvelope: make([]byte, 48),
 		PasswordKeyNonce:    make([]byte, 12),
-		RecoveryKeyHash:     []byte(encode(make([]byte, 32))),
+		RecoveryKeyHash:     make([]byte, 32),
 		RecoveryKeyEnvelope: make([]byte, 48),
 		RecoveryKeyNonce:    make([]byte, 12),
 	}
@@ -112,7 +112,7 @@ func TestLogoutRevokesRefreshAndAccessSessions(t *testing.T) {
 func TestLoginSuccessAndWrongPassword(t *testing.T) {
 	salt, _ := infraauth.GenerateSalt()
 	hash, _ := infraauth.HashPassword("correct horse battery", salt)
-	user := &entity.User{ID: "u1", PasswordHash: hash, AuthSalt: encode(salt), KdfSalt: "kdf"}
+	user := &entity.User{ID: "u1", PasswordHash: hash, AuthSalt: encode(salt), KdfSalt: encode(make([]byte, 16))}
 	users := &mocks.MockUserRepository{FindByPhoneHashFunc: func(context.Context, string) (*entity.User, error) { return user, nil }, AddDeviceFunc: func(context.Context, string, string) error { return nil }}
 	refresh := &mocks.MockRefreshTokenRepository{}
 	s := newService(users, refresh)
@@ -130,7 +130,7 @@ func TestRefreshSuccess(t *testing.T) {
 	raw := "old-refresh-token"
 	old := &entity.RefreshToken{TokenHash: infraauth.HashRefreshToken(raw), UserID: "u1", DeviceID: "d1", CreatedAt: time.Now().Add(-time.Hour), ExpiresAt: time.Now().Add(time.Hour)}
 	users := &mocks.MockUserRepository{FindByIDFunc: func(context.Context, string) (*entity.User, error) {
-		return &entity.User{ID: "u1", KdfSalt: "kdf"}, nil
+		return &entity.User{ID: "u1", KdfSalt: encode(make([]byte, 16))}, nil
 	}}
 	var revoked bool
 	refresh := &mocks.MockRefreshTokenRepository{
@@ -259,4 +259,30 @@ func TestLoginAllowsVerificationAfterLockExpiry(t *testing.T) {
 	if _, err := newService(users, &mocks.MockRefreshTokenRepository{}).Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: "correct horse battery", DeviceID: "d"}); err != nil || !reset {
 		t.Fatalf("err=%v reset=%v", err, reset)
 	}
+}
+
+func TestRecoveryKeyHashCanonicalRepresentation(t *testing.T) {
+	raw := []byte("01234567890123456789012345678901")
+	keyStd := base64.StdEncoding.EncodeToString(raw)
+	keyRaw := base64.RawStdEncoding.EncodeToString(raw)
+
+	canonical := hashRecovery(keyStd)
+	if canonical != hashRecovery(keyRaw) {
+		t.Fatal("padded and raw standard Base64 recovery keys must hash identically")
+	}
+	if !verifyRecoveryKeyHash(canonical, keyStd) {
+		t.Fatal("canonical recovery hash must verify")
+	}
+	if !verifyRecoveryKeyHash(string(mustDecodeRawURL(t, canonical)), keyStd) {
+		t.Fatal("legacy raw 32-byte recovery hash must remain verifiable")
+	}
+}
+
+func mustDecodeRawURL(t *testing.T, value string) []byte {
+	t.Helper()
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return decoded
 }

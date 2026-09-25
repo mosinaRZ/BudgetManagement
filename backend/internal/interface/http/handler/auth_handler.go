@@ -75,12 +75,27 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, apperror.ErrValidation("recovery_key_nonce must be valid base64"))
 		return
 	}
+	recoveryKeyHash, err := decodeRecoveryHash(q.RecoveryKeyHash)
+	if err != nil {
+		response.Error(w, apperror.ErrValidation("recovery_key_hash must be valid base64"))
+		return
+	}
+
 	in := auth.RegisterInput{
-		PhoneNumber: q.PhoneNumber, Email: q.Email, Password: q.Password, DeviceID: q.DeviceID,
-		OTPChallengeID: q.OTPChallengeID, OTPCode: q.OTPCode,
-		EmailOTPChallengeID: q.EmailOTPChallengeID, EmailOTPCode: q.EmailOTPCode,
-		KdfSalt: q.KdfSalt, PasswordKeyEnvelope: passwordKeyEnvelope, PasswordKeyNonce: passwordKeyNonce,
-		RecoveryKeyHash: []byte(q.RecoveryKeyHash), RecoveryKeyEnvelope: recoveryKeyEnvelope, RecoveryKeyNonce: recoveryKeyNonce,
+		PhoneNumber:         q.PhoneNumber,
+		Email:               q.Email,
+		Password:            q.Password,
+		DeviceID:            q.DeviceID,
+		OTPChallengeID:      q.OTPChallengeID,
+		OTPCode:             q.OTPCode,
+		EmailOTPChallengeID: q.EmailOTPChallengeID,
+		EmailOTPCode:        q.EmailOTPCode,
+		KdfSalt:             q.KdfSalt,
+		PasswordKeyEnvelope: passwordKeyEnvelope,
+		PasswordKeyNonce:    passwordKeyNonce,
+		RecoveryKeyHash:     recoveryKeyHash,
+		RecoveryKeyEnvelope: recoveryKeyEnvelope,
+		RecoveryKeyNonce:    recoveryKeyNonce,
 	}
 	out, err := h.usecase.Register(r.Context(), in)
 	if err != nil {
@@ -193,6 +208,16 @@ func decodeB64(s string) ([]byte, error) {
 		return nil, err
 	}
 	return b, nil
+}
+
+func decodeRecoveryHash(s string) ([]byte, error) {
+	if s == "" {
+		return nil, nil
+	}
+	if b, err := base64.StdEncoding.DecodeString(s); err == nil {
+		return b, nil
+	}
+	return base64.RawURLEncoding.DecodeString(s)
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {

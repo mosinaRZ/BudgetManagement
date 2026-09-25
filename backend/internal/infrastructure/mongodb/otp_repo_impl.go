@@ -3,12 +3,13 @@ package mongodb
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/apperror"
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"time"
 )
 
 const otpCollectionName = "otp_challenges"
@@ -80,32 +81,68 @@ func (r *otpRepo) FindActive(ctx context.Context, id string) (*entity.OTPChallen
 	}
 	return &entity.OTPChallenge{ID: m.ID.Hex(), UserID: m.UserID, DestinationHash: m.DestinationHash, Channel: m.Channel, CodeHash: m.CodeHash, Purpose: entity.OTPPurpose(m.Purpose), CreatedAt: m.CreatedAt, ExpiresAt: m.ExpiresAt, ConsumedAt: m.ConsumedAt, Attempts: m.Attempts}, nil
 }
-func (r *otpRepo) Consume(ctx context.Context, id string) error {
-	oid, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return apperror.ErrNotFound("OTP challenge not found")
-	}
+func (r *otpRepo) InvalidateActive(ctx context.Context, destinationHash, channel string, purpose entity.OTPPurpose) error {
 	now := time.Now().UTC()
-	res, err := r.c.UpdateOne(ctx, bson.M{"_id": oid, "consumedAt": bson.M{"$exists": false}}, bson.M{"$set": bson.M{"consumedAt": now}})
+	_, err := r.c.UpdateMany(ctx, bson.M{
+		"destinationHash": destinationHash,
+		"channel":         channel,
+		"purpose":         string(purpose),
+		"consumedAt":      bson.M{"$exists": false},
+		"expiresAt":       bson.M{"$gt": now},
+	}, bson.M{"$set": bson.M{"consumedAt": now}})
 	if err != nil {
-		return apperror.ErrInternal("failed to consume OTP", err)
-	}
-	if res.ModifiedCount == 0 {
-		return apperror.ErrConflict("OTP already consumed")
+		return apperror.ErrInternal("failed to invalidate previous OTP challenges", err)
 	}
 	return nil
 }
-func (r *otpRepo) IncrementAttempts(ctx context.Context, id string) error {
+
+func (r *otpRepo) InvalidateByID(ctx context.Context, id string) error {
 	oid, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return apperror.ErrNotFound("OTP challenge not found")
 	}
-	_, err = r.c.UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$inc": bson.M{"attempts": 1}})
+	_, err = r.c.UpdateOne(ctx, bson.M{"_id": oid, "consumedAt": bson.M{"$exists": false}}, bson.M{"$set": bson.M{"consumedAt": time.Now().UTC()}})
 	if err != nil {
-		return apperror.ErrInternal("failed to update OTP attempts", err)
+		return apperror.ErrInternal("failed to invalidate OTP challenge", err)
 	}
 	return nil
 }
+
+func (r *otpRepo) VerifyAndConsume(ctx context.Context, id, codeHash string, now time.Time, maxAttempts int) (bool, error) {
+	oid, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return false, apperror.ErrNotFound("OTP challenge not found")
+	}
+
+	// The successful verification and one-time consumption are one atomic MongoDB update.
+	res, err := r.c.UpdateOne(ctx, bson.M{
+		"_id":        oid,
+		"codeHash":   codeHash,
+		"consumedAt": bson.M{"$exists": false},
+		"expiresAt":  bson.M{"$gt": now},
+		"attempts":   bson.M{"$lt": maxAttempts},
+	}, bson.M{"$set": bson.M{"consumedAt": now}})
+	if err != nil {
+		return false, apperror.ErrInternal("failed to verify OTP", err)
+	}
+	if res.ModifiedCount == 1 {
+		return true, nil
+	}
+
+	// A wrong code consumes an attempt, also atomically, but never increments a
+	// challenge that is already expired, consumed, or exhausted.
+	_, err = r.c.UpdateOne(ctx, bson.M{
+		"_id":        oid,
+		"consumedAt": bson.M{"$exists": false},
+		"expiresAt":  bson.M{"$gt": now},
+		"attempts":   bson.M{"$lt": maxAttempts},
+	}, bson.M{"$inc": bson.M{"attempts": 1}})
+	if err != nil {
+		return false, apperror.ErrInternal("failed to update OTP attempts", err)
+	}
+	return false, nil
+}
+
 func (r *otpRepo) RecentCount(ctx context.Context, destination, channel string, purpose entity.OTPPurpose, minutes int) (int, error) {
 	since := time.Now().UTC().Add(-time.Duration(minutes) * time.Minute)
 	n, err := r.c.CountDocuments(ctx, bson.M{"destinationHash": destination, "channel": channel, "purpose": string(purpose), "createdAt": bson.M{"$gte": since}})

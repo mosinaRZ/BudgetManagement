@@ -67,92 +67,177 @@ func (s *ServiceImpl) Register(ctx context.Context, in RegisterInput) (RegisterO
 	if err != nil {
 		return RegisterOutput{}, apperror.ErrValidation("invalid phone number")
 	}
+
 	if len(in.Password) < 8 || len(in.Password) > 256 {
 		return RegisterOutput{}, apperror.ErrValidation("password must be between 8 and 256 characters")
 	}
 	if err := validDevice(in.DeviceID); err != nil {
 		return RegisterOutput{}, err
 	}
-	ph := hashIdentifier(phone, s.secret)
 	if s.otp == nil {
 		return RegisterOutput{}, apperror.ErrInternal("OTP service is not configured")
 	}
-	dest, err := s.otp.Verify(ctx, VerifyOTPInput{ChallengeID: in.OTPChallengeID, Code: in.OTPCode, Purpose: entity.OTPPurposeRegister})
+
+	phoneHash := hashIdentifier(phone, s.secret)
+	if err := s.verifyRegistrationOTP(ctx, in, phoneHash); err != nil {
+		return RegisterOutput{}, err
+	}
+
+	if err := s.ensurePhoneAvailable(ctx, phoneHash); err != nil {
+		return RegisterOutput{}, err
+	}
+
+	emailHash, emailVerified, err := s.prepareRegistrationEmail(ctx, in)
 	if err != nil {
 		return RegisterOutput{}, err
 	}
-	if !hmac.Equal([]byte(dest), []byte(ph)) {
-		return RegisterOutput{}, apperror.ErrUnauthorized("OTP destination does not match account identifier")
-	}
-	if existing, err := s.users.FindByPhoneHash(ctx, ph); err == nil && existing != nil {
-		return RegisterOutput{}, apperror.ErrConflict("user already exists")
-	} else if err != nil {
-		code, ok := apperror.CodeOf(err)
-		if !ok || code != apperror.CodeNotFound {
-			return RegisterOutput{}, err
-		}
-	}
-	emailHash := ""
-	emailVerified := false
-	if strings.TrimSpace(in.Email) != "" {
-		emailHash = hashIdentifier(strings.ToLower(strings.TrimSpace(in.Email)), s.secret)
-		if existing, err := s.users.FindByEmailHash(ctx, emailHash); err == nil && existing != nil {
-			return RegisterOutput{}, apperror.ErrConflict("email already exists")
-		} else if err != nil {
-			code, ok := apperror.CodeOf(err)
-			if !ok || code != apperror.CodeNotFound {
-				return RegisterOutput{}, err
-			}
-		}
-		if in.EmailOTPChallengeID == "" || in.EmailOTPCode == "" {
-			return RegisterOutput{}, apperror.ErrValidation("email OTP is required when email is provided")
-		}
-		ed, err := s.otp.Verify(ctx, VerifyOTPInput{ChallengeID: in.EmailOTPChallengeID, Code: in.EmailOTPCode, Purpose: entity.OTPPurposeEmailVerification})
-		if err != nil {
-			return RegisterOutput{}, err
-		}
-		if !hmac.Equal([]byte(ed), []byte(emailHash)) {
-			return RegisterOutput{}, apperror.ErrUnauthorized("email OTP destination does not match")
-		}
-		emailVerified = true
-	}
-	salt, err := infraauth.GenerateSalt()
+
+	authSalt, err := infraauth.GenerateSalt()
 	if err != nil {
 		return RegisterOutput{}, apperror.ErrInternal("failed to generate password salt")
 	}
-	passwordHash, err := infraauth.HashPassword(in.Password, salt)
+
+	passwordHash, err := infraauth.HashPassword(in.Password, authSalt)
 	if err != nil {
 		return RegisterOutput{}, apperror.ErrInternal("failed to hash password")
 	}
-	kdfSalt := in.KdfSalt
-	if kdfSalt != "" {
-		decoded, decodeErr := decodeBase64Flexible(kdfSalt)
-		if decodeErr != nil || len(decoded) != 16 {
-			return RegisterOutput{}, apperror.ErrValidation("invalid KDF salt")
-		}
-	} else {
-		b, err := infraauth.GenerateSalt()
-		if err != nil {
-			return RegisterOutput{}, apperror.ErrInternal("failed to generate KDF salt")
-		}
-		kdfSalt = base64.RawStdEncoding.EncodeToString(b)
-	}
-	if err := validateClientKeyMaterial(kdfSalt, in.PasswordKeyEnvelope, in.PasswordKeyNonce, in.RecoveryKeyHash, in.RecoveryKeyEnvelope, in.RecoveryKeyNonce); err != nil {
+
+	kdfSalt, err := prepareRegistrationKdfSalt(in.KdfSalt)
+	if err != nil {
 		return RegisterOutput{}, err
 	}
+
+	if err := validateClientKeyMaterial(
+		kdfSalt,
+		in.PasswordKeyEnvelope,
+		in.PasswordKeyNonce,
+		in.RecoveryKeyHash,
+		in.RecoveryKeyEnvelope,
+		in.RecoveryKeyNonce,
+	); err != nil {
+		return RegisterOutput{}, err
+	}
+
 	now := time.Now().UTC()
-	u := &entity.User{Role: entity.RoleUser, PhoneHash: ph, EmailHash: emailHash, PhoneVerified: true, EmailVerified: emailVerified, PasswordHash: passwordHash, AuthSalt: base64.RawStdEncoding.EncodeToString(salt), KdfSalt: kdfSalt, PasswordKeyEnvelope: in.PasswordKeyEnvelope, PasswordKeyNonce: in.PasswordKeyNonce, RecoveryKeyHash: string(in.RecoveryKeyHash), RecoveryKeyEnvelope: in.RecoveryKeyEnvelope, RecoveryKeyNonce: in.RecoveryKeyNonce, CreatedAt: now, UpdatedAt: now, Devices: []string{in.DeviceID}}
-	if err := s.users.Create(ctx, u); err != nil {
+	user := &entity.User{
+		Role:                entity.RoleUser,
+		PhoneHash:           phoneHash,
+		EmailHash:           emailHash,
+		PhoneVerified:       true,
+		EmailVerified:       emailVerified,
+		PasswordHash:        passwordHash,
+		AuthSalt:            base64.RawStdEncoding.EncodeToString(authSalt),
+		KdfSalt:             kdfSalt,
+		PasswordKeyEnvelope: in.PasswordKeyEnvelope,
+		PasswordKeyNonce:    in.PasswordKeyNonce,
+		RecoveryKeyHash:     base64.RawURLEncoding.EncodeToString(in.RecoveryKeyHash),
+		RecoveryKeyEnvelope: in.RecoveryKeyEnvelope,
+		RecoveryKeyNonce:    in.RecoveryKeyNonce,
+		CreatedAt:           now,
+		UpdatedAt:           now,
+		Devices:             []string{in.DeviceID},
+	}
+
+	if err := s.users.Create(ctx, user); err != nil {
 		return RegisterOutput{}, err
 	}
+
 	if s.devices != nil {
-		now := time.Now().UTC()
-		if err := s.devices.Register(ctx, &entity.Device{ID: in.DeviceID, UserID: u.ID, CreatedAt: now, LastSeenAt: now}); err != nil {
+		if err := s.devices.Register(ctx, &entity.Device{
+			ID:         in.DeviceID,
+			UserID:     user.ID,
+			CreatedAt:  now,
+			LastSeenAt: now,
+		}); err != nil {
 			return RegisterOutput{}, err
 		}
 	}
-	return s.issueSession(ctx, u, in.DeviceID)
+
+	return s.issueSession(ctx, user, in.DeviceID)
 }
+
+func (s *ServiceImpl) verifyRegistrationOTP(ctx context.Context, in RegisterInput, phoneHash string) error {
+	destination, err := s.otp.Verify(ctx, VerifyOTPInput{
+		ChallengeID: in.OTPChallengeID,
+		Code:        in.OTPCode,
+		Purpose:     entity.OTPPurposeRegister,
+	})
+	if err != nil {
+		return err
+	}
+	if !hmac.Equal([]byte(destination), []byte(phoneHash)) {
+		return apperror.ErrUnauthorized("OTP destination does not match account identifier")
+	}
+	return nil
+}
+
+func (s *ServiceImpl) ensurePhoneAvailable(ctx context.Context, phoneHash string) error {
+	existing, err := s.users.FindByPhoneHash(ctx, phoneHash)
+	if err == nil && existing != nil {
+		return apperror.ErrConflict("user already exists")
+	}
+	if err != nil {
+		code, ok := apperror.CodeOf(err)
+		if !ok || code != apperror.CodeNotFound {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *ServiceImpl) prepareRegistrationEmail(ctx context.Context, in RegisterInput) (string, bool, error) {
+	email := strings.TrimSpace(in.Email)
+	if email == "" {
+		return "", false, nil
+	}
+
+	emailHash := hashIdentifier(strings.ToLower(email), s.secret)
+	existing, err := s.users.FindByEmailHash(ctx, emailHash)
+	if err == nil && existing != nil {
+		return "", false, apperror.ErrConflict("email already exists")
+	}
+	if err != nil {
+		code, ok := apperror.CodeOf(err)
+		if !ok || code != apperror.CodeNotFound {
+			return "", false, err
+		}
+	}
+
+	if in.EmailOTPChallengeID == "" || in.EmailOTPCode == "" {
+		return "", false, apperror.ErrValidation("email OTP is required when email is provided")
+	}
+
+	destination, err := s.otp.Verify(ctx, VerifyOTPInput{
+		ChallengeID: in.EmailOTPChallengeID,
+		Code:        in.EmailOTPCode,
+		Purpose:     entity.OTPPurposeEmailVerification,
+	})
+	if err != nil {
+		return "", false, err
+	}
+	if !hmac.Equal([]byte(destination), []byte(emailHash)) {
+		return "", false, apperror.ErrUnauthorized("email OTP destination does not match")
+	}
+
+	return emailHash, true, nil
+}
+
+func prepareRegistrationKdfSalt(value string) (string, error) {
+	if value != "" {
+		decoded, err := decodeBase64Flexible(value)
+		if err != nil || len(decoded) != 16 {
+			return "", apperror.ErrValidation("invalid KDF salt")
+		}
+		return value, nil
+	}
+
+	salt, err := infraauth.GenerateSalt()
+	if err != nil {
+		return "", apperror.ErrInternal("failed to generate KDF salt")
+	}
+	return base64.RawStdEncoding.EncodeToString(salt), nil
+}
+
 func (s *ServiceImpl) Login(ctx context.Context, in LoginInput) (LoginOutput, error) {
 	if len(in.Password) > 256 {
 		return LoginOutput{}, apperror.ErrUnauthorized("invalid credentials")
@@ -301,7 +386,7 @@ func (s *ServiceImpl) PrepareRecovery(ctx context.Context, in PrepareRecoveryInp
 	if err != nil {
 		return PrepareRecoveryOutput{}, apperror.ErrUnauthorized("invalid recovery request")
 	}
-	if u.RecoveryKeyHash == "" || !hmac.Equal([]byte(u.RecoveryKeyHash), []byte(hashRecovery(in.RecoveryKey))) {
+	if !verifyRecoveryKeyHash(u.RecoveryKeyHash, in.RecoveryKey) {
 		return PrepareRecoveryOutput{}, apperror.ErrUnauthorized("recovery key is invalid")
 	}
 	raw, err := infraauth.GenerateRefreshToken()
@@ -519,16 +604,43 @@ func hashIdentifier(v, secret string) string {
 }
 func hashRecovery(v string) string {
 	v = strings.TrimSpace(v)
-	// Recovery keys generated by the client are base64-encoded random bytes.
-	// Hash the decoded bytes so the stored registration hash and recovery check
-	// use the same canonical representation. Keep a string fallback for legacy
-	// installations that may have stored the old representation.
-	if raw, err := base64.RawStdEncoding.DecodeString(v); err == nil && len(raw) > 0 {
+	var raw []byte
+	if decoded, err := base64.StdEncoding.DecodeString(v); err == nil {
+		raw = decoded
+	} else if decoded, err := base64.RawStdEncoding.DecodeString(v); err == nil {
+		raw = decoded
+	} else if decoded, err := base64.RawURLEncoding.DecodeString(v); err == nil {
+		raw = decoded
+	}
+	if len(raw) > 0 {
 		h := sha256.Sum256(raw)
 		return base64.RawURLEncoding.EncodeToString(h[:])
 	}
 	h := sha256.Sum256([]byte(v))
 	return base64.RawURLEncoding.EncodeToString(h[:])
+}
+
+func verifyRecoveryKeyHash(stored, recoveryKey string) bool {
+	if stored == "" {
+		return false
+	}
+	canonical := hashRecovery(recoveryKey)
+	if hmac.Equal([]byte(stored), []byte(canonical)) {
+		return true
+	}
+	decodedCanonical, err := base64.RawURLEncoding.DecodeString(canonical)
+	if err != nil {
+		return false
+	}
+	// Backward compatibility for installations created before the canonical
+	// Base64URL hash representation was introduced.
+	if len(stored) == sha256.Size && hmac.Equal([]byte(stored), decodedCanonical) {
+		return true
+	}
+	if raw, err := base64.StdEncoding.DecodeString(stored); err == nil && len(raw) == sha256.Size {
+		return hmac.Equal(raw, decodedCanonical)
+	}
+	return false
 }
 
 // IdentifierHashForCLI hashes a normalized identifier using the same server secret used by authentication.
