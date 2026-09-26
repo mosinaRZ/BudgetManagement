@@ -26,7 +26,7 @@ object NotificationHelper {
         descEn: String,
         tag: String = ""
     ) {
-        if (!NotificationPreferences.isTypeEnabled(context, notificationType)) return
+        if (tag != "WELCOME" && !NotificationPreferences.isTypeEnabled(context, notificationType)) return
 
         val app = context.applicationContext as BudgetApp
         val repository = app.container.notificationRepository

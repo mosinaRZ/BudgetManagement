@@ -828,7 +828,7 @@ fun DebtCreditItemCard(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(text = if (isPersian) "باقی‌مانده:" else "Remaining:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
-                    text = "%,.0f".format(remainingAmount),
+                    text = "%,d".format(remainingAmount),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold,
                     color = if (remainingAmount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
