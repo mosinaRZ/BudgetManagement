@@ -1,13 +1,26 @@
 package ir.hamedan.budgetmanagement.utils
 
 import android.content.Context
-import android.graphics.*
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Typeface
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextDirectionHeuristics
+import android.text.TextPaint
 import android.graphics.pdf.PdfDocument
 import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import java.io.File
 import java.io.FileOutputStream
-import kotlin.math.ceil
+import java.text.NumberFormat
+import java.util.Locale
+import kotlin.math.max
+
 
 data class ExportStats(
     val openingBalance: Double,
@@ -23,261 +36,332 @@ data class ExportStats(
 
 object PdfExporter {
 
-    private const val PAGE_WIDTH = 595   // A4 در 72dpi
+    private const val PAGE_WIDTH = 595
     private const val PAGE_HEIGHT = 842
-    private const val MARGIN = 32f
-    private const val ROW_HEIGHT = 26f
-    private const val HEADER_BLOCK_HEIGHT = 220f // لوگو + استت‌ها + عنوان صورتحساب، فقط صفحه اول
+    private const val MARGIN = 28f
     private const val FOOTER_HEIGHT = 30f
-    private const val TABLE_HEADER_HEIGHT = 30f
+    private const val TABLE_HEADER_HEIGHT = 32f
+    private const val FIRST_PAGE_TOP = 255f
+    private const val OTHER_PAGE_TOP = 72f
+    private const val MIN_ROW_HEIGHT = 36f
+
+    private const val BRAND = "#408A71"
+    private const val BRAND_LIGHT = "#EAF4F0"
+    private const val ALT_ROW = "#F5F8F7"
+    private const val HEADER_GRAY = "#4D5754"
+    private const val TEXT = "#26332F"
+    private const val MUTED = "#6B7773"
+    private const val BORDER = "#D4DEDA"
+    private const val INCOME = "#2E8B67"
+    private const val EXPENSE = "#C65B5B"
+
+    private data class Column(val key: String, val weight: Float, val titleFa: String, val titleEn: String)
+
+    private val logicalColumns = listOf(
+        Column("index", 6f, "ردیف", "#"),
+        Column("date", 13f, "تاریخ", "Date"),
+        Column("title", 17f, "عنوان", "Title"),
+        Column("category", 15f, "دسته‌بندی", "Category"),
+        Column("type", 11f, "نوع", "Type"),
+        Column("amount", 17f, "مبلغ", "Amount"),
+        Column("note", 21f, "یادداشت", "Note")
+    )
 
     fun generate(
         context: Context,
         transactions: List<TransactionEntity>,
         stats: ExportStats,
-        isPersian: Boolean
+        isPersian: Boolean,
+        categoryNames: Map<String, String> = emptyMap()
     ): File {
-        // --- ۱. محاسبه تعداد صفحات ---
-        val usableFirstPage = PAGE_HEIGHT - HEADER_BLOCK_HEIGHT - FOOTER_HEIGHT - TABLE_HEADER_HEIGHT - MARGIN * 2
-        val usableOtherPages = PAGE_HEIGHT - FOOTER_HEIGHT - TABLE_HEADER_HEIGHT - MARGIN * 2
-
-        val rowsFirstPage = (usableFirstPage / ROW_HEIGHT).toInt().coerceAtLeast(1)
-        val rowsOtherPages = (usableOtherPages / ROW_HEIGHT).toInt().coerceAtLeast(1)
-
-        val totalRows = transactions.size
-        val totalPages = if (totalRows <= rowsFirstPage) 1
-        else 1 + ceil((totalRows - rowsFirstPage).toDouble() / rowsOtherPages).toInt()
-
-        // --- ۲. رسم واقعی ---
         val document = PdfDocument()
+        val logo = context.resources.openRawResource(R.raw.export_logo_mark).use { BitmapFactory.decodeStream(it) }
+        val rows = transactions.map { buildRow(it, stats.currency, isPersian, categoryNames) }
+        val pages = paginate(rows, isPersian)
 
-        var rowIndex = 0
-        for (pageNumber in 1..totalPages) {
+        val ranges = if (pages.isEmpty()) listOf(0 until 0) else pages
+        ranges.forEachIndexed { pageIndex, range ->
+            val pageNumber = pageIndex + 1
             val pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
             val page = document.startPage(pageInfo)
             val canvas = page.canvas
             var y = MARGIN
 
             if (pageNumber == 1) {
-                y = drawHeader(canvas, isPersian, y)
-                y = drawStatsBox(canvas, stats, isPersian, y)
-                y = drawStatementTitle(canvas, stats, isPersian, y)
+                y = drawHeader(canvas, logo, isPersian, y)
+                y = drawSummary(canvas, stats, isPersian, y)
+                y = drawStatementLine(canvas, stats, isPersian, y)
+            } else {
+                y = drawCompactHeader(canvas, logo, isPersian, y)
             }
 
             y = drawTableHeader(canvas, isPersian, y)
-
-            val tableStartY = y
-            val rowsThisPage = if (pageNumber == 1) rowsFirstPage else rowsOtherPages
-            var drawnOnThisPage = 0
-            while (rowIndex < totalRows && drawnOnThisPage < rowsThisPage) {
-                drawTransactionRow(canvas, rowNumber = rowIndex + 1, tx = transactions[rowIndex], currency = stats.currency, isPersian = isPersian, y = y)
-                y += ROW_HEIGHT
+            val heights = mutableListOf<Float>()
+            var rowIndex = range.first
+            for (index in range) {
+                val row = rows[index]
+                val h = max(MIN_ROW_HEIGHT, row.height)
+                drawRow(canvas, rowIndex + 1, row, isPersian, y, h, (rowIndex - range.first) % 2 == 1)
+                heights += h
+                y += h
                 rowIndex++
-                drawnOnThisPage++
+            }
+            drawTableBorders(canvas, y - heights.sum(), heights, isPersian)
+
+            if (range.isEmpty()) {
+                drawCentered(canvas, if (isPersian) "تراکنشی برای این بازه ثبت نشده است" else "No transactions were recorded in this period", PAGE_WIDTH / 2f, y + 44f, 10f, true, Color.parseColor(BRAND), isPersian)
             }
 
-            // رسم خطوط جدول (افقی و عمودی)
-            if (drawnOnThisPage > 0) {
-                drawTableBorders(canvas, tableStartY, drawnOnThisPage)
-            }
-
-            drawFooter(canvas, pageNumber, totalPages, isPersian)
+            drawFooter(canvas, pageNumber, ranges.size, isPersian)
             document.finishPage(page)
         }
 
-        // --- ۳. ذخیره در cache/exports ---
         val exportsDir = File(context.cacheDir, "exports").apply { mkdirs() }
-        val fileName = "Cidna_Statement_${System.currentTimeMillis()}.pdf"
-        val outFile = File(exportsDir, fileName)
+        val outFile = File(exportsDir, "Cidna_Statement_${System.currentTimeMillis()}.pdf")
         FileOutputStream(outFile).use { document.writeTo(it) }
         document.close()
-
+        logo.recycleIfNeeded()
         return outFile
     }
 
-    private fun textPaint(size: Float, bold: Boolean = false, color: Int = Color.BLACK) =
-        Paint().apply {
-            textSize = size
-            isAntiAlias = true
-            this.color = color
-            textAlign = Paint.Align.LEFT
-            typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-        }
 
-    /**
-     * وسط‌چین واقعی متن.
-     * Paint.Align.CENTER نقطه‌ی X رو مرکز "عرض پیشروی" متن می‌گیره، نه مرکز جوهر واقعیِ حروف؛
-     * به همین خاطر با فونت‌های فارسی/بولد معمولاً چشم می‌بینه متن کمی به یک طرف کشیده شده.
-     * اینجا با getTextBounds عرض واقعیِ رندرشده رو می‌گیریم و خودمون X دقیق رو حساب می‌کنیم.
-     */
-    private fun drawCenteredText(canvas: Canvas, text: String, centerX: Float, y: Float, paint: Paint) {
-        val bounds = Rect()
-        paint.getTextBounds(text, 0, text.length, bounds)
-        val x = centerX - bounds.width() / 2f - bounds.left
-        canvas.drawText(text, x, y, paint)
-    }
-
-    private fun drawHeader(canvas: Canvas, isPersian: Boolean, startY: Float): Float {
-        var y = startY
-        val centerX = PAGE_WIDTH / 2f
-
-        drawCenteredText(
-            canvas,
-            if (isPersian) "سیدنا: مدرن ترین برنامه مدیریت مالی" else "Cidna: The modernest financial manager",
-            centerX, y, textPaint(18f, bold = true)
-        )
-        return y + 24f
-    }
-
-    private fun drawStatsBox(canvas: Canvas, stats: ExportStats, isPersian: Boolean, startY: Float): Float {
-        var y = startY
-        val labelPaint = textPaint(10f, color = Color.DKGRAY)
-        val valuePaint = textPaint(11f, bold = true)
-
-        val rows = listOf(
-            (if (isPersian) "مانده از قبل" else "Opening Balance") to formatAmount(stats.openingBalance, stats.currency, isPersian),
-            (if (isPersian) "جمع کل واریز" else "Total Income") to formatAmount(stats.totalIncome, stats.currency, isPersian),
-            (if (isPersian) "جمع کل برداشت" else "Total Expense") to formatAmount(stats.totalExpense, stats.currency, isPersian),
-            (if (isPersian) "مانده" else "Balance") to formatAmount(stats.balance, stats.currency, isPersian),
-            (if (isPersian) "معدل موجودی" else "Average Balance") to formatAmount(stats.averageBalance, stats.currency, isPersian),
-            (if (isPersian) "نوع ارز" else "Currency") to currencyLabel(stats.currency, isPersian),
-            (if (isPersian) "تاریخ صدور فایل" else "Issue Date") to DateUtils.formatTimestamp(stats.issueDateMillis, isPersian)
-        )
-
-        val colWidth = (PAGE_WIDTH - MARGIN * 2) / 2f
-        rows.chunked(2).forEach { pair ->
-            pair.forEachIndexed { i, (label, value) ->
-                val x = MARGIN + i * colWidth
-                canvas.drawText(label, x, y, labelPaint)
-                canvas.drawText(value, x, y + 14f, valuePaint)
+    private fun paginate(rows: List<RowLayout>, isPersian: Boolean): List<IntRange> {
+        if (rows.isEmpty()) return emptyList()
+        val firstAvailable = PAGE_HEIGHT - FIRST_PAGE_TOP - FOOTER_HEIGHT
+        val otherAvailable = PAGE_HEIGHT - OTHER_PAGE_TOP - FOOTER_HEIGHT
+        val pages = mutableListOf<IntRange>()
+        var start = 0
+        var cursor = 0
+        var available = firstAvailable
+        while (cursor < rows.size) {
+            var used = 0f
+            var end = cursor
+            while (end < rows.size) {
+                val h = max(MIN_ROW_HEIGHT, rows[end].height)
+                if (end > cursor && used + h > available) break
+                used += h
+                end++
+                if (used >= available) break
             }
-            y += 34f
+            if (end == cursor) end++
+            pages += start until end
+            start = end
+            cursor = end
+            available = otherAvailable
         }
-        return y + 12f
+        return pages
     }
 
-    private fun drawStatementTitle(canvas: Canvas, stats: ExportStats, isPersian: Boolean, startY: Float): Float {
+    private data class RowLayout(
+        val timestamp: Long,
+        val title: String,
+        val category: String,
+        val type: String,
+        val amount: String,
+        val note: String,
+        val height: Float
+    )
+
+    private fun buildRow(
+        tx: TransactionEntity,
+        currency: String,
+        isPersian: Boolean,
+        categoryNames: Map<String, String>
+    ): RowLayout {
+        val title = tx.title.ifBlank { if (isPersian) "بدون عنوان" else "Untitled" }
+        val category = categoryNames[tx.categoryId]
+            ?: tx.categoryId.ifBlank { if (isPersian) "دسته‌بندی نشده" else "Uncategorized" }
+        val type = if (tx.type == "INCOME") if (isPersian) "درآمد" else "Income" else if (isPersian) "هزینه" else "Expense"
+        val amount = formatAmount(tx.amount.toDouble(), currency, isPersian)
+        val note = tx.note.ifBlank { "—" }
+        val widths = widths()
+        val noteWidth = widths.last() - 14f
+        val noteLayout = buildLayout(note, noteWidth, isPersian, 8.4f, Layout.Alignment.ALIGN_OPPOSITE)
+        val titleLayout = buildLayout(title, widths[2] - 10f, isPersian, 8.2f, Layout.Alignment.ALIGN_CENTER)
+        val categoryLayout = buildLayout(category, widths[3] - 10f, isPersian, 8.2f, Layout.Alignment.ALIGN_CENTER)
+        val height = max(MIN_ROW_HEIGHT, noteLayout.height + 14f)
+        return RowLayout(tx.timestamp, title, category, type, amount, note, height)
+    }
+
+    private fun buildLayout(text: String, width: Float, rtl: Boolean, size: Float, alignment: Layout.Alignment): StaticLayout {
+        val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor(TEXT)
+            textSize = size
+            typeface = Typeface.DEFAULT
+        }
+        return StaticLayout.Builder.obtain(text, 0, text.length, paint, width.toInt().coerceAtLeast(12))
+            .setAlignment(alignment)
+            .setIncludePad(false)
+            .setLineSpacing(0f, 1.16f)
+            .setTextDirection(if (rtl) TextDirectionHeuristics.FIRSTSTRONG_RTL else TextDirectionHeuristics.FIRSTSTRONG_LTR)
+            .build()
+    }
+
+    private fun widths(): List<Float> {
+        val total = PAGE_WIDTH - MARGIN * 2
+        return logicalColumns.map { total * it.weight / 100f }
+    }
+
+    private fun drawHeader(canvas: Canvas, logo: Bitmap?, isPersian: Boolean, startY: Float): Float {
+        val brand = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(BRAND) }
+        canvas.drawRoundRect(MARGIN, startY, PAGE_WIDTH - MARGIN, startY + 76f, 18f, 18f, brand)
+        if (logo != null) {
+            val size = 48f
+            val left = PAGE_WIDTH / 2f - size / 2f
+            val white = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+            canvas.drawRoundRect(left - 9f, startY + 7f, left + size + 9f, startY + size + 7f, 16f, 16f, white)
+            drawBitmapContain(canvas, logo, RectF(left, startY + 7f, left + size, startY + size + 7f))
+        }
+        drawCentered(canvas, if (isPersian) "گزارش مالی سیدنا" else "Cidna Financial Statement", PAGE_WIDTH / 2f, startY + 65f, 15f, true, Color.WHITE, isPersian)
+        return startY + 92f
+    }
+
+    private fun drawCompactHeader(canvas: Canvas, logo: Bitmap?, isPersian: Boolean, startY: Float): Float {
+        val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(BRAND); strokeWidth = 1.5f }
+        canvas.drawLine(MARGIN, startY + 42f, PAGE_WIDTH - MARGIN, startY + 42f, line)
+        if (logo != null) drawBitmapContain(canvas, logo, RectF(PAGE_WIDTH / 2f - 20f, startY, PAGE_WIDTH / 2f + 20f, startY + 38f))
+        drawCentered(canvas, if (isPersian) "گزارش مالی سیدنا" else "Cidna Financial Statement", PAGE_WIDTH / 2f, startY + 59f, 10f, true, Color.parseColor(BRAND), isPersian)
+        return startY + 70f
+    }
+
+    private fun drawSummary(canvas: Canvas, stats: ExportStats, isPersian: Boolean, startY: Float): Float {
+        val top = startY
+        val box = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(BRAND_LIGHT) }
+        canvas.drawRoundRect(MARGIN, top, PAGE_WIDTH - MARGIN, top + 112f, 14f, 14f, box)
+        val leftX = MARGIN + 16f
+        val rightX = PAGE_WIDTH - MARGIN - 16f
+        val labels = listOf(
+            if (isPersian) "مانده از قبل" else "Opening Balance",
+            if (isPersian) "جمع واریز" else "Total Income",
+            if (isPersian) "جمع برداشت" else "Total Expense",
+            if (isPersian) "مانده" else "Balance",
+            if (isPersian) "نوع ارز" else "Currency",
+            if (isPersian) "تاریخ صدور" else "Issue Date"
+        )
+        val values = listOf(
+            formatAmount(stats.openingBalance, stats.currency, isPersian),
+            formatAmount(stats.totalIncome, stats.currency, isPersian),
+            formatAmount(stats.totalExpense, stats.currency, isPersian),
+            formatAmount(stats.balance, stats.currency, isPersian),
+            currencyLabel(stats.currency, isPersian),
+            DateUtils.formatTimestamp(stats.issueDateMillis, isPersian)
+        )
+        labels.forEachIndexed { i, label ->
+            val col = i % 2
+            val row = i / 2
+            val x = if (isPersian) rightX - col * 270f else leftX + col * 270f
+            val y = top + 20f + row * 34f
+            drawSingleLine(canvas, label, x, y, 7.7f, false, MUTED, isPersian, if (isPersian) Layout.Alignment.ALIGN_OPPOSITE else Layout.Alignment.ALIGN_NORMAL, 250f)
+            drawSingleLine(canvas, values[i], x, y + 12f, 9.3f, true, TEXT, isPersian, if (isPersian) Layout.Alignment.ALIGN_OPPOSITE else Layout.Alignment.ALIGN_NORMAL, 250f)
+        }
+        return top + 124f
+    }
+
+    private fun drawStatementLine(canvas: Canvas, stats: ExportStats, isPersian: Boolean, startY: Float): Float {
         val from = DateUtils.formatTimestamp(stats.startMillis, isPersian)
         val to = DateUtils.formatTimestamp(stats.endMillis, isPersian)
-        val text = if (isPersian) "صورتحساب از $from تا $to" else "Statement from $from to $to"
-        drawCenteredText(canvas, text, PAGE_WIDTH / 2f, startY, textPaint(12f, bold = true))
-        return startY + 20f
-    }
-
-    // وزن نسبی هر ستون از عرض کل جدول (جمع وزن‌ها = ۱۰۰). ترتیب: ردیف، تاریخ، عنوان، دسته‌بندی، نوع، مبلغ، یادداشت
-    private val COLUMN_WEIGHTS = listOf(6, 13, 18, 15, 11, 17, 20)
-
-    private fun columnWidths(): List<Float> {
-        val totalWidth = PAGE_WIDTH - MARGIN * 2
-        return COLUMN_WEIGHTS.map { totalWidth * it / 100f }
+        drawCentered(canvas, if (isPersian) "صورتحساب از تاریخ $from تا $to" else "Statement from $from to $to", PAGE_WIDTH / 2f, startY + 12f, 9.5f, true, Color.parseColor(BRAND), isPersian)
+        return startY + 28f
     }
 
     private fun drawTableHeader(canvas: Canvas, isPersian: Boolean, startY: Float): Float {
-        val headerPaint = textPaint(9.5f, bold = true, color = Color.WHITE)
-        val bgPaint = Paint().apply { color = Color.parseColor("#2E7D32") } // سبز هماهنگ با آیکون برنامه
-        canvas.drawRect(MARGIN, startY, PAGE_WIDTH - MARGIN, startY + TABLE_HEADER_HEIGHT, bgPaint)
-
-        val cols = if (isPersian)
-            listOf("ردیف", "تاریخ", "عنوان", "دسته‌بندی", "نوع", "مبلغ", "یادداشت")
-        else
-            listOf("#", "Date", "Title", "Category", "Type", "Amount", "Note")
-
-        val widths = columnWidths()
+        val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(HEADER_GRAY) }
+        canvas.drawRoundRect(MARGIN, startY, PAGE_WIDTH - MARGIN, startY + TABLE_HEADER_HEIGHT, 7f, 7f, bg)
+        val cols = if (isPersian) logicalColumns.reversed() else logicalColumns
+        val ws = if (isPersian) widths().reversed() else widths()
         var x = MARGIN
         cols.forEachIndexed { i, col ->
-            val cellCenterX = x + widths[i] / 2f
-            drawCenteredText(canvas, col, cellCenterX, startY + 20f, headerPaint)
-            x += widths[i]
+            drawCentered(canvas, if (isPersian) col.titleFa else col.titleEn, x + ws[i] / 2f, startY + 20f, 7.7f, true, Color.WHITE, isPersian)
+            x += ws[i]
         }
-        return startY + TABLE_HEADER_HEIGHT + 4f
+        return startY + TABLE_HEADER_HEIGHT + 3f
     }
 
-    private fun drawTransactionRow(canvas: Canvas, rowNumber: Int, tx: TransactionEntity, currency: String, isPersian: Boolean, y: Float) {
-        val cellPaint = textPaint(9f)
+    private fun drawRow(canvas: Canvas, number: Int, row: RowLayout, isPersian: Boolean, y: Float, rowHeight: Float, alternate: Boolean) {
+        val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(if (alternate) ALT_ROW else "#FFFFFF") }
+        canvas.drawRect(MARGIN, y, PAGE_WIDTH - MARGIN, y + rowHeight, bg)
 
-        // برای هر ستون یک محدودیت طول متفاوت می‌ذاریم چون عرض ستون‌ها یکسان نیست
-        val cells = listOf(
-            rowNumber.toString(),
-            DateUtils.formatTimestamp(tx.timestamp, isPersian),
-            tx.title.take(16),
-            tx.categoryId.take(13),
-            if (tx.type == "INCOME") (if (isPersian) "درآمد" else "Income") else (if (isPersian) "هزینه" else "Expense"),
-            formatAmount(tx.amount.toDouble(), currency, isPersian),
-            tx.note.take(18)
+        val values = mapOf(
+            "index" to number.toString(),
+            "date" to DateUtils.formatTimestamp(row.timestamp, isPersian),
+            "title" to row.title,
+            "category" to row.category,
+            "type" to row.type,
+            "amount" to row.amount,
+            "note" to row.note
         )
-
-        val widths = columnWidths()
+        val cols = if (isPersian) logicalColumns.reversed() else logicalColumns
+        val ws = if (isPersian) widths().reversed() else widths()
         var x = MARGIN
-        cells.forEachIndexed { i, cell ->
-            val cellCenterX = x + widths[i] / 2f
-            drawCenteredText(canvas, cell, cellCenterX, y + 18f, cellPaint)
-            x += widths[i]
+        cols.forEachIndexed { i, col ->
+            val value = values[col.key].orEmpty()
+            val alignment = if (col.key == "note" && isPersian) Layout.Alignment.ALIGN_OPPOSITE else Layout.Alignment.ALIGN_CENTER
+            val size = if (col.key == "note") 8.1f else 8.0f
+            val layout = buildLayout(value, ws[i] - 10f, isPersian, size, alignment)
+            canvas.save()
+            canvas.translate(x + 5f, y + max(6f, (rowHeight - layout.height) / 2f))
+            layout.draw(canvas)
+            canvas.restore()
+            x += ws[i]
         }
     }
 
-    /** رسم خطوط افقی و عمودی جدول برای خوانایی بهتر */
-    private fun drawTableBorders(canvas: Canvas, tableStartY: Float, rowCount: Int) {
-        val borderPaint = Paint().apply {
-            color = Color.parseColor("#BDBDBD")
-            strokeWidth = 0.8f
-            style = Paint.Style.STROKE
-            isAntiAlias = true
-        }
-        val outerPaint = Paint().apply {
-            color = Color.parseColor("#757575")
-            strokeWidth = 1.2f
-            style = Paint.Style.STROKE
-            isAntiAlias = true
-        }
-
-        val tableTop = tableStartY - 4f - TABLE_HEADER_HEIGHT
-        val tableBottom = tableStartY + rowCount * ROW_HEIGHT
+    private fun drawTableBorders(canvas: Canvas, top: Float, heights: List<Float>, isPersian: Boolean) {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(BORDER); strokeWidth = 0.7f }
         val left = MARGIN
         val right = PAGE_WIDTH - MARGIN
-
-        // کادر بیرونی جدول
-        canvas.drawRect(left, tableTop, right, tableBottom, outerPaint)
-
-        // خطوط افقی بین ردیف‌ها
-        for (i in 0..rowCount) {
-            val y = tableStartY + i * ROW_HEIGHT
-            canvas.drawLine(left, y, right, y, borderPaint)
-        }
-        // خط بالای هدر (قبلاً با پس‌زمینه سبز پوشیده شده)
-        canvas.drawLine(left, tableTop, right, tableTop, outerPaint)
-
-        // خطوط عمودی ستون‌ها
-        val widths = columnWidths()
+        var y = top
+        canvas.drawLine(left, y, right, y, paint)
+        heights.forEach { y += it; canvas.drawLine(left, y, right, y, paint) }
         var x = left
-        for (i in 0 until widths.size - 1) {
-            x += widths[i]
-            canvas.drawLine(x, tableTop, x, tableBottom, borderPaint)
-        }
+        val ws = if (isPersian) widths().reversed() else widths()
+        ws.dropLast(1).forEach { w -> x += w; canvas.drawLine(x, top, x, y, paint) }
     }
 
     private fun drawFooter(canvas: Canvas, page: Int, total: Int, isPersian: Boolean) {
-        val text = if (isPersian) "صفحه $page از $total" else "Page $page of $total"
-        drawCenteredText(canvas, text, PAGE_WIDTH / 2f, PAGE_HEIGHT - MARGIN / 2, textPaint(9f))
+        val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(BORDER); strokeWidth = 0.8f }
+        canvas.drawLine(MARGIN, PAGE_HEIGHT - 32f, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - 32f, line)
+        drawCentered(canvas, if (isPersian) "صفحه $page از $total" else "Page $page of $total", PAGE_WIDTH / 2f, PAGE_HEIGHT - 14f, 7.5f, false, Color.parseColor(MUTED), isPersian)
     }
 
-    /**
-     * مقادیر همیشه در دیتابیس به تومان ذخیره می‌شن.
-     * اگه واحد پولی انتخابی کاربر ریال باشه، مقدار نمایشی باید ضربدر ۱۰ بشه (۱ تومان = ۱۰ ریال).
-     */
-    private fun toDisplayAmount(amount: Double, currencyCode: String): Double {
-        return if (currencyCode.equals("IRR", ignoreCase = true)) amount * 10 else amount
-    }
-
-    private fun currencyLabel(currencyCode: String, isPersian: Boolean): String {
-        return if (currencyCode.equals("IRR", ignoreCase = true)) {
-            if (isPersian) "ریال" else "Rial"
-        } else {
-            if (isPersian) "تومان" else "Toman"
+    private fun drawSingleLine(canvas: Canvas, text: String, x: Float, y: Float, size: Float, bold: Boolean, color: String, rtl: Boolean, alignment: Layout.Alignment, width: Float) {
+        val layout = buildLayout(text, width, rtl, size, alignment)
+        val left = when (alignment) {
+            Layout.Alignment.ALIGN_OPPOSITE -> x - width
+            Layout.Alignment.ALIGN_CENTER -> x - width / 2f
+            else -> x
         }
+        canvas.save(); canvas.translate(left, y - size); layout.draw(canvas); canvas.restore()
+    }
+
+    private fun drawCentered(canvas: Canvas, text: String, centerX: Float, baseline: Float, size: Float, bold: Boolean, color: Int, rtl: Boolean) {
+        val layout = buildLayout(text, PAGE_WIDTH - MARGIN * 2, rtl, size, Layout.Alignment.ALIGN_CENTER)
+        canvas.save(); canvas.translate(MARGIN, baseline - layout.height + 2f); layout.draw(canvas); canvas.restore()
+    }
+
+    private fun drawBitmapContain(canvas: Canvas, bitmap: Bitmap, dst: RectF) {
+        val scale = minOf(dst.width() / bitmap.width, dst.height() / bitmap.height)
+        val w = bitmap.width * scale
+        val h = bitmap.height * scale
+        val left = dst.centerX() - w / 2f
+        val top = dst.centerY() - h / 2f
+        canvas.drawBitmap(bitmap, null, RectF(left, top, left + w, top + h), Paint(Paint.ANTI_ALIAS_FLAG).apply { isFilterBitmap = true })
     }
 
     private fun formatAmount(amount: Double, currencyCode: String, isPersian: Boolean): String {
-        val displayValue = toDisplayAmount(amount, currencyCode)
-        return "%,.0f %s".format(displayValue, currencyLabel(currencyCode, isPersian))
+        val display = if (currencyCode.equals("IRR", true)) amount * 10 else amount
+        val locale = if (isPersian) Locale("fa", "IR") else Locale.US
+        val number = NumberFormat.getNumberInstance(locale).apply { maximumFractionDigits = 0 }
+        return "${number.format(display)} ${currencyLabel(currencyCode, isPersian)}"
+    }
+
+    private fun currencyLabel(currencyCode: String, isPersian: Boolean): String = if (currencyCode.equals("IRR", true)) {
+        if (isPersian) "ریال" else "Rial"
+    } else {
+        if (isPersian) "تومان" else "Toman"
+    }
+
+    private fun Bitmap.recycleIfNeeded() {
+        if (!isRecycled) recycle()
     }
 }

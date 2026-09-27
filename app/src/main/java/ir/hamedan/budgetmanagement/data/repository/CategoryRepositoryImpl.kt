@@ -39,40 +39,82 @@ class CategoryRepositoryImpl(
      * budget limits, and all corresponding sync metadata/tombstones commit together.
      */
     override suspend fun deleteCategoryWithReassignment(category: CategoryEntity): Int {
-        val defaultCategoryTitle = "UNCATEGORIZED"
+        require(!category.isSystem) { "System categories cannot be deleted." }
+        require(category.title != UNCATEGORIZED_TITLE) { "The uncategorized category cannot be deleted." }
+
         val now = System.currentTimeMillis()
 
         return syncLocalDataSource.transaction {
             val transactions = transactionDao.getByCategoryId(category.id)
             val budgets = budgetLimitDao.getByCategoryId(category.id)
+            val uncategorized = getOrCreateUncategorizedCategory(category.isExpense, now)
 
-            var uncategorized = categoryDao.getCategoryByTitle(defaultCategoryTitle)
-            if (uncategorized == null) {
-                uncategorized = CategoryEntity(
-                    title = defaultCategoryTitle,
-                    iconEmoji = "📦",
-                    isExpense = category.isExpense,
-                    isSystem = true,
-                    createdAt = now,
+            // Reassign first, then delete the category. Both operations are part of
+            // the same Room transaction, so a failure cannot leave dangling references.
+            transactionDao.reassignCategoryForTransactions(
+                oldCategoryId = category.id,
+                newCategoryId = uncategorized.id,
+                updatedAt = now
+            )
+
+            transactions.forEach { transaction ->
+                syncLocalDataSource.recordMutationInTransaction(
+                    entityType = SyncEntityType.TRANSACTION,
+                    entityId = transaction.id,
                     updatedAt = now
                 )
-                categoryDao.insert(uncategorized)
-                syncLocalDataSource.recordMutationInTransaction(SyncEntityType.CATEGORY, uncategorized.id, now)
-            }
-
-            transactionDao.reassignCategoryForTransactions(category.id, uncategorized.id, now)
-            transactions.forEach { transaction ->
-                syncLocalDataSource.recordMutationInTransaction(SyncEntityType.TRANSACTION, transaction.id, now)
             }
 
             budgets.forEach { budget ->
                 budgetLimitDao.delete(budget)
-                syncLocalDataSource.recordMutationInTransaction(SyncEntityType.BUDGET_LIMIT, budget.id, now, true)
+                syncLocalDataSource.recordMutationInTransaction(
+                    entityType = SyncEntityType.BUDGET_LIMIT,
+                    entityId = budget.id,
+                    updatedAt = now,
+                    isDeleted = true
+                )
             }
 
             categoryDao.delete(category)
-            syncLocalDataSource.recordMutationInTransaction(SyncEntityType.CATEGORY, category.id, now, true)
+            syncLocalDataSource.recordMutationInTransaction(
+                entityType = SyncEntityType.CATEGORY,
+                entityId = category.id,
+                updatedAt = now,
+                isDeleted = true
+            )
+
             transactions.size
         }
+    }
+
+    /**
+     * Returns the single system fallback category used when a user category is deleted.
+     * Creation happens inside the caller's Room transaction, so concurrent deletions
+     * cannot observe a partially-created fallback category.
+     */
+    private suspend fun getOrCreateUncategorizedCategory(
+        isExpense: Boolean,
+        now: Long
+    ): CategoryEntity {
+        return categoryDao.getCategoryByTitle(UNCATEGORIZED_TITLE)
+            ?: CategoryEntity(
+                title = UNCATEGORIZED_TITLE,
+                iconEmoji = "📦",
+                isExpense = isExpense,
+                isSystem = true,
+                createdAt = now,
+                updatedAt = now
+            ).also { category ->
+                categoryDao.insert(category)
+                syncLocalDataSource.recordMutationInTransaction(
+                    entityType = SyncEntityType.CATEGORY,
+                    entityId = category.id,
+                    updatedAt = now
+                )
+            }
+    }
+
+    private companion object {
+        const val UNCATEGORIZED_TITLE = "UNCATEGORIZED"
     }
 }

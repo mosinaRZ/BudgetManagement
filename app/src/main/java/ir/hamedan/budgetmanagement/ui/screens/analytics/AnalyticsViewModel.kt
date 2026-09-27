@@ -24,6 +24,7 @@ class AnalyticsViewModel(
     val selectedTimeFilter = MutableStateFlow(TimeFilter.ALL)
     val isPersianState = MutableStateFlow(true)
     val isIncomeChartSelectedState = MutableStateFlow(false)
+    val selectedTimeBucketIndex = MutableStateFlow<Int?>(null)
 
     fun updateLocale(isPersian: Boolean) {
         isPersianState.value = isPersian
@@ -31,22 +32,54 @@ class AnalyticsViewModel(
 
     fun setIncomeChartSelected(isSelected: Boolean) {
         isIncomeChartSelectedState.value = isSelected
+        selectedTimeBucketIndex.value = null
     }
+
+    fun onTimeBucketSelected(index: Int) {
+        selectedTimeBucketIndex.value =
+            if (selectedTimeBucketIndex.value == index) null else index
+    }
+
+    private data class AnalyticsControls(
+        val timeFilter: TimeFilter,
+        val isPersian: Boolean,
+        val isIncomeChartSelected: Boolean,
+        val selectedBucketIndex: Int?
+    )
+
+    private val controls: StateFlow<AnalyticsControls> = combine(
+        selectedTimeFilter,
+        isPersianState,
+        isIncomeChartSelectedState,
+        selectedTimeBucketIndex
+    ) { timeFilter, isPersian, isIncomeChartSelected, selectedBucketIndex ->
+        AnalyticsControls(timeFilter, isPersian, isIncomeChartSelected, selectedBucketIndex)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = AnalyticsControls(TimeFilter.ALL, true, false, null)
+    )
 
     val uiState: StateFlow<AnalyticsUiState> = combine(
         repository.getAllTransactions(),
         categoryRepository.getAllCategories(),
-        selectedTimeFilter,
-        isPersianState,
-        isIncomeChartSelectedState
-    ) { allTransactions, categories, timeFilter, isPersian, isIncomeChartSelected ->
+        controls
+    ) { allTransactions, categories, controls ->
+        val timeFilter = controls.timeFilter
+        val isPersian = controls.isPersian
+        val isIncomeChartSelected = controls.isIncomeChartSelected
+        val selectedBucketIndex = controls.selectedBucketIndex
+
 
         val hasAnyTransaction = allTransactions.isNotEmpty()
 
         val filteredTransactions = filterTransactionsByTime(allTransactions, timeFilter, isPersian)
+        val selectedTransactions = selectedBucketIndex?.let {
+            filterTransactionsByBucket(allTransactions, timeFilter, it, isPersian)
+        } ?: filteredTransactions
 
-        val totalIncome = filteredTransactions.filter { it.type == "INCOME" }.sumOf { it.amount }.toDouble()
-        val expensesList = filteredTransactions.filter { it.type == "EXPENSE" }
+        val totalIncome = selectedTransactions.filter { it.type == "INCOME" }.sumOf { it.amount }.toDouble()
+        val expensesList = selectedTransactions.filter { it.type == "EXPENSE" }
         val totalExpense = expensesList.sumOf { it.amount }.toDouble()
         val balance = totalIncome - totalExpense
 
@@ -65,15 +98,24 @@ class AnalyticsViewModel(
             .sortedByDescending { it.totalAmount }
 
         val timeExpenses = calculateTimeExpenses(allTransactions, timeFilter, isPersian, isIncomeChartSelected)
-        val currentIndex = timeExpenses.indexOfFirst { it.isCurrent }.let { if (it == -1) 0 else it }
+        val currentIndex = if (timeFilter == TimeFilter.DAILY) {
+            timeExpenses.indexOfLast { it.totalAmount > 0.0 }.let { if (it == -1) 0 else it }
+        } else {
+            timeExpenses.indexOfFirst { it.isCurrent }.let { if (it == -1) 0 else it }
+        }
 
         val averageExpense = if (expensesList.isNotEmpty()) totalExpense / expensesList.size else 0.0
-        val topExpenseEntities = expensesList
-            .filter { it.amount > averageExpense }
+        val heavyExpenseThreshold = calculateHeavyExpenseThreshold(expensesList)
+        val heavyExpenseEntities = expensesList
+            .filter { it.amount >= heavyExpenseThreshold && heavyExpenseThreshold > 0.0 }
             .sortedByDescending { it.amount }
-            .take(5)
+        val topExpenseEntities = heavyExpenseEntities.take(5)
 
-        val trendChartData = calculateTrendChartData(allTransactions, timeFilter, isPersian)
+        val trendChartData = if (selectedBucketIndex != null) {
+            calculateSelectedTrendChartData(selectedTransactions)
+        } else {
+            calculateTrendChartData(allTransactions, timeFilter, isPersian)
+        }
 
         AnalyticsUiState(
             isLoading = false,
@@ -86,6 +128,10 @@ class AnalyticsViewModel(
             currentTimeIndex = currentIndex,
             topExpenses = topExpenseEntities,
             averageExpense = averageExpense,
+            expenseTransactionCount = expensesList.size,
+            heavyExpenseCount = heavyExpenseEntities.size,
+            heavyExpenseThreshold = heavyExpenseThreshold,
+            selectedTimeBucketIndex = selectedBucketIndex,
             trendPoints = trendChartData.points,
             trendHasEnoughData = trendChartData.hasEnoughData,
             trendCurrentIndex = trendChartData.currentIndex,
@@ -99,7 +145,77 @@ class AnalyticsViewModel(
     )
 
     fun onTimeFilterChanged(filter: TimeFilter) {
+        selectedTimeBucketIndex.value = null
         selectedTimeFilter.value = filter
+    }
+
+    private fun filterTransactionsByBucket(
+        transactions: List<TransactionEntity>,
+        filter: TimeFilter,
+        bucketIndex: Int,
+        isPersian: Boolean
+    ): List<TransactionEntity> {
+        val now = LocalDate.now()
+        val (jYearNow, jMonthNow, _) = DateUtils.toJalali(now)
+        return transactions.filter { tx ->
+            val date = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+            if (isPersian) {
+                val (jy, jm, jd) = DateUtils.toJalali(date)
+                when (filter) {
+                    TimeFilter.DAILY -> jy == jYearNow && jm == jMonthNow && jd == bucketIndex + 1
+                    TimeFilter.WEEKLY -> jy == jYearNow && jm == jMonthNow && ((jd - 1) / 7).coerceIn(0, 4) == bucketIndex
+                    TimeFilter.MONTHLY -> jy == jYearNow && jm == bucketIndex + 1
+                    TimeFilter.ALL -> {
+                        val years = transactions.map { item ->
+                            val d = Instant.ofEpochMilli(item.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                            DateUtils.toJalali(d).first
+                        }.distinct().sorted()
+                        years.getOrNull(bucketIndex)?.let { it == jy } ?: false
+                    }
+                }
+            } else {
+                when (filter) {
+                    TimeFilter.DAILY -> date.year == now.year && date.monthValue == now.monthValue && date.dayOfMonth == bucketIndex + 1
+                    TimeFilter.WEEKLY -> date.year == now.year && date.monthValue == now.monthValue && ((date.dayOfMonth - 1) / 7).coerceIn(0, 4) == bucketIndex
+                    TimeFilter.MONTHLY -> date.year == now.year && date.monthValue == bucketIndex + 1
+                    TimeFilter.ALL -> {
+                        val years = transactions.map { item ->
+                            Instant.ofEpochMilli(item.timestamp).atZone(ZoneId.systemDefault()).toLocalDate().year
+                        }.distinct().sorted()
+                        years.getOrNull(bucketIndex)?.let { it == date.year } ?: false
+                    }
+                }
+            }
+        }.sortedBy { it.timestamp }
+    }
+
+    private fun calculateSelectedTrendChartData(transactions: List<TransactionEntity>): TrendChartData {
+        if (transactions.isEmpty()) return TrendChartData(emptyList(), false, 0)
+        val sorted = transactions.sortedBy { it.timestamp }
+        var running = 0.0
+        val points = sorted.map { tx ->
+            running += if (tx.type == "INCOME") tx.amount else -tx.amount
+            running.toFloat()
+        }
+        return TrendChartData(points, true, (points.size - 1).coerceAtLeast(0))
+    }
+
+    private fun calculateHeavyExpenseThreshold(expenses: List<TransactionEntity>): Double {
+        if (expenses.size < 2) return Double.POSITIVE_INFINITY
+        val values = expenses.map { it.amount.toDouble() }.sorted()
+        fun percentile(p: Double): Double {
+            val position = (values.size - 1) * p
+            val lower = position.toInt()
+            val upper = kotlin.math.ceil(position).toInt().coerceAtMost(values.lastIndex)
+            if (lower == upper) return values[lower]
+            val fraction = position - lower
+            return values[lower] + (values[upper] - values[lower]) * fraction
+        }
+        val q1 = percentile(0.25)
+        val q3 = percentile(0.75)
+        val iqr = (q3 - q1).coerceAtLeast(0.0)
+        val average = values.average()
+        return maxOf(q3 + 1.5 * iqr, average * 1.5)
     }
 
     private fun filterTransactionsByTime(
@@ -181,7 +297,7 @@ class AnalyticsViewModel(
                             labelFa = day.toString(),
                             labelEn = day.toString(),
                             totalAmount = dailySums[day - 1],
-                            isCurrent = (day == currentJalaliDay)
+                            isCurrent = (day == currentJalaliDay),
                         )
                     }
                 }
@@ -193,7 +309,7 @@ class AnalyticsViewModel(
                         jYear == currentJalaliYear && jMonth == currentJalaliMonth
                     }
 
-                    val weeks = arrayOf(0.0, 0.0, 0.0, 0.0)
+                    val weeks = arrayOf(0.0, 0.0, 0.0, 0.0, 0.0)
                     currentMonthExpenses.forEach { tx ->
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         val (_, _, day) = DateUtils.toJalali(txDate)
@@ -201,7 +317,8 @@ class AnalyticsViewModel(
                             day in 1..7 -> weeks[0] += tx.amount.toDouble()
                             day in 8..14 -> weeks[1] += tx.amount.toDouble()
                             day in 15..21 -> weeks[2] += tx.amount.toDouble()
-                            day >= 22 -> weeks[3] += tx.amount.toDouble()
+                            day in 22..28 -> weeks[3] += tx.amount.toDouble()
+                            day >= 29 -> weeks[4] += tx.amount.toDouble()
                         }
                     }
 
@@ -211,7 +328,8 @@ class AnalyticsViewModel(
                         TimeExpenseModel("هفته ۱", "Week 1", weeks[0], isCurrent = currentWeekIndex == 0),
                         TimeExpenseModel("هفته ۲", "Week 2", weeks[1], isCurrent = currentWeekIndex == 1),
                         TimeExpenseModel("هفته ۳", "Week 3", weeks[2], isCurrent = currentWeekIndex == 2),
-                        TimeExpenseModel("هفته ۴", "Week 4", weeks[3], isCurrent = currentWeekIndex == 3)
+                        TimeExpenseModel("هفته ۴", "Week 4", weeks[3], isCurrent = currentWeekIndex == 3),
+                        TimeExpenseModel("هفته ۵", "Week 5", weeks[4], isCurrent = currentWeekIndex == 4)
                     )
                 }
 
@@ -236,7 +354,7 @@ class AnalyticsViewModel(
                             labelFa = DateUtils.PERSIAN_MONTH_NAMES[index],
                             labelEn = DateUtils.PERSIAN_MONTH_NAMES[index],
                             totalAmount = months[index],
-                            isCurrent = (index == currentJalaliMonth - 1)
+                            isCurrent = (index == currentJalaliMonth - 1),
                         )
                     }
                 }
@@ -257,7 +375,7 @@ class AnalyticsViewModel(
                                 labelFa = year.toString(),
                                 labelEn = year.toString(),
                                 totalAmount = sum,
-                                isCurrent = (year == currentJalaliYear)
+                                isCurrent = (year == currentJalaliYear),
                             )
                         }
                     }
@@ -290,7 +408,7 @@ class AnalyticsViewModel(
                             labelFa = day.toString(),
                             labelEn = day.toString(),
                             totalAmount = dailySums[day - 1],
-                            isCurrent = (day == currentGDay)
+                            isCurrent = (day == currentGDay),
                         )
                     }
                 }
@@ -301,7 +419,7 @@ class AnalyticsViewModel(
                         txDate.year == currentGYear && txDate.monthValue == currentGMonth
                     }
 
-                    val weeks = arrayOf(0.0, 0.0, 0.0, 0.0)
+                    val weeks = arrayOf(0.0, 0.0, 0.0, 0.0, 0.0)
                     currentMonthExpenses.forEach { tx ->
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         val day = txDate.dayOfMonth
@@ -309,7 +427,8 @@ class AnalyticsViewModel(
                             day in 1..7 -> weeks[0] += tx.amount.toDouble()
                             day in 8..14 -> weeks[1] += tx.amount.toDouble()
                             day in 15..21 -> weeks[2] += tx.amount.toDouble()
-                            day >= 22 -> weeks[3] += tx.amount.toDouble()
+                            day in 22..28 -> weeks[3] += tx.amount.toDouble()
+                            day >= 29 -> weeks[4] += tx.amount.toDouble()
                         }
                     }
 
@@ -319,7 +438,8 @@ class AnalyticsViewModel(
                         TimeExpenseModel("Week 1", "Week 1", weeks[0], isCurrent = currentWeekIndex == 0),
                         TimeExpenseModel("Week 2", "Week 2", weeks[1], isCurrent = currentWeekIndex == 1),
                         TimeExpenseModel("Week 3", "Week 3", weeks[2], isCurrent = currentWeekIndex == 2),
-                        TimeExpenseModel("Week 4", "Week 4", weeks[3], isCurrent = currentWeekIndex == 3)
+                        TimeExpenseModel("Week 4", "Week 4", weeks[3], isCurrent = currentWeekIndex == 3),
+                        TimeExpenseModel("Week 5", "Week 5", weeks[4], isCurrent = currentWeekIndex == 4)
                     )
                 }
 
@@ -343,7 +463,7 @@ class AnalyticsViewModel(
                             labelFa = DateUtils.ENGLISH_MONTH_NAMES[index],
                             labelEn = DateUtils.ENGLISH_MONTH_NAMES[index],
                             totalAmount = months[index],
-                            isCurrent = (index == currentGMonth - 1)
+                            isCurrent = (index == currentGMonth - 1),
                         )
                     }
                 }
@@ -363,7 +483,7 @@ class AnalyticsViewModel(
                                 labelFa = year.toString(),
                                 labelEn = year.toString(),
                                 totalAmount = sum,
-                                isCurrent = (year == currentGYear)
+                                isCurrent = (year == currentGYear),
                             )
                         }
                     }
@@ -394,6 +514,23 @@ class AnalyticsViewModel(
         }.distinct().count()
     }
 
+    private fun countDistinctCalendarDaysInCurrentMonth(
+        transactions: List<TransactionEntity>,
+        isPersian: Boolean
+    ): Int {
+        val now = LocalDate.now()
+        val (currentYear, currentMonth, _) = DateUtils.toJalali(now)
+        return transactions.mapNotNull { tx ->
+            val date = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+            if (isPersian) {
+                val (y, m, d) = DateUtils.toJalali(date)
+                if (y == currentYear && m == currentMonth) d else null
+            } else {
+                if (date.year == now.year && date.monthValue == now.monthValue) date.dayOfMonth else null
+            }
+        }.distinct().size
+    }
+
     private fun calculateTrendChartData(
         allTransactions: List<TransactionEntity>,
         filter: TimeFilter,
@@ -401,7 +538,8 @@ class AnalyticsViewModel(
     ): TrendChartData {
         val distinctMonths = countDistinctCalendarMonths(allTransactions, isPersian)
         val hasEnoughData = when (filter) {
-            TimeFilter.DAILY, TimeFilter.WEEKLY -> true
+            TimeFilter.DAILY -> countDistinctCalendarDaysInCurrentMonth(allTransactions, isPersian) >= 2
+            TimeFilter.WEEKLY -> true
             TimeFilter.MONTHLY -> distinctMonths >= 2
             TimeFilter.ALL -> allTransactions.size >= 2
         }
@@ -469,7 +607,7 @@ class AnalyticsViewModel(
                         val (jYear, jMonth, _) = DateUtils.toJalali(txDate)
                         jYear == currentJalaliYear && jMonth == currentJalaliMonth
                     }
-                    val weeklyNet = arrayOf(0.0, 0.0, 0.0, 0.0)
+                    val weeklyNet = arrayOf(0.0, 0.0, 0.0, 0.0, 0.0)
                     monthTransactions.forEach { tx ->
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         val (_, _, day) = DateUtils.toJalali(txDate)
@@ -477,7 +615,8 @@ class AnalyticsViewModel(
                             day in 1..7 -> 0
                             day in 8..14 -> 1
                             day in 15..21 -> 2
-                            else -> 3
+                            day in 22..28 -> 3
+                            else -> 4
                         }
                         weeklyNet[weekIndex] += netAmount(tx)
                     }
@@ -533,7 +672,7 @@ class AnalyticsViewModel(
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         txDate.year == currentGYear && txDate.monthValue == currentGMonth
                     }
-                    val weeklyNet = arrayOf(0.0, 0.0, 0.0, 0.0)
+                    val weeklyNet = arrayOf(0.0, 0.0, 0.0, 0.0, 0.0)
                     monthTransactions.forEach { tx ->
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         val day = txDate.dayOfMonth
@@ -541,7 +680,8 @@ class AnalyticsViewModel(
                             day in 1..7 -> 0
                             day in 8..14 -> 1
                             day in 15..21 -> 2
-                            else -> 3
+                            day in 22..28 -> 3
+                            else -> 4
                         }
                         weeklyNet[weekIndex] += netAmount(tx)
                     }
@@ -620,8 +760,10 @@ class AnalyticsViewModel(
             }
         }
 
+        val lastDataDay = dailyNet.keys.maxOrNull() ?: firstDay
+        val endDay = lastDataDay.coerceAtLeast(firstDay).coerceAtMost(currentDay)
         var cumulative = 0.0
-        return (firstDay..currentDay).map { day ->
+        return (firstDay..endDay).map { day ->
             cumulative += dailyNet[day] ?: 0.0
             cumulative.toFloat()
         }

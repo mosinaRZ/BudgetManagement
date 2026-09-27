@@ -148,6 +148,7 @@ fun PasswordResetScreen(
                         userId = preparation.userId
                     )
                         .onSuccess {
+                            (context.applicationContext as BudgetApp).container.rememberedLoginStore.clearBiometricCredential()
                             onResetSuccess()
                         }
                         .onFailure { throwable ->

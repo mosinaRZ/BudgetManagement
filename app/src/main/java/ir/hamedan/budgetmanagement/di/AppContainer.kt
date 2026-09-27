@@ -29,6 +29,7 @@ import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepositoryImpl
 import ir.hamedan.budgetmanagement.data.security.AuthSessionStore
 import ir.hamedan.budgetmanagement.data.security.DeviceIdentityStore
+import ir.hamedan.budgetmanagement.data.security.RememberedLoginStore
 import ir.hamedan.budgetmanagement.data.security.SyncKeyManager
 import ir.hamedan.budgetmanagement.data.sync.SyncEngine
 import ir.hamedan.budgetmanagement.worker.SyncScheduler
@@ -50,6 +51,7 @@ class AppContainer(context: Context) {
     val deviceApi: DeviceApi by lazy { DeviceApi(authenticatedApiClient) }
     val syncApi: SyncApi by lazy { SyncApi(authenticatedApiClient) }
     val deviceIdentityStore: DeviceIdentityStore by lazy { DeviceIdentityStore(appContext) }
+    val rememberedLoginStore: RememberedLoginStore by lazy { RememberedLoginStore(appContext) }
     val syncKeyManager: SyncKeyManager by lazy { SyncKeyManager(appContext) }
     val syncEngine: SyncEngine by lazy {
         SyncEngine(database, syncApi, authSessionStore, syncKeyManager)
@@ -65,6 +67,7 @@ class AppContainer(context: Context) {
             syncEngine = syncEngine,
             syncLocalDataSource = syncLocalDataSource,
             deviceIdentityStore = deviceIdentityStore,
+            rememberedLoginStore = rememberedLoginStore,
             syncScheduler = syncScheduler
         )
     }

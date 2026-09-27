@@ -92,6 +92,15 @@ fun TransactionsScreen(
     val transactionsList by viewModel.filteredTransactions.collectAsState()
 
     val currencyUnit by viewModel.currencyUnit.collectAsState(initial = "IRT")
+    val categories by viewModel.categories.collectAsState()
+
+    val categoryInfoById = remember(categories, isPersian) {
+        categories.associate { category ->
+            category.id to (
+                    StringMapper.getCategoryName(category.title, isPersian) to category.iconEmoji
+                    )
+        }
+    }
 
     var showFilterSheet by remember { mutableStateOf(false) }
     var transactionToDelete by remember { mutableStateOf<TransactionEntity?>(null) }
@@ -257,6 +266,9 @@ fun TransactionsScreen(
                                 isPersian = isPersian,
                                 currencyUnit = currencyUnit,
                                 numberFormatter = numberFormatter,
+                                categoryTitle = categoryInfoById[transaction.categoryId]?.first
+                                    ?: StringMapper.getCategoryName(transaction.categoryId, isPersian),
+                                categoryIcon = categoryInfoById[transaction.categoryId]?.second ?: "📁",
                                 onEdit = { transactionToEdit = transaction },
                                 onDelete = { transactionToDelete = transaction }
                             )
@@ -666,7 +678,7 @@ fun TransactionsScreen(
                                         text = if (isPressed) {
                                             if (isPersian) "در حال حذف..." else "Deleting..."
                                         } else {
-                                            if (isPersian) "حذف" else "Hold to Delete"
+                                            if (isPersian) "حذف" else "Delete"
                                         },
                                         color = MaterialTheme.colorScheme.onError,
                                         maxLines = 1
@@ -1547,6 +1559,8 @@ private fun TransactionRow(
     isPersian: Boolean,
     currencyUnit: String,
     numberFormatter: NumberFormat,
+    categoryTitle: String,
+    categoryIcon: String,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -1580,11 +1594,6 @@ private fun TransactionRow(
         if (currencyUnit == "IRR") "IRR" else "T"
     }
 
-    val formattedTime = remember(transaction.timestamp) {
-        SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(transaction.timestamp))
-    }
-
-    val categoryTitle = StringMapper.getCategoryName(transaction.categoryId, isPersian)
 
     Box(
         modifier = Modifier
@@ -1690,12 +1699,24 @@ private fun TransactionRow(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "$categoryTitle • $formattedTime",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                )
+                Spacer(modifier = Modifier.height(9.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CategoryMetaChip(
+                        emoji = categoryIcon,
+                        text = categoryTitle,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    TransactionMetaChip(
+                        icon = Icons.Default.CalendarToday,
+                        text = DateUtils.formatTimestamp(transaction.timestamp, isPersian),
+                        isPersian = isPersian,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                }
             }
 
             Text(
@@ -1720,6 +1741,75 @@ private fun TransactionRow(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun CategoryMetaChip(
+    emoji: String,
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        modifier = modifier
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.09f), shape)
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), shape)
+            .padding(horizontal = 9.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = emoji.ifBlank { "📁" }, fontSize = 14.sp)
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun TransactionMetaChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    isPersian: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val shape = RoundedCornerShape(10.dp)
+    Row(
+        modifier = modifier
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.82f), shape)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), shape)
+            .padding(horizontal = 9.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(14.dp)
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

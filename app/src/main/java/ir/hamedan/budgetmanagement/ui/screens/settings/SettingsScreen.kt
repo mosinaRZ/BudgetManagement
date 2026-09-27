@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -41,8 +42,10 @@ import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
+import ir.hamedan.budgetmanagement.data.security.RememberedLoginStore
 import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.preferences.SharedPreferences
@@ -104,6 +107,9 @@ fun SettingsScreen(
     }
 
     var showChangePasswordDialog by remember { mutableStateOf(false) }
+    var showBiometricPasswordDialog by remember { mutableStateOf(false) }
+    var biometricSetupError by remember { mutableStateOf<String?>(null) }
+    val rememberedLoginStore = remember(context) { RememberedLoginStore(context) }
     var showThemeBottomSheet by remember { mutableStateOf(false) }
     var themeMode by remember(context) { mutableStateOf(ThemePreferences.getThemeMode(context)) }
     var showLogoutDialog by remember { mutableStateOf(false) }
@@ -416,7 +422,7 @@ fun SettingsScreen(
                 }
             }
 
-            // ۴. بخش امنیت (همراه با احراز هویت اثر انگشت برای سوییچ)
+            // ۴. بخش امنیت
             if (matchesSearch("امنیت برنامه", "App Security", "تنظیم رمز ورود و ویژگی‌های بیومتریک", "Configure passcode and biometric login")) {
                 item {
                     val hasBiometricHardware = remember(context) {
@@ -447,25 +453,52 @@ fun SettingsScreen(
                                     checked = isBiometricEnabled,
                                     onCheckedChange = { targetChecked ->
                                         val activity = context as? FragmentActivity
-                                        if (activity != null) {
+                                        if (activity == null) {
+                                            biometricSetupError = if (isPersian) "امکان احراز هویت در این صفحه وجود ندارد." else "Biometric authentication is unavailable on this screen."
+                                        } else if (!targetChecked) {
+                                            // خاموش کردن فقط پس از احراز هویت انجام می‌شود تا تغییر تنظیم امنیتی بدون تأیید کاربر ممکن نباشد.
                                             BiometricPromptManager.showBiometricPrompt(
                                                 activity = activity,
                                                 onSuccess = {
-                                                    isBiometricEnabled = targetChecked
-                                                    SharedPreferences.setBiometricEnabled(context, targetChecked)
-
+                                                    isBiometricEnabled = false
+                                                    SharedPreferences.setBiometricEnabled(context, false)
                                                     NotificationHelper.send(
                                                         context = context,
                                                         notificationType = NotificationType.SETTINGS_CHANGED,
                                                         type = "SYSTEM",
                                                         titleFa = "تنظیمات به‌روزرسانی شد",
                                                         titleEn = "Settings Updated",
-                                                        descFa = "تنظیمات بیومتریک برنامه با موفقیت تغییر کرد.",
-                                                        descEn = "Biometric login have been updated successfully.",
+                                                        descFa = "ورود با اثر انگشت غیرفعال شد.",
+                                                        descEn = "Biometric login has been disabled.",
                                                         tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
                                                     )
                                                 }
                                             )
+                                        } else {
+                                            // اگر Credential قبلاً ساخته شده باشد فقط تأیید بیومتریک لازم است.
+                                            // در غیر این صورت ابتدا رمز محلی بررسی و سپس Credential در Keystore ساخته می‌شود.
+                                            biometricSetupError = null
+                                            if (rememberedLoginStore.hasBiometricCredential() && rememberedLoginStore.canUseStrongBiometric()) {
+                                                BiometricPromptManager.showBiometricPrompt(
+                                                    activity = activity,
+                                                    onSuccess = {
+                                                        isBiometricEnabled = true
+                                                        SharedPreferences.setBiometricEnabled(context, true)
+                                                        NotificationHelper.send(
+                                                            context = context,
+                                                            notificationType = NotificationType.SETTINGS_CHANGED,
+                                                            type = "SYSTEM",
+                                                            titleFa = "ورود با اثر انگشت فعال شد",
+                                                            titleEn = "Biometric login enabled",
+                                                            descFa = "از این پس می‌توانید بدون وارد کردن رمز عبور وارد شوید.",
+                                                            descEn = "You can now unlock the app without typing your password.",
+                                                            tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
+                                                        )
+                                                    }
+                                                )
+                                            } else {
+                                                showBiometricPasswordDialog = true
+                                            }
                                         }
                                     }
                                 )
@@ -592,6 +625,74 @@ fun SettingsScreen(
                 isPersian = isPersian,
                 onDismiss = { showLogoutDialog = false },
                 onConfirm = { onLoginClick() }
+            )
+        }
+
+        if (showBiometricPasswordDialog) {
+            EnableBiometricLoginDialog(
+                isPersian = isPersian,
+                errorMessage = biometricSetupError,
+                onDismiss = {
+                    showBiometricPasswordDialog = false
+                    biometricSetupError = null
+                },
+                onConfirm = { currentPassword ->
+                    if (!rememberedLoginStore.verifyPassword(currentPassword)) {
+                        biometricSetupError = if (isPersian) "رمز عبور فعلی نادرست است." else "The current password is incorrect."
+                    } else {
+                        val activity = context as? FragmentActivity
+                        val cipher = rememberedLoginStore.prepareEncryptionCipher()
+                        if (activity == null || cipher == null) {
+                            biometricSetupError = if (isPersian) "بیومتریک دستگاه آماده استفاده نیست." else "Biometric authentication is not available on this device."
+                        } else {
+                            val passwordToRemember = currentPassword
+                            val prompt = BiometricPrompt(
+                                activity,
+                                ContextCompat.getMainExecutor(context),
+                                object : BiometricPrompt.AuthenticationCallback() {
+                                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                                        result.cryptoObject?.cipher?.let { authenticatedCipher ->
+                                            rememberedLoginStore.savePassword(authenticatedCipher, passwordToRemember)
+                                            isBiometricEnabled = rememberedLoginStore.hasBiometricCredential()
+                                            SharedPreferences.setBiometricEnabled(context, isBiometricEnabled)
+                                            if (isBiometricEnabled) {
+                                                showBiometricPasswordDialog = false
+                                                biometricSetupError = null
+                                                NotificationHelper.send(
+                                                    context = context,
+                                                    notificationType = NotificationType.SETTINGS_CHANGED,
+                                                    type = "SYSTEM",
+                                                    titleFa = "ورود با اثر انگشت فعال شد",
+                                                    titleEn = "Biometric login enabled",
+                                                    descFa = "از این پس می‌توانید بدون وارد کردن رمز عبور وارد شوید.",
+                                                    descEn = "You can now unlock the app without typing your password.",
+                                                    tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
+                                                )
+                                            } else {
+                                                biometricSetupError = if (isPersian) "فعال‌سازی ورود با اثر انگشت انجام نشد." else "Biometric login could not be enabled."
+                                            }
+                                        } ?: run {
+                                            biometricSetupError = if (isPersian) "احراز هویت بیومتریک کامل نشد." else "Biometric authentication could not be completed."
+                                        }
+                                    }
+
+                                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                                        biometricSetupError = errString.toString().takeIf { it.isNotBlank() }
+                                    }
+                                }
+                            )
+
+                            prompt.authenticate(
+                                BiometricPrompt.PromptInfo.Builder()
+                                    .setTitle(if (isPersian) "فعال‌سازی ورود با اثر انگشت" else "Enable biometric login")
+                                    .setSubtitle(if (isPersian) "برای فعال‌سازی، بیومتریک خود را تأیید کنید" else "Confirm your biometric to enable login")
+                                    .setNegativeButtonText(if (isPersian) "انصراف" else "Cancel")
+                                    .build(),
+                                BiometricPrompt.CryptoObject(cipher)
+                            )
+                        }
+                    }
+                }
             )
         }
 
@@ -1148,6 +1249,92 @@ fun LogoutConfirmationDialog(
                     text = if (isPersian) "انصراف" else "Cancel",
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+    )
+}
+
+@Composable
+private fun EnableBiometricLoginDialog(
+    isPersian: Boolean,
+    errorMessage: String?,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var password by remember { mutableStateOf("") }
+    var visible by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.Fingerprint,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(36.dp)
+            )
+        },
+        title = {
+            Text(
+                text = if (isPersian) "فعال‌سازی ورود با اثر انگشت" else "Enable biometric login",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = if (isPersian)
+                        "برای فعال‌سازی ورود بیومتریک، یک‌بار رمز عبور فعلی خود را وارد کنید. رمز عبور به‌صورت متن ساده ذخیره نمی‌شود."
+                    else
+                        "Enter your current password once to enable biometric login. Your password is not stored in plaintext.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f)
+                )
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text(if (isPersian) "رمز عبور فعلی" else "Current password") },
+                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                    trailingIcon = {
+                        IconButton(onClick = { visible = !visible }) {
+                            Icon(
+                                imageVector = if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = null
+                            )
+                        }
+                    },
+                    visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+                    shape = RoundedCornerShape(16.dp),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done
+                    )
+                )
+                if (!errorMessage.isNullOrBlank()) {
+                    Text(
+                        text = errorMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(password) },
+                enabled = password.isNotBlank()
+            ) {
+                Text(if (isPersian) "ادامه" else "Continue")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(if (isPersian) "انصراف" else "Cancel")
             }
         }
     )

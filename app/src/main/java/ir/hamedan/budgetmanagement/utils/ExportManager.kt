@@ -9,6 +9,7 @@ import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
+import kotlinx.coroutines.flow.first
 import java.io.File
 
 enum class ExportFormat { PDF, XLSX }
@@ -21,6 +22,7 @@ object ExportManager {
 
         val range = ExportPeriodCalculator.resolve(period)
         val transactions = repo.getTransactionsBetween(range.startMillis, range.endMillis)
+        val categoryNames = app.container.database.categoryDao().getAllCategories().first().associate { it.id to StringMapper.getCategoryName(it.title, isPersian) }
         val openingBalance = repo.getBalanceBefore(range.startMillis).toDouble()
 
         val income = transactions.filter { it.type == "INCOME" }.sumOf { it.amount }.toDouble()
@@ -43,8 +45,8 @@ object ExportManager {
         )
 
         val file: File = when (format) {
-            ExportFormat.PDF -> PdfExporter.generate(context, transactions, stats, isPersian)
-            ExportFormat.XLSX -> XlsxExporter.generate(context, transactions, stats, isPersian)
+            ExportFormat.PDF -> PdfExporter.generate(context, transactions, stats, isPersian, categoryNames)
+            ExportFormat.XLSX -> XlsxExporter.generate(context, transactions, stats, isPersian, categoryNames)
         }
 
         shareFile(context, file, format)

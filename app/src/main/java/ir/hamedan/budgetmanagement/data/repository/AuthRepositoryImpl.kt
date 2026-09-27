@@ -7,6 +7,7 @@ import ir.hamedan.budgetmanagement.data.local.models.UserEntity
 import ir.hamedan.budgetmanagement.data.network.AuthApi
 import ir.hamedan.budgetmanagement.data.security.AuthSessionStore
 import ir.hamedan.budgetmanagement.data.security.DeviceIdentityStore
+import ir.hamedan.budgetmanagement.data.security.RememberedLoginStore
 import ir.hamedan.budgetmanagement.data.security.SyncKeyManager
 import ir.hamedan.budgetmanagement.data.sync.SyncEngine
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +23,7 @@ class AuthRepositoryImpl(
     private val syncEngine: SyncEngine,
     private val syncLocalDataSource: SyncLocalDataSource,
     private val deviceIdentityStore: DeviceIdentityStore,
+    private val rememberedLoginStore: RememberedLoginStore,
     private val syncScheduler: SyncScheduler
 ) : AuthRepository {
 
@@ -176,6 +178,8 @@ class AuthRepositoryImpl(
                 isLoggedIn = true
             )
         )
+        rememberedLoginStore.saveIdentifier((identifier ?: phoneNumber ?: email).orEmpty())
+        rememberedLoginStore.savePasswordVerifier(password)
         val state = syncStateRepository.get()
         syncStateRepository.save(state.copy(deviceId = deviceId, accountUserId = response.userId, syncRequired = true))
         syncScheduler.enqueueNow()

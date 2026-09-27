@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 
 class BudgetApp : Application() {
@@ -28,10 +29,12 @@ class BudgetApp : Application() {
         NotificationPreferences.ensureDefaultsInitialized(this)
         AppNotificationManager.createChannel(this)
         AppUsagePreferences.updateLastOpen(this)
-        seedDefaultCategoriesIfNeeded()
         if (container.authRepository.isAuthenticated()) {
             CoroutineScope(Dispatchers.IO).launch {
-                runCatching { container.syncEngine.sync() }
+                runCatching {
+                    seedDefaultCategoriesIfNeeded()
+                    container.syncEngine.sync()
+                }
             }
         }
         scheduleWorkers()
@@ -42,10 +45,10 @@ class BudgetApp : Application() {
     // منتقل‌شده از AddViewModel تا دیگر وابسته به این نباشد که
     // کاربر وارد کدام صفحه شده، و اگر کاربر بعداً یکی از این
     // دسته‌بندی‌ها را حذف کند، دوباره ساخته نشود.
-    private fun seedDefaultCategoriesIfNeeded() {
+    suspend fun seedDefaultCategoriesIfNeeded() {
         if (CategorySeedPreferences.isSeeded(this)) return
 
-        CoroutineScope(Dispatchers.IO).launch {
+        withContext(Dispatchers.IO) {
             val defaultCategories = listOf(
                 CategoryEntity(title = "FOOD", iconEmoji = "🍕", isExpense = true),
                 CategoryEntity(title = "TRANSPORT", iconEmoji = "🚗", isExpense = true),

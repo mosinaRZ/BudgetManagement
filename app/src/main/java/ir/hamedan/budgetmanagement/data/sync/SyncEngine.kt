@@ -327,13 +327,49 @@ class SyncEngine(
     private suspend fun deleteLocalEntity(type: String, id: String) {
         when (type) {
             SyncEntityType.TRANSACTION -> database.transactionDao().deleteTransactionById(id)
-            SyncEntityType.CATEGORY -> database.categoryDao().getById(id)?.let { database.categoryDao().delete(it) }
+            SyncEntityType.CATEGORY -> deleteCategoryWithTransactionReassignment(id)
             SyncEntityType.BUDGET_LIMIT -> database.budgetLimitDao().deleteById(id)
             SyncEntityType.DEBT_CREDIT -> database.debtCreditDao().deleteById(id)
             SyncEntityType.SAVING_GOAL -> database.savingGoalDao().getById(id)?.let { database.savingGoalDao().deleteGoal(it) }
             SyncEntityType.SAVING_GOAL_OPERATION -> database.savingGoalOperationDao().deleteById(id)
             SyncEntityType.DEBT_PAYMENT -> database.debtPaymentDao().deleteById(id)
         }
+    }
+
+    /**
+     * A category deletion can arrive from another device through sync. Never remove
+     * such a category while transactions still point to it: first move those
+     * transactions to the local system fallback category, then delete the category.
+     * This method is called from applyServerChange(), which already runs inside the
+     * surrounding Room transaction.
+     */
+    private suspend fun deleteCategoryWithTransactionReassignment(categoryId: String) {
+        val category = database.categoryDao().getById(categoryId) ?: return
+
+        if (category.title == UNCATEGORIZED_TITLE) {
+            // The fallback category is system-owned and must never disappear locally.
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        val transactions = database.transactionDao().getByCategoryId(categoryId)
+        val uncategorized = database.categoryDao().getCategoryByTitle(UNCATEGORIZED_TITLE)
+            ?: ir.hamedan.budgetmanagement.data.local.models.CategoryEntity(
+                title = UNCATEGORIZED_TITLE,
+                iconEmoji = "📦",
+                isExpense = category.isExpense,
+                isSystem = true,
+                createdAt = now,
+                updatedAt = now
+            ).also { database.categoryDao().insert(it) }
+
+        database.transactionDao().reassignCategoryForTransactions(
+            oldCategoryId = categoryId,
+            newCategoryId = uncategorized.id,
+            updatedAt = now
+        )
+
+        database.categoryDao().delete(category)
     }
 
     private suspend fun upsertLocalEntity(type: String, j: JSONObject) {
@@ -396,5 +432,6 @@ class SyncEngine(
 
     companion object {
         private const val MAX_CHANGES_PER_REQUEST = 100
+        private const val UNCATEGORIZED_TITLE = "UNCATEGORIZED"
     }
 }

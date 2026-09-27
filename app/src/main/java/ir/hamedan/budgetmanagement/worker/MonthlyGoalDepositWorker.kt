@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import ir.hamedan.budgetmanagement.BudgetApp
+import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
@@ -26,6 +27,23 @@ class MonthlyGoalDepositWorker(
         val transactionRepository = app.container.transactionRepository
         val categoryRepository = app.container.categoryRepository
         val isPersian = LocaleHelper.getLanguage(applicationContext) == "fa"
+
+        // Resolve the canonical system category before mutating any goal.
+        // The previous code deposited first and looked up SAVING_GOAL afterwards;
+        // during first-launch seeding this could make the deposit succeed while
+        // the transaction was silently skipped by `?: continue`.
+        //
+        // Self-heal the category if it is temporarily missing. The title is the
+        // same stable key used by BudgetApp, so existing seeded categories are
+        // always reused rather than replaced.
+        val savingGoalCategory = categoryRepository.getAllCategories().first()
+            .firstOrNull { it.title == "SAVING_GOAL" }
+            ?: CategoryEntity(
+                title = "SAVING_GOAL",
+                iconEmoji = "🐷",
+                isExpense = true,
+                isSystem = true
+            ).also { categoryRepository.insertCategory(it) }
 
         val goals = goalRepository.getAllGoals().first()
         var currentBalance = transactionRepository.getCurrentBalance()
@@ -56,25 +74,25 @@ class MonthlyGoalDepositWorker(
                 continue
             }
 
-            // واریز مبلغ
+            // واریز مبلغ به قلک
             goalRepository.depositToGoal(goal.id, goal.monthlyAmount)
-
-            // فقط زمان آخرین واریز را آپدیت کن
-            goalRepository.updateLastAutoDepositTimestamp(goal.id, now)
 
             currentBalance -= goal.monthlyAmount
 
+            // ثبت تراکنش با همان دسته‌بندی سیستمی SAVING_GOAL.
             transactionRepository.insertTransaction(
                 TransactionEntity(
                     title = if (isPersian) "واریز خودکار ماهانه به قلک: ${goal.title}"
                     else "Auto Monthly Deposit to: ${goal.title}",
                     amount = goal.monthlyAmount,
-                    categoryId = categoryRepository.getAllCategories().first().firstOrNull { it.title == "SAVING_GOAL" }?.id
-                        ?: continue,
+                    categoryId = savingGoalCategory.id,
                     type = "EXPENSE",
                     note = if (isPersian) "واریز خودکار ماهانه" else "Automatic monthly deposit"
                 )
             )
+
+            // فقط بعد از ثبت موفق تراکنش، زمان آخرین واریز را ثبت کن.
+            goalRepository.updateLastAutoDepositTimestamp(goal.id, now)
 
             NotificationHelper.send(
                 context = applicationContext,

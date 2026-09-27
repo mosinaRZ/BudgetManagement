@@ -1,5 +1,6 @@
 package ir.hamedan.budgetmanagement.ui.screens.analytics
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -18,8 +19,10 @@ import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.di.appViewModel
@@ -68,6 +72,7 @@ fun AnalyticsScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     var isFirstFilterEmission by remember { mutableStateOf(true) }
+    var showAnalyticsInteractionHint by remember { mutableStateOf(true) }
 
     LaunchedEffect(selectedFilter) {
         if (isFirstFilterEmission) {
@@ -108,8 +113,13 @@ fun AnalyticsScreen(
                 SmartInsightCard(
                     isPersian = isPersian,
                     totalExpense = uiState.totalExpense,
+                    totalIncome = uiState.totalIncome,
+                    balance = uiState.balance,
+                    expenseCount = uiState.expenseTransactionCount,
+                    heavyExpenseCount = uiState.heavyExpenseCount,
                     topCategory = uiState.categoryExpenses.firstOrNull()?.categoryName ?: "",
-                    currencyUnit = currencyUnit
+                    currencyUnit = currencyUnit,
+                    selectedBucketIndex = uiState.selectedTimeBucketIndex
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -132,7 +142,9 @@ fun AnalyticsScreen(
                     selectedFilter = selectedFilter,
                     currencyUnit = currencyUnit,
                     isIncome = uiState.isIncomeChartSelected,
-                    onIncomeChange = { analyticsViewModel.setIncomeChartSelected(it) }
+                    onIncomeChange = { analyticsViewModel.setIncomeChartSelected(it) },
+                    selectedIndex = uiState.selectedTimeBucketIndex,
+                    onEntryClick = { analyticsViewModel.onTimeBucketSelected(it) }
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -151,11 +163,22 @@ fun AnalyticsScreen(
                     topExpenses = uiState.topExpenses,
                     totalExpense = uiState.totalExpense,
                     averageExpense = uiState.averageExpense,
+                    heavyExpenseThreshold = uiState.heavyExpenseThreshold,
                     currencyUnit = currencyUnit
                 )
 
                 Spacer(modifier = Modifier.navigationBarsPadding().height(80.dp))
             }
+
+            AnalyticsInteractionHint(
+                isPersian = isPersian,
+                visible = showAnalyticsInteractionHint && !uiState.isLoading && uiState.hasAnyTransactionInDb,
+                onDismiss = { showAnalyticsInteractionHint = false },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 130.dp)
+            )
 
             // تاپ‌بار شناور بدون نیاز به Scaffold
             Column(
@@ -277,7 +300,9 @@ fun ExpenseTimeBarChartCard(
     selectedFilter: TimeFilter,
     currencyUnit: String,
     isIncome: Boolean,
-    onIncomeChange: (Boolean) -> Unit
+    onIncomeChange: (Boolean) -> Unit,
+    selectedIndex: Int? = null,
+    onEntryClick: ((Int) -> Unit)? = null
 ) {
     val numberFormatter = remember(isPersian) {
         NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
@@ -314,9 +339,14 @@ fun ExpenseTimeBarChartCard(
         yAxisLabel = if (isPersian) "مبلغ ($currencyUnit)" else "Amount ($currencyUnit)",
         xAxisLabel = if (isPersian) "زمان" else "Time",
         scrollToIndex = currentIndex,
+        selectedIndex = selectedIndex,
+        onEntryClick = onEntryClick,
         valueFormatter = { value ->
             val displayValue = if (currencyUnit == "IRR") (value * 10).toLong() else value.toLong()
-            numberFormatter.format(displayValue)
+            val raw = numberFormatter.format(displayValue)
+            // برای ارقام بزرگ، فونت/عرض خود کارت امکان نمایش کامل مقدار را فراهم می‌کند؛
+            // در اینجا مقدار هر ستون همچنان کامل و بدون خلاصه‌سازی نگه داشته می‌شود.
+            raw
         },
         actionContent = {
             ChartTypeSwitch(
@@ -588,29 +618,53 @@ private fun TimeFilterSelector(
 private fun SmartInsightCard(
     isPersian: Boolean,
     totalExpense: Double,
+    totalIncome: Double,
+    balance: Double,
+    expenseCount: Int,
+    heavyExpenseCount: Int,
     topCategory: String,
-    currencyUnit: String
+    currencyUnit: String,
+    selectedBucketIndex: Int?
 ) {
     val cardShape = RoundedCornerShape(20.dp)
     val numberFormatter = remember(isPersian) {
         NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
     }
+    var expanded by rememberSaveable(selectedBucketIndex) { mutableStateOf(false) }
+    val arrowRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(260, easing = FastOutSlowInEasing),
+        label = "smartInsightArrow"
+    )
 
     val displayExpense = if (currencyUnit == "IRR") (totalExpense * 10).toLong() else totalExpense.toLong()
+    val displayIncome = if (currencyUnit == "IRR") (totalIncome * 10).toLong() else totalIncome.toLong()
+    val displayBalance = if (currencyUnit == "IRR") (kotlin.math.abs(balance) * 10).toLong() else kotlin.math.abs(balance).toLong()
     val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "Toman")
     val mappedCategory = StringMapper.getCategoryName(topCategory, isPersian)
 
-    val insightTextFa = if (totalExpense > 0) {
-        "مجموع هزینه‌های این دوره ${numberFormatter.format(displayExpense)} $currencyText است. بیشترین سهم مربوط به دسته‌بندی «$mappedCategory» می‌باشد."
+    val headline = if (totalExpense > 0) {
+        if (isPersian) "در این دوره ${numberFormatter.format(displayExpense)} $currencyText هزینه شده و بیشترین سهم با «$mappedCategory» است."
+        else "You spent ${numberFormatter.format(displayExpense)} $currencyText in this period; the largest share is $mappedCategory."
     } else {
-        "هیچ هزینه‌ای برای دوره زمانی انتخاب‌شده ثبت نشده است."
+        if (isPersian) "برای این بازه هنوز هزینه‌ای ثبت نشده است." else "No expense has been recorded for this period yet."
     }
 
-    val insightTextEn = if (totalExpense > 0) {
-        "Total expenses for this period are ${numberFormatter.format(displayExpense)} $currencyText. Top spending category is '$mappedCategory'."
-    } else {
-        "No expenses recorded for the selected period."
-    }
+    val detailLines = if (isPersian) listOf(
+        "تعداد تراکنش‌های هزینه‌ای قابل بررسی: ${numberFormatter.format(expenseCount)}؛ هزینه‌های خارج از الگو: ${numberFormatter.format(heavyExpenseCount)}",
+        "جمع درآمد: ${numberFormatter.format(displayIncome)} $currencyText؛ مانده خالص: ${if (balance < 0) "-" else ""}${numberFormatter.format(displayBalance)} $currencyText",
+        if (totalIncome > 0) {
+            val ratio = (totalExpense / totalIncome) * 100.0
+            "نسبت هزینه به درآمد: ${numberFormatter.format(ratio.coerceAtLeast(0.0))}% — ${if (ratio > 100) "هزینه‌ها از درآمد بیشتر بوده‌اند." else "درآمد پوشش مناسبی برای هزینه‌های این دوره ایجاد کرده است."}"
+        } else "در این دوره درآمدی برای مقایسه ثبت نشده است."
+    ) else listOf(
+        "Expense transactions analyzed: ${numberFormatter.format(expenseCount)}; unusual expenses: ${numberFormatter.format(heavyExpenseCount)}",
+        "Income: ${numberFormatter.format(displayIncome)} $currencyText; net balance: ${if (balance < 0) "-" else ""}${numberFormatter.format(displayBalance)} $currencyText",
+        if (totalIncome > 0) {
+            val ratio = (totalExpense / totalIncome) * 100.0
+            "Expense-to-income ratio: ${numberFormatter.format(ratio.coerceAtLeast(0.0))}% — ${if (ratio > 100) "expenses exceeded income." else "income covered the period's expenses."}"
+        } else "No income was recorded for comparison."
+    )
 
     Box(
         modifier = Modifier
@@ -619,12 +673,10 @@ private fun SmartInsightCard(
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), cardShape)
             .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f), cardShape)
             .clip(cardShape)
+            .clickable { expanded = !expanded }
             .padding(16.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(
                 modifier = Modifier
                     .size(40.dp)
@@ -640,18 +692,39 @@ private fun SmartInsightCard(
             }
 
             Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = if (isPersian) "تحلیل رفتار مالی" else "Smart Financial Insight",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (expanded) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.rotate(arrowRotation)
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = if (isPersian) "تحلیل رفتار مالی" else "Smart Financial Insight",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = if (isPersian) insightTextFa else insightTextEn,
+                    text = headline,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                 )
+
+                AnimatedVisibility(visible = expanded) {
+                    Column(verticalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.padding(top = 10.dp)) {
+                        detailLines.forEach { line ->
+                            Row(verticalAlignment = Alignment.Top) {
+                                Text("•", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.width(6.dp))
+                                Text(line, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -676,7 +749,7 @@ private fun BalanceTrendChartCard(
 
     val subtitle = when (selectedFilter) {
         TimeFilter.DAILY -> if (isPersian) "روند موجودی از اولین تراکنش ماه تا امروز" else "Balance trend from first transaction to today"
-        TimeFilter.WEEKLY -> if (isPersian) "روند موجودی در ۴ هفته ماه جاری" else "Balance trend for 4 weeks of current month"
+        TimeFilter.WEEKLY -> if (isPersian) "روند موجودی در ۵ بازه ماه جاری" else "Balance trend for 5 periods of current month"
         TimeFilter.MONTHLY -> if (isPersian) "روند موجودی ماه‌به‌ماه" else "Month-by-month balance trend"
         TimeFilter.ALL -> if (isPersian) "روند موجودی به ازای هر تراکنش" else "Balance trend per transaction"
     }
@@ -693,6 +766,11 @@ private fun BalanceTrendChartCard(
         } else {
             "At least two transactions are needed to draw a trend. Add one more transaction to see your balance trend."
         }
+        TimeFilter.DAILY -> if (isPersian) {
+            "برای رسم روند روزانه حداقل به تراکنش در دو روز متفاوت از ماه جاری نیاز است. با ثبت داده در روز بعد، نمودار فعال می‌شود."
+        } else {
+            "Daily trend needs transactions on at least two different days of the current month. Add data on another day to unlock the chart."
+        }
         else -> if (isPersian) {
             "با ثبت تراکنش‌های بیشتر در بازه‌های زمانی مختلف، نمودار روند موجودی شما تکمیل‌تر نمایش داده می‌شود."
         } else {
@@ -706,7 +784,10 @@ private fun BalanceTrendChartCard(
             val targetScroll = ((currentTimeIndex * spacingPx) - spacingPx * 2)
                 .coerceAtLeast(0f)
                 .toInt()
-            scrollState.animateScrollTo(targetScroll)
+            scrollState.animateScrollTo(
+                value = targetScroll,
+                animationSpec = tween(durationMillis = 1100, easing = FastOutSlowInEasing)
+            )
         }
     }
 
@@ -1151,6 +1232,7 @@ private fun TopExpensesCard(
     topExpenses: List<TransactionEntity>,
     totalExpense: Double,
     averageExpense: Double,
+    heavyExpenseThreshold: Double,
     currencyUnit: String
 ) {
     val cardShape = RoundedCornerShape(24.dp)
@@ -1158,7 +1240,9 @@ private fun TopExpensesCard(
         NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
     }
 
-    val displayAvg = if (currencyUnit == "IRR") (averageExpense * 10).toLong() else averageExpense.toLong()
+    val displayThreshold = if (heavyExpenseThreshold.isFinite()) {
+        if (currencyUnit == "IRR") (heavyExpenseThreshold * 10).toLong() else heavyExpenseThreshold.toLong()
+    } else 0L
     val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")
 
     Box(
@@ -1179,9 +1263,13 @@ private fun TopExpensesCard(
             )
             Text(
                 text = if (isPersian)
-                    "هزینه‌های بالاتر از میانگین (${numberFormatter.format(displayAvg)} $currencyText)"
+                    if (heavyExpenseThreshold.isFinite())
+                        "هزینه‌های خارج از الگوی معمول؛ آستانه تشخیص ${numberFormatter.format(displayThreshold)} $currencyText"
+                    else "برای تشخیص هزینه غیرعادی، داده بیشتری لازم است."
                 else
-                    "Expenses above average (${numberFormatter.format(displayAvg)} $currencyText)",
+                    if (heavyExpenseThreshold.isFinite())
+                        "Expenses outside the normal pattern; detection threshold ${numberFormatter.format(displayThreshold)} $currencyText"
+                    else "More data is needed to detect unusual expenses.",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1190,7 +1278,7 @@ private fun TopExpensesCard(
 
             if (topExpenses.isEmpty()) {
                 Text(
-                    text = if (isPersian) "هزینه‌ای بالاتر از میانگین در این دوره ثبت نشده است" else "No heavy expenses found above average",
+                    text = if (isPersian) "هزینه‌ای که از آستانه سخت‌گیرانه این دوره عبور کند پیدا نشد." else "No expense crossed the strict anomaly threshold for this period.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

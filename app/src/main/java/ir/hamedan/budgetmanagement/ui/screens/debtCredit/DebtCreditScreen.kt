@@ -628,7 +628,7 @@ fun DebtCreditScreen(
                                         text = if (isPressed) {
                                             if (isPersian) "در حال حذف..." else "Deleting..."
                                         } else {
-                                            if (isPersian) "حذف" else "Hold to Delete"
+                                            if (isPersian) "حذف" else "Delete"
                                         },
                                         color = MaterialTheme.colorScheme.onError,
                                         maxLines = 1

@@ -14,6 +14,48 @@ import kotlinx.coroutines.launch
 object NotificationHelper {
 
     /**
+     * Creates the welcome notification after the user's first successful login.
+     * The shown-state is stored per account so logging out/in does not show it again.
+     */
+    fun sendWelcomeIfNeeded(context: Context) {
+        val app = context.applicationContext as BudgetApp
+        val userId = app.container.authSessionStore.userId()?.takeIf { it.isNotBlank() } ?: return
+        val prefs = context.applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val key = "welcome_shown_$userId"
+
+        if (prefs.getBoolean(key, false)) return
+
+        val repository = app.container.notificationRepository
+        val tag = "WELCOME_$userId"
+        val entity = NotificationEntity(
+            type = "SYSTEM",
+            titleFa = "خوش آمدید!",
+            titleEn = "Welcome!",
+            descFa = "به برنامه مدیریت بودجه سیدنا خوش آمدید. امیدواریم تجربه خوبی داشته باشید.",
+            descEn = "Welcome to Cidna Budget Management. We hope you have a great experience.",
+            tag = tag
+        )
+
+        CoroutineScope(Dispatchers.IO).launch {
+            if (repository.countByTag(tag) > 0) {
+                prefs.edit().putBoolean(key, true).apply()
+                return@launch
+            }
+
+            repository.insert(entity)
+            prefs.edit().putBoolean(key, true).apply()
+
+            AppNotificationManager.sendPushIfAllowed(
+                context = context.applicationContext,
+                titleFa = entity.titleFa,
+                titleEn = entity.titleEn,
+                bodyFa = entity.descFa,
+                bodyEn = entity.descEn
+            )
+        }
+    }
+
+    /**
      * ارسال اعلان درون‌برنامه‌ای + (در صورت فعال بودن) اعلان سیستمی
      */
     fun send(

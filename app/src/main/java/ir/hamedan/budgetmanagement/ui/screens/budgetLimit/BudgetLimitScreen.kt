@@ -323,7 +323,7 @@ fun BudgetLimitScreen(
             )
         }
 
-        // ------------------ Delete Dialog (Hold to Delete) ------------------
+        // ------------------ Delete Dialog (Delete) ------------------
         limitToDelete?.let { item ->
             val mappedCategoryName = StringMapper.getCategoryName(categories.find { it.id == item.entity.categoryId }?.title.orEmpty(), isPersian)
             var isPressed by remember { mutableStateOf(false) }
@@ -454,7 +454,7 @@ fun BudgetLimitScreen(
                                 }
                             }
 
-                            // دکمه حذف با قابلیت فشردن و نگه داشتن (Hold to Delete)
+                            // دکمه حذف با قابلیت فشردن و نگه داشتن (Delete)
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -498,7 +498,7 @@ fun BudgetLimitScreen(
                                         text = if (isPressed) {
                                             if (isPersian) "در حال حذف..." else "Deleting..."
                                         } else {
-                                            if (isPersian) "حذف" else "Hold to Delete"
+                                            if (isPersian) "حذف" else "Delete"
                                         },
                                         color = MaterialTheme.colorScheme.onError,
                                         maxLines = 1

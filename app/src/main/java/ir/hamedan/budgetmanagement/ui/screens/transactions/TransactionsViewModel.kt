@@ -64,6 +64,14 @@ class TransactionViewModel(
 
     val currencyUnit: StateFlow<String> = CurrencySharedPreferences.currencyFlow
 
+    val categories: StateFlow<List<CategoryEntity>> =
+        categoryRepository.getAllCategories()
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyList()
+            )
+
     val expenseCategories: StateFlow<List<CategoryEntity>> =
         categoryRepository.getCategoriesByExpenseStatus(isExpense = true)
             .stateIn(
@@ -214,25 +222,6 @@ class TransactionViewModel(
                 descEn = "Transaction \"${transaction.title}\" was updated.",
                 tag = "TX_EDIT_${transaction.id}_${System.currentTimeMillis()}"
             )
-        }
-    }
-
-    fun deleteCategoryAndMigrateTransactions(category: CategoryEntity) {
-        viewModelScope.launch {
-            val affectedCount = categoryRepository.deleteCategoryWithReassignment(category)
-
-            if (affectedCount > 0) {
-                NotificationHelper.send(
-                    context = context,
-                    notificationType = NotificationType.TRANSACTION_CATEGORY_CHANGE,
-                    type = "WARNING",
-                    titleFa = "تغییر دسته‌بندی تراکنش‌ها",
-                    titleEn = "Transactions Category Changed",
-                    descFa = "تعداد $affectedCount تراکنش از دسته «${category.title}» به «دسته‌بندی نشده» منتقل شدند.",
-                    descEn = "$affectedCount transactions from \"${category.title}\" were moved to Uncategorized.",
-                    tag = "CAT_DEL_${category.id}_${System.currentTimeMillis()}"
-                )
-            }
         }
     }
 

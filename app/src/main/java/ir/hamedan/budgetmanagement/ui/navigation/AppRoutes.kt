@@ -5,13 +5,14 @@ import kotlinx.serialization.Serializable
 /**
  * Type-safe navigation routes
  */
+@Serializable
 sealed interface AppRoute {
 
     @Serializable
     data object Splash : AppRoute
 
     @Serializable
-    data object Login : AppRoute
+    data class Login(val localUnlockOnly: Boolean = false) : AppRoute
 
     @Serializable
     data object Register : AppRoute
@@ -52,6 +53,7 @@ sealed interface AppRoute {
 /**
  * Routeهای مربوط به Bottom Navigation داخل MainStructure
  */
+@Serializable
 sealed interface MainTabRoute {
 
     @Serializable

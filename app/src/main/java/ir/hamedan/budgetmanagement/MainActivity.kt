@@ -48,6 +48,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
+import ir.hamedan.budgetmanagement.data.security.AppLockPreferences
 import ir.hamedan.budgetmanagement.data.preferences.OnboardingPreferences
 import ir.hamedan.budgetmanagement.data.preferences.PermissionReminderPreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
@@ -202,9 +203,46 @@ class MainActivity : FragmentActivity() {
         val authScope = rememberCoroutineScope()
         val sessionAuthenticated by app.container.authSessionStore.authenticated.collectAsState()
         val currentRouteEntry by navController.currentBackStackEntryAsState()
+        val applicationContext = LocalContext.current.applicationContext
 
-        LaunchedEffect(sessionAuthenticated, currentRouteEntry?.destination?.route) {
+        val appLockPreferences = remember(applicationContext) {
+            AppLockPreferences(applicationContext)
+        }
+        var lifecycleResumeTrigger by remember { mutableIntStateOf(0) }
+
+        // After two minutes in the background, require local re-authentication.
+        // This never clears or changes access/refresh tokens.
+        val lifecycleOwner = LocalLifecycleOwner.current
+        DisposableEffect(lifecycleOwner, sessionAuthenticated) {
+            val observer = LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_STOP -> {
+                        if (sessionAuthenticated) {
+                            appLockPreferences.markBackgrounded(System.currentTimeMillis())
+                        }
+                    }
+                    Lifecycle.Event.ON_START -> lifecycleResumeTrigger++
+                    else -> Unit
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        }
+
+        LaunchedEffect(sessionAuthenticated, currentRouteEntry?.destination?.route, lifecycleResumeTrigger) {
             val route = currentRouteEntry?.destination?.route.orEmpty()
+
+            if (sessionAuthenticated &&
+                appLockPreferences.shouldLockNow() &&
+                route.contains("MainStructure")
+            ) {
+                appLockPreferences.markLockRequired()
+                navController.navigate(AppRoute.Login(localUnlockOnly = true)) {
+                    popUpTo(AppRoute.MainStructure) { inclusive = true }
+                    launchSingleTop = true
+                }
+                return@LaunchedEffect
+            }
 
             if (!sessionAuthenticated &&
                 route.isNotBlank() &&
@@ -212,7 +250,7 @@ class MainActivity : FragmentActivity() {
                 !route.contains("Register") &&
                 !route.contains("Splash")
             ) {
-                navController.navigate(AppRoute.Login) {
+                navController.navigate(AppRoute.Login()) {
                     popUpTo(navController.graph.startDestinationId) {
                         inclusive = true
                     }
@@ -230,25 +268,36 @@ class MainActivity : FragmentActivity() {
             composable<AppRoute.Splash> {
                 SplashScreen(
                     onAnimationFinished = {
-                        val destination = if (sessionAuthenticated) {
-                            AppRoute.MainStructure
+                        // Navigate with a concrete route instance. Do not store the two
+                        // branches in a variable typed as AppRoute: typed Navigation infers
+                        // the generic route from the static type, which would make it try
+                        // to serialize the sealed parent instead of the concrete destination.
+                        if (sessionAuthenticated) {
+                            // The existing server session remains valid. Opening the app only
+                            // requires local re-authentication; no token refresh/login is triggered.
+                            navController.navigate(AppRoute.Login(localUnlockOnly = true)) {
+                                popUpTo(AppRoute.Splash) { inclusive = true }
+                                launchSingleTop = true
+                            }
                         } else {
-                            AppRoute.Login
-                        }
-                        navController.navigate(destination) {
-                            popUpTo(AppRoute.Splash) { inclusive = true }
-                            launchSingleTop = true
+                            navController.navigate(AppRoute.Login()) {
+                                popUpTo(AppRoute.Splash) { inclusive = true }
+                                launchSingleTop = true
+                            }
                         }
                     }
                 )
             }
 
             // 🚀 ۲. صفحه لاگین هوشمند (اثر انگشت + فرم متنی)
-            composable<AppRoute.Login> {
+            composable<AppRoute.Login> { backStackEntry ->
+                val loginRoute = backStackEntry.toRoute<AppRoute.Login>()
                 LoginScreen(
+                    localUnlockOnly = loginRoute.localUnlockOnly,
                     onLoginSuccess = {
+                        appLockPreferences.clearLock()
                         navController.navigate(AppRoute.MainStructure) {
-                            popUpTo(AppRoute.Login) { inclusive = true }
+                            popUpTo(AppRoute.Login()) { inclusive = true }
                         }
                     },
                     onRegister = {
@@ -320,7 +369,7 @@ class MainActivity : FragmentActivity() {
             composable<AppRoute.Register> {
                 RegisterScreen(
                     onRegistered = {
-                        navController.navigate(AppRoute.Login) {
+                        navController.navigate(AppRoute.Login()) {
                             popUpTo(AppRoute.Register) {
                                 inclusive = true
                             }
@@ -424,7 +473,7 @@ class MainActivity : FragmentActivity() {
                                 onLoginClick = {
                                     authScope.launch {
                                         app.container.authRepository.logout()
-                                        navController.navigate(AppRoute.Login) {
+                                        navController.navigate(AppRoute.Login()) {
                                             popUpTo(AppRoute.MainStructure) { inclusive = true }
                                         }
                                     }
