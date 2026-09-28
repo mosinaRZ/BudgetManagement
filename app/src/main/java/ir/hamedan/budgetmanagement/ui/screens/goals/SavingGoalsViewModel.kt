@@ -4,6 +4,10 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
+import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
+import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
+import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
+import kotlinx.coroutines.flow.first
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepository
 import ir.hamedan.budgetmanagement.domain.usecase.SavingGoalUseCase
@@ -20,7 +24,9 @@ import kotlinx.coroutines.launch
 class SavingGoalsViewModel(
     private val repository: SavingGoalRepository,
     private val context: Context,
-    private val useCase: SavingGoalUseCase
+    private val useCase: SavingGoalUseCase,
+    private val transactionRepository: TransactionRepository,
+    private val categoryRepository: CategoryRepository
 ) : ViewModel() {
 
     val savingGoals: StateFlow<List<SavingGoalEntity>?> = repository.getAllGoals()
@@ -62,10 +68,40 @@ class SavingGoalsViewModel(
                 return@launch
             }
 
-            useCase.deposit(goalId, amount)
-            // یافتن هدف برای محاسبه درصد پیشرفت و ارسال اعلان
             val currentGoal = savingGoals.value?.find { it.id == goalId }
             val goalTitle = currentGoal?.title ?: ""
+            if (currentGoal == null) {
+                _depositError.emit(if (LocaleHelper.getLanguage(context) == "fa") "قلک پیدا نشد." else "Saving goal not found.")
+                return@launch
+            }
+
+            val currentBalance = transactionRepository.getCurrentBalance()
+            if (currentBalance < amount) {
+                val isPersian = LocaleHelper.getLanguage(context) == "fa"
+                _depositError.emit(
+                    if (isPersian) "موجودی حساب برای این واریز کافی نیست."
+                    else "Your account balance is not sufficient for this deposit."
+                )
+                return@launch
+            }
+
+            val savingGoalCategory = categoryRepository.getAllCategories().first()
+                .firstOrNull { it.title == "SAVING_GOAL" }
+                ?: run {
+                    _depositError.emit(if (LocaleHelper.getLanguage(context) == "fa") "دسته‌بندی سیستمی قلک پیدا نشد." else "Saving goal system category is missing.")
+                    return@launch
+                }
+
+            useCase.deposit(goalId, amount)
+            transactionRepository.insertTransaction(
+                TransactionEntity(
+                    title = if (LocaleHelper.getLanguage(context) == "fa") "واریز به قلک: $goalTitle" else "Deposit to saving goal: $goalTitle",
+                    amount = amount,
+                    categoryId = savingGoalCategory.id,
+                    type = "EXPENSE",
+                    note = if (LocaleHelper.getLanguage(context) == "fa") "واریز دستی به قلک" else "Manual saving goal deposit"
+                )
+            )
 
             NotificationHelper.send(
                 context = context,
@@ -108,8 +144,33 @@ class SavingGoalsViewModel(
     fun withdraw(goalId: String, amount: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             if (amount <= 0) return@launch
+            val currentGoal = savingGoals.value?.find { it.id == goalId }
+            if (currentGoal == null) {
+                _depositError.emit(if (LocaleHelper.getLanguage(context) == "fa") "قلک پیدا نشد." else "Saving goal not found.")
+                return@launch
+            }
+            if (amount > currentGoal.currentAmount) {
+                _depositError.emit(if (LocaleHelper.getLanguage(context) == "fa") "مبلغ برداشت نمی‌تواند بیشتر از موجودی قلک باشد." else "Withdrawal cannot exceed the goal balance.")
+                return@launch
+            }
+            val savingGoalCategory = categoryRepository.getAllCategories().first()
+                .firstOrNull { it.title == "SAVING_GOAL" }
+                ?: run {
+                    _depositError.emit(if (LocaleHelper.getLanguage(context) == "fa") "دسته‌بندی سیستمی قلک پیدا نشد." else "Saving goal system category is missing.")
+                    return@launch
+                }
+
             useCase.withdraw(goalId, amount)
-            val goalTitle = savingGoals.value?.find { it.id == goalId }?.title ?: ""
+            val goalTitle = currentGoal.title
+            transactionRepository.insertTransaction(
+                TransactionEntity(
+                    title = if (LocaleHelper.getLanguage(context) == "fa") "برداشت از قلک: $goalTitle" else "Withdrawal from saving goal: $goalTitle",
+                    amount = amount,
+                    categoryId = savingGoalCategory.id,
+                    type = "INCOME",
+                    note = if (LocaleHelper.getLanguage(context) == "fa") "برداشت دستی از قلک" else "Manual saving goal withdrawal"
+                )
+            )
 
             NotificationHelper.send(
                 context = context,

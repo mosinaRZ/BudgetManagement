@@ -173,6 +173,10 @@ class DebtCreditViewModel(
         }
     }
 
+    fun settleWithRemainingBalance(id: String) {
+        settleDueReminder(id)
+    }
+
     fun settleDueReminder(id: String) {
         viewModelScope.launch(ioDispatcher) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
@@ -185,6 +189,17 @@ class DebtCreditViewModel(
             }
 
             val isDebt = item.type == "DEBT"
+            if (isDebt) {
+                val currentBalance = transactionRepository.getCurrentBalance()
+                if (currentBalance < remaining) {
+                    val isPersian = LocaleHelper.getLanguage(context) == "fa"
+                    _errorMessage.emit(
+                        if (isPersian) "موجودی حساب برای تسویه این بدهی کافی نیست."
+                        else "Your account balance is not sufficient to settle this debt."
+                    )
+                    return@launch
+                }
+            }
             val updated = item.copy(paidAmount = item.totalAmount, isSettled = true)
             debtCreditRepository.insertOrUpdate(updated)
 

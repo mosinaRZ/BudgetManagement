@@ -419,14 +419,8 @@ fun SavingGoalsScreen(
                             )
                         )
                     } else {
-                        viewModel.addGoal(
-                            title,
-                            targetAmount,
-                            monthlyAmount,
-                            icon
-                        )
+                        viewModel.addGoal(title, targetAmount, monthlyAmount, icon)
                     }
-
                     showAddDialog = false
                     goalToEdit = null
                 }
@@ -464,7 +458,7 @@ fun SavingGoalsScreen(
             )
         }
 
-        // ------------------ Delete Dialog (Delete) ------------------
+        // ------------------ Delete Dialog (Hold to Delete) ------------------
         goalToDelete?.let { goal ->
             // متغیرهای وضعیت برای تشخیص نگه‌داشتن دکمه و پر شدن انیمیشن
             var isPressed by remember { mutableStateOf(false) }
@@ -596,7 +590,7 @@ fun SavingGoalsScreen(
                                 }
                             }
 
-                            // دکمه حذف با قابلیت فشردن و نگه داشتن (Delete)
+                            // دکمه حذف با قابلیت فشردن و نگه داشتن (Hold to Delete)
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -640,7 +634,7 @@ fun SavingGoalsScreen(
                                         text = if (isPressed) {
                                             if (isPersian) "در حال حذف..." else "Deleting..."
                                         } else {
-                                            if (isPersian) "حذف" else "Delete"
+                                            if (isPersian) "حذف" else "Hold to Delete"
                                         },
                                         color = MaterialTheme.colorScheme.onError,
                                         maxLines = 1
@@ -884,8 +878,8 @@ fun AddOrEditGoalDialog(
     isPersian: Boolean,
     currencyUnit: String,
     onDismiss: () -> Unit,
-    onConfirm: (title: String, targetAmount: Long, monthlyAmount: Long, icon: String) -> Unit)
-{
+    onConfirm: (title: String, targetAmount: Long, monthlyAmount: Long, icon: String) -> Unit
+) {
     val maxTitleLength = 25
     val maxDigits = 12
 
@@ -1069,23 +1063,13 @@ fun AddOrEditGoalDialog(
 
                     Button(
                         onClick = {
-                            val inputTarget = rawTargetAmount.toLongOrNull() ?: 0L
-                            val finalTargetInToman =
-                                if (currencyUnit == "IRR") inputTarget / 10L else inputTarget
-
-                            val inputMonthly = rawMonthlyAmount.toLongOrNull() ?: 0L
-                            val finalMonthlyInToman =
-                                if (currencyUnit == "IRR") inputMonthly / 10L else inputMonthly
-
-                            onConfirm(
-                                title.trim(),
-                                finalTargetInToman,
-                                finalMonthlyInToman,
-                                selectedIcon
-                            )
+                            val cleanTarget = rawTargetAmount.toLongOrNull() ?: 0L
+                            val finalTargetInToman = if (currencyUnit == "IRR") cleanTarget / 10L else cleanTarget
+                            val cleanMonthly = rawMonthlyAmount.toLongOrNull() ?: 0L
+                            val finalMonthlyInToman = if (currencyUnit == "IRR") cleanMonthly / 10L else cleanMonthly
+                            onConfirm(title.trim(), finalTargetInToman, finalMonthlyInToman, selectedIcon)
                         },
-                        enabled = title.isNotBlank() &&
-                                (rawTargetAmount.toLongOrNull() ?: 0L) > 0L,
+                        enabled = title.isNotBlank() && (rawTargetAmount.toLongOrNull() ?: 0L) > 0L,
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp),
@@ -1120,13 +1104,13 @@ fun AmountActionDialog(
     isDeposit: Boolean,
     initialAmount: Long = 0L,
     onDismiss: () -> Unit,
-    onConfirm: (amount: Long) -> Unit)
-{
+    onConfirm: (amount: Long) -> Unit
+) {
     val maxDigits = 12
     val initialRaw = remember(initialAmount, currencyUnit) {
         if (initialAmount <= 0) ""
         else {
-            val amount = if (currencyUnit == "IRR") (initialAmount * 10).toLong() else initialAmount.toLong()
+            val amount = if (currencyUnit == "IRR") (initialAmount * 10L).toLong() else initialAmount
             amount.toString()
         }
     }
@@ -1218,13 +1202,11 @@ fun AmountActionDialog(
 
                     Button(
                         onClick = {
-                            val inputAmount = rawAmount.toLongOrNull() ?: 0L
-                            val finalAmountInToman =
-                                if (currencyUnit == "IRR") inputAmount / 10L else inputAmount
-
+                            val cleanNumber = rawAmount.toLongOrNull() ?: 0L
+                            val finalAmountInToman = if (currencyUnit == "IRR") cleanNumber / 10L else cleanNumber
                             onConfirm(finalAmountInToman)
                         },
-                        enabled = (rawAmount.toDoubleOrNull() ?: 0.0) > 0,
+                        enabled = (rawAmount.toLongOrNull() ?: 0L) > 0L,
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp),

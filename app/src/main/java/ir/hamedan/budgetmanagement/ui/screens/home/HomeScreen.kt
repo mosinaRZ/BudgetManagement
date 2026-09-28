@@ -232,8 +232,20 @@ fun HomeScreen(
         transactionsList.sortedByDescending { it.timestamp }.take(3)
     }
 
-    val allGoals = remember(goalsList) { goalsList ?: emptyList() }
-    val allLimits = remember(limitsList) { limitsList ?: emptyList() }
+    // فقط موارد فعال در داشبورد خانه نمایش داده می‌شوند:
+    // قلک‌های تکمیل‌نشده، محدودیت‌های فعالِ داخل بازه و بدهی/طلب‌های تسویه‌نشده.
+    val now = System.currentTimeMillis()
+    val allGoals = remember(goalsList) {
+        (goalsList ?: emptyList()).filter { it.currentAmount < it.targetAmount }
+    }
+    val allLimits = remember(limitsList, now) {
+        (limitsList ?: emptyList()).filter { limit ->
+            limit.entity.isActive && now in limit.entity.startDate..limit.entity.endDate
+        }
+    }
+    val activeDebtCreditList = remember(debtCreditList) {
+        debtCreditList.filter { it.paidAmount < it.totalAmount && !it.isSettled }
+    }
 
     var showBottomSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
@@ -645,6 +657,17 @@ fun HomeScreen(
                                 Spacer(Modifier.height(16.dp))
                             }
 
+                            if (allGoals.isEmpty()) {
+                                Text(
+                                    text = if (isPersian) "قلک فعالی ندارید" else "No active savings goals",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(Modifier.height(12.dp))
+                            }
+
                             Button(
                                 onClick = onAddScreenClickPiggy,
                                 modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -730,6 +753,17 @@ fun HomeScreen(
                                     )
                                 }
                                 Spacer(Modifier.height(16.dp))
+                            }
+
+                            if (allLimits.isEmpty()) {
+                                Text(
+                                    text = if (isPersian) "محدودیت خرج‌کرد فعالی ندارید" else "No active expense limits",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(Modifier.height(12.dp))
                             }
 
                             Button(
@@ -890,6 +924,17 @@ fun HomeScreen(
                             }
 
                             Spacer(Modifier.height(20.dp))
+
+                            if (debtCreditList.isEmpty()) {
+                                Text(
+                                    text = if (isPersian) "بدهی یا طلب فعالی ندارید" else "No active debts or credits",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(Modifier.height(12.dp))
+                            }
 
                             Button(
                                 onClick = onAddScreenClickDebt,
@@ -1143,6 +1188,42 @@ fun HomeScreen(
 
         // Bottom Sheet اعلان‌ها
         if (showBottomSheet) {
+            // زمان نسبی اعلان‌ها؛ کوچک و داخل کادر هر اعلان نمایش داده می‌شود.
+            var notificationNow by remember { mutableLongStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(showBottomSheet) {
+                while (showBottomSheet) {
+                    notificationNow = System.currentTimeMillis()
+                    kotlinx.coroutines.delay(30_000L)
+                }
+            }
+
+            fun relativeNotificationTime(timestamp: Long): String {
+                val elapsed = (notificationNow - timestamp).coerceAtLeast(0L)
+                val minute = 60_000L
+                val hour = 60L * minute
+                val day = 24L * hour
+                val week = 7L * day
+                return when {
+                    elapsed < minute -> if (isPersian) "همین حالا" else "Just now"
+                    elapsed < hour -> {
+                        val n = elapsed / minute
+                        if (isPersian) "$n دقیقه پیش" else "$n min ago"
+                    }
+                    elapsed < day -> {
+                        val n = elapsed / hour
+                        if (isPersian) "$n ساعت پیش" else "$n hr ago"
+                    }
+                    elapsed < week -> {
+                        val n = elapsed / day
+                        if (isPersian) "$n روز پیش" else "$n day${if (n == 1L) "" else "s"} ago"
+                    }
+                    else -> {
+                        val n = elapsed / week
+                        if (isPersian) "$n هفته پیش" else "$n week${if (n == 1L) "" else "s"} ago"
+                    }
+                }
+            }
+
             ModalBottomSheet(
                 onDismissRequest = { showBottomSheet = false },
                 sheetState = sheetState,
@@ -1261,26 +1342,44 @@ fun HomeScreen(
 
                                         Spacer(Modifier.width(12.dp))
 
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(text = if (isPersian) item.titleFa else item.titleEn, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            Column(modifier = Modifier.fillMaxWidth().padding(end = 62.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(text = if (isPersian) item.titleFa else item.titleEn, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
 
-                                                if (!item.isRead) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(8.dp)
-                                                            .background(MaterialTheme.colorScheme.primary, CircleShape)
-                                                    )
+                                                    if (!item.isRead) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(8.dp)
+                                                                .background(MaterialTheme.colorScheme.primary, CircleShape)
+                                                        )
+                                                    }
                                                 }
+
+                                                Spacer(Modifier.height(4.dp))
+
+                                                Text(text = if (isPersian) item.descFa else item.descEn, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f), lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.2)
                                             }
 
-                                            Spacer(Modifier.height(4.dp))
-
-                                            Text(text = if (isPersian) item.descFa else item.descEn, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f), lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.2)
+                                            Surface(
+                                                modifier = Modifier.align(Alignment.TopEnd),
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
+                                            ) {
+                                                Text(
+                                                    text = relativeNotificationTime(item.timestamp),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                                                    fontSize = 9.sp,
+                                                    maxLines = 1,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }

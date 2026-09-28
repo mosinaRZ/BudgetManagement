@@ -8,11 +8,13 @@ import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.utils.NotificationHelper
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -26,6 +28,9 @@ class CategoriesViewModel(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null
         )
+
+    private val _errorMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val errorMessage = _errorMessage
 
     private val _transactionCountsMap = MutableStateFlow<Map<String, Int>>(emptyMap())
     val transactionCountsMap: StateFlow<Map<String, Int>> = _transactionCountsMap.asStateFlow()
@@ -54,9 +59,14 @@ class CategoriesViewModel(
 
     fun addCategory(title: String, iconEmoji: String, isExpense: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
+            val normalizedTitle = title.trim()
+            if (categories.value.orEmpty().any { it.title.trim().equals(normalizedTitle, ignoreCase = true) }) {
+                _errorMessage.emit(if (ir.hamedan.budgetmanagement.utils.LocaleHelper.getLanguage(context) == "fa") "این نام دسته‌بندی قبلاً استفاده شده است. نام دیگری انتخاب کنید." else "This category name is already in use. Choose another name.")
+                return@launch
+            }
             categoryRepository.insertCategory(
                 CategoryEntity(
-                    title = title,
+                    title = normalizedTitle,
                     iconEmoji = iconEmoji,
                     isExpense = isExpense
                 )
@@ -80,7 +90,12 @@ class CategoriesViewModel(
 
     fun updateCategory(category: CategoryEntity, newTitle: String, newEmoji: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            categoryRepository.updateCategory(category, newTitle, newEmoji)
+            val normalizedTitle = newTitle.trim()
+            if (categories.value.orEmpty().any { it.id != category.id && it.title.trim().equals(normalizedTitle, ignoreCase = true) }) {
+                _errorMessage.emit(if (ir.hamedan.budgetmanagement.utils.LocaleHelper.getLanguage(context) == "fa") "این نام دسته‌بندی قبلاً استفاده شده است. نام دیگری انتخاب کنید." else "This category name is already in use. Choose another name.")
+                return@launch
+            }
+            categoryRepository.updateCategory(category, normalizedTitle, newEmoji)
 
             NotificationHelper.send(
                 context = context,
@@ -88,8 +103,8 @@ class CategoriesViewModel(
                 type = "WARNING",
                 titleFa = "دسته بندی ویرایش شد",
                 titleEn = "Category Updated",
-                descFa = "دسته‌بندی «${category.title}» به «$newTitle» تغییر یافت.",
-                descEn = "Category \"${category.title}\" was updated to \"$newTitle\".",
+                descFa = "دسته‌بندی «${category.title}» به «$normalizedTitle» تغییر یافت.",
+                descEn = "Category \"${category.title}\" was updated to \"$normalizedTitle\".",
                 tag = "CATEGORY_UPDATE_${newTitle}_${System.currentTimeMillis()}"
             )
         }

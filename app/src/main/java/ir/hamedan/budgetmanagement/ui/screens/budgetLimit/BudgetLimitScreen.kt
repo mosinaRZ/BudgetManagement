@@ -104,6 +104,12 @@ fun BudgetLimitScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        viewModel.errorMessage.collect { message ->
+            snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Short)
+        }
+    }
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }
 
     val limitsListState by viewModel.budgetLimitsWithSpent.collectAsState()
@@ -205,7 +211,8 @@ fun BudgetLimitScreen(
                                 viewModel.updateLimitStatus(item.entity.id, isActive)
                             },
                             onEditClick = { limitToEdit = item },
-                            onDeleteClick = { limitToDelete = item }
+                            onDeleteClick = { limitToDelete = item },
+                            onRenewClick = { viewModel.renewLimit(item.entity.id) }
                         )
                     }
                 }
@@ -607,7 +614,8 @@ fun BudgetLimitItemCard(
     categoryName: String,
     onToggleActive: (Boolean) -> Unit,
     onEditClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
+    onRenewClick: () -> Unit
 ) {
     val cardShape = RoundedCornerShape(20.dp)
 
@@ -716,6 +724,17 @@ fun BudgetLimitItemCard(
                     fontWeight = FontWeight.Bold,
                     color = statusColor
                 )
+                Spacer(Modifier.height(2.dp))
+                Button(
+                    onClick = onRenewClick,
+                    modifier = Modifier.fillMaxWidth().height(42.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(17.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (isPersian) "تمدید ۳۰ روزه" else "Renew for 30 days", fontWeight = FontWeight.Bold)
+                }
             }
 
             Row(
@@ -779,13 +798,29 @@ fun AddOrEditLimitDialog(
     }
     var rawAmountDigits by remember { mutableStateOf(initialRawDigits) }
 
-    var startDateMillis by remember { mutableStateOf(limitToEdit?.entity?.startDate ?: System.currentTimeMillis()) }
-    var endDateMillis by remember { mutableStateOf(limitToEdit?.entity?.endDate ?: (System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000)) }
+    val todayStartMillis = remember {
+        Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+
+    var startDateMillis by remember {
+        mutableStateOf((limitToEdit?.entity?.startDate ?: todayStartMillis).coerceAtLeast(todayStartMillis))
+    }
+    var endDateMillis by remember { mutableStateOf(limitToEdit?.entity?.endDate ?: (todayStartMillis + 30L * 24 * 60 * 60 * 1000)) }
 
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
 
-    val startDatePickerState = rememberDatePickerState(initialSelectedDateMillis = startDateMillis)
+    val startDatePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = startDateMillis,
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis >= todayStartMillis
+        }
+    )
     val endDatePickerState = rememberDatePickerState(initialSelectedDateMillis = endDateMillis)
 
     if (showStartDatePicker) {
@@ -793,7 +828,9 @@ fun AddOrEditLimitDialog(
             onDismissRequest = { showStartDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
-                    startDatePickerState.selectedDateMillis?.let { startDateMillis = it }
+                    startDatePickerState.selectedDateMillis?.let {
+                        startDateMillis = it.coerceAtLeast(todayStartMillis)
+                    }
                     showStartDatePicker = false
                 }) { Text(if (isPersian) "تایید" else "OK") }
             }

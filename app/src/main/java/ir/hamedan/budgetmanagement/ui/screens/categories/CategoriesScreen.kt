@@ -61,6 +61,12 @@ fun CategoriesScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        categoryViewModel.errorMessage.collect { message ->
+            snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Short)
+        }
+    }
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }
 
     val categoriesState by categoryViewModel.categories.collectAsState()
@@ -72,6 +78,7 @@ fun CategoriesScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var categoryToEdit by remember { mutableStateOf<CategoryEntity?>(null) }
     var categoryToDelete by remember { mutableStateOf<CategoryEntity?>(null) }
+    var categoryDialogError by remember { mutableStateOf<String?>(null) }
 
     val hiddenCategories by categoryViewModel.hiddenCategories.collectAsState()
 
@@ -333,15 +340,45 @@ fun CategoriesScreen(
                 onDismiss = {
                     showAddDialog = false
                     categoryToEdit = null
+                    categoryDialogError = null
                 },
+                errorText = categoryDialogError,
                 onConfirm = { title, emoji ->
-                    if (categoryToEdit != null) {
-                        categoryViewModel.updateCategory(categoryToEdit!!, title, emoji)
-                    } else {
-                        categoryViewModel.addCategory(title, emoji, isExpenseTab)
+                    val normalizedTitle = title.trim()
+
+                    val duplicate = categoriesState.orEmpty().any {
+                        it.id != categoryToEdit?.id &&
+                                it.title.trim().equals(normalizedTitle, ignoreCase = true)
                     }
-                    showAddDialog = false
-                    categoryToEdit = null
+
+                    if (duplicate) {
+                        categoryDialogError =
+                            if (isPersian) {
+                                "این نام دسته‌بندی قبلاً استفاده شده است. نام دیگری انتخاب کنید."
+                            } else {
+                                "This category name is already in use. Choose another name."
+                            }
+                    } else {
+                        categoryDialogError = null
+
+                        if (categoryToEdit != null) {
+                            categoryViewModel.updateCategory(
+                                categoryToEdit!!,
+                                normalizedTitle,
+                                emoji
+                            )
+                        } else {
+                            categoryViewModel.addCategory(
+                                normalizedTitle,
+                                emoji,
+                                isExpenseTab
+                            )
+                        }
+
+                        showAddDialog = false
+                        categoryToEdit = null
+                        categoryDialogError = null
+                    }
                 }
             )
         }
@@ -761,6 +798,7 @@ fun AddOrEditCategoryDialog(
     isExpense: Boolean,
     isPersian: Boolean,
     onDismiss: () -> Unit,
+    errorText: String? = null,
     onConfirm: (title: String, emoji: String) -> Unit
 ) {
     val maxTitleLength = 20
@@ -846,6 +884,8 @@ fun AddOrEditCategoryDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
+                    isError = !errorText.isNullOrBlank(),
+                    supportingText = if (!errorText.isNullOrBlank()) { { Text(errorText, color = MaterialTheme.colorScheme.error) } } else null,
                     trailingIcon = {
                         VoiceInputButton(
                             onResult = { spoken ->

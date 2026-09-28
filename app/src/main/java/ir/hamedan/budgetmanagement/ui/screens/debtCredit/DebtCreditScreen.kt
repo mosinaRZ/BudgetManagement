@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -84,6 +85,7 @@ fun DebtCreditScreen(
     var itemToDelete by remember { mutableStateOf<DebtCreditEntity?>(null) }
     var itemForDeposit by remember { mutableStateOf<DebtCreditEntity?>(null) }
     var itemForWithdraw by remember { mutableStateOf<DebtCreditEntity?>(null) }
+    var itemForSettlement by remember { mutableStateOf<DebtCreditEntity?>(null) }
 
     var pendingSaveData by remember { mutableStateOf<PendingSaveData?>(null) }
 
@@ -173,7 +175,13 @@ fun DebtCreditScreen(
                             showAddDialog = true
                         },
                         onDeleteClick = { itemToDelete = item },
-                        onToggleSettled = { viewModel.toggleSettled(item.id, item.isSettled) }
+                        onToggleSettled = {
+                            if (item.isSettled) {
+                                viewModel.toggleSettled(item.id, true)
+                            } else {
+                                itemForSettlement = item
+                            }
+                        }
                     )
                 }
             }
@@ -275,6 +283,106 @@ fun DebtCreditScreen(
                     itemForDeposit = null
                 }
             )
+        }
+
+        itemForSettlement?.let { item ->
+            val remaining = (item.totalAmount - item.paidAmount).coerceAtLeast(0L)
+            val isDebt = item.type == "DEBT"
+            val accent = if (isDebt) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+            val dialogShape = RoundedCornerShape(28.dp)
+
+            Dialog(onDismissRequest = { itemForSettlement = null }) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface, dialogShape)
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), dialogShape)
+                        .clip(dialogShape)
+                        .padding(24.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .background(accent.copy(alpha = 0.1f), CircleShape)
+                                .border(1.dp, accent.copy(alpha = 0.18f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.AccountBalanceWallet,
+                                contentDescription = null,
+                                tint = accent,
+                                modifier = Modifier.size(30.dp)
+                            )
+                        }
+
+                        Text(
+                            text = if (isPersian) "تسویه «${item.personName}»؟" else "Settle “${item.personName}”?",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Text(
+                            text = if (isPersian) "مانده قابل تسویه" else "Remaining balance",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Text(
+                            text = "${NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US).format(remaining)} ${if (isPersian) "تومان" else "Toman"}",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = accent
+                        )
+
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Warning, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
+                                Spacer(Modifier.width(9.dp))
+                                Text(
+                                    if (isPersian) "با تأیید، مبلغ مانده به‌عنوان تراکنش ${if (isDebt) "برداشت" else "واریز"} در تراز حساب ثبت می‌شود."
+                                    else "Confirming will record the remaining amount as a ${if (isDebt) "withdrawal" else "income"} transaction in your account balance.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedButton(
+                                onClick = { itemForSettlement = null },
+                                modifier = Modifier.weight(1f).height(50.dp),
+                                shape = RoundedCornerShape(15.dp)
+                            ) {
+                                Text(if (isPersian) "انصراف" else "Cancel", fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = {
+                                    viewModel.settleWithRemainingBalance(item.id)
+                                    itemForSettlement = null
+                                },
+                                modifier = Modifier.weight(1f).height(50.dp),
+                                shape = RoundedCornerShape(15.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = accent)
+                            ) {
+                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(if (isPersian) "بله، تسویه کن" else "Yes, settle", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         itemForWithdraw?.let { item ->

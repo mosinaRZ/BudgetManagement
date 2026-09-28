@@ -53,7 +53,9 @@ class AppViewModelFactory(
                 SavingGoalsViewModel(
                     repository = container.savingGoalRepository,
                     context = appContext,
-                    useCase = SavingGoalUseCase(container.savingGoalRepository)
+                    useCase = SavingGoalUseCase(container.savingGoalRepository),
+                    transactionRepository = container.transactionRepository,
+                    categoryRepository = container.categoryRepository
                 ) as T
             }
             modelClass.isAssignableFrom(BudgetLimitViewModel::class.java) -> {

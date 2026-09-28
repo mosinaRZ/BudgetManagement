@@ -40,6 +40,9 @@ class BudgetLimitViewModel(
     private val context: Context
 ) : ViewModel() {
 
+    private val _errorMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val errorMessage: SharedFlow<String> = _errorMessage
+
     val currencyUnit: StateFlow<String> = CurrencySharedPreferences.currencyFlow
 
     val expenseCategories: StateFlow<List<CategoryEntity>> = categoryRepository
@@ -118,7 +121,19 @@ class BudgetLimitViewModel(
             val adjustedEndDate = endDate + (24 * 60 * 60 * 1000L - 1)
 
             val category = expenseCategories.value.firstOrNull { it.title == categoryName }
-                ?: throw IllegalArgumentException("Category not found: $categoryName")
+            if (category == null) {
+                _errorMessage.emit(if (ir.hamedan.budgetmanagement.utils.LocaleHelper.getLanguage(context) == "fa") "دسته‌بندی انتخاب‌شده معتبر نیست." else "The selected category is not valid.")
+                return@launch
+            }
+            val duplicate = budgetLimitsWithSpent.value.any { existing ->
+                existing.entity.id != limitId && existing.entity.categoryId == category.id &&
+                        existing.entity.startDate <= adjustedEndDate && existing.entity.endDate >= startDate
+            }
+            if (duplicate) {
+                val isPersian = ir.hamedan.budgetmanagement.utils.LocaleHelper.getLanguage(context) == "fa"
+                _errorMessage.emit(if (isPersian) "برای این دسته‌بندی یک محدودیت با بازه هم‌پوشان از قبل وجود دارد." else "An overlapping budget limit already exists for this category.")
+                return@launch
+            }
             val limit = BudgetLimitEntity(
                 id = existingLimit?.id ?: java.util.UUID.randomUUID().toString(),
                 categoryId = category.id,
@@ -139,6 +154,26 @@ class BudgetLimitViewModel(
                 descFa = "محدودیت مالی جدید برای دسته بندی «${categoryName}» ثبت شد.",
                 descEn = "New budget limit added for category ${categoryName}.",
                 tag = "BUDGET_${categoryName}_${System.currentTimeMillis()}"
+            )
+        }
+    }
+
+    fun renewLimit(id: String, durationDays: Int = 30) {
+        viewModelScope.launch {
+            val current = budgetLimitsWithSpent.value.find { it.entity.id == id }?.entity ?: return@launch
+            val start = System.currentTimeMillis()
+            val end = start + durationDays.coerceAtLeast(1) * 24L * 60L * 60L * 1000L - 1L
+            val renewed = current.copy(isActive = true, startDate = start, endDate = end, updatedAt = start)
+            budgetLimitRepository.saveLimit(renewed)
+            NotificationHelper.send(
+                context = context,
+                notificationType = NotificationType.BUDGET_ADD,
+                type = "SUCCESS",
+                titleFa = "محدودیت مالی تمدید شد",
+                titleEn = "Budget Limit Renewed",
+                descFa = "محدودیت دسته‌بندی «${expenseCategories.value.firstOrNull { it.id == current.categoryId }?.title.orEmpty()}» برای ۳۰ روز تمدید شد.",
+                descEn = "The budget limit was renewed for 30 days.",
+                tag = "BUDGET_RENEW_${id}_${System.currentTimeMillis()}"
             )
         }
     }
