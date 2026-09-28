@@ -40,7 +40,7 @@ object PdfExporter {
     private const val PAGE_HEIGHT = 842
     private const val MARGIN = 28f
     private const val FOOTER_HEIGHT = 30f
-    private const val TABLE_HEADER_HEIGHT = 32f
+    private const val TABLE_HEADER_HEIGHT = 40f
     private const val FIRST_PAGE_TOP = 255f
     private const val OTHER_PAGE_TOP = 72f
     private const val MIN_ROW_HEIGHT = 36f
@@ -205,22 +205,39 @@ object PdfExporter {
     private fun drawHeader(canvas: Canvas, logo: Bitmap?, isPersian: Boolean, startY: Float): Float {
         val brand = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(BRAND) }
         canvas.drawRoundRect(MARGIN, startY, PAGE_WIDTH - MARGIN, startY + 76f, 18f, 18f, brand)
+
         if (logo != null) {
-            val size = 48f
-            val left = PAGE_WIDTH / 2f - size / 2f
+            val size = 40f
+            val horizontalInset = 14f
+            val left = if (isPersian) PAGE_WIDTH - MARGIN - horizontalInset - size else MARGIN + horizontalInset
+            val top = startY + 18f
             val white = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
-            canvas.drawRoundRect(left - 9f, startY + 7f, left + size + 9f, startY + size + 7f, 16f, 16f, white)
-            drawBitmapContain(canvas, logo, RectF(left, startY + 7f, left + size, startY + size + 7f))
+            canvas.drawRoundRect(left - 7f, top - 7f, left + size + 7f, top + size + 7f, 13f, 13f, white)
+            drawBitmapContain(canvas, logo, RectF(left, top, left + size, top + size))
         }
-        drawCentered(canvas, if (isPersian) "گزارش مالی سیدنا" else "Cidna Financial Statement", PAGE_WIDTH / 2f, startY + 65f, 15f, true, Color.WHITE, isPersian)
+
+        drawCentered(
+            canvas,
+            if (isPersian) "گزارش مالی سیدنا" else "Cidna Financial Statement",
+            PAGE_WIDTH / 2f,
+            startY + 65f,
+            15f,
+            true,
+            Color.WHITE,
+            isPersian
+        )
         return startY + 92f
     }
 
     private fun drawCompactHeader(canvas: Canvas, logo: Bitmap?, isPersian: Boolean, startY: Float): Float {
         val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(BRAND); strokeWidth = 1.5f }
         canvas.drawLine(MARGIN, startY + 42f, PAGE_WIDTH - MARGIN, startY + 42f, line)
-        if (logo != null) drawBitmapContain(canvas, logo, RectF(PAGE_WIDTH / 2f - 20f, startY, PAGE_WIDTH / 2f + 20f, startY + 38f))
-        drawCentered(canvas, if (isPersian) "گزارش مالی سیدنا" else "Cidna Financial Statement", PAGE_WIDTH / 2f, startY + 59f, 10f, true, Color.parseColor(BRAND), isPersian)
+        if (logo != null) {
+            val size = 30f
+            val left = if (isPersian) PAGE_WIDTH - MARGIN - size else MARGIN
+            drawBitmapContain(canvas, logo, RectF(left, startY + 4f, left + size, startY + 4f + size))
+        }
+        drawCentered(canvas, if (isPersian) "گزارش مالی سیدنا" else "Cidna Financial Statement", PAGE_WIDTH / 2f, startY + 34f, 10f, true, Color.parseColor(BRAND), isPersian)
         return startY + 70f
     }
 
@@ -267,11 +284,26 @@ object PdfExporter {
     private fun drawTableHeader(canvas: Canvas, isPersian: Boolean, startY: Float): Float {
         val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(HEADER_GRAY) }
         canvas.drawRoundRect(MARGIN, startY, PAGE_WIDTH - MARGIN, startY + TABLE_HEADER_HEIGHT, 7f, 7f, bg)
+
         val cols = if (isPersian) logicalColumns.reversed() else logicalColumns
         val ws = if (isPersian) widths().reversed() else widths()
         var x = MARGIN
         cols.forEachIndexed { i, col ->
-            drawCentered(canvas, if (isPersian) col.titleFa else col.titleEn, x + ws[i] / 2f, startY + 20f, 7.7f, true, Color.WHITE, isPersian)
+            val title = if (isPersian) col.titleFa else col.titleEn
+            val cellWidth = ws[i] - 8f
+            val layout = buildLayout(
+                title,
+                cellWidth,
+                isPersian,
+                7.4f,
+                Layout.Alignment.ALIGN_CENTER
+            )
+            val drawX = x + 4f
+            val drawY = startY + (TABLE_HEADER_HEIGHT - layout.height) / 2f
+            canvas.save()
+            canvas.translate(drawX, drawY)
+            layout.draw(canvas)
+            canvas.restore()
             x += ws[i]
         }
         return startY + TABLE_HEADER_HEIGHT + 3f

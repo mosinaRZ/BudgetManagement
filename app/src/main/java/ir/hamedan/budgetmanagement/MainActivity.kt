@@ -66,6 +66,7 @@ import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsScreen
 import ir.hamedan.budgetmanagement.ui.screens.home.HomeScreen
 import ir.hamedan.budgetmanagement.ui.screens.auth.LoginScreen
 import ir.hamedan.budgetmanagement.ui.screens.auth.RegisterScreen
+import ir.hamedan.budgetmanagement.ui.screens.auth.PasswordResetScreen
 import ir.hamedan.budgetmanagement.ui.screens.budgetLimit.BudgetLimitScreen
 import ir.hamedan.budgetmanagement.ui.screens.categories.CategoriesScreen
 import ir.hamedan.budgetmanagement.ui.screens.debtCredit.DebtCreditScreen
@@ -302,7 +303,21 @@ class MainActivity : FragmentActivity() {
                     },
                     onRegister = {
                         navController.navigate(AppRoute.Register)
+                    },
+                    onForgotPassword = {
+                        navController.navigate(AppRoute.PasswordReset)
                     }
+                )
+            }
+
+            composable<AppRoute.PasswordReset> {
+                PasswordResetScreen(
+                    onResetSuccess = {
+                        navController.navigate(AppRoute.Login()) {
+                            popUpTo(AppRoute.PasswordReset) { inclusive = true }
+                        }
+                    },
+                    onBack = { navController.popBackStack() }
                 )
             }
 

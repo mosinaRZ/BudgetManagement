@@ -60,6 +60,7 @@ import kotlinx.coroutines.launch
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onRegister: () -> Unit,
+    onForgotPassword: () -> Unit,
     localUnlockOnly: Boolean = false
 ) {
     val context = LocalContext.current
@@ -75,6 +76,7 @@ fun LoginScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoggingIn by remember { mutableStateOf(false) }
     var biometricPromptShown by remember(localUnlockOnly) { mutableStateOf(false) }
+    var biometricCanceled by remember(localUnlockOnly) { mutableStateOf(false) }
 
     val passwordFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -112,7 +114,7 @@ fun LoginScreen(
                 super.onAuthenticationError(errorCode, errString)
                 isLoggingIn = false
                 biometricPromptShown = false
-                errorMessage = errString.toString().takeIf { it.isNotBlank() }
+                errorMessage = null
             }
 
             override fun onAuthenticationFailed() {
@@ -124,7 +126,7 @@ fun LoginScreen(
             BiometricPrompt.PromptInfo.Builder()
                 .setTitle(if (isPersian) "تأیید هویت برای ورود" else "Verify to continue")
                 .setSubtitle(if (isPersian) "برای ورود به برنامه اثر انگشت خود را تأیید کنید" else "Confirm your biometric to unlock the app")
-                .setNegativeButtonText(if (isPersian) "انصراف" else "Cancel")
+                .setNegativeButtonText("\u200B")
                 .build(),
             BiometricPrompt.CryptoObject(cipher)
         )
@@ -260,8 +262,8 @@ fun LoginScreen(
             ) {
                 OutlinedTextField(
                     value = username,
-                    onValueChange = { if (!localUnlockOnly) { username = it; errorMessage = null } },
-                    readOnly = localUnlockOnly,
+                    onValueChange = { username = it; errorMessage = null },
+                    readOnly = false,
                     label = { Text(if (isPersian) "شماره موبایل یا ایمیل" else "Phone or email") },
                     leadingIcon = { Icon(Icons.Default.Person, null) },
                     singleLine = true,
@@ -271,7 +273,7 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                if (!localUnlockOnly || !biometricReady) {
+                if (true) {
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it; errorMessage = null },
@@ -287,38 +289,61 @@ fun LoginScreen(
                     )
                 }
 
-                if (localUnlockOnly && biometricReady) {
+                LoadingButton(
+                    text = when {
+                        !localUnlockOnly -> if (isPersian) "ورود به حساب" else "Sign In"
+                        password.isBlank() && biometricReady -> if (isPersian) "ورود با اثر انگشت" else "Sign in with fingerprint"
+                        else -> if (isPersian) "ورود با رمز عبور" else "Sign in with password"
+                    },
+                    isLoading = isLoggingIn,
+                    onClick = when {
+                        !localUnlockOnly -> ::submitServerLogin
+                        password.isBlank() && biometricReady -> ::startBiometricUnlock
+                        else -> ::submitLocalPassword
+                    }
+                )
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    TextButton(
+                        onClick = onForgotPassword,
+                        enabled = !isLoggingIn
+                    ) {
+                        Text(
+                            text = if (isPersian) "رمز عبور را فراموش کرده‌اید؟" else "Forgot your password?",
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
-                    ) {
-                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                            Icon(Icons.Default.Fingerprint, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-                            Spacer(Modifier.width(10.dp))
-                            Text(if (isPersian) "در حال درخواست تأیید اثر انگشت…" else "Waiting for biometric verification…", fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                } else {
-                    LoadingButton(
-                        text = if (localUnlockOnly) (if (isPersian) "ورود با رمز عبور" else "Unlock with password") else (if (isPersian) "ورود به حساب" else "Sign In"),
-                        isLoading = isLoggingIn,
-                        onClick = if (localUnlockOnly) ::submitLocalPassword else ::submitServerLogin
-                    )
-                }
-
-                if (!localUnlockOnly) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
                     ) {
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                            Text(if (isPersian) "حساب کاربری ندارید؟" else "Don't have an account?", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                if (isPersian) "حساب کاربری ندارید؟" else "Don't have an account?",
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
                             Spacer(Modifier.width(6.dp))
-                            TextButton(onClick = onRegister, enabled = !isLoggingIn, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) {
-                                Text(if (isPersian) "ثبت‌نام کنید" else "Create one", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            TextButton(
+                                onClick = onRegister,
+                                enabled = !isLoggingIn,
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                            ) {
+                                Text(
+                                    if (isPersian) "ساخت حساب" else "Create account",
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
                             }
                         }
                     }

@@ -1702,19 +1702,19 @@ private fun TransactionRow(
                 Spacer(modifier = Modifier.height(9.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    CategoryMetaChip(
-                        emoji = categoryIcon,
+                    TransactionMetaInfo(
+                        icon = categoryIcon,
                         text = categoryTitle,
-                        modifier = Modifier.weight(1f, fill = false)
+                        modifier = Modifier.weight(1f)
                     )
-                    TransactionMetaChip(
-                        icon = Icons.Default.CalendarToday,
+                    TransactionMetaInfo(
+                        icon = null,
+                        vectorIcon = Icons.Default.CalendarToday,
                         text = DateUtils.formatTimestamp(transaction.timestamp, isPersian),
-                        isPersian = isPersian,
-                        modifier = Modifier.weight(1f, fill = false)
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
@@ -1745,70 +1745,39 @@ private fun TransactionRow(
 }
 
 @Composable
-private fun CategoryMetaChip(
-    emoji: String,
+private fun TransactionMetaInfo(
+    icon: String? = null,
+    vectorIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     text: String,
     modifier: Modifier = Modifier
 ) {
-    val shape = RoundedCornerShape(12.dp)
     Row(
-        modifier = modifier
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.09f), shape)
-            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), shape)
-            .padding(horizontal = 9.dp, vertical = 6.dp),
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(24.dp)
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(text = emoji.ifBlank { "📁" }, fontSize = 14.sp)
+        if (icon != null) {
+            Text(
+                text = icon.ifBlank { "📁" },
+                fontSize = 16.sp,
+                modifier = Modifier.widthIn(min = 20.dp)
+            )
+        } else if (vectorIcon != null) {
+            Icon(
+                imageVector = vectorIcon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(17.dp)
+            )
         }
         Text(
             text = text,
             style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-private fun TransactionMetaChip(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    text: String,
-    isPersian: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val shape = RoundedCornerShape(10.dp)
-    Row(
-        modifier = modifier
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.82f), shape)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), shape)
-            .padding(horizontal = 9.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(14.dp)
-        )
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
         )
     }
 }
