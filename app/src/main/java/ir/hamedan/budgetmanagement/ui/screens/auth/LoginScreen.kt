@@ -126,7 +126,7 @@ fun LoginScreen(
             BiometricPrompt.PromptInfo.Builder()
                 .setTitle(if (isPersian) "تأیید هویت برای ورود" else "Verify to continue")
                 .setSubtitle(if (isPersian) "برای ورود به برنامه اثر انگشت خود را تأیید کنید" else "Confirm your biometric to unlock the app")
-                .setNegativeButtonText("\u200B")
+                .setNegativeButtonText(if (isPersian) "انصراف" else "Cancel")
                 .build(),
             BiometricPrompt.CryptoObject(cipher)
         )

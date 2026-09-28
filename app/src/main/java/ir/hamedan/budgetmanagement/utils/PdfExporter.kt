@@ -5,22 +5,25 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.Typeface
+import android.graphics.pdf.PdfDocument
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextDirectionHeuristics
 import android.text.TextPaint
-import android.graphics.pdf.PdfDocument
+import android.text.TextUtils
 import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import java.io.File
 import java.io.FileOutputStream
 import java.text.NumberFormat
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.max
-
 
 data class ExportStats(
     val openingBalance: Double,
@@ -34,341 +37,608 @@ data class ExportStats(
     val endMillis: Long
 )
 
+// ───────────────────────── Page geometry (A4 @ 72dpi, units = pt) ─────────────────────────
+private const val PAGE_W = 595f
+private const val PAGE_H = 842f
+private const val MARGIN = 32f
+private const val CONTENT_WIDTH = PAGE_W - MARGIN * 2
+
+private const val FOOTER_TOP = PAGE_H - 40f
+private const val CONTENT_BOTTOM = FOOTER_TOP - 10f
+
+private const val TABLE_HEADER_HEIGHT = 30f
+private const val ROWS_GAP = 4f
+private const val MIN_ROW_HEIGHT = 30f
+private const val ROW_V_PAD = 8f
+
+// Fixed vertical layout of the first page (header → cards → info strip → table)
+private const val FIRST_HEADER_HEIGHT = 84f
+private const val CARDS_TOP = 128f
+private const val CARDS_HEIGHT = 72f
+private const val INFO_TOP = 210f
+private const val INFO_HEIGHT = 44f
+private const val FIRST_TABLE_TOP = 268f
+private const val OTHER_TABLE_TOP = 80f
+private const val FIRST_ROWS_TOP = FIRST_TABLE_TOP + TABLE_HEADER_HEIGHT + ROWS_GAP
+private const val OTHER_ROWS_TOP = OTHER_TABLE_TOP + TABLE_HEADER_HEIGHT + ROWS_GAP
+
+// ───────────────────────── Colors ─────────────────────────
+private val cBrand = Color.parseColor("#408A71")
+private val cBrandDark = Color.parseColor("#2F6B57")
+private val cBrandLight = Color.parseColor("#EAF4F0")
+private val cAltRow = Color.parseColor("#F6F9F8")
+private val cText = Color.parseColor("#1F2A27")
+private val cMuted = Color.parseColor("#6B7773")
+private val cBorder = Color.parseColor("#D9E2DE")
+private val cIncome = Color.parseColor("#1F8A5F")
+private val cIncomeBg = Color.parseColor("#E3F4EC")
+private val cExpense = Color.parseColor("#C0392B")
+private val cExpenseBg = Color.parseColor("#FBE8E6")
+private val cNeutral = Color.parseColor("#4D5754")
+private val cWhiteSoft = Color.argb(215, 255, 255, 255)
+
+private enum class Align { START, END, CENTER }
+
+private enum class Col(
+    val weight: Float,
+    val align: Align,
+    val pad: Float,
+    val titleFa: String,
+    val titleEn: String
+) {
+    INDEX(6f, Align.CENTER, 2f, "ردیف", "#"),
+    DATE(14f, Align.CENTER, 4f, "تاریخ", "Date"),
+    TITLE(18f, Align.START, 8f, "عنوان", "Title"),
+    CATEGORY(15f, Align.START, 8f, "دسته‌بندی", "Category"),
+    TYPE(9f, Align.CENTER, 4f, "نوع", "Type"),
+    AMOUNT(19f, Align.CENTER, 4f, "مبلغ", "Amount"),
+    NOTE(19f, Align.START, 8f, "یادداشت", "Note")
+}
+
+private class RowLayout(
+    val date: StaticLayout,
+    val title: StaticLayout,
+    val category: StaticLayout,
+    val amount: StaticLayout,
+    val note: StaticLayout,
+    val typeLabel: String,
+    val isIncome: Boolean,
+    val otherHeight: Float,   // tallest non-note cell (content only, no padding)
+    val height: Float
+)
+
+/** A slice of a row placed on one page. Normal rows are one fragment; very long notes are split by line. */
+private class Fragment(
+    val row: Int,
+    val fromLine: Int,
+    val toLine: Int,
+    val isFirst: Boolean,
+    val height: Float
+)
+
 object PdfExporter {
 
-    private const val PAGE_WIDTH = 595
-    private const val PAGE_HEIGHT = 842
-    private const val MARGIN = 28f
-    private const val FOOTER_HEIGHT = 30f
-    private const val TABLE_HEADER_HEIGHT = 40f
-    private const val FIRST_PAGE_TOP = 255f
-    private const val OTHER_PAGE_TOP = 72f
-    private const val MIN_ROW_HEIGHT = 36f
-
-    private const val BRAND = "#408A71"
-    private const val BRAND_LIGHT = "#EAF4F0"
-    private const val ALT_ROW = "#F5F8F7"
-    private const val HEADER_GRAY = "#4D5754"
-    private const val TEXT = "#26332F"
-    private const val MUTED = "#6B7773"
-    private const val BORDER = "#D4DEDA"
-    private const val INCOME = "#2E8B67"
-    private const val EXPENSE = "#C65B5B"
-
-    private data class Column(val key: String, val weight: Float, val titleFa: String, val titleEn: String)
-
-    private val logicalColumns = listOf(
-        Column("index", 6f, "ردیف", "#"),
-        Column("date", 13f, "تاریخ", "Date"),
-        Column("title", 17f, "عنوان", "Title"),
-        Column("category", 15f, "دسته‌بندی", "Category"),
-        Column("type", 11f, "نوع", "Type"),
-        Column("amount", 17f, "مبلغ", "Amount"),
-        Column("note", 21f, "یادداشت", "Note")
-    )
-
+    /**
+     * @param regularTypeface / boldTypeface  optional custom fonts (e.g. Vazirmatn) for the sharpest
+     * Persian rendering. When null, the system fonts are used.
+     */
     fun generate(
         context: Context,
         transactions: List<TransactionEntity>,
         stats: ExportStats,
         isPersian: Boolean,
-        categoryNames: Map<String, String> = emptyMap()
+        categoryNames: Map<String, String> = emptyMap(),
+        regularTypeface: Typeface? = null,
+        boldTypeface: Typeface? = null
     ): File {
+        val painter = PdfPainter(
+            rtl = isPersian,
+            regularFace = regularTypeface ?: Typeface.DEFAULT,
+            boldFace = boldTypeface ?: Typeface.DEFAULT_BOLD
+        )
         val document = PdfDocument()
-        val logo = context.resources.openRawResource(R.raw.export_logo_mark).use { BitmapFactory.decodeStream(it) }
-        val rows = transactions.map { buildRow(it, stats.currency, isPersian, categoryNames) }
-        val pages = paginate(rows, isPersian)
+        val logo: Bitmap? = context.resources.openRawResource(R.raw.export_logo_mark)
+            .use { BitmapFactory.decodeStream(it) }
 
-        val ranges = if (pages.isEmpty()) listOf(0 until 0) else pages
-        ranges.forEachIndexed { pageIndex, range ->
-            val pageNumber = pageIndex + 1
-            val pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
-            val page = document.startPage(pageInfo)
-            val canvas = page.canvas
-            var y = MARGIN
+        try {
+            val rows = transactions.map { painter.buildRow(it, stats.currency, categoryNames) }
+            val pages = paginate(rows)
 
-            if (pageNumber == 1) {
-                y = drawHeader(canvas, logo, isPersian, y)
-                y = drawSummary(canvas, stats, isPersian, y)
-                y = drawStatementLine(canvas, stats, isPersian, y)
-            } else {
-                y = drawCompactHeader(canvas, logo, isPersian, y)
+            pages.forEachIndexed { pageIndex, fragments ->
+                val pageNumber = pageIndex + 1
+                val pageInfo = PdfDocument.PageInfo.Builder(PAGE_W.toInt(), PAGE_H.toInt(), pageNumber).create()
+                val page = document.startPage(pageInfo)
+                val canvas = page.canvas
+
+                val tableTop: Float
+                if (pageNumber == 1) {
+                    painter.drawFirstHeader(canvas, logo, stats.issueDateMillis)
+                    painter.drawSummaryCards(canvas, stats)
+                    painter.drawInfoStrip(canvas, stats, rows.size)
+                    tableTop = FIRST_TABLE_TOP
+                } else {
+                    painter.drawCompactHeader(canvas, logo)
+                    tableTop = OTHER_TABLE_TOP
+                }
+
+                painter.drawTableHeader(canvas, tableTop, stats.currency)
+                var y = tableTop + TABLE_HEADER_HEIGHT + ROWS_GAP
+                for (fragment in fragments) {
+                    painter.drawRow(canvas, fragment, rows[fragment.row], y, fragment.row % 2 == 1)
+                    y += fragment.height
+                }
+                if (rows.isEmpty()) painter.drawEmptyState(canvas, y)
+
+                painter.drawFooter(canvas, pageNumber, pages.size)
+                document.finishPage(page)
             }
 
-            y = drawTableHeader(canvas, isPersian, y)
-            val heights = mutableListOf<Float>()
-            var rowIndex = range.first
-            for (index in range) {
-                val row = rows[index]
-                val h = max(MIN_ROW_HEIGHT, row.height)
-                drawRow(canvas, rowIndex + 1, row, isPersian, y, h, (rowIndex - range.first) % 2 == 1)
-                heights += h
-                y += h
-                rowIndex++
-            }
-            drawTableBorders(canvas, y - heights.sum(), heights, isPersian)
-
-            if (range.isEmpty()) {
-                drawCentered(canvas, if (isPersian) "تراکنشی برای این بازه ثبت نشده است" else "No transactions were recorded in this period", PAGE_WIDTH / 2f, y + 44f, 10f, true, Color.parseColor(BRAND), isPersian)
-            }
-
-            drawFooter(canvas, pageNumber, ranges.size, isPersian)
-            document.finishPage(page)
+            val exportsDir = File(context.cacheDir, "exports").apply { mkdirs() }
+            val outFile = File(exportsDir, "Cidna_Statement_${System.currentTimeMillis()}.pdf")
+            FileOutputStream(outFile).use { document.writeTo(it) }
+            return outFile
+        } finally {
+            document.close()
+            if (logo != null && !logo.isRecycled) logo.recycle()
         }
-
-        val exportsDir = File(context.cacheDir, "exports").apply { mkdirs() }
-        val outFile = File(exportsDir, "Cidna_Statement_${System.currentTimeMillis()}.pdf")
-        FileOutputStream(outFile).use { document.writeTo(it) }
-        document.close()
-        logo.recycleIfNeeded()
-        return outFile
     }
 
+    /**
+     * Splits rows into pages using the real space under the table header.
+     * A row that fits on a page is never cut. A row taller than a whole page (a huge note) is
+     * split line-by-line across as many pages as needed, so no text is ever lost.
+     * Always returns at least one page (empty statements still get a page).
+     */
+    private fun paginate(rows: List<RowLayout>): List<List<Fragment>> {
+        val pages = mutableListOf<List<Fragment>>()
+        var current = mutableListOf<Fragment>()
+        var used = 0f
+        var available = CONTENT_BOTTOM - FIRST_ROWS_TOP
+        val fullCapacity = CONTENT_BOTTOM - OTHER_ROWS_TOP
 
-    private fun paginate(rows: List<RowLayout>, isPersian: Boolean): List<IntRange> {
-        if (rows.isEmpty()) return emptyList()
-        val firstAvailable = PAGE_HEIGHT - FIRST_PAGE_TOP - FOOTER_HEIGHT
-        val otherAvailable = PAGE_HEIGHT - OTHER_PAGE_TOP - FOOTER_HEIGHT
-        val pages = mutableListOf<IntRange>()
-        var start = 0
-        var cursor = 0
-        var available = firstAvailable
-        while (cursor < rows.size) {
-            var used = 0f
-            var end = cursor
-            while (end < rows.size) {
-                val h = max(MIN_ROW_HEIGHT, rows[end].height)
-                if (end > cursor && used + h > available) break
-                used += h
-                end++
-                if (used >= available) break
-            }
-            if (end == cursor) end++
-            pages += start until end
-            start = end
-            cursor = end
-            available = otherAvailable
+        fun newPage() {
+            pages.add(current)
+            current = mutableListOf()
+            used = 0f
+            available = fullCapacity
         }
+
+        rows.forEachIndexed { i, row ->
+            if (row.height <= fullCapacity) {
+                if (used > 0f && used + row.height > available) newPage()
+                current.add(Fragment(i, 0, row.note.lineCount, true, row.height))
+                used += row.height
+            } else {
+                val note = row.note
+                val lines = note.lineCount
+                var from = 0
+                var first = true
+                while (from < lines) {
+                    val base = if (first) row.otherHeight else 0f
+                    val firstLineH = (note.getLineBottom(from) - note.getLineTop(from)).toFloat()
+                    val minNeeded = ROW_V_PAD * 2 + max(base, firstLineH)
+                    if (used > 0f && available - used < minNeeded) newPage()
+                    val space = available - used
+                    var to = from
+                    while (to < lines && note.getLineBottom(to) - note.getLineTop(from) <= space - ROW_V_PAD * 2) to++
+                    if (to == from) to = from + 1
+                    val noteH = (note.getLineBottom(to - 1) - note.getLineTop(from)).toFloat()
+                    val h = ROW_V_PAD * 2 + max(base, noteH)
+                    current.add(Fragment(i, from, to, first, h))
+                    used += h
+                    from = to
+                    first = false
+                    if (from < lines) newPage()
+                }
+            }
+        }
+        pages.add(current)
         return pages
     }
+}
 
-    private data class RowLayout(
-        val timestamp: Long,
-        val title: String,
-        val category: String,
-        val type: String,
-        val amount: String,
-        val note: String,
-        val height: Float
-    )
+private class PdfPainter(
+    private val rtl: Boolean,
+    private val regularFace: Typeface,
+    private val boldFace: Typeface
+) {
+    private val locale: Locale = if (rtl) Locale.forLanguageTag("fa-IR") else Locale.US
+    private val moneyFormat: NumberFormat =
+        NumberFormat.getNumberInstance(locale).apply { maximumFractionDigits = 0 }
+    private val plainFormat: NumberFormat =
+        NumberFormat.getNumberInstance(locale).apply { maximumFractionDigits = 0; isGroupingUsed = false }
 
-    private fun buildRow(
-        tx: TransactionEntity,
-        currency: String,
-        isPersian: Boolean,
-        categoryNames: Map<String, String>
-    ): RowLayout {
-        val title = tx.title.ifBlank { if (isPersian) "بدون عنوان" else "Untitled" }
-        val category = categoryNames[tx.categoryId]
-            ?: tx.categoryId.ifBlank { if (isPersian) "دسته‌بندی نشده" else "Uncategorized" }
-        val type = if (tx.type == "INCOME") if (isPersian) "درآمد" else "Income" else if (isPersian) "هزینه" else "Expense"
-        val amount = formatAmount(tx.amount.toDouble(), currency, isPersian)
-        val note = tx.note.ifBlank { "—" }
-        val widths = widths()
-        val noteWidth = widths.last() - 14f
-        val noteLayout = buildLayout(note, noteWidth, isPersian, 8.4f, Layout.Alignment.ALIGN_OPPOSITE)
-        val titleLayout = buildLayout(title, widths[2] - 10f, isPersian, 8.2f, Layout.Alignment.ALIGN_CENTER)
-        val categoryLayout = buildLayout(category, widths[3] - 10f, isPersian, 8.2f, Layout.Alignment.ALIGN_CENTER)
-        val height = max(MIN_ROW_HEIGHT, noteLayout.height + 14f)
-        return RowLayout(tx.timestamp, title, category, type, amount, note, height)
+    private val colWidths: List<Float> = Col.values().map { CONTENT_WIDTH * it.weight / 100f }
+    private val colOffsets: List<Float> = run {
+        var acc = 0f
+        colWidths.map { val o = acc; acc += it; o }
     }
 
-    private fun buildLayout(text: String, width: Float, rtl: Boolean, size: Float, alignment: Layout.Alignment): StaticLayout {
+    private fun t(fa: String, en: String) = if (rtl) fa else en
+
+    /** Left x of a box that starts [offset] pt from the reading-start edge (right in Persian). */
+    private fun startLeft(offset: Float, width: Float): Float =
+        if (rtl) PAGE_W - MARGIN - offset - width else MARGIN + offset
+
+    // ───────────────────────── Text helpers ─────────────────────────
+
+    private fun layout(
+        value: String,
+        width: Float,
+        size: Float,
+        color: Int,
+        bold: Boolean = false,
+        align: Align = Align.START,
+        ltr: Boolean = false,
+        maxLines: Int = 1
+    ): StaticLayout {
         val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor(TEXT)
+            this.color = color
             textSize = size
-            typeface = Typeface.DEFAULT
+            typeface = if (bold) boldFace else regularFace
         }
-        return StaticLayout.Builder.obtain(text, 0, text.length, paint, width.toInt().coerceAtLeast(12))
+        val alignment = when (align) {
+            Align.START -> Layout.Alignment.ALIGN_NORMAL
+            Align.END -> Layout.Alignment.ALIGN_OPPOSITE
+            Align.CENTER -> Layout.Alignment.ALIGN_CENTER
+        }
+        val direction = if (ltr || !rtl) TextDirectionHeuristics.LTR else TextDirectionHeuristics.RTL
+        return StaticLayout.Builder.obtain(value, 0, value.length, paint, width.toInt().coerceAtLeast(1))
             .setAlignment(alignment)
             .setIncludePad(false)
-            .setLineSpacing(0f, 1.16f)
-            .setTextDirection(if (rtl) TextDirectionHeuristics.FIRSTSTRONG_RTL else TextDirectionHeuristics.FIRSTSTRONG_LTR)
+            .setLineSpacing(0f, 1.2f)
+            .setTextDirection(direction)
+            .apply {
+                if (maxLines != Int.MAX_VALUE) {
+                    setMaxLines(maxLines)
+                    setEllipsize(TextUtils.TruncateAt.END)
+                }
+            }
             .build()
     }
 
-    private fun widths(): List<Float> {
-        val total = PAGE_WIDTH - MARGIN * 2
-        return logicalColumns.map { total * it.weight / 100f }
+    private fun draw(canvas: Canvas, layout: StaticLayout, left: Float, top: Float) {
+        canvas.save()
+        canvas.translate(left, top)
+        layout.draw(canvas)
+        canvas.restore()
     }
 
-    private fun drawHeader(canvas: Canvas, logo: Bitmap?, isPersian: Boolean, startY: Float): Float {
-        val brand = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(BRAND) }
-        canvas.drawRoundRect(MARGIN, startY, PAGE_WIDTH - MARGIN, startY + 76f, 18f, 18f, brand)
+    private fun text(
+        canvas: Canvas,
+        value: String,
+        left: Float,
+        top: Float,
+        width: Float,
+        size: Float,
+        color: Int,
+        bold: Boolean = false,
+        align: Align = Align.START,
+        ltr: Boolean = false,
+        maxLines: Int = 1
+    ): StaticLayout {
+        val l = layout(value, width, size, color, bold, align, ltr, maxLines)
+        draw(canvas, l, left, top)
+        return l
+    }
 
+    private fun measure(value: String, size: Float, bold: Boolean): Float {
+        val p = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = size
+            typeface = if (bold) boldFace else regularFace
+        }
+        return p.measureText(value)
+    }
+
+    /** Largest font size (<= [start]) at which [value] fits on one line. */
+    private fun fit(value: String, maxWidth: Float, start: Float, min: Float, bold: Boolean): Float {
+        var s = start
+        while (s > min) {
+            if (measure(value, s, bold) <= maxWidth) return s
+            s -= 0.5f
+        }
+        return min
+    }
+
+    private fun fill(color: Int) = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color }
+
+    private fun stroke(color: Int, width: Float) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = color
+        strokeWidth = width
+        style = Paint.Style.STROKE
+    }
+
+    // ───────────────────────── Formatting ─────────────────────────
+
+    private fun unitLabel(currency: String) =
+        if (currency.equals("IRR", true)) t("ریال", "Rial") else t("تومان", "Toman")
+
+    private fun formatMoney(value: Double, currency: String, forceSign: Boolean = false): String {
+        val display = if (currency.equals("IRR", true)) value * 10 else value
+        val body = moneyFormat.format(abs(display))
+        return when {
+            display < 0 -> "-$body"
+            forceSign && display > 0 -> "+$body"
+            else -> body
+        }
+    }
+
+    // ───────────────────────── Row building ─────────────────────────
+
+    private fun colInner(col: Col) = colWidths[col.ordinal] - col.pad * 2
+
+    fun buildRow(tx: TransactionEntity, currency: String, categoryNames: Map<String, String>): RowLayout {
+        val isIncome = tx.type == "INCOME"
+        val title = tx.title.ifBlank { t("بدون عنوان", "Untitled") }
+        val category = categoryNames[tx.categoryId]
+            ?: tx.categoryId.takeUnless { it.isBlank() || it.equals("UNCATEGORIZED", true) }
+            ?: t("دسته‌بندی نشده", "Uncategorized")
+        val note = tx.note.ifBlank { "—" }
+        val signed = tx.amount.toDouble().let { if (isIncome) it else -it }
+        val amountText = formatMoney(signed, currency, forceSign = true)
+        val amountColor = if (isIncome) cIncome else cExpense
+
+        val dateL = layout(
+            DateUtils.formatTimestamp(tx.timestamp, rtl), colInner(Col.DATE), 8.5f, cText,
+            align = Align.CENTER, maxLines = 2
+        )
+        val titleL = layout(title, colInner(Col.TITLE), 9.5f, cText, bold = true, maxLines = 10)
+        val categoryL = layout(category, colInner(Col.CATEGORY), 9f, cText, maxLines = 10)
+        val amountSize = fit(amountText, colInner(Col.AMOUNT), 9.5f, 6.5f, true)
+        val amountL = layout(
+            amountText, colInner(Col.AMOUNT), amountSize, amountColor,
+            bold = true, align = Align.CENTER, ltr = true
+        )
+        val noteL = layout(note, colInner(Col.NOTE), 8.5f, cMuted, maxLines = Int.MAX_VALUE)
+
+        val otherHeight = listOf(dateL, titleL, categoryL, amountL).maxOf { it.height }.toFloat()
+        val content = max(otherHeight, noteL.height.toFloat())
+        val height = max(MIN_ROW_HEIGHT, content + ROW_V_PAD * 2)
+
+        return RowLayout(
+            date = dateL,
+            title = titleL,
+            category = categoryL,
+            amount = amountL,
+            note = noteL,
+            typeLabel = if (isIncome) t("درآمد", "Income") else t("هزینه", "Expense"),
+            isIncome = isIncome,
+            otherHeight = otherHeight,
+            height = height
+        )
+    }
+
+    // ───────────────────────── Page 1 header ─────────────────────────
+
+    fun drawFirstHeader(canvas: Canvas, logo: Bitmap?, issueMillis: Long) {
+        val top = MARGIN
+        val rect = RectF(MARGIN, top, PAGE_W - MARGIN, top + FIRST_HEADER_HEIGHT)
+        val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(rect.left, rect.top, rect.right, rect.bottom, cBrandDark, cBrand, Shader.TileMode.CLAMP)
+        }
+        canvas.drawRoundRect(rect, 16f, 16f, bg)
+
+        val tile = 48f
+        val inset = 18f
+        val tileLeft = startLeft(inset, tile)
+        val tileTop = top + (FIRST_HEADER_HEIGHT - tile) / 2f
+        canvas.drawRoundRect(RectF(tileLeft, tileTop, tileLeft + tile, tileTop + tile), 12f, 12f, fill(Color.WHITE))
         if (logo != null) {
-            val size = 40f
-            val horizontalInset = 14f
-            val left = if (isPersian) PAGE_WIDTH - MARGIN - horizontalInset - size else MARGIN + horizontalInset
-            val top = startY + 18f
-            val white = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
-            canvas.drawRoundRect(left - 7f, top - 7f, left + size + 7f, top + size + 7f, 13f, 13f, white)
+            drawBitmapContain(canvas, logo, RectF(tileLeft + 7f, tileTop + 7f, tileLeft + tile - 7f, tileTop + tile - 7f))
+        }
+
+        val issueWidth = 124f
+        val textOffset = inset + tile + 14f
+        val issueOffset = CONTENT_WIDTH - inset - issueWidth
+        val textWidth = issueOffset - 14f - textOffset
+
+        // Title + subtitle
+        val title = layout(t("گزارش مالی سیدنا", "Cidna Financial Statement"), textWidth, 17f, Color.WHITE, bold = true)
+        val subtitle = layout(t("صورتحساب تراکنش‌ها", "Transaction statement"), textWidth, 9f, cWhiteSoft)
+        var y = top + (FIRST_HEADER_HEIGHT - (title.height + 4f + subtitle.height)) / 2f
+        draw(canvas, title, startLeft(textOffset, textWidth), y)
+        y += title.height + 4f
+        draw(canvas, subtitle, startLeft(textOffset, textWidth), y)
+
+        // Divider + issue date (opposite side)
+        val dividerX = startLeft(issueOffset - 8f, 0f)
+        canvas.drawLine(
+            dividerX, top + 22f, dividerX, top + FIRST_HEADER_HEIGHT - 22f,
+            stroke(Color.argb(90, 255, 255, 255), 1f)
+        )
+        val issueValue = DateUtils.formatTimestamp(issueMillis, rtl)
+        val label = layout(t("تاریخ صدور", "Issue date"), issueWidth, 8.5f, cWhiteSoft)
+        val valueSize = fit(issueValue, issueWidth, 10.5f, 7.5f, true)
+        val value = layout(issueValue, issueWidth, valueSize, Color.WHITE, bold = true)
+        var iy = top + (FIRST_HEADER_HEIGHT - (label.height + 4f + value.height)) / 2f
+        draw(canvas, label, startLeft(issueOffset, issueWidth), iy)
+        iy += label.height + 4f
+        draw(canvas, value, startLeft(issueOffset, issueWidth), iy)
+    }
+
+    fun drawCompactHeader(canvas: Canvas, logo: Bitmap?) {
+        val top = MARGIN
+        val size = 28f
+        var textOffset = 0f
+        if (logo != null) {
+            val left = startLeft(0f, size)
             drawBitmapContain(canvas, logo, RectF(left, top, left + size, top + size))
+            textOffset = size + 10f
+        }
+        val width = 320f
+        val l = layout(t("گزارش مالی سیدنا", "Cidna Financial Statement"), width, 12f, cBrand, bold = true)
+        draw(canvas, l, startLeft(textOffset, width), top + (size - l.height) / 2f)
+        val lineY = top + size + 8f
+        canvas.drawLine(MARGIN, lineY, PAGE_W - MARGIN, lineY, stroke(cBrand, 1.2f))
+    }
+
+    // ───────────────────────── Summary cards ─────────────────────────
+
+    private class Card(val label: String, val value: String, val accent: Int, val filled: Boolean)
+
+    fun drawSummaryCards(canvas: Canvas, stats: ExportStats) {
+        val gap = 8f
+        val w = (CONTENT_WIDTH - gap * 3) / 4f
+        val unit = unitLabel(stats.currency)
+        val cards = listOf(
+            Card(t("مانده از قبل", "Opening balance"), formatMoney(stats.openingBalance, stats.currency), cNeutral, false),
+            Card(t("جمع واریز", "Total income"), formatMoney(stats.totalIncome, stats.currency), cIncome, false),
+            Card(t("جمع برداشت", "Total expense"), formatMoney(stats.totalExpense, stats.currency), cExpense, false),
+            Card(t("مانده", "Balance"), formatMoney(stats.balance, stats.currency), cBrand, true)
+        )
+        cards.forEachIndexed { i, card ->
+            val left = startLeft(i * (w + gap), w)
+            val rect = RectF(left, CARDS_TOP, left + w, CARDS_TOP + CARDS_HEIGHT)
+            if (card.filled) {
+                canvas.drawRoundRect(rect, 12f, 12f, fill(cBrand))
+            } else {
+                canvas.drawRoundRect(rect, 12f, 12f, fill(Color.WHITE))
+                canvas.drawRoundRect(rect, 12f, 12f, stroke(cBorder, 0.9f))
+                canvas.drawRoundRect(
+                    RectF(left + 16f, CARDS_TOP, left + w - 16f, CARDS_TOP + 3.5f), 2f, 2f, fill(card.accent)
+                )
+            }
+            val soft = if (card.filled) cWhiteSoft else cMuted
+            val strong = if (card.filled) Color.WHITE else card.accent
+
+            text(canvas, card.label, left + 6f, CARDS_TOP + 14f, w - 12f, 8.5f, soft, align = Align.CENTER)
+            val size = fit(card.value, w - 16f, 13.5f, 8f, true)
+            text(canvas, card.value, left + 8f, CARDS_TOP + 30f, w - 16f, size, strong, bold = true, align = Align.CENTER, ltr = true)
+            text(canvas, unit, left + 6f, CARDS_TOP + 53f, w - 12f, 8f, soft, align = Align.CENTER)
+        }
+    }
+
+    fun drawInfoStrip(canvas: Canvas, stats: ExportStats, txCount: Int) {
+        val rect = RectF(MARGIN, INFO_TOP, PAGE_W - MARGIN, INFO_TOP + INFO_HEIGHT)
+        canvas.drawRoundRect(rect, 12f, 12f, fill(cBrandLight))
+
+        val from = DateUtils.formatTimestamp(stats.startMillis, rtl)
+        val to = DateUtils.formatTimestamp(stats.endMillis, rtl)
+        val items = listOf(
+            t("بازه گزارش", "Statement period") to t("از $from تا $to", "$from  –  $to"),
+            t("نوع ارز", "Currency") to unitLabel(stats.currency),
+            t("تعداد تراکنش", "Transactions") to plainFormat.format(txCount)
+        )
+        val weights = floatArrayOf(0.44f, 0.28f, 0.28f)
+        var offset = 0f
+        items.forEachIndexed { i, (label, value) ->
+            val w = CONTENT_WIDTH * weights[i]
+            val left = startLeft(offset, w)
+            text(canvas, label, left + 8f, INFO_TOP + 9f, w - 16f, 8.5f, cMuted, align = Align.CENTER)
+            val size = fit(value, w - 16f, 10.5f, 7.5f, true)
+            text(canvas, value, left + 8f, INFO_TOP + 24f, w - 16f, size, cText, bold = true, align = Align.CENTER)
+            if (i > 0) {
+                val x = startLeft(offset, 0f)
+                canvas.drawLine(x, INFO_TOP + 10f, x, INFO_TOP + INFO_HEIGHT - 10f, stroke(cBorder, 0.9f))
+            }
+            offset += w
+        }
+    }
+
+    // ───────────────────────── Table ─────────────────────────
+
+    fun drawTableHeader(canvas: Canvas, top: Float, currency: String) {
+        val rect = RectF(MARGIN, top, PAGE_W - MARGIN, top + TABLE_HEADER_HEIGHT)
+        canvas.drawRoundRect(rect, 8f, 8f, fill(cNeutral))
+
+        Col.values().forEach { col ->
+            var title = t(col.titleFa, col.titleEn)
+            if (col == Col.AMOUNT) title = "$title (${unitLabel(currency)})"
+            val width = colInner(col)
+            val l = layout(title, width, 8.5f, Color.WHITE, bold = true, align = col.align, maxLines = 2)
+            val left = startLeft(colOffsets[col.ordinal], colWidths[col.ordinal]) + col.pad
+            draw(canvas, l, left, top + (TABLE_HEADER_HEIGHT - l.height) / 2f)
+        }
+    }
+
+    fun drawRow(canvas: Canvas, fragment: Fragment, row: RowLayout, top: Float, alternate: Boolean) {
+        val h = fragment.height
+        if (alternate) canvas.drawRect(MARGIN, top, PAGE_W - MARGIN, top + h, fill(cAltRow))
+        canvas.drawLine(MARGIN, top + h, PAGE_W - MARGIN, top + h, stroke(cBorder, 0.6f))
+
+        fun cell(col: Col, l: StaticLayout) {
+            val left = startLeft(colOffsets[col.ordinal], colWidths[col.ordinal]) + col.pad
+            draw(canvas, l, left, top + (h - l.height) / 2f)
         }
 
-        drawCentered(
-            canvas,
-            if (isPersian) "گزارش مالی سیدنا" else "Cidna Financial Statement",
-            PAGE_WIDTH / 2f,
-            startY + 65f,
-            15f,
-            true,
-            Color.WHITE,
-            isPersian
-        )
-        return startY + 92f
-    }
-
-    private fun drawCompactHeader(canvas: Canvas, logo: Bitmap?, isPersian: Boolean, startY: Float): Float {
-        val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(BRAND); strokeWidth = 1.5f }
-        canvas.drawLine(MARGIN, startY + 42f, PAGE_WIDTH - MARGIN, startY + 42f, line)
-        if (logo != null) {
-            val size = 30f
-            val left = if (isPersian) PAGE_WIDTH - MARGIN - size else MARGIN
-            drawBitmapContain(canvas, logo, RectF(left, startY + 4f, left + size, startY + 4f + size))
+        // Note column: whole note, or only the lines that belong to this fragment.
+        val note = row.note
+        if (fragment.fromLine == 0 && fragment.toLine == note.lineCount) {
+            cell(Col.NOTE, note)
+        } else {
+            val left = startLeft(colOffsets[Col.NOTE.ordinal], colWidths[Col.NOTE.ordinal]) + Col.NOTE.pad
+            val sliceTop = note.getLineTop(fragment.fromLine)
+            val sliceH = (note.getLineBottom(fragment.toLine - 1) - sliceTop).toFloat()
+            val y = top + ROW_V_PAD
+            canvas.save()
+            canvas.clipRect(left, y, left + colInner(Col.NOTE), y + sliceH)
+            canvas.translate(left, y - sliceTop)
+            note.draw(canvas)
+            canvas.restore()
         }
-        drawCentered(canvas, if (isPersian) "گزارش مالی سیدنا" else "Cidna Financial Statement", PAGE_WIDTH / 2f, startY + 34f, 10f, true, Color.parseColor(BRAND), isPersian)
-        return startY + 70f
-    }
 
-    private fun drawSummary(canvas: Canvas, stats: ExportStats, isPersian: Boolean, startY: Float): Float {
-        val top = startY
-        val box = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(BRAND_LIGHT) }
-        canvas.drawRoundRect(MARGIN, top, PAGE_WIDTH - MARGIN, top + 112f, 14f, 14f, box)
-        val leftX = MARGIN + 16f
-        val rightX = PAGE_WIDTH - MARGIN - 16f
-        val labels = listOf(
-            if (isPersian) "مانده از قبل" else "Opening Balance",
-            if (isPersian) "جمع واریز" else "Total Income",
-            if (isPersian) "جمع برداشت" else "Total Expense",
-            if (isPersian) "مانده" else "Balance",
-            if (isPersian) "نوع ارز" else "Currency",
-            if (isPersian) "تاریخ صدور" else "Issue Date"
-        )
-        val values = listOf(
-            formatAmount(stats.openingBalance, stats.currency, isPersian),
-            formatAmount(stats.totalIncome, stats.currency, isPersian),
-            formatAmount(stats.totalExpense, stats.currency, isPersian),
-            formatAmount(stats.balance, stats.currency, isPersian),
-            currencyLabel(stats.currency, isPersian),
-            DateUtils.formatTimestamp(stats.issueDateMillis, isPersian)
-        )
-        labels.forEachIndexed { i, label ->
-            val col = i % 2
-            val row = i / 2
-            val x = if (isPersian) rightX - col * 270f else leftX + col * 270f
-            val y = top + 20f + row * 34f
-            drawSingleLine(canvas, label, x, y, 7.7f, false, MUTED, isPersian, if (isPersian) Layout.Alignment.ALIGN_OPPOSITE else Layout.Alignment.ALIGN_NORMAL, 250f)
-            drawSingleLine(canvas, values[i], x, y + 12f, 9.3f, true, TEXT, isPersian, if (isPersian) Layout.Alignment.ALIGN_OPPOSITE else Layout.Alignment.ALIGN_NORMAL, 250f)
-        }
-        return top + 124f
-    }
-
-    private fun drawStatementLine(canvas: Canvas, stats: ExportStats, isPersian: Boolean, startY: Float): Float {
-        val from = DateUtils.formatTimestamp(stats.startMillis, isPersian)
-        val to = DateUtils.formatTimestamp(stats.endMillis, isPersian)
-        drawCentered(canvas, if (isPersian) "صورتحساب از تاریخ $from تا $to" else "Statement from $from to $to", PAGE_WIDTH / 2f, startY + 12f, 9.5f, true, Color.parseColor(BRAND), isPersian)
-        return startY + 28f
-    }
-
-    private fun drawTableHeader(canvas: Canvas, isPersian: Boolean, startY: Float): Float {
-        val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(HEADER_GRAY) }
-        canvas.drawRoundRect(MARGIN, startY, PAGE_WIDTH - MARGIN, startY + TABLE_HEADER_HEIGHT, 7f, 7f, bg)
-
-        val cols = if (isPersian) logicalColumns.reversed() else logicalColumns
-        val ws = if (isPersian) widths().reversed() else widths()
-        var x = MARGIN
-        cols.forEachIndexed { i, col ->
-            val title = if (isPersian) col.titleFa else col.titleEn
-            val cellWidth = ws[i] - 8f
-            val layout = buildLayout(
-                title,
-                cellWidth,
-                isPersian,
-                7.4f,
-                Layout.Alignment.ALIGN_CENTER
+        if (!fragment.isFirst) {
+            val hint = layout(
+                t("ادامه‌ی یادداشت ردیف ${plainFormat.format(fragment.row + 1)}", "Note continued (row ${fragment.row + 1})"),
+                colInner(Col.TITLE) + colWidths[Col.DATE.ordinal], 8f, cMuted
             )
-            val drawX = x + 4f
-            val drawY = startY + (TABLE_HEADER_HEIGHT - layout.height) / 2f
-            canvas.save()
-            canvas.translate(drawX, drawY)
-            layout.draw(canvas)
-            canvas.restore()
-            x += ws[i]
+            val left = startLeft(colOffsets[Col.DATE.ordinal], colWidths[Col.DATE.ordinal] + colWidths[Col.TITLE.ordinal]) + 4f
+            draw(canvas, hint, left, top + ROW_V_PAD)
+            return
         }
-        return startY + TABLE_HEADER_HEIGHT + 3f
+
+        Col.values().forEach { col ->
+            when (col) {
+                Col.INDEX -> cell(
+                    col,
+                    layout(plainFormat.format(fragment.row + 1), colInner(col), 8.5f, cMuted, align = Align.CENTER)
+                )
+                Col.DATE -> cell(col, row.date)
+                Col.TITLE -> cell(col, row.title)
+                Col.CATEGORY -> cell(col, row.category)
+                Col.AMOUNT -> cell(col, row.amount)
+                Col.TYPE -> drawTypePill(canvas, row, top, h)
+                Col.NOTE -> Unit
+            }
+        }
     }
 
-    private fun drawRow(canvas: Canvas, number: Int, row: RowLayout, isPersian: Boolean, y: Float, rowHeight: Float, alternate: Boolean) {
-        val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(if (alternate) ALT_ROW else "#FFFFFF") }
-        canvas.drawRect(MARGIN, y, PAGE_WIDTH - MARGIN, y + rowHeight, bg)
+    private fun drawTypePill(canvas: Canvas, row: RowLayout, top: Float, rowHeight: Float) {
+        val col = Col.TYPE
+        val colW = colWidths[col.ordinal]
+        val textColor = if (row.isIncome) cIncome else cExpense
+        val bgColor = if (row.isIncome) cIncomeBg else cExpenseBg
+        val pillW = minOf(colW - 8f, measure(row.typeLabel, 8f, true) + 14f)
+        val pillH = 16f
+        val pillLeft = startLeft(colOffsets[col.ordinal], colW) + (colW - pillW) / 2f
+        val pillTop = top + (rowHeight - pillH) / 2f
+        canvas.drawRoundRect(RectF(pillLeft, pillTop, pillLeft + pillW, pillTop + pillH), pillH / 2f, pillH / 2f, fill(bgColor))
+        val l = layout(row.typeLabel, pillW, 8f, textColor, bold = true, align = Align.CENTER)
+        draw(canvas, l, pillLeft, pillTop + (pillH - l.height) / 2f)
+    }
 
-        val values = mapOf(
-            "index" to number.toString(),
-            "date" to DateUtils.formatTimestamp(row.timestamp, isPersian),
-            "title" to row.title,
-            "category" to row.category,
-            "type" to row.type,
-            "amount" to row.amount,
-            "note" to row.note
+    fun drawEmptyState(canvas: Canvas, top: Float) {
+        val rect = RectF(MARGIN, top + 12f, PAGE_W - MARGIN, top + 72f)
+        canvas.drawRoundRect(rect, 12f, 12f, fill(cBrandLight))
+        val l = layout(
+            t("تراکنشی برای این بازه ثبت نشده است", "No transactions were recorded in this period"),
+            rect.width() - 24f, 10.5f, cBrand, bold = true, align = Align.CENTER
         )
-        val cols = if (isPersian) logicalColumns.reversed() else logicalColumns
-        val ws = if (isPersian) widths().reversed() else widths()
-        var x = MARGIN
-        cols.forEachIndexed { i, col ->
-            val value = values[col.key].orEmpty()
-            val alignment = if (col.key == "note" && isPersian) Layout.Alignment.ALIGN_OPPOSITE else Layout.Alignment.ALIGN_CENTER
-            val size = if (col.key == "note") 8.1f else 8.0f
-            val layout = buildLayout(value, ws[i] - 10f, isPersian, size, alignment)
-            canvas.save()
-            canvas.translate(x + 5f, y + max(6f, (rowHeight - layout.height) / 2f))
-            layout.draw(canvas)
-            canvas.restore()
-            x += ws[i]
-        }
+        draw(canvas, l, rect.left + 12f, rect.centerY() - l.height / 2f)
     }
 
-    private fun drawTableBorders(canvas: Canvas, top: Float, heights: List<Float>, isPersian: Boolean) {
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(BORDER); strokeWidth = 0.7f }
-        val left = MARGIN
-        val right = PAGE_WIDTH - MARGIN
-        var y = top
-        canvas.drawLine(left, y, right, y, paint)
-        heights.forEach { y += it; canvas.drawLine(left, y, right, y, paint) }
-        var x = left
-        val ws = if (isPersian) widths().reversed() else widths()
-        ws.dropLast(1).forEach { w -> x += w; canvas.drawLine(x, top, x, y, paint) }
-    }
+    // ───────────────────────── Footer ─────────────────────────
 
-    private fun drawFooter(canvas: Canvas, page: Int, total: Int, isPersian: Boolean) {
-        val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor(BORDER); strokeWidth = 0.8f }
-        canvas.drawLine(MARGIN, PAGE_HEIGHT - 32f, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - 32f, line)
-        drawCentered(canvas, if (isPersian) "صفحه $page از $total" else "Page $page of $total", PAGE_WIDTH / 2f, PAGE_HEIGHT - 14f, 7.5f, false, Color.parseColor(MUTED), isPersian)
-    }
-
-    private fun drawSingleLine(canvas: Canvas, text: String, x: Float, y: Float, size: Float, bold: Boolean, color: String, rtl: Boolean, alignment: Layout.Alignment, width: Float) {
-        val layout = buildLayout(text, width, rtl, size, alignment)
-        val left = when (alignment) {
-            Layout.Alignment.ALIGN_OPPOSITE -> x - width
-            Layout.Alignment.ALIGN_CENTER -> x - width / 2f
-            else -> x
-        }
-        canvas.save(); canvas.translate(left, y - size); layout.draw(canvas); canvas.restore()
-    }
-
-    private fun drawCentered(canvas: Canvas, text: String, centerX: Float, baseline: Float, size: Float, bold: Boolean, color: Int, rtl: Boolean) {
-        val layout = buildLayout(text, PAGE_WIDTH - MARGIN * 2, rtl, size, Layout.Alignment.ALIGN_CENTER)
-        canvas.save(); canvas.translate(MARGIN, baseline - layout.height + 2f); layout.draw(canvas); canvas.restore()
+    fun drawFooter(canvas: Canvas, page: Int, total: Int) {
+        canvas.drawLine(MARGIN, FOOTER_TOP, PAGE_W - MARGIN, FOOTER_TOP, stroke(cBorder, 0.8f))
+        val y = FOOTER_TOP + 9f
+        val w = 220f
+        text(canvas, t("تهیه‌شده با سیدنا", "Generated by Cidna"), startLeft(0f, w), y, w, 8.5f, cMuted)
+        text(
+            canvas,
+            t("صفحه ${plainFormat.format(page)} از ${plainFormat.format(total)}", "Page $page of $total"),
+            startLeft(CONTENT_WIDTH - w, w), y, w, 8.5f, cMuted, align = Align.END
+        )
     }
 
     private fun drawBitmapContain(canvas: Canvas, bitmap: Bitmap, dst: RectF) {
@@ -377,23 +647,9 @@ object PdfExporter {
         val h = bitmap.height * scale
         val left = dst.centerX() - w / 2f
         val top = dst.centerY() - h / 2f
-        canvas.drawBitmap(bitmap, null, RectF(left, top, left + w, top + h), Paint(Paint.ANTI_ALIAS_FLAG).apply { isFilterBitmap = true })
-    }
-
-    private fun formatAmount(amount: Double, currencyCode: String, isPersian: Boolean): String {
-        val display = if (currencyCode.equals("IRR", true)) amount * 10 else amount
-        val locale = if (isPersian) Locale("fa", "IR") else Locale.US
-        val number = NumberFormat.getNumberInstance(locale).apply { maximumFractionDigits = 0 }
-        return "${number.format(display)} ${currencyLabel(currencyCode, isPersian)}"
-    }
-
-    private fun currencyLabel(currencyCode: String, isPersian: Boolean): String = if (currencyCode.equals("IRR", true)) {
-        if (isPersian) "ریال" else "Rial"
-    } else {
-        if (isPersian) "تومان" else "Toman"
-    }
-
-    private fun Bitmap.recycleIfNeeded() {
-        if (!isRecycled) recycle()
+        canvas.drawBitmap(
+            bitmap, null, RectF(left, top, left + w, top + h),
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { isFilterBitmap = true }
+        )
     }
 }

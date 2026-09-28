@@ -1566,6 +1566,7 @@ private fun TransactionRow(
 ) {
     val rowShape = RoundedCornerShape(20.dp)
     val isExpense = transaction.type == "EXPENSE"
+    val accent = if (isExpense) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     var isRevealed by remember { mutableStateOf(false) }
 
     val revealOffsetDp = if (isPersian) 120.dp else (-120).dp
@@ -1579,13 +1580,11 @@ private fun TransactionRow(
         label = "AlphaAnimation"
     )
 
+    // \u200E (LRM) keeps the sign on the left of the digits in both RTL and LTR layouts
     val formattedAmount = remember(transaction.amount, isPersian, currencyUnit) {
         val calculatedAmount = if (currencyUnit == "IRR") transaction.amount.toLong() * 10 else transaction.amount.toLong()
-        if (isPersian && isExpense) {
-            "-${numberFormatter.format(calculatedAmount)}"
-        } else {
-            numberFormatter.format(if (isExpense) -calculatedAmount else calculatedAmount)
-        }
+        val sign = if (isExpense) "-" else "+"
+        "\u200E$sign${numberFormatter.format(calculatedAmount)}"
     }
 
     val currencySuffix = if (isPersian) {
@@ -1593,7 +1592,6 @@ private fun TransactionRow(
     } else {
         if (currencyUnit == "IRR") "IRR" else "T"
     }
-
 
     Box(
         modifier = Modifier
@@ -1656,33 +1654,50 @@ private fun TransactionRow(
                 .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), rowShape)
                 .clip(rowShape)
                 .clickable { isRevealed = !isRevealed }
-                .padding(14.dp),
+                .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .background(
-                        if (isExpense) MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
-                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (isExpense) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
-                    contentDescription = null,
-                    tint = if (isExpense) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
+            // Category emoji tile + small direction badge (income / expense)
+            Box(modifier = Modifier.size(48.dp)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(accent.copy(alpha = 0.12f), RoundedCornerShape(16.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = categoryIcon.ifBlank { "📁" },
+                        fontSize = 22.sp
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(18.dp)
+                        .align(Alignment.BottomEnd)
+                        .offset(x = 4.dp, y = 4.dp)
+                        .background(accent, CircleShape)
+                        .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isExpense) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(10.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
+            // Title / note / category chip
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
                 Text(
                     text = transaction.title.ifEmpty { categoryTitle },
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -1693,45 +1708,60 @@ private fun TransactionRow(
                     Text(
                         text = transaction.note,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                Spacer(modifier = Modifier.height(9.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Spacer(modifier = Modifier.height(2.dp))
+                Box(
+                    modifier = Modifier
+                        .background(accent.copy(alpha = 0.10f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
                 ) {
-                    TransactionMetaInfo(
-                        icon = categoryIcon,
+                    Text(
                         text = categoryTitle,
-                        modifier = Modifier.weight(1f)
-                    )
-                    TransactionMetaInfo(
-                        icon = null,
-                        vectorIcon = Icons.Default.CalendarToday,
-                        text = DateUtils.formatTimestamp(transaction.timestamp, isPersian),
-                        modifier = Modifier.weight(1f)
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
 
-            Text(
-                text = "$formattedAmount $currencySuffix",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
-                color = if (isExpense) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 4.dp)
-            )
+            Spacer(modifier = Modifier.width(8.dp))
 
-            Spacer(modifier = Modifier.width(4.dp))
+            // Amount / currency / date
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = formattedAmount,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = accent,
+                    maxLines = 1,
+                    softWrap = false
+                )
+                Text(
+                    text = currencySuffix,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = accent.copy(alpha = 0.75f),
+                    maxLines = 1
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                TransactionMetaInfo(
+                    vectorIcon = Icons.Default.CalendarToday,
+                    text = DateUtils.formatTimestamp(transaction.timestamp, isPersian)
+                )
+            }
 
             IconButton(
                 onClick = { isRevealed = !isRevealed },
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(24.dp)
             ) {
                 Icon(
                     imageVector = if (isRevealed) Icons.Default.Close else Icons.Default.MoreVert,
@@ -1754,30 +1784,27 @@ private fun TransactionMetaInfo(
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         if (icon != null) {
             Text(
                 text = icon.ifBlank { "📁" },
-                fontSize = 16.sp,
-                modifier = Modifier.widthIn(min = 20.dp)
+                fontSize = 12.sp
             )
         } else if (vectorIcon != null) {
             Icon(
                 imageVector = vectorIcon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(17.dp)
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                modifier = Modifier.size(12.dp)
             )
         }
         Text(
             text = text,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false)
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            maxLines = 1,
+            softWrap = false
         )
     }
 }
