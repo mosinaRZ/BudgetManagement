@@ -273,10 +273,11 @@ class AnalyticsViewModel(
 
         if (isPersian) {
             val (currentJalaliYear, currentJalaliMonth, currentJalaliDay) = DateUtils.toJalali(now)
+            val daysInJalaliMonth = DateUtils.getDaysInJalaliMonth(currentJalaliYear, currentJalaliMonth)
 
             return when (filter) {
                 TimeFilter.DAILY -> {
-                    val daysInMonth = DateUtils.getDaysInJalaliMonth(currentJalaliYear, currentJalaliMonth)
+                    val daysInMonth = daysInJalaliMonth
                     val currentMonthExpenses = targetTransactions.filter { tx ->
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         val (jYear, jMonth, _) = DateUtils.toJalali(txDate)
@@ -322,15 +323,49 @@ class AnalyticsViewModel(
                         }
                     }
 
-                    val currentWeekIndex = (currentJalaliDay - 1) / 7
+                    val currentWeekIndex = ((currentJalaliDay - 1) / 7).coerceAtMost(4)
+                    val weekCount = when {
+                        daysInJalaliMonth <= 28 -> 4
+                        else -> 5
+                    }
 
-                    listOf(
-                        TimeExpenseModel("هفته ۱", "Week 1", weeks[0], isCurrent = currentWeekIndex == 0),
-                        TimeExpenseModel("هفته ۲", "Week 2", weeks[1], isCurrent = currentWeekIndex == 1),
-                        TimeExpenseModel("هفته ۳", "Week 3", weeks[2], isCurrent = currentWeekIndex == 2),
-                        TimeExpenseModel("هفته ۴", "Week 4", weeks[3], isCurrent = currentWeekIndex == 3),
-                        TimeExpenseModel("هفته ۵", "Week 5", weeks[4], isCurrent = currentWeekIndex == 4)
-                    )
+                    (0 until weekCount).map { index ->
+                        val (labelFa, labelEn) = when (index) {
+                            0 -> "روز ۱–۷" to "Days 1–7"
+                            1 -> "روز ۸–۱۴" to "Days 8–14"
+                            2 -> "روز ۱۵–۲۱" to "Days 15–21"
+                            3 -> "روز ۲۲–۲۸" to "Days 22–28"
+                            else -> {
+                                val endDayFa = daysInJalaliMonth
+                                    .toString()
+                                    .map { char ->
+                                        when (char) {
+                                            '0' -> '۰'
+                                            '1' -> '۱'
+                                            '2' -> '۲'
+                                            '3' -> '۳'
+                                            '4' -> '۴'
+                                            '5' -> '۵'
+                                            '6' -> '۶'
+                                            '7' -> '۷'
+                                            '8' -> '۸'
+                                            '9' -> '۹'
+                                            else -> char
+                                        }
+                                    }
+                                    .joinToString("")
+
+                                "روز ۲۹-$endDayFa" to "Days 29–$daysInJalaliMonth"
+                            }
+                        }
+
+                        TimeExpenseModel(
+                            labelFa = labelFa,
+                            labelEn = labelEn,
+                            totalAmount = weeks[index],
+                            isCurrent = currentWeekIndex == index
+                        )
+                    }
                 }
 
                 TimeFilter.MONTHLY -> {
@@ -385,10 +420,10 @@ class AnalyticsViewModel(
             val currentGYear = now.year
             val currentGMonth = now.monthValue
             val currentGDay = now.dayOfMonth
+            val daysInMonth = now.lengthOfMonth()
 
             return when (filter) {
                 TimeFilter.DAILY -> {
-                    val daysInMonth = now.lengthOfMonth()
                     val currentMonthExpenses = targetTransactions.filter { tx ->
                         val txDate = Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
                         txDate.year == currentGYear && txDate.monthValue == currentGMonth
@@ -432,15 +467,24 @@ class AnalyticsViewModel(
                         }
                     }
 
-                    val currentWeekIndex = (currentGDay - 1) / 7
+                    val currentWeekIndex = ((currentGDay - 1) / 7).coerceAtMost(4)
+                    val weekCount = if (daysInMonth >= 29) 5 else 4
 
-                    listOf(
-                        TimeExpenseModel("Week 1", "Week 1", weeks[0], isCurrent = currentWeekIndex == 0),
-                        TimeExpenseModel("Week 2", "Week 2", weeks[1], isCurrent = currentWeekIndex == 1),
-                        TimeExpenseModel("Week 3", "Week 3", weeks[2], isCurrent = currentWeekIndex == 2),
-                        TimeExpenseModel("Week 4", "Week 4", weeks[3], isCurrent = currentWeekIndex == 3),
-                        TimeExpenseModel("Week 5", "Week 5", weeks[4], isCurrent = currentWeekIndex == 4)
-                    )
+                    (0 until weekCount).map { index ->
+                        val labelEn = when (index) {
+                            0 -> "Days 1–7"
+                            1 -> "Days 8–14"
+                            2 -> "Days 15–21"
+                            3 -> "Days 22–28"
+                            else -> "Days 29–$daysInMonth"
+                        }
+                        TimeExpenseModel(
+                            labelFa = labelEn,
+                            labelEn = labelEn,
+                            totalAmount = weeks[index],
+                            isCurrent = currentWeekIndex == index
+                        )
+                    }
                 }
 
                 TimeFilter.MONTHLY -> {

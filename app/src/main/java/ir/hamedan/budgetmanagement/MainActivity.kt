@@ -55,6 +55,7 @@ import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.getThemeMode
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.saveThemeMode
 import ir.hamedan.budgetmanagement.ui.components.CapsuleBottomNavigation
+import ir.hamedan.budgetmanagement.ui.components.InAppNotificationHint
 import ir.hamedan.budgetmanagement.ui.components.OnboardingDialog
 import ir.hamedan.budgetmanagement.ui.components.OnboardingPermission
 import ir.hamedan.budgetmanagement.ui.components.PermissionReminderBanner
@@ -85,6 +86,20 @@ import kotlinx.coroutines.launch
 // 🚀 تغییر مهم: ارث‌بری از FragmentActivity برای جلوگیری از کرش اثر انگشت
 class MainActivity : FragmentActivity() {
 
+    override fun onStart() {
+        super.onStart()
+        val app = applicationContext as BudgetApp
+        app.isAppInForeground = true
+        AppNotificationManager.cancelAll(applicationContext)
+    }
+
+    override fun onStop() {
+        val app = applicationContext as BudgetApp
+        app.isAppInForeground = false
+        super.onStop()
+    }
+
+
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(LocaleHelper.onAttach(newBase))
     }
@@ -111,22 +126,6 @@ class MainActivity : FragmentActivity() {
         // 🚀 درخواست خودکار مجوزها از اینجا حذف شد.
         // حالا دیالوگ آنبوردینگ (اولین ورود کاربر) با توضیح هر مجوز، خودش این درخواست را می‌زند.
 
-// اعلان خوش‌آمدگویی (فقط یک‌بار)
-        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        if (!prefs.getBoolean("welcome_shown", false)) {
-            NotificationHelper.send(
-                context = applicationContext,
-                notificationType = NotificationType.SETTINGS_CHANGED,
-                type = "SYSTEM",
-                titleFa = "خوش آمدید!",
-                titleEn = "Welcome!",
-                descFa = "به برنامه مدیریت بودجه سیدنا خوش آمدید. امیدواریم تجربه خوبی داشته باشید.",
-                descEn = "Welcome to Cidna Budget Management. We hope you have a great experience.",
-                tag = "WELCOME"
-            )
-            prefs.edit().putBoolean("welcome_shown", true).apply()
-        }
-
         setContent {
             val context = LocalContext.current
 
@@ -138,6 +137,15 @@ class MainActivity : FragmentActivity() {
 
             // آیا دیالوگ اولین ورود (خوش‌آمدگویی + مجوزها) باید نشان داده شود؟
             var showOnboarding by remember { mutableStateOf(!OnboardingPreferences.isCompleted(context)) }
+            var inAppNotification by remember {
+                mutableStateOf<NotificationHelper.InAppNotification?>(null)
+            }
+
+            LaunchedEffect(Unit) {
+                NotificationHelper.inAppNotifications.collect { notification ->
+                    inAppNotification = notification
+                }
+            }
 
             // اگر کاربر از تنظیمات گوشی مجوزی را تغییر داد و به اپ برگشت، وضعیت را رفرش کن
             val lifecycleOwner = LocalLifecycleOwner.current
@@ -152,41 +160,60 @@ class MainActivity : FragmentActivity() {
             }
 
             BudgetManagementTheme(themeMode = themeMode) {
-                TheApp(
-                    modifier = Modifier.fillMaxSize(),
-                    onThemeToggle = {
-                        // جابه‌جایی سریع و بدون دردسر تم
-                        val newMode = when (themeMode) {
-                            ThemePreferences.MODE_LIGHT -> ThemePreferences.MODE_DARK
-                            ThemePreferences.MODE_DARK -> ThemePreferences.MODE_LIGHT
-                            else -> if (isSystemDark) ThemePreferences.MODE_LIGHT else ThemePreferences.MODE_DARK
-                        }
+                Box(modifier = Modifier.fillMaxSize()) {
 
-                        themeMode = newMode
-                        saveThemeMode(context, newMode)
+                    TheApp(
+                        modifier = Modifier.fillMaxSize(),
+                        onThemeToggle = {
+                            // جابه‌جایی سریع و بدون دردسر تم
+                            val newMode = when (themeMode) {
+                                ThemePreferences.MODE_LIGHT -> ThemePreferences.MODE_DARK
+                                ThemePreferences.MODE_DARK -> ThemePreferences.MODE_LIGHT
+                                else -> if (isSystemDark) ThemePreferences.MODE_LIGHT else ThemePreferences.MODE_DARK
+                            }
 
-                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                            ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
-                        }
-                    }
-                )
+                            themeMode = newMode
+                            saveThemeMode(context, newMode)
 
-                if (showOnboarding) {
-                    val isPersian = LocaleHelper.getLanguage(context) == "fa"
-                    OnboardingDialog(
-                        isPersian = isPersian,
-                        isPermissionGranted = { permission ->
-                            permissionRefreshTrigger // فقط برای وابسته‌کردن ری‌کامپوز به این state
-                            ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
-                        },
-                        onRequestPermissions = { perms ->
-                            requestPermissionsLauncher.launch(perms.toTypedArray())
-                        },
-                        onFinish = {
-                            OnboardingPreferences.setCompleted(context)
-                            showOnboarding = false
+                            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
+                            }
                         }
                     )
+
+                    if (showOnboarding) {
+                        val isPersian = LocaleHelper.getLanguage(context) == "fa"
+                        OnboardingDialog(
+                            isPersian = isPersian,
+                            isPermissionGranted = { permission ->
+                                permissionRefreshTrigger // فقط برای وابسته‌کردن ری‌کامپوز به این state
+                                ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+                            },
+                            onRequestPermissions = { perms ->
+                                requestPermissionsLauncher.launch(perms.toTypedArray())
+                            },
+                            onFinish = {
+                                OnboardingPreferences.setCompleted(context)
+                                showOnboarding = false
+                            }
+                        )
+                    }
+
+
+                    inAppNotification?.let { notification ->
+                        InAppNotificationHint(
+                            isPersian = LocaleHelper.getLanguage(context) == "fa",
+                            titleFa = notification.titleFa,
+                            titleEn = notification.titleEn,
+                            bodyFa = notification.bodyFa,
+                            bodyEn = notification.bodyEn,
+                            visible = true,
+                            onDismiss = { inAppNotification = null },
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 130.dp)
+                        )
+                    }
                 }
             }
         }
@@ -194,7 +221,7 @@ class MainActivity : FragmentActivity() {
 
     @SuppressLint("UnrememberedMutableState")
     @Composable
-    fun TheApp(
+    private fun TheApp(
         modifier: Modifier = Modifier,
         onThemeToggle: () -> Unit = {}
     ) {

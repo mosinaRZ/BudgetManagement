@@ -116,6 +116,11 @@ fun TransactionsScreen(
         }
     }
 
+    // Amount-based ordering has no meaningful chronological groups; keeping
+    // "today/yesterday/..." above those rows makes the sorted result confusing.
+    val showDateHeaders = filterState.sortOrder == SortOrder.NEWEST ||
+            filterState.sortOrder == SortOrder.OLDEST
+
     val isTrulyEmpty = !isLoading && transactionsList.isEmpty() &&
             searchQuery.isBlank() &&
             !filterState.isCustomFilterActive &&
@@ -249,18 +254,34 @@ fun TransactionsScreen(
                     ),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    groupedTransactions.forEach { (dateHeader, items) ->
-                        item(key = dateHeader) {
-                            Text(
-                                text = dateHeader,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
+                    if (showDateHeaders) {
+                        groupedTransactions.forEach { (dateHeader, items) ->
+                            item(key = "header_$dateHeader") {
+                                Text(
+                                    text = dateHeader,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
 
-                        items(items, key = { it.id }) { transaction ->
+                            items(items, key = { it.id }) { transaction ->
+                                TransactionRow(
+                                    transaction = transaction,
+                                    isPersian = isPersian,
+                                    currencyUnit = currencyUnit,
+                                    numberFormatter = numberFormatter,
+                                    categoryTitle = categoryInfoById[transaction.categoryId]?.first
+                                        ?: StringMapper.getCategoryName(transaction.categoryId, isPersian),
+                                    categoryIcon = categoryInfoById[transaction.categoryId]?.second ?: "📁",
+                                    onEdit = { transactionToEdit = transaction },
+                                    onDelete = { transactionToDelete = transaction }
+                                )
+                            }
+                        }
+                    } else {
+                        items(transactionsList, key = { it.id }) { transaction ->
                             TransactionRow(
                                 transaction = transaction,
                                 isPersian = isPersian,
@@ -1882,40 +1903,68 @@ private fun getRelativeDateHeader(timestamp: Long, isPersian: Boolean): String {
     val zone = ZoneId.systemDefault()
     val today = LocalDate.now(zone)
     val date = Instant.ofEpochMilli(timestamp).atZone(zone).toLocalDate()
-
-    // Calendar-day difference, not raw millis — otherwise a 30-hour gap that
-    // crosses midnight twice gets miscounted relative to "Today"/"Yesterday".
     val diffDays = ChronoUnit.DAYS.between(date, today)
 
-    val isSameMonth = if (isPersian) {
-        // Persian months don't line up with Gregorian months, so this has to
-        // go through the app's own Jalali conversion, not Calendar.MONTH.
+    if (diffDays < 0) {
+        return DateUtils.formatTimestamp(timestamp, isPersian)
+    }
+
+    if (diffDays == 0L) return if (isPersian) "امروز" else "Today"
+    if (diffDays == 1L) return if (isPersian) "دیروز" else "Yesterday"
+
+    if (diffDays in 2..6) {
+        return if (isPersian) {
+            "${toPersianDigits(diffDays.toString())} روز پیش"
+        } else {
+            "$diffDays days ago"
+        }
+    }
+
+    val monthDifference = if (isPersian) {
         val (todayYear, todayMonth, _) = DateUtils.toJalali(today)
         val (dateYear, dateMonth, _) = DateUtils.toJalali(date)
-        todayYear == dateYear && todayMonth == dateMonth
+        (todayYear * 12 + (todayMonth - 1)) - (dateYear * 12 + (dateMonth - 1))
     } else {
-        today.year == date.year && today.monthValue == date.monthValue
+        (today.year * 12 + (today.monthValue - 1)) -
+                (date.year * 12 + (date.monthValue - 1))
     }
 
     return when {
-        diffDays == 0L -> {
-            if (isPersian) "امروز" else "Today"
-        }
-
-        diffDays == 1L -> {
-            if (isPersian) "دیروز" else "Yesterday"
-        }
-
-        diffDays in 2..6 -> {
-            if (isPersian) "$diffDays روز پیش" else "$diffDays days ago"
-        }
-
-        isSameMonth -> {
+        monthDifference <= 0L -> {
             if (isPersian) "این ماه" else "This month"
         }
 
+        monthDifference < 12 -> {
+            if (isPersian) {
+                "${toPersianDigits(monthDifference.toString())} ماه پیش"
+            } else {
+                if (monthDifference == 1) {
+                    "1 month ago"
+                } else {
+                    "$monthDifference months ago"
+                }
+            }
+        }
+
         else -> {
-            DateUtils.formatTimestamp(timestamp, isPersian)
+            val years = monthDifference / 12L
+            if (isPersian) {
+                if (years == 1L) "یک سال پیش"
+                else "${toPersianDigits(years.toString())} سال پیش"
+            } else {
+                if (years == 1L) "1 year ago" else "$years years ago"
+            }
+        }
+    }
+}
+
+private fun toPersianDigits(value: String): String {
+    val latin = "0123456789"
+    val persian = "۰۱۲۳۴۵۶۷۸۹"
+    return buildString(value.length) {
+        value.forEach { char ->
+            val index = latin.indexOf(char)
+            append(if (index >= 0) persian[index] else char)
         }
     }
 }

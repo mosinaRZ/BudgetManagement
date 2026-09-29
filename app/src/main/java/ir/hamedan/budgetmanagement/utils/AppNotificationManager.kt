@@ -9,6 +9,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
 
@@ -33,8 +34,21 @@ object AppNotificationManager {
         }
     }
 
+    fun cancelAll(context: Context) {
+        NotificationManagerCompat.from(context.applicationContext).cancelAll()
+    }
+
     fun sendPushIfAllowed(context: Context, titleFa: String, titleEn: String, bodyFa: String, bodyEn: String) {
-        // اگر کاربر فقط in-app انتخاب کرده، push نفرست
+        val app = context.applicationContext as? BudgetApp
+
+        // Final delivery gate: foreground notifications never reach the
+        // Android NotificationManager.
+        if (app?.isAppInForeground == true) {
+            cancelAll(context.applicationContext)
+            return
+        }
+
+        // اگر کاربر فقط in-app انتخاب کرده، push نفرست.
         if (NotificationPreferences.getMode(context) == NotificationPreferences.MODE_IN_APP) return
 
         val isPersian = LocaleHelper.getLanguage(context) == "fa"

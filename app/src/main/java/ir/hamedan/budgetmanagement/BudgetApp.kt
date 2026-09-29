@@ -20,6 +20,9 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 
 class BudgetApp : Application() {
+    @Volatile
+    var isAppInForeground: Boolean = false
+
     lateinit var container: AppContainer
         private set
 

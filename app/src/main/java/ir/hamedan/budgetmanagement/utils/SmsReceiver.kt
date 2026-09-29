@@ -12,11 +12,14 @@ import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.BuildConfig
 import ir.hamedan.budgetmanagement.data.local.models.PendingTransactionEntity
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
+import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.text.NumberFormat
+import java.util.Locale
 
 /**
  * Receives SMS_RECEIVED broadcasts, filters likely bank messages,
@@ -94,6 +97,17 @@ class SmsReceiver : BroadcastReceiver() {
                  */
                 val amount = parseResult.amount.toLong()
 
+                val appCurrency = CurrencySharedPreferences.getCurrency(appContext)
+                val displayMultiplier = if (appCurrency == "IRR") 10L else 1L
+                val displayAmount = amount * displayMultiplier
+                val isPersian = LocaleHelper.getLanguage(appContext) == "fa"
+                val numberFormatter = NumberFormat.getIntegerInstance(
+                    if (isPersian) Locale("fa", "IR") else Locale.US
+                )
+                val formattedAmount = numberFormatter.format(displayAmount)
+                val currencyTextFa = if (appCurrency == "IRR") "ریال" else "تومان"
+                val currencyTextEn = if (appCurrency == "IRR") "Rial" else "Toman"
+
                 val pending = PendingTransactionEntity(
                     rawMessage = fullBody,
                     senderAddress = sender,
@@ -132,11 +146,15 @@ class SmsReceiver : BroadcastReceiver() {
                     titleFa = "تراکنش پیامکی جدید",
                     titleEn = "New SMS Transaction",
                     descFa = if (parseResult.isTypeDetected) {
-                        "یک تراکنش با مبلغ $amount شناسایی شد. برای تکمیل وارد برنامه شوید."
+                        "یک تراکنش به مبلغ $formattedAmount $currencyTextFa شناسایی شد. برای تکمیل وارد برنامه شوید."
                     } else {
-                        "یک پیامک بانکی دریافت شد که نیاز به بررسی شما دارد."
+                        "یک پیامک بانکی حاوی مبلغ $formattedAmount $currencyTextFa دریافت شد و نیاز به بررسی شما دارد."
                     },
-                    descEn = "A transaction of $amount was detected. Open the app to complete it.",
+                    descEn = if (parseResult.isTypeDetected) {
+                        "A transaction of $formattedAmount $currencyTextEn was detected. Open the app to complete it."
+                    } else {
+                        "A bank SMS containing $formattedAmount $currencyTextEn was received and needs your review."
+                    },
                     tag = "SMS_PENDING_${pending.id}"
                 )
             } catch (e: Exception) {

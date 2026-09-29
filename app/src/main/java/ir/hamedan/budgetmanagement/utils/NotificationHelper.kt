@@ -9,9 +9,22 @@ import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
 object NotificationHelper {
+
+    data class InAppNotification(
+        val titleFa: String,
+        val titleEn: String,
+        val bodyFa: String,
+        val bodyEn: String
+    )
+
+    // Queue foreground notifications so they survive Activity/Compose startup.
+    private val _inAppNotifications = Channel<InAppNotification>(Channel.UNLIMITED)
+    val inAppNotifications = _inAppNotifications.receiveAsFlow()
 
     /**
      * Creates the welcome notification after the user's first successful login.
@@ -45,7 +58,7 @@ object NotificationHelper {
             repository.insert(entity)
             prefs.edit().putBoolean(key, true).apply()
 
-            AppNotificationManager.sendPushIfAllowed(
+            publishDelivery(
                 context = context.applicationContext,
                 titleFa = entity.titleFa,
                 titleEn = entity.titleEn,
@@ -88,7 +101,7 @@ object NotificationHelper {
             if (!alreadyExists) {
                 repository.insert(entity)
 
-                AppNotificationManager.sendPushIfAllowed(
+                publishDelivery(
                     context = context.applicationContext,
                     titleFa = titleFa,
                     titleEn = titleEn,
@@ -98,4 +111,33 @@ object NotificationHelper {
             }
         }
     }
+
+    private fun publishDelivery(
+        context: Context,
+        titleFa: String,
+        titleEn: String,
+        bodyFa: String,
+        bodyEn: String
+    ) {
+        val app = context.applicationContext as? BudgetApp
+        if (app?.isAppInForeground == true) {
+            _inAppNotifications.trySend(
+                InAppNotification(
+                    titleFa = titleFa,
+                    titleEn = titleEn,
+                    bodyFa = bodyFa,
+                    bodyEn = bodyEn
+                )
+            )
+        } else {
+            AppNotificationManager.sendPushIfAllowed(
+                context = context.applicationContext,
+                titleFa = titleFa,
+                titleEn = titleEn,
+                bodyFa = bodyFa,
+                bodyEn = bodyEn
+            )
+        }
+    }
+
 }

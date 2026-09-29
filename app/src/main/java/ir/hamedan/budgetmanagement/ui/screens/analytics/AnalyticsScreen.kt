@@ -323,7 +323,10 @@ fun ExpenseTimeBarChartCard(
 
     val subtitle = when (selectedFilter) {
         TimeFilter.DAILY -> if (isPersian) "توزیع $typeTextFa به تفکیک روزهای ماه جاری" else "Daily $typeTextEn breakdown for current month"
-        TimeFilter.WEEKLY -> if (isPersian) "توزیع $typeTextFa در هفته‌های ماه جاری" else "Weekly $typeTextEn breakdown for current month"
+        TimeFilter.WEEKLY -> if (isPersian)
+            "توزیع $typeTextFa در هفته‌های ماه جاری"
+        else
+            "Weekly $typeTextEn breakdown for current month"
         TimeFilter.MONTHLY -> if (isPersian) "توزیع $typeTextFa در ماه‌های سال جاری" else "Monthly $typeTextEn breakdown for current year"
         TimeFilter.ALL -> if (isPersian) "توزیع $typeTextFa به تفکیک سال" else "Yearly $typeTextEn breakdown"
     }
