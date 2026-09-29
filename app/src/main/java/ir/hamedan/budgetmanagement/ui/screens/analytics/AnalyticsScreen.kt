@@ -17,9 +17,14 @@ import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.ShowChart
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -47,13 +52,17 @@ import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.BarChartEntry
 import ir.hamedan.budgetmanagement.ui.components.ColumnBarChartCard
+import ir.hamedan.budgetmanagement.ui.components.appSkeletonShimmer
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TimeFilter
 import ir.hamedan.budgetmanagement.utils.DateUtils
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
 import java.text.NumberFormat
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnalyticsScreen(
     onAddScreenClick: () -> Unit = {},
@@ -73,6 +82,7 @@ fun AnalyticsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var isFirstFilterEmission by remember { mutableStateOf(true) }
     var showAnalyticsInteractionHint by remember { mutableStateOf(true) }
+    var showAnalyticsFilterSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(selectedFilter) {
         if (isFirstFilterEmission) {
@@ -112,14 +122,7 @@ fun AnalyticsScreen(
 
                 SmartInsightCard(
                     isPersian = isPersian,
-                    totalExpense = uiState.totalExpense,
-                    totalIncome = uiState.totalIncome,
-                    balance = uiState.balance,
-                    expenseCount = uiState.expenseTransactionCount,
-                    heavyExpenseCount = uiState.heavyExpenseCount,
-                    topCategory = uiState.categoryExpenses.firstOrNull()?.categoryName ?: "",
-                    currencyUnit = currencyUnit,
-                    selectedBucketIndex = uiState.selectedTimeBucketIndex
+                    insight = uiState.smartInsight
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -129,7 +132,8 @@ fun AnalyticsScreen(
                     dataPoints = uiState.trendPoints,
                     hasEnoughData = uiState.trendHasEnoughData,
                     selectedFilter = selectedFilter,
-                    currentTimeIndex = uiState.trendCurrentIndex
+                    currentTimeIndex = uiState.trendCurrentIndex,
+                    isCustomRange = uiState.isCustomRange
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -141,6 +145,7 @@ fun AnalyticsScreen(
                     currentIndex = uiState.currentTimeIndex,
                     selectedFilter = selectedFilter,
                     currencyUnit = currencyUnit,
+                    isCustomRange = uiState.isCustomRange,
                     isIncome = uiState.isIncomeChartSelected,
                     onIncomeChange = { analyticsViewModel.setIncomeChartSelected(it) },
                     selectedIndex = uiState.selectedTimeBucketIndex,
@@ -161,9 +166,6 @@ fun AnalyticsScreen(
                 TopExpensesCard(
                     isPersian = isPersian,
                     topExpenses = uiState.topExpenses,
-                    totalExpense = uiState.totalExpense,
-                    averageExpense = uiState.averageExpense,
-                    heavyExpenseThreshold = uiState.heavyExpenseThreshold,
                     currencyUnit = currencyUnit
                 )
 
@@ -177,7 +179,7 @@ fun AnalyticsScreen(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .statusBarsPadding()
-                    .padding(top = 130.dp)
+                    .padding(top = 150.dp)
             )
 
             // تاپ‌بار شناور بدون نیاز به Scaffold
@@ -188,16 +190,41 @@ fun AnalyticsScreen(
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding().padding(top = 12.dp))
 
-                AnalyticsTopBar(isPersian = isPersian)
+                AnalyticsTopBar(
+                    isPersian = isPersian,
+                    isFilterActive = uiState.isCustomRange,
+                    onFilterClick = { showAnalyticsFilterSheet = true }
+                )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 TimeFilterSelector(
                     selectedFilter = selectedFilter,
                     isPersian = isPersian,
+                    isCustomRange = uiState.isCustomRange,
                     onFilterSelected = { analyticsViewModel.onTimeFilterChanged(it) }
                 )
             }
+        }
+
+        if (showAnalyticsFilterSheet) {
+            AnalyticsFilterBottomSheet(
+                isPersian = isPersian,
+                isCustomRange = uiState.isCustomRange,
+                customStartMillis = uiState.customStartMillis,
+                customEndMillis = uiState.customEndMillis,
+                compareWithPrevious = uiState.compareWithPrevious,
+                onDismiss = { showAnalyticsFilterSheet = false },
+                onCustomRangeSelected = { start, end ->
+                    analyticsViewModel.setCustomDateRange(start, end)
+                    showAnalyticsFilterSheet = false
+                },
+                onClearCustomRange = {
+                    analyticsViewModel.clearCustomDateRange()
+                    showAnalyticsFilterSheet = false
+                },
+                onCompareChanged = { analyticsViewModel.setCompareWithPrevious(it) }
+            )
         }
 
         // نمایش اسنک‌بارها روی Box
@@ -209,32 +236,6 @@ fun AnalyticsScreen(
                 .padding(bottom = 72.dp)
         )
     }
-}
-
-@Composable
-private fun shimmerBrush(): Brush {
-    val shimmerColors = listOf(
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
-    )
-
-    val transition = rememberInfiniteTransition(label = "ShimmerTransition")
-    val translateAnimation = transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1000f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "ShimmerTranslation"
-    )
-
-    return Brush.linearGradient(
-        colors = shimmerColors,
-        start = Offset.Zero,
-        end = Offset(x = translateAnimation.value, y = translateAnimation.value)
-    )
 }
 
 @Composable
@@ -299,6 +300,7 @@ fun ExpenseTimeBarChartCard(
     currentIndex: Int,
     selectedFilter: TimeFilter,
     currencyUnit: String,
+    isCustomRange: Boolean = false,
     isIncome: Boolean,
     onIncomeChange: (Boolean) -> Unit,
     selectedIndex: Int? = null,
@@ -321,7 +323,9 @@ fun ExpenseTimeBarChartCard(
 
     val title = if (isPersian) "مقایسه زمانی $typeTextFa" else "${if (isIncome) "Income" else "Expense"} Time Comparison"
 
-    val subtitle = when (selectedFilter) {
+    val subtitle = if (isCustomRange) {
+        if (isPersian) "توزیع $typeTextFa در بازه انتخابی" else "$typeTextEn breakdown for the selected range"
+    } else when (selectedFilter) {
         TimeFilter.DAILY -> if (isPersian) "توزیع $typeTextFa به تفکیک روزهای ماه جاری" else "Daily $typeTextEn breakdown for current month"
         TimeFilter.WEEKLY -> if (isPersian)
             "توزیع $typeTextFa در هفته‌های ماه جاری"
@@ -363,8 +367,6 @@ fun ExpenseTimeBarChartCard(
 
 @Composable
 private fun AnalyticsSkeletonScreen() {
-    val brush = shimmerBrush()
-
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -380,7 +382,7 @@ private fun AnalyticsSkeletonScreen() {
                     .height(80.dp)
                     .padding(horizontal = 24.dp)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(brush)
+                    .appSkeletonShimmer()
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -392,7 +394,7 @@ private fun AnalyticsSkeletonScreen() {
                     .height(260.dp)
                     .padding(horizontal = 24.dp)
                     .clip(RoundedCornerShape(24.dp))
-                    .background(brush)
+                    .appSkeletonShimmer()
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -404,7 +406,7 @@ private fun AnalyticsSkeletonScreen() {
                     .height(280.dp)
                     .padding(horizontal = 24.dp)
                     .clip(RoundedCornerShape(24.dp))
-                    .background(brush)
+                    .appSkeletonShimmer()
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -416,7 +418,7 @@ private fun AnalyticsSkeletonScreen() {
                     .height(220.dp)
                     .padding(horizontal = 24.dp)
                     .clip(RoundedCornerShape(24.dp))
-                    .background(brush)
+                    .appSkeletonShimmer()
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -428,7 +430,7 @@ private fun AnalyticsSkeletonScreen() {
                     .height(200.dp)
                     .padding(horizontal = 24.dp)
                     .clip(RoundedCornerShape(24.dp))
-                    .background(brush)
+                    .appSkeletonShimmer()
             )
 
             Spacer(modifier = Modifier.navigationBarsPadding().height(80.dp))
@@ -448,7 +450,7 @@ private fun AnalyticsSkeletonScreen() {
                     .height(52.dp)
                     .padding(horizontal = 24.dp)
                     .clip(RoundedCornerShape(24.dp))
-                    .background(brush)
+                    .appSkeletonShimmer()
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -459,7 +461,7 @@ private fun AnalyticsSkeletonScreen() {
                     .height(46.dp)
                     .padding(horizontal = 24.dp)
                     .clip(RoundedCornerShape(16.dp))
-                    .background(brush)
+                    .appSkeletonShimmer()
             )
         }
     }
@@ -535,31 +537,67 @@ private fun EmptyAnalyticsView(
 }
 
 @Composable
-private fun AnalyticsTopBar(isPersian: Boolean) {
+private fun AnalyticsTopBar(
+    isPersian: Boolean,
+    isFilterActive: Boolean,
+    onFilterClick: () -> Unit
+) {
+    val smallShape = RoundedCornerShape(24.dp)
     val centerShape = RoundedCornerShape(24.dp)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp)
+            .padding(horizontal = 24.dp, vertical = 8.dp)
     ) {
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), centerShape)
-                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), centerShape)
-                .clip(centerShape)
-                .padding(horizontal = 12.dp),
-            contentAlignment = Alignment.Center
+                .height(56.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = if (isPersian) "آنالیز و تحلیل مالی" else "Financial Analytics",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), centerShape)
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), centerShape)
+                    .clip(centerShape)
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (isPersian) "آنالیز و تحلیل مالی" else "Financial Analytics",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .background(
+                        if (isFilterActive) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
+                        smallShape
+                    )
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), smallShape)
+                    .clip(smallShape),
+                contentAlignment = Alignment.Center
+            ) {
+                IconButton(onClick = onFilterClick) {
+                    Icon(
+                        imageVector = Icons.Default.FilterList,
+                        contentDescription = if (isPersian) "فیلتر" else "Filter",
+                        tint = if (isFilterActive) MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }
@@ -568,6 +606,7 @@ private fun AnalyticsTopBar(isPersian: Boolean) {
 private fun TimeFilterSelector(
     selectedFilter: TimeFilter,
     isPersian: Boolean,
+    isCustomRange: Boolean = false,
     onFilterSelected: (TimeFilter) -> Unit
 ) {
     val shape = RoundedCornerShape(16.dp)
@@ -584,7 +623,7 @@ private fun TimeFilterSelector(
         val filters = remember { TimeFilter.values() }
 
         filters.forEach { filter ->
-            val isSelected = filter == selectedFilter
+            val isSelected = !isCustomRange && filter == selectedFilter
             val title = if (isPersian) filter.titleFa else filter.titleEn
 
             val backgroundAlpha by animateFloatAsState(
@@ -620,115 +659,408 @@ private fun TimeFilterSelector(
 @Composable
 private fun SmartInsightCard(
     isPersian: Boolean,
-    totalExpense: Double,
-    totalIncome: Double,
-    balance: Double,
-    expenseCount: Int,
-    heavyExpenseCount: Int,
-    topCategory: String,
-    currencyUnit: String,
-    selectedBucketIndex: Int?
+    insight: SmartInsight
 ) {
-    val cardShape = RoundedCornerShape(20.dp)
-    val numberFormatter = remember(isPersian) {
-        NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
-    }
-    var expanded by rememberSaveable(selectedBucketIndex) { mutableStateOf(false) }
-    val arrowRotation by animateFloatAsState(
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val rotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
-        animationSpec = tween(260, easing = FastOutSlowInEasing),
-        label = "smartInsightArrow"
+        animationSpec = tween(durationMillis = 220),
+        label = "SmartInsightArrowRotation"
     )
 
-    val displayExpense = if (currencyUnit == "IRR") (totalExpense * 10).toLong() else totalExpense.toLong()
-    val displayIncome = if (currencyUnit == "IRR") (totalIncome * 10).toLong() else totalIncome.toLong()
-    val displayBalance = if (currencyUnit == "IRR") (kotlin.math.abs(balance) * 10).toLong() else kotlin.math.abs(balance).toLong()
-    val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "Toman")
-    val mappedCategory = StringMapper.getCategoryName(topCategory, isPersian)
-
-    val headline = if (totalExpense > 0) {
-        if (isPersian) "در این دوره ${numberFormatter.format(displayExpense)} $currencyText هزینه شده و بیشترین سهم با «$mappedCategory» است."
-        else "You spent ${numberFormatter.format(displayExpense)} $currencyText in this period; the largest share is $mappedCategory."
-    } else {
-        if (isPersian) "برای این بازه هنوز هزینه‌ای ثبت نشده است." else "No expense has been recorded for this period yet."
-    }
-
-    val detailLines = if (isPersian) listOf(
-        "تعداد تراکنش‌های هزینه‌ای قابل بررسی: ${numberFormatter.format(expenseCount)}؛ هزینه‌های خارج از الگو: ${numberFormatter.format(heavyExpenseCount)}",
-        "جمع درآمد: ${numberFormatter.format(displayIncome)} $currencyText؛ مانده خالص: ${if (balance < 0) "-" else ""}${numberFormatter.format(displayBalance)} $currencyText",
-        if (totalIncome > 0) {
-            val ratio = (totalExpense / totalIncome) * 100.0
-            "نسبت هزینه به درآمد: ${numberFormatter.format(ratio.coerceAtLeast(0.0))}% — ${if (ratio > 100) "هزینه‌ها از درآمد بیشتر بوده‌اند." else "درآمد پوشش مناسبی برای هزینه‌های این دوره ایجاد کرده است."}"
-        } else "در این دوره درآمدی برای مقایسه ثبت نشده است."
-    ) else listOf(
-        "Expense transactions analyzed: ${numberFormatter.format(expenseCount)}; unusual expenses: ${numberFormatter.format(heavyExpenseCount)}",
-        "Income: ${numberFormatter.format(displayIncome)} $currencyText; net balance: ${if (balance < 0) "-" else ""}${numberFormatter.format(displayBalance)} $currencyText",
-        if (totalIncome > 0) {
-            val ratio = (totalExpense / totalIncome) * 100.0
-            "Expense-to-income ratio: ${numberFormatter.format(ratio.coerceAtLeast(0.0))}% — ${if (ratio > 100) "expenses exceeded income." else "income covered the period's expenses."}"
-        } else "No income was recorded for comparison."
+    val cardShape = RoundedCornerShape(20.dp)
+    val headline = localizeInsightCategories(
+        if (isPersian) insight.headlineFa else insight.headlineEn,
+        isPersian
     )
+    val summary = localizeInsightCategories(
+        if (isPersian) insight.summaryFa else insight.summaryEn,
+        isPersian
+    )
+    val action = localizeInsightCategories(
+        if (isPersian) insight.actionFa else insight.actionEn,
+        isPersian
+    )
+    val focusLabel = localizeInsightCategories(
+        if (isPersian) insight.focusLabelFa else insight.focusLabelEn,
+        isPersian
+    )
+    val focusValue = insight.focusValue.coerceIn(0.0, 100.0)
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), cardShape)
-            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f), cardShape)
+            .padding(horizontal = 24.dp, vertical = 12.dp)
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f)
+                    )
+                ),
+                cardShape
+            )
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f), cardShape)
             .clip(cardShape)
-            .clickable { expanded = !expanded }
-            .padding(16.dp)
     ) {
-        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), CircleShape),
+                    .size(34.dp)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.AutoAwesome,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
             Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = if (isPersian) "تحلیل رفتار مالی" else "Smart Financial Insight",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowDown,
-                        contentDescription = if (expanded) "Collapse" else "Expand",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.rotate(arrowRotation)
-                    )
-                }
-                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (isPersian) "تحلیل هوشمند" else "Smart Analysis",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = headline,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = if (expanded) 2 else 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = if (expanded) {
+                    if (isPersian) "بستن تحلیل هوشمند" else "Collapse smart analysis"
+                } else {
+                    if (isPersian) "نمایش تحلیل هوشمند" else "Expand smart analysis"
+                },
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .size(22.dp)
+                    .rotate(rotation)
+            )
+        }
+
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 18.sp
                 )
 
-                AnimatedVisibility(visible = expanded) {
-                    Column(verticalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.padding(top = 10.dp)) {
-                        detailLines.forEach { line ->
-                            Row(verticalAlignment = Alignment.Top) {
-                                Text("•", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                                Spacer(Modifier.width(6.dp))
-                                Text(line, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
+                        .padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = focusLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = "${focusValue.toInt()}%",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .width(76.dp)
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(focusValue.toFloat() / 100f)
+                                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(50))
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.06f))
+                        .padding(10.dp),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lightbulb,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = action,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun localizeInsightCategories(text: String, isPersian: Boolean): String {
+    val categoryKeys = listOf(
+        "FOOD",
+        "TRANSPORT",
+        "SHOPPING",
+        "BILL",
+        "SALARY",
+        "INVESTMENT",
+        "UNCATEGORIZED",
+        "DEBT_CREDIT_PAYABLE",
+        "DEBT_CREDIT_RECEIVABLE",
+        "SAVING_GOAL",
+        "SAVING_GOAL_RETURN"
+    )
+
+    return categoryKeys.fold(text) { result, key ->
+        result.replace(Regex("(?<![A-Za-z_])${Regex.escape(key)}(?![A-Za-z_])"), StringMapper.getCategoryName(key, isPersian))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AnalyticsFilterBottomSheet(
+    isPersian: Boolean,
+    isCustomRange: Boolean,
+    customStartMillis: Long?,
+    customEndMillis: Long?,
+    compareWithPrevious: Boolean,
+    onDismiss: () -> Unit,
+    onCustomRangeSelected: (Long, Long) -> Unit,
+    onClearCustomRange: () -> Unit,
+    onCompareChanged: (Boolean) -> Unit
+) {
+    var showDateRangePicker by remember { mutableStateOf(false) }
+    var pendingStart by remember(customStartMillis) { mutableStateOf(customStartMillis) }
+    var pendingEnd by remember(customEndMillis) { mutableStateOf(customEndMillis) }
+    var pendingCompare by remember(compareWithPrevious) { mutableStateOf(compareWithPrevious) }
+
+    val dateRangeState = rememberDateRangePickerState(
+        initialSelectedStartDateMillis = pendingStart,
+        initialSelectedEndDateMillis = pendingEnd
+    )
+
+    fun localDateMillis(date: LocalDate): Long =
+        date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+    val quickRanges = listOf(
+        (if (isPersian) "امروز" else "Today") to {
+            val end = LocalDate.now()
+            pendingStart = localDateMillis(end)
+            pendingEnd = localDateMillis(end)
+        },
+        (if (isPersian) "۷ روز اخیر" else "Last 7 days") to {
+            val end = LocalDate.now()
+            pendingStart = localDateMillis(end.minusDays(6))
+            pendingEnd = localDateMillis(end)
+        },
+        (if (isPersian) "۳۰ روز اخیر" else "Last 30 days") to {
+            val end = LocalDate.now()
+            pendingStart = localDateMillis(end.minusDays(29))
+            pendingEnd = localDateMillis(end)
+        },
+        (if (isPersian) "۹۰ روز اخیر" else "Last 90 days") to {
+            val end = LocalDate.now()
+            pendingStart = localDateMillis(end.minusDays(89))
+            pendingEnd = localDateMillis(end)
+        }
+    )
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.padding(horizontal = 12.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .fillMaxWidth()
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (isPersian) "فیلتر هوشمند" else "Smart Filter",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (isPersian) "بازه تحلیل را انتخاب کن" else "Choose the analytics range",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (isCustomRange) {
+                    IconButton(onClick = {
+                        pendingStart = null
+                        pendingEnd = null
+                        pendingCompare = false
+                    }) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = if (isPersian) "حذف فیلتر" else "Clear filter"
+                        )
                     }
                 }
             }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                quickRanges.forEach { (label, action) ->
+                    FilterChip(
+                        selected = false,
+                        onClick = action,
+                        label = { Text(label) }
+                    )
+                }
+            }
+
+            OutlinedButton(
+                onClick = { showDateRangePicker = true },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(Icons.Default.DateRange, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (pendingStart != null && pendingEnd != null) {
+                        "${DateUtils.formatTimestamp(pendingStart!!, isPersian)}  —  ${DateUtils.formatTimestamp(pendingEnd!!, isPersian)}"
+                    } else if (isPersian) {
+                        "انتخاب بازه دلخواه"
+                    } else {
+                        "Choose a custom range"
+                    }
+                )
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (isPersian) "مقایسه با بازه قبل" else "Compare with previous period",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = if (isPersian) "تغییرات هزینه را هم در تحلیل هوشمند ببین" else "Show spending changes in Smart Analysis",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = pendingCompare && pendingStart != null && pendingEnd != null,
+                    onCheckedChange = { pendingCompare = it },
+                    enabled = pendingStart != null && pendingEnd != null
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(if (isPersian) "انصراف" else "Cancel")
+                }
+                Button(
+                    onClick = {
+                        if (pendingStart != null && pendingEnd != null) {
+                            onCustomRangeSelected(pendingStart!!, pendingEnd!!)
+                            onCompareChanged(pendingCompare)
+                        } else {
+                            onClearCustomRange()
+                            onCompareChanged(false)
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(if (isPersian) "اعمال فیلتر" else "Apply Filter")
+                }
+            }
+        }
+    }
+
+    if (showDateRangePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDateRangePicker = false },
+            confirmButton = {
+                TextButton(
+                    enabled = dateRangeState.selectedStartDateMillis != null && dateRangeState.selectedEndDateMillis != null,
+                    onClick = {
+                        pendingStart = dateRangeState.selectedStartDateMillis
+                        pendingEnd = dateRangeState.selectedEndDateMillis
+                        showDateRangePicker = false
+                    }
+                ) {
+                    Text(if (isPersian) "تایید" else "OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDateRangePicker = false }) {
+                    Text(if (isPersian) "انصراف" else "Cancel")
+                }
+            }
+        ) {
+            DateRangePicker(
+                state = dateRangeState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 520.dp),
+                title = { Text(if (isPersian) "انتخاب بازه تحلیل" else "Select analytics range") },
+                headline = { Text(if (isPersian) "از تاریخ تا تاریخ" else "From date to date") }
+            )
         }
     }
 }
@@ -739,7 +1071,8 @@ private fun BalanceTrendChartCard(
     dataPoints: List<Float>,
     hasEnoughData: Boolean,
     selectedFilter: TimeFilter,
-    currentTimeIndex: Int
+    currentTimeIndex: Int,
+    isCustomRange: Boolean = false
 ) {
     val cardShape = RoundedCornerShape(24.dp)
     val lineColor = MaterialTheme.colorScheme.primary
@@ -750,7 +1083,9 @@ private fun BalanceTrendChartCard(
     val scrollState = rememberScrollState()
     val density = LocalDensity.current
 
-    val subtitle = when (selectedFilter) {
+    val subtitle = if (isCustomRange) {
+        if (isPersian) "روند موجودی در بازه انتخابی" else "Balance trend for the selected range"
+    } else when (selectedFilter) {
         TimeFilter.DAILY -> if (isPersian) "روند موجودی از اولین تراکنش ماه تا امروز" else "Balance trend from first transaction to today"
         TimeFilter.WEEKLY -> if (isPersian) "روند موجودی در ۵ بازه ماه جاری" else "Balance trend for 5 periods of current month"
         TimeFilter.MONTHLY -> if (isPersian) "روند موجودی ماه‌به‌ماه" else "Month-by-month balance trend"
@@ -1233,20 +1568,46 @@ private fun ExpenseCategoryPieChartCard(
 private fun TopExpensesCard(
     isPersian: Boolean,
     topExpenses: List<TransactionEntity>,
-    totalExpense: Double,
-    averageExpense: Double,
-    heavyExpenseThreshold: Double,
     currencyUnit: String
 ) {
     val cardShape = RoundedCornerShape(24.dp)
     val numberFormatter = remember(isPersian) {
         NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
     }
+    val currencyText = if (isPersian) {
+        if (currencyUnit == "IRR") "ریال" else "تومان"
+    } else {
+        if (currencyUnit == "IRR") "Rial" else "Toman"
+    }
 
-    val displayThreshold = if (heavyExpenseThreshold.isFinite()) {
-        if (currencyUnit == "IRR") (heavyExpenseThreshold * 10).toLong() else heavyExpenseThreshold.toLong()
-    } else 0L
-    val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")
+    val recommendation = when {
+        topExpenses.isEmpty() -> {
+            if (isPersian) {
+                "فعلاً هزینه‌ای که نیاز به توجه ویژه داشته باشد دیده نشد."
+            } else {
+                "No expense currently stands out as needing special attention."
+            }
+        }
+
+        topExpenses.size == 1 -> {
+            val title = topExpenses.first().title
+                .takeIf { it.isNotBlank() }
+                ?: StringMapper.getCategoryName(topExpenses.first().categoryId, isPersian)
+            if (isPersian) {
+                "بیشترین هزینه این بازه «$title» بوده؛ قبل از خریدهای مشابه، بررسی کن که واقعاً ضروری باشند."
+            } else {
+                "Your largest expense was $title. Before making similar purchases, consider whether they are necessary."
+            }
+        }
+
+        else -> {
+            if (isPersian) {
+                "این چند هزینه بیشترین فشار را روی خرج این بازه گذاشته‌اند؛ اگر هدفت کاهش هزینه است، اول همین موارد را بررسی کن."
+            } else {
+                "These expenses account for the biggest spending pressure in this period. Review them first if you want to cut costs."
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -1259,37 +1620,23 @@ private fun TopExpensesCard(
     ) {
         Column {
             Text(
-                text = if (isPersian) "سنگین‌ترین هزینه‌های دوره" else "Top Expenses",
+                text = if (isPersian) "سنگین‌ترین هزینه‌ها" else "Top Expenses",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = if (isPersian)
-                    if (heavyExpenseThreshold.isFinite())
-                        "هزینه‌های خارج از الگوی معمول؛ آستانه تشخیص ${numberFormatter.format(displayThreshold)} $currencyText"
-                    else "برای تشخیص هزینه غیرعادی، داده بیشتری لازم است."
-                else
-                    if (heavyExpenseThreshold.isFinite())
-                        "Expenses outside the normal pattern; detection threshold ${numberFormatter.format(displayThreshold)} $currencyText"
-                    else "More data is needed to detect unusual expenses.",
+                text = recommendation,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (topExpenses.isEmpty()) {
-                Text(
-                    text = if (isPersian) "هزینه‌ای که از آستانه سخت‌گیرانه این دوره عبور کند پیدا نشد." else "No expense crossed the strict anomaly threshold for this period.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
+            if (topExpenses.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     topExpenses.forEach { item ->
-                        val sharePercentage = if (totalExpense > 0) ((item.amount / totalExpense) * 100).toInt() else 0
-                        val displayAmount = if (currencyUnit == "IRR") (item.amount * 10).toLong() else item.amount.toLong()
+                        val displayAmount = if (currencyUnit == "IRR") item.amount * 10L else item.amount
 
                         Row(
                             modifier = Modifier
@@ -1319,7 +1666,10 @@ private fun TopExpensesCard(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = item.title.ifEmpty { StringMapper.getCategoryName(item.categoryId, isPersian) },
+                                        text = item.title
+                                            .takeIf { it.isNotBlank() }
+                                            ?.let { localizeInsightCategories(it, isPersian) }
+                                            ?: StringMapper.getCategoryName(item.categoryId, isPersian),
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface,
@@ -1340,11 +1690,6 @@ private fun TopExpensesCard(
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "$sharePercentage% ${if (isPersian) "از کل" else "of total"}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }

@@ -67,6 +67,7 @@ import ir.hamedan.budgetmanagement.data.preferences.DueReminderPreferences
 import ir.hamedan.budgetmanagement.ui.components.SwipeToConfirmButton
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.appSkeletonShimmer
 import ir.hamedan.budgetmanagement.ui.components.BalanceWidgetReceiver
 import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitViewModel
 import ir.hamedan.budgetmanagement.ui.screens.categories.CategoriesViewModel
@@ -281,18 +282,6 @@ fun HomeScreen(
         }
     }
 
-    // انیمیشن عمومی برای تمامی Skeleton Screenها
-    val transition = rememberInfiniteTransition(label = "global_skeleton_shimmer")
-    val shimmerAlpha by transition.animateFloat(
-        initialValue = 0.2f,
-        targetValue = 0.6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "global_shimmer_alpha"
-    )
-
     Box(modifier = Modifier.fillMaxSize()) {
         AuroraBackground()
 
@@ -326,9 +315,9 @@ fun HomeScreen(
                             .padding(20.dp)
                     ) {
                         Column {
-                            Box(modifier = Modifier.width(100.dp).height(12.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha)))
+                            Box(modifier = Modifier.width(100.dp).height(12.dp).clip(RoundedCornerShape(4.dp)).appSkeletonShimmer())
                             Spacer(Modifier.height(28.dp))
-                            Box(modifier = Modifier.width(180.dp).height(28.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha)))
+                            Box(modifier = Modifier.width(180.dp).height(28.dp).clip(RoundedCornerShape(6.dp)).appSkeletonShimmer())
                         }
                     }
                 }
@@ -352,9 +341,9 @@ fun HomeScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Box(modifier = Modifier.width(50.dp).height(10.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha)))
+                                    Box(modifier = Modifier.width(50.dp).height(10.dp).clip(RoundedCornerShape(4.dp)).appSkeletonShimmer())
                                     Spacer(Modifier.height(8.dp))
-                                    Box(modifier = Modifier.width(80.dp).height(14.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha)))
+                                    Box(modifier = Modifier.width(80.dp).height(14.dp).clip(RoundedCornerShape(4.dp)).appSkeletonShimmer())
                                 }
                             }
                         }
@@ -372,13 +361,13 @@ fun HomeScreen(
                             .padding(20.dp)
                     ) {
                         Column {
-                            Box(modifier = Modifier.width(120.dp).height(16.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha)))
+                            Box(modifier = Modifier.width(120.dp).height(16.dp).clip(RoundedCornerShape(4.dp)).appSkeletonShimmer())
                             Spacer(Modifier.height(20.dp))
                             repeat(2) {
-                                Box(modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha)))
+                                Box(modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape).appSkeletonShimmer())
                                 Spacer(Modifier.height(16.dp))
                             }
-                            Box(modifier = Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha)))
+                            Box(modifier = Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(16.dp)).appSkeletonShimmer())
                         }
                     }
                 }
@@ -394,11 +383,11 @@ fun HomeScreen(
                             .padding(20.dp)
                     ) {
                         Column {
-                            Box(modifier = Modifier.width(100.dp).height(16.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha)))
+                            Box(modifier = Modifier.width(100.dp).height(16.dp).clip(RoundedCornerShape(4.dp)).appSkeletonShimmer())
                             Spacer(Modifier.height(20.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 repeat(2) {
-                                    Box(modifier = Modifier.width(140.dp).height(80.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha)))
+                                    Box(modifier = Modifier.width(140.dp).height(80.dp).clip(RoundedCornerShape(16.dp)).appSkeletonShimmer())
                                 }
                             }
                         }
@@ -407,10 +396,10 @@ fun HomeScreen(
 
                 // 5. آخرین تراکنش‌ها
                 item {
-                    Box(modifier = Modifier.width(130.dp).height(16.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha)))
+                    Box(modifier = Modifier.width(130.dp).height(16.dp).clip(RoundedCornerShape(4.dp)).appSkeletonShimmer())
                 }
                 items(3) {
-                    RecentTransactionSkeletonItem(shimmerAlpha)
+                    RecentTransactionSkeletonItem()
                 }
 
             } else {
@@ -1717,49 +1706,47 @@ private fun getCategoryEmoji(categoryName: String, categoriesList: List<Category
  * کامپوننت SkeletonScreen برای آیتم‌های لیست تراکنش
  */
 @Composable
-fun RecentTransactionSkeletonItem(shimmerAlpha: Float) {
+fun RecentTransactionSkeletonItem() {
     val rowShape = RoundedCornerShape(20.dp)
-    val shimmerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha)
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), rowShape)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.05f), rowShape)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), rowShape)
             .clip(rowShape)
-            .padding(16.dp),
+            .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
                 .size(44.dp)
                 .clip(CircleShape)
-                .background(shimmerColor)
+                .appSkeletonShimmer()
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Box(
                 modifier = Modifier
-                    .width(100.dp)
-                    .height(14.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(shimmerColor)
+                    .height(16.dp)
+                    .fillMaxWidth(0.55f)
+                    .clip(RoundedCornerShape(6.dp))
+                    .appSkeletonShimmer()
             )
             Spacer(modifier = Modifier.height(6.dp))
             Box(
                 modifier = Modifier
-                    .width(60.dp)
-                    .height(10.dp)
+                    .height(12.dp)
+                    .fillMaxWidth(0.35f)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(shimmerColor)
+                    .appSkeletonShimmer()
             )
         }
         Box(
             modifier = Modifier
-                .width(70.dp)
-                .height(16.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(shimmerColor)
+                .height(18.dp)
+                .width(75.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .appSkeletonShimmer()
         )
     }
 }

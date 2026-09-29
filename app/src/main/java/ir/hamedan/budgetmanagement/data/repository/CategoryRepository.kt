@@ -25,6 +25,10 @@ interface CategoryRepository {
         categoryId: String
     ): Int
 
+    suspend fun getTransactionTotal(
+        categoryId: String
+    ): Long
+
     suspend fun getBudgetLimitCount(
         categoryId: String
     ): Int

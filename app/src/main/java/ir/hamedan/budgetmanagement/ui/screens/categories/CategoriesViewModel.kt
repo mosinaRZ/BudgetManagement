@@ -35,6 +35,9 @@ class CategoriesViewModel(
     private val _transactionCountsMap = MutableStateFlow<Map<String, Int>>(emptyMap())
     val transactionCountsMap: StateFlow<Map<String, Int>> = _transactionCountsMap.asStateFlow()
 
+    private val _transactionTotalsMap = MutableStateFlow<Map<String, Long>>(emptyMap())
+    val transactionTotalsMap: StateFlow<Map<String, Long>> = _transactionTotalsMap.asStateFlow()
+
     // استیت برای نگهداری شناسه (String) دسته‌بندی‌هایی که موقتاً در UI مخفی شده‌اند[cite: 10, 19]
     private val _hiddenCategories = MutableStateFlow<Set<String>>(emptySet())
     val hiddenCategories: StateFlow<Set<String>> = _hiddenCategories.asStateFlow()
@@ -48,10 +51,14 @@ class CategoriesViewModel(
             categories.collectLatest { categoryList ->
                 if (categoryList != null) {
                     val countsMap = mutableMapOf<String, Int>()
+                    val totalsMap = mutableMapOf<String, Long>()
                     for (category in categoryList) {
-                        countsMap[category.title] = categoryRepository.getTransactionCount(category.title)
+                        // Transactions are linked by the stable category ID, not the title.
+                        countsMap[category.id] = categoryRepository.getTransactionCount(category.id)
+                        totalsMap[category.id] = categoryRepository.getTransactionTotal(category.id)
                     }
                     _transactionCountsMap.value = countsMap
+                    _transactionTotalsMap.value = totalsMap
                 }
             }
         }

@@ -2,6 +2,7 @@ package ir.hamedan.budgetmanagement
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -71,6 +72,7 @@ import ir.hamedan.budgetmanagement.ui.screens.auth.PasswordResetScreen
 import ir.hamedan.budgetmanagement.ui.screens.budgetLimit.BudgetLimitScreen
 import ir.hamedan.budgetmanagement.ui.screens.categories.CategoriesScreen
 import ir.hamedan.budgetmanagement.ui.screens.debtCredit.DebtCreditScreen
+import ir.hamedan.budgetmanagement.ui.screens.devices.DevicesScreen
 import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsScreen
 import ir.hamedan.budgetmanagement.ui.screens.splash.SplashScreen
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionsScreen
@@ -85,6 +87,10 @@ import kotlinx.coroutines.launch
 @Suppress("DEPRECATION")
 // 🚀 تغییر مهم: ارث‌بری از FragmentActivity برای جلوگیری از کرش اثر انگشت
 class MainActivity : FragmentActivity() {
+
+    companion object {
+        const val ACTION_ADD_TRANSACTION = "ir.hamedan.budgetmanagement.action.ADD_TRANSACTION"
+    }
 
     override fun onStart() {
         super.onStart()
@@ -108,6 +114,18 @@ class MainActivity : FragmentActivity() {
     // تا دیالوگ آنبوردینگ وضعیت «فعال/دادن» را دوباره محاسبه کند.
     private var permissionRefreshTrigger by mutableIntStateOf(0)
 
+    private var shortcutOpenAddTransaction by mutableStateOf(false)
+
+    private fun handleShortcutIntent(intent: Intent?) {
+        shortcutOpenAddTransaction = intent?.action == ACTION_ADD_TRANSACTION
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleShortcutIntent(intent)
+    }
+
     private val requestPermissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
@@ -122,6 +140,7 @@ class MainActivity : FragmentActivity() {
         CurrencySharedPreferences.init(applicationContext)
 
         AppNotificationManager.createChannel(applicationContext)
+        handleShortcutIntent(intent)
 
         // 🚀 درخواست خودکار مجوزها از اینجا حذف شد.
         // حالا دیالوگ آنبوردینگ (اولین ورود کاربر) با توضیح هر مجوز، خودش این درخواست را می‌زند.
@@ -164,6 +183,8 @@ class MainActivity : FragmentActivity() {
 
                     TheApp(
                         modifier = Modifier.fillMaxSize(),
+                        openAddTransactionRequested = shortcutOpenAddTransaction,
+                        onShortcutConsumed = { shortcutOpenAddTransaction = false },
                         onThemeToggle = {
                             // جابه‌جایی سریع و بدون دردسر تم
                             val newMode = when (themeMode) {
@@ -211,7 +232,7 @@ class MainActivity : FragmentActivity() {
                             onDismiss = { inAppNotification = null },
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
-                                .padding(top = 130.dp)
+                                .padding(top = 150.dp)
                         )
                     }
                 }
@@ -223,6 +244,8 @@ class MainActivity : FragmentActivity() {
     @Composable
     private fun TheApp(
         modifier: Modifier = Modifier,
+        openAddTransactionRequested: Boolean = false,
+        onShortcutConsumed: () -> Unit = {},
         onThemeToggle: () -> Unit = {}
     ) {
 
@@ -232,6 +255,20 @@ class MainActivity : FragmentActivity() {
         val sessionAuthenticated by app.container.authSessionStore.authenticated.collectAsState()
         val currentRouteEntry by navController.currentBackStackEntryAsState()
         val applicationContext = LocalContext.current.applicationContext
+
+        LaunchedEffect(openAddTransactionRequested, sessionAuthenticated, currentRouteEntry?.destination?.route) {
+            val route = currentRouteEntry?.destination?.route.orEmpty()
+            if (openAddTransactionRequested &&
+                sessionAuthenticated &&
+                route.isNotBlank() &&
+                !route.contains("Login") &&
+                !route.contains("Splash") &&
+                !route.contains("AddScreen")
+            ) {
+                navController.navigate(AppRoute.AddScreen())
+                onShortcutConsumed()
+            }
+        }
 
         val appLockPreferences = remember(applicationContext) {
             AppLockPreferences(applicationContext)
@@ -402,6 +439,10 @@ class MainActivity : FragmentActivity() {
                 )
             }
 
+            composable<AppRoute.Devices> {
+                DevicesScreen(onBack = { navController.popBackStack() })
+            }
+
             composable<AppRoute.NotificationCalibration> {
                 NotificationCalibrationScreen(
                     onBackClick = { navController.popBackStack() }
@@ -511,6 +552,9 @@ class MainActivity : FragmentActivity() {
                                 },
                                 onNotificationCalibrationClick = {
                                     navController.navigate(AppRoute.NotificationCalibration)
+                                },
+                                onDevicesClick = {
+                                    navController.navigate(AppRoute.Devices)
                                 },
                                 onLoginClick = {
                                     authScope.launch {

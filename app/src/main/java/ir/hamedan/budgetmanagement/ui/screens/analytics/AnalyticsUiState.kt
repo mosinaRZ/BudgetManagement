@@ -17,6 +17,20 @@ data class TimeExpenseModel(
     val isCurrent: Boolean = false
 )
 
+
+data class SmartInsight(
+    val headlineFa: String = "",
+    val headlineEn: String = "",
+    val summaryFa: String = "",
+    val summaryEn: String = "",
+    val actionFa: String = "",
+    val actionEn: String = "",
+    val focusLabelFa: String = "",
+    val focusLabelEn: String = "",
+    val focusValue: Double = 0.0,
+    val expenseChangePercent: Double? = null
+)
+
 data class AnalyticsUiState(
     val isLoading: Boolean = true,
     val hasAnyTransactionInDb: Boolean = false,
@@ -36,5 +50,10 @@ data class AnalyticsUiState(
     val trendHasEnoughData: Boolean = true,
     val trendCurrentIndex: Int = 0,
     val selectedPeriod: String = "ALL",
-    val isIncomeChartSelected: Boolean = false
+    val isIncomeChartSelected: Boolean = false,
+    val isCustomRange: Boolean = false,
+    val customStartMillis: Long? = null,
+    val customEndMillis: Long? = null,
+    val compareWithPrevious: Boolean = false,
+    val smartInsight: SmartInsight = SmartInsight()
 )

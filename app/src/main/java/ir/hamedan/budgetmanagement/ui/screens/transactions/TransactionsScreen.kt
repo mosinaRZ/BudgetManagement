@@ -29,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -51,6 +50,7 @@ import com.airbnb.lottie.compose.rememberLottieComposition
 import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.appSkeletonShimmer
 import ir.hamedan.budgetmanagement.ui.components.SwipeToConfirmButton
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.ui.screens.add.ThousandsSeparatorTransformation
@@ -719,34 +719,6 @@ fun TransactionsScreen(
 // -----------------------------------------------------------------------------
 
 @Composable
-fun Modifier.shimmerEffect(): Modifier {
-    val transition = rememberInfiniteTransition(label = "ShimmerTransition")
-    val translateAnim = transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1000f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "ShimmerTranslation"
-    )
-
-    val shimmerColors = listOf(
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
-    )
-
-    val brush = Brush.linearGradient(
-        colors = shimmerColors,
-        start = Offset.Zero,
-        end = Offset(x = translateAnim.value, y = translateAnim.value)
-    )
-
-    return this.background(brush)
-}
-
-@Composable
 private fun TransactionsSkeletonScreen() {
     LazyColumn(
         modifier = Modifier
@@ -763,7 +735,7 @@ private fun TransactionsSkeletonScreen() {
                     .height(14.dp)
                     .width(70.dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .shimmerEffect()
+                    .appSkeletonShimmer()
             )
         }
         items(3) {
@@ -779,7 +751,7 @@ private fun TransactionsSkeletonScreen() {
                     .height(14.dp)
                     .width(90.dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .shimmerEffect()
+                    .appSkeletonShimmer()
             )
         }
         items(2) {
@@ -805,7 +777,7 @@ private fun TransactionSkeletonRow() {
             modifier = Modifier
                 .size(44.dp)
                 .clip(CircleShape)
-                .shimmerEffect()
+                .appSkeletonShimmer()
         )
 
         Spacer(modifier = Modifier.width(12.dp))
@@ -817,7 +789,7 @@ private fun TransactionSkeletonRow() {
                     .height(16.dp)
                     .fillMaxWidth(0.55f)
                     .clip(RoundedCornerShape(6.dp))
-                    .shimmerEffect()
+                    .appSkeletonShimmer()
             )
             Spacer(modifier = Modifier.height(8.dp))
             Box(
@@ -825,7 +797,7 @@ private fun TransactionSkeletonRow() {
                     .height(12.dp)
                     .fillMaxWidth(0.35f)
                     .clip(RoundedCornerShape(4.dp))
-                    .shimmerEffect()
+                    .appSkeletonShimmer()
             )
         }
 
@@ -837,7 +809,7 @@ private fun TransactionSkeletonRow() {
                 .height(18.dp)
                 .width(75.dp)
                 .clip(RoundedCornerShape(6.dp))
-                .shimmerEffect()
+                .appSkeletonShimmer()
         )
     }
 }

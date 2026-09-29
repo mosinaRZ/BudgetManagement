@@ -55,6 +55,15 @@ interface TransactionDao {
     ): Int
 
     @Query("""
+        SELECT COALESCE(SUM(amount), 0)
+        FROM transactions
+        WHERE categoryId = :categoryId
+    """)
+    suspend fun getTransactionTotalForCategory(
+        categoryId: String
+    ): Long
+
+    @Query("""
         UPDATE transactions
         SET categoryId = :newCategoryId,
             updatedAt = :updatedAt

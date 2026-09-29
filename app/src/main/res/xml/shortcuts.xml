@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="add_transaction"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_add_transaction"
+        android:shortcutShortLabel="@string/shortcut_add_transaction_short"
+        android:shortcutLongLabel="@string/shortcut_add_transaction_long">
+        <intent
+            android:action="ir.hamedan.budgetmanagement.action.ADD_TRANSACTION"
+            android:targetPackage="ir.hamedan.budgetmanagement"
+            android:targetClass="ir.hamedan.budgetmanagement.MainActivity" />
+    </shortcut>
+</shortcuts>

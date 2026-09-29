@@ -32,6 +32,7 @@ class CategoryRepositoryImpl(
         categoryDao.getCategoriesByExpenseStatus(isExpense)
 
     override suspend fun getTransactionCount(categoryId: String): Int = transactionDao.getTransactionCountForCategory(categoryId)
+    override suspend fun getTransactionTotal(categoryId: String): Long = transactionDao.getTransactionTotalForCategory(categoryId)
     override suspend fun getBudgetLimitCount(categoryId: String): Int = budgetLimitDao.getLimitCountForCategory(categoryId)
 
     /**

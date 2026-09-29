@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -46,6 +47,7 @@ import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.StatusBarAuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
+import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.utils.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
 import kotlinx.coroutines.launch
@@ -71,6 +73,8 @@ fun CategoriesScreen(
 
     val categoriesState by categoryViewModel.categories.collectAsState()
     val transactionCounts by categoryViewModel.transactionCountsMap.collectAsState()
+    val transactionTotals by categoryViewModel.transactionTotalsMap.collectAsState()
+    val currencyUnit by CurrencySharedPreferences.currencyFlow.collectAsState()
 
     var selectedTabState by remember { mutableIntStateOf(0) }
     val isExpenseTab = selectedTabState == 0
@@ -178,10 +182,13 @@ fun CategoriesScreen(
                         modifier = Modifier.weight(1f)
                     ) {
                         items(filteredCategories, key = { it.id }) { category ->
-                            val count = transactionCounts[category.title] ?: 0
+                            val count = transactionCounts[category.id] ?: 0
+                            val totalAmount = transactionTotals[category.id] ?: 0L
                             CategoryItemCard(
                                 category = category,
                                 transactionCount = count,
+                                transactionTotal = totalAmount,
+                                currencyUnit = currencyUnit,
                                 isPersian = isPersian,
                                 onEditClick = { categoryToEdit = category },
                                 onDeleteClick = { categoryToDelete = category }
@@ -392,8 +399,8 @@ fun CategoriesScreen(
             var isPressed by remember { mutableStateOf(false) }
 
             LaunchedEffect(category.title) {
-                transactionCount = categoryViewModel.getTransactionCount(category.title)
-                budgetLimitCount = categoryViewModel.getBudgetLimitCount(category.title)
+                transactionCount = categoryViewModel.getTransactionCount(category.id)
+                budgetLimitCount = categoryViewModel.getBudgetLimitCount(category.id)
             }
 
             val categoryName = StringMapper.getCategoryName(category.title, isPersian)
@@ -694,6 +701,8 @@ private fun CircularCountdownSnackbar(
 fun CategoryItemCard(
     category: CategoryEntity,
     transactionCount: Int,
+    transactionTotal: Long,
+    currencyUnit: String,
     isPersian: Boolean,
     onEditClick: () -> Unit,
     onDeleteClick: () -> Unit
@@ -706,7 +715,7 @@ fun CategoryItemCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(130.dp)
+            .height(148.dp)
             .background(
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                 cardShape
@@ -771,21 +780,51 @@ fun CategoryItemCard(
                     maxLines = 1
                 )
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ReceiptLong,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Text(
-                        text = if (isPersian) "${numberFormatter.format(transactionCount)} تراکنش" else "${numberFormatter.format(transactionCount)} txns",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ReceiptLong,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = if (isPersian) "${numberFormatter.format(transactionCount)} تراکنش" else "${numberFormatter.format(transactionCount)} txns",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccountBalanceWallet,
+                            contentDescription = null,
+                            tint = if (category.isExpense) {
+                                MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                            } else {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                            },
+                            modifier = Modifier.size(14.dp)
+                        )
+                        val displayAmount = if (currencyUnit == "IRR") transactionTotal * 10L else transactionTotal
+                        val currencyText = if (isPersian) {
+                            if (currencyUnit == "IRR") "ریال" else "تومان"
+                        } else {
+                            if (currencyUnit == "IRR") "Rial" else "Toman"
+                        }
+                        Text(
+                            text = "${numberFormatter.format(displayAmount)} $currencyText",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
         }
