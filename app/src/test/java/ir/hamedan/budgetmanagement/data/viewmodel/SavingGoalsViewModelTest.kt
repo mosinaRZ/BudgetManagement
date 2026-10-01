@@ -69,7 +69,8 @@ class SavingGoalsViewModelTest {
     }
 
     @Test fun savingGoals_exposesRepositoryFlow() = runTest(dispatcher) {
-        assertThat(viewModel.savingGoals.first()).containsExactly(goal)
+        val goals = viewModel.savingGoals.first { it != null }
+        assertThat(goals).containsExactly(goal)
     }
 
     @Test fun addGoal_delegatesToUseCase() = runTest(dispatcher) {
@@ -85,6 +86,8 @@ class SavingGoalsViewModelTest {
         coEvery { txRepository.getCurrentBalance() } returns 100_000L
         coEvery { useCase.deposit("g1", 5_000L) } just Runs
         viewModel.savingGoals.first()
+
+        viewModel.savingGoals.first { goals -> goals?.any { it.id == "g1" } == true }
 
         viewModel.deposit("g1", 5_000L)
         advanceUntilIdle()

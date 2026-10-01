@@ -14,6 +14,7 @@ import io.mockk.mockkObject
 import io.mockk.mockkStatic
 import io.mockk.unmockkAll
 import ir.hamedan.budgetmanagement.BudgetApp
+import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.PendingTransactionRepository
 import ir.hamedan.budgetmanagement.di.AppContainer
@@ -85,7 +86,7 @@ class SmsReceiverTest {
     fun onReceive_wrongAction_doesNotTouchRepository() {
         SmsReceiver().onReceive(context, Intent(Intent.ACTION_BOOT_COMPLETED))
 
-        coVerify(exactly = 0) { pendingRepository.addPending(any()) }
+        coVerify(exactly = 0) { pendingRepository.insert(any()) }
     }
 
     @Test
@@ -99,6 +100,6 @@ class SmsReceiverTest {
             Intent(Telephony.Sms.Intents.SMS_RECEIVED_ACTION)
         )
 
-        coVerify(exactly = 0) { pendingRepository.addPending(any()) }
+        coVerify(exactly = 0) { pendingRepository.insert(any()) }
     }
 }

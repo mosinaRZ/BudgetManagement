@@ -107,6 +107,28 @@ object CategorySuggestionHelper {
             }
         }
 
+        // اگر یک دستهٔ سیستمی با کلیدواژهٔ مستقیم پیدا شده باشد،
+        // ابتدا همان تطبیق مستقیم را مبنا قرار می‌دهیم تا نام نمایشی یک
+        // دستهٔ دیگر (مثلاً «خرید» برای SHOPPING) روی کلیدواژهٔ دقیق‌تر
+        // مثل «پیتزا» برای FOOD غلبه نکند.
+        if (scores.isNotEmpty()) {
+            val systemMatches = scores.filterKeys { key ->
+                systemKeywordMap.values.any { it == key }
+            }
+            if (systemMatches.isNotEmpty()) {
+                val bestSystemScore = systemMatches.maxOf { it.value }
+                val bestSystemCategories = systemMatches
+                    .filterValues { it == bestSystemScore }
+                    .keys
+
+                // فقط زمانی که چند دستهٔ سیستمی امتیاز یکسان دارند،
+                // ادامهٔ امتیازدهی برای شکستن تساوی انجام می‌شود.
+                if (bestSystemCategories.size == 1) {
+                    return bestSystemCategories.first()
+                }
+            }
+        }
+
         // ۲) امتیاز از خودِ عنوان دسته‌بندی‌ها (سیستمی و سفارشی)
         for (category in availableCategories) {
             val categoryKey = category.title

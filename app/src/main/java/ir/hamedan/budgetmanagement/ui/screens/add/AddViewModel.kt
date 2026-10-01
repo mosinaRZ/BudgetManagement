@@ -34,7 +34,7 @@ class AddViewModel(
     fun addTransaction(title: String, amount: Double, categoryKey: String, isExpense: Boolean, note: String = "") {
         viewModelScope.launch {
             val categoryId = categoryRepository.getAllCategories().first().firstOrNull { it.id == categoryKey || it.title == categoryKey }?.id
-                ?: throw IllegalArgumentException("Category not found: $categoryKey")
+                ?: return@launch
             val newTransaction = TransactionEntity(
                 title = title,
                 amount = MoneyContract.fromInput(amount),

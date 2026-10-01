@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
@@ -57,6 +58,7 @@ class AddViewModelTest {
 
     @Test fun addTransaction_resolvesCategoryAndConvertsMoneyToStorageUnit() = runTest(dispatcher) {
         viewModel.addTransaction("Lunch", 12_345.0, "FOOD", true, "note")
+        advanceUntilIdle()
 
         coVerify {
             transactionRepository.insertTransaction(
@@ -75,7 +77,8 @@ class AddViewModelTest {
         every { categoryRepository.getAllCategories() } returns flowOf(listOf(CategoryEntity(id="x", title="OTHER", isExpense=true)))
 
         viewModel.addTransaction("Lunch", 100.0, "FOOD", true)
-        // The coroutine failure is isolated by viewModelScope; verify that no transaction was written.
+        advanceUntilIdle()
+
         coVerify(exactly = 0) { transactionRepository.insertTransaction(any()) }
     }
 }

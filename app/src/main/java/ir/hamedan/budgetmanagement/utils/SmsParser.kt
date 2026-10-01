@@ -103,7 +103,7 @@ object SmsParser {
             else -> "EXPENSE"
         }
 
-        val isTypeDetected = hasIncome.xor(hasExpense)
+        val isTypeDetected = hasIncome || hasExpense
 
         val rawAmount = findBestAmount(normalized)
         if (rawAmount <= 0.0) {

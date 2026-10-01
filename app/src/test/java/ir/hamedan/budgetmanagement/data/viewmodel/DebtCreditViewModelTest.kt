@@ -83,7 +83,7 @@ class DebtCreditViewModelTest {
     }
 
     @Test fun debtCreditList_exposesRepositoryItems() = runTest(dispatcher) {
-        assertThat(viewModel.debtCreditList.first()).containsExactly(debt)
+        assertThat(viewModel.debtCreditList.first { it.isNotEmpty() }).containsExactly(debt)
     }
 
     @Test fun saveOrUpdate_delegatesToUseCase() = runTest(dispatcher) {
@@ -103,7 +103,7 @@ class DebtCreditViewModelTest {
     @Test fun deposit_delegatesToUseCaseWhenBalanceIsEnough() = runTest(dispatcher) {
         viewModel.debtCreditList // establish StateFlow; upstream is lazy
         coEvery { useCase.deposit(debt, 30_000L) } just Runs
-        viewModel.debtCreditList.first()
+        viewModel.debtCreditList.first { it.isNotEmpty() }
 
         viewModel.deposit("d1", 30_000L)
         advanceUntilIdle()

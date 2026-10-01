@@ -194,7 +194,7 @@ class TransactionViewModelTest {
         )
         val result = collectLastFiltered()
         assertThat(result).hasSize(1)
-        assertThat(result[0].category).isEqualTo("UNCATEGORIZED")
+        assertThat(result[0].categoryId).isEqualTo("UNCATEGORIZED")
         assertThat(result[0].id).isEqualTo("4")
     }
 
@@ -390,7 +390,7 @@ class TransactionViewModelTest {
 
         coVerify {
             transactionRepository.insertTransaction(
-                match { it.title == "ناهار ویرایش‌شده" && it.amount == 200_000.0 }
+                match { it.title == "ناهار ویرایش‌شده" && it.amount == 200_000L }
             )
         }
     }

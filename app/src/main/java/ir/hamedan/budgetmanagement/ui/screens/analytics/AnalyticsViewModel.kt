@@ -150,9 +150,12 @@ class AnalyticsViewModel(
         }
 
         val averageExpense = if (expensesList.isNotEmpty()) totalExpense / expensesList.size else 0.0
-        val heavyExpenseThreshold = calculateHeavyExpenseThreshold(expensesList)
+        // A "heavy" expense is defined as strictly above the average expense.
+        // This keeps the analytics contract deterministic and avoids classifying
+        // an exactly-average transaction as a heavy/top expense.
+        val heavyExpenseThreshold = averageExpense
         val heavyExpenseEntities = expensesList
-            .filter { it.amount >= heavyExpenseThreshold && heavyExpenseThreshold > 0.0 }
+            .filter { averageExpense > 0.0 && it.amount.toDouble() > averageExpense }
             .sortedByDescending { it.amount }
         val topExpenseEntities = heavyExpenseEntities.take(5)
 

@@ -12,12 +12,14 @@ import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkAll
 import io.mockk.verify
+import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.PendingTransactionEntity
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.PendingTransactionRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.ui.screens.home.PendingTransactionViewModel
 import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
+import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
@@ -65,6 +67,12 @@ class PendingTransactionViewModelTest {
 
         every { pendingRepository.getPendingTransactions() } returns flowOf(listOf(samplePending))
         every { pendingRepository.getPendingCount() } returns flowOf(1)
+        every { categoryRepository.getAllCategories() } returns flowOf(
+            listOf(
+                CategoryEntity(id = "FOOD", title = "غذا", isExpense = true),
+                CategoryEntity(id = "SALARY", title = "حقوق", isExpense = false)
+            )
+        )
         every { categoryRepository.getCategoriesByExpenseStatus(any()) } returns flowOf(emptyList())
 
         mockkObject(NotificationHelper)
@@ -90,13 +98,13 @@ class PendingTransactionViewModelTest {
     @Test
     fun confirmTransaction_insertsTransactionAndConfirmsPending() = runTest(testDispatcher) {
         coEvery { transactionRepository.insertTransaction(any()) } just Runs
-        coEvery { pendingRepository.confirm(any()) } just Runs
+        coEvery { pendingRepository.updateStatus(any(), any()) } just Runs
 
         viewModel.confirmTransaction(
             pending = samplePending,
             title = "خرید",
             amount = 150_000L,
-            categoryId = "FOOD",
+            category = "FOOD",
             isExpense = true,
             note = "از پیامک"
         )
@@ -107,40 +115,40 @@ class PendingTransactionViewModelTest {
                 match {
                     it.title == "خرید" &&
                             it.amount == 150_000L &&
-                            it.category == "FOOD" &&
+                            it.categoryId == "FOOD" &&
                             it.type == "EXPENSE" &&
                             it.note == "از پیامک" &&
                             it.timestamp == samplePending.timestamp
                 }
             )
-            pendingRepository.confirm("pt1")
+            pendingRepository.updateStatus("pt1", "CONFIRMED")
         }
     }
 
     @Test
     fun confirmTransaction_income_setsTypeIncome() = runTest(testDispatcher) {
         coEvery { transactionRepository.insertTransaction(any()) } just Runs
-        coEvery { pendingRepository.confirm(any()) } just Runs
+        coEvery { pendingRepository.updateStatus(any(), any()) } just Runs
 
         viewModel.confirmTransaction(
             pending = samplePending,
             title = "واریز",
             amount = 2_000_000L,
-            categoryId = "SALARY",
+            category = "SALARY",
             isExpense = false
         )
         advanceUntilIdle()
 
         coVerify {
             transactionRepository.insertTransaction(match { it.type == "INCOME" })
-            pendingRepository.confirm("pt1")
+            pendingRepository.updateStatus("pt1", "CONFIRMED")
         }
     }
 
     @Test
     fun confirmTransaction_preservesSmsTimestamp() = runTest(testDispatcher) {
         coEvery { transactionRepository.insertTransaction(any()) } just Runs
-        coEvery { pendingRepository.confirm(any()) } just Runs
+        coEvery { pendingRepository.updateStatus(any(), any()) } just Runs
 
         val smsTime = 1_650_111_222_333L
         val pending = samplePending.copy(timestamp = smsTime)
@@ -149,7 +157,7 @@ class PendingTransactionViewModelTest {
             pending = pending,
             title = "x",
             amount = 1L,
-            categoryId = "FOOD",
+            category = "FOOD",
             isExpense = true
         )
         advanceUntilIdle()
@@ -162,13 +170,13 @@ class PendingTransactionViewModelTest {
     @Test
     fun confirmTransaction_sendsSuccessNotificationWithPendingIdTag() = runTest(testDispatcher) {
         coEvery { transactionRepository.insertTransaction(any()) } just Runs
-        coEvery { pendingRepository.confirm(any()) } just Runs
+        coEvery { pendingRepository.updateStatus(any(), any()) } just Runs
 
         viewModel.confirmTransaction(
             pending = samplePending,
             title = "خرید",
             amount = 10L,
-            categoryId = "FOOD",
+            category = "FOOD",
             isExpense = true
         )
         advanceUntilIdle()
@@ -176,7 +184,8 @@ class PendingTransactionViewModelTest {
         verify {
             NotificationHelper.send(
                 context = context,
-                type = "SUCCESS",
+                notificationType = NotificationType.SMS_CONFIRMED,
+                type = "SMS",
                 titleFa = any(),
                 titleEn = any(),
                 descFa = any(),
@@ -188,13 +197,13 @@ class PendingTransactionViewModelTest {
 
     @Test
     fun ignoreTransaction_callsIgnoreOnly_doesNotInsertTransaction() = runTest(testDispatcher) {
-        coEvery { pendingRepository.ignore(any()) } just Runs
+        coEvery { pendingRepository.updateStatus(any(), any()) } just Runs
 
         viewModel.ignoreTransaction(samplePending)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { pendingRepository.ignore("pt1") }
+        coVerify(exactly = 1) { pendingRepository.updateStatus("pt1", "IGNORED") }
         coVerify(exactly = 0) { transactionRepository.insertTransaction(any()) }
-        coVerify(exactly = 0) { pendingRepository.confirm(any()) }
+        coVerify(exactly = 0) { pendingRepository.updateStatus(any(), "CONFIRMED") }
     }
 }

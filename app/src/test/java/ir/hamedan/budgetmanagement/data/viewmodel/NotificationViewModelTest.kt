@@ -78,12 +78,13 @@ class NotificationViewModelTest {
 
     @Test
     fun addNotification_callsRepositoryAndPush() = runTest(testDispatcher) {
-        coEvery { repository.addNotification(any()) } just Runs
+        coEvery { repository.countByTag(any()) } returns 0
+        coEvery { repository.insert(any()) } just Runs
 
         viewModel.addNotification(sample)
         advanceUntilIdle()
 
-        coVerify { repository.addNotification(sample) }
+        coVerify { repository.insert(sample) }
         verify {
             AppNotificationManager.sendPushIfAllowed(
                 context = context,
