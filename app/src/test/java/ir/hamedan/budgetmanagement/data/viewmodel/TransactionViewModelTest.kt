@@ -22,7 +22,7 @@ import ir.hamedan.budgetmanagement.ui.screens.transactions.SortOrder
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TimeFilter
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionTypeFilter
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
-import ir.hamedan.budgetmanagement.utils.NotificationHelper
+import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,32 +61,32 @@ class TransactionViewModelTest {
         TransactionEntity(
             id = "1",
             title = "ناهار",
-            amount = 100_000.0,
-            category = "FOOD",
+            amount = 100_000L,
+            categoryId = "FOOD",
             type = "EXPENSE",
             timestamp = 1_700_200_000_000L
         ),
         TransactionEntity(
             id = "2",
             title = "حقوق",
-            amount = 50_000_000.0,
-            category = "SALARY",
+            amount = 50_000_000L,
+            categoryId = "SALARY",
             type = "INCOME",
             timestamp = 1_700_100_000_000L
         ),
         TransactionEntity(
             id = "3",
             title = "تاکسی",
-            amount = 50_000.0,
-            category = "TRANSPORT",
+            amount = 50_000L,
+            categoryId = "TRANSPORT",
             type = "EXPENSE",
             timestamp = 1_700_000_000_000L
         ),
         TransactionEntity(
             id = "4",
             title = "بدون دسته",
-            amount = 20_000.0,
-            category = "UNCATEGORIZED",
+            amount = 20_000L,
+            categoryId = "UNCATEGORIZED",
             type = "EXPENSE",
             timestamp = 1_700_050_000_000L
         )
@@ -109,7 +109,7 @@ class TransactionViewModelTest {
 
         mockkObject(NotificationHelper)
         every {
-            NotificationHelper.send(any(), any(), any(), any(), any(), any(), any())
+            NotificationHelper.send(any(), any(), any(), any(), any(), any(), any(), any())
         } just Runs
 
         // Seed data BEFORE constructing the ViewModel so the first upstream emission is complete.
@@ -273,8 +273,8 @@ class TransactionViewModelTest {
         )
         val result = collectLastFiltered()
         assertThat(result).isNotEmpty()
-        assertThat(result.first().amount).isEqualTo(50_000_000.0)
-        assertThat(result.last().amount).isEqualTo(20_000.0)
+        assertThat(result.first().amount).isEqualTo(50_000_000L)
+        assertThat(result.last().amount).isEqualTo(20_000L)
     }
 
     @Test
@@ -288,8 +288,8 @@ class TransactionViewModelTest {
         )
         val result = collectLastFiltered()
         assertThat(result).isNotEmpty()
-        assertThat(result.first().amount).isEqualTo(20_000.0)
-        assertThat(result.last().amount).isEqualTo(50_000_000.0)
+        assertThat(result.first().amount).isEqualTo(20_000L)
+        assertThat(result.last().amount).isEqualTo(50_000_000L)
         assertThat(result.map { it.amount }).isInOrder()
     }
 
@@ -384,7 +384,7 @@ class TransactionViewModelTest {
         coEvery { transactionRepository.insertTransaction(any()) } just Runs
         collectLastFiltered()
 
-        val updated = sampleTransactions[0].copy(title = "ناهار ویرایش‌شده", amount = 200_000.0)
+        val updated = sampleTransactions[0].copy(title = "ناهار ویرایش‌شده", amount = 200_000L)
         viewModel.updateTransaction(updated)
         advanceUntilIdle()
 

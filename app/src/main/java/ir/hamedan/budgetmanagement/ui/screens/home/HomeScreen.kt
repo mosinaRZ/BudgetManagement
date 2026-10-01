@@ -74,9 +74,9 @@ import ir.hamedan.budgetmanagement.ui.screens.categories.CategoriesViewModel
 import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsViewModel
 import ir.hamedan.budgetmanagement.ui.screens.notification.NotificationViewModel
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
-import ir.hamedan.budgetmanagement.ui.viewmodels.DebtCreditViewModel
 import ir.hamedan.budgetmanagement.utils.DateUtils
-import ir.hamedan.budgetmanagement.utils.LocaleHelper
+import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
+import ir.hamedan.budgetmanagement.ui.screens.debtCredit.DebtCreditViewModel
 import ir.hamedan.budgetmanagement.utils.StringMapper
 import java.text.NumberFormat
 import java.util.*

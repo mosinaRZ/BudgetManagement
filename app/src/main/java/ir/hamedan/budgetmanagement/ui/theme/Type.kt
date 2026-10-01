@@ -10,7 +10,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import ir.hamedan.budgetmanagement.R
-import ir.hamedan.budgetmanagement.utils.LocaleHelper // ۲. ایمپورت کردن لوکال هلپر شما
+import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper // ۲. ایمپورت کردن لوکال هلپر شما
 
 // فونت‌های انگلیسی (Inter)
 private val InterFontFamily = FontFamily(

@@ -33,7 +33,7 @@ import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
-import ir.hamedan.budgetmanagement.utils.LocaleHelper
+import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs

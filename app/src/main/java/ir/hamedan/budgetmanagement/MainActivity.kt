@@ -48,7 +48,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
-import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.security.AppLockPreferences
 import ir.hamedan.budgetmanagement.data.preferences.OnboardingPreferences
 import ir.hamedan.budgetmanagement.data.preferences.PermissionReminderPreferences
@@ -79,9 +78,9 @@ import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionsScreen
 import ir.hamedan.budgetmanagement.ui.screens.settings.NotificationCalibrationScreen
 import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsScreen
 import ir.hamedan.budgetmanagement.ui.theme.BudgetManagementTheme
-import ir.hamedan.budgetmanagement.utils.AppNotificationManager
-import ir.hamedan.budgetmanagement.utils.LocaleHelper
-import ir.hamedan.budgetmanagement.utils.NotificationHelper
+import ir.hamedan.budgetmanagement.data.notification.AppNotificationManager
+import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
+import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import kotlinx.coroutines.launch
 
 @Suppress("DEPRECATION")

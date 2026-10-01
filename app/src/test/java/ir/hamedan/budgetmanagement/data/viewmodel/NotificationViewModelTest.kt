@@ -15,7 +15,7 @@ import io.mockk.verify
 import ir.hamedan.budgetmanagement.data.local.models.NotificationEntity
 import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import ir.hamedan.budgetmanagement.ui.screens.notification.NotificationViewModel
-import ir.hamedan.budgetmanagement.utils.AppNotificationManager
+import ir.hamedan.budgetmanagement.data.notification.AppNotificationManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow

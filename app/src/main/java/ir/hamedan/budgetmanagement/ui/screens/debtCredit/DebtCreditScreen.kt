@@ -50,10 +50,10 @@ import ir.hamedan.budgetmanagement.ui.components.StatusBarAuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.ui.screens.add.ThousandsSeparatorTransformation
 import ir.hamedan.budgetmanagement.ui.screens.goals.AmountActionDialog
-import ir.hamedan.budgetmanagement.ui.viewmodels.DebtCreditViewModel
+import ir.hamedan.budgetmanagement.ui.screens.debtCredit.DebtCreditViewModel
 import ir.hamedan.budgetmanagement.utils.CategorySuggestionHelper
 import ir.hamedan.budgetmanagement.utils.DateUtils
-import ir.hamedan.budgetmanagement.utils.LocaleHelper
+import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
 import kotlinx.coroutines.launch
 import java.text.NumberFormat

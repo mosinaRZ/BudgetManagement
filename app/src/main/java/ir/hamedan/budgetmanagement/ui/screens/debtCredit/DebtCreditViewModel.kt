@@ -1,4 +1,4 @@
-package ir.hamedan.budgetmanagement.ui.viewmodels
+package ir.hamedan.budgetmanagement.ui.screens.debtCredit
 
 import android.content.Context
 import androidx.glance.appwidget.updateAll
@@ -12,8 +12,9 @@ import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.domain.usecase.DebtCreditUseCase
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.ui.components.BalanceWidget
-import ir.hamedan.budgetmanagement.utils.LocaleHelper
-import ir.hamedan.budgetmanagement.utils.NotificationHelper
+import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
+import ir.hamedan.budgetmanagement.utils.DateUtils
+import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -24,8 +25,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.util.Calendar
-import java.util.concurrent.TimeUnit
 
 class DebtCreditViewModel(
     private val debtCreditRepository: DebtCreditRepository,
@@ -260,8 +259,7 @@ class DebtCreditViewModel(
         if (item.isSettled || item.dueDateMillis <= 0) return
 
         val now = System.currentTimeMillis()
-        val diffMillis = item.dueDateMillis - now
-        val daysLeft = TimeUnit.MILLISECONDS.toDays(diffMillis).toInt()
+        val daysLeft = DateUtils.daysUntil(item.dueDateMillis, now).toInt()
 
         if (daysLeft in listOf(1, 3, 7)) {
             val tag = "DEBT_DUE_REMINDER_${daysLeft}_${item.id}"
@@ -290,38 +288,5 @@ class DebtCreditViewModel(
         }
     }
 
-    fun calculateExpirationDate(
-        totalAmount: Long,
-        monthlyAmount: Long,
-        dueDay: Int
-    ): Long {
-        if (totalAmount <= 0L || monthlyAmount <= 0L) {
-            return System.currentTimeMillis()
-        }
 
-        val monthsRequired =
-            ((totalAmount + monthlyAmount - 1L) / monthlyAmount).coerceAtLeast(1L)
-
-        val calendar = Calendar.getInstance()
-
-        // اولین سررسید
-        val currentDay = calendar.get(Calendar.DAY_OF_MONTH)
-
-        if (currentDay > dueDay) {
-            calendar.add(Calendar.MONTH, 1)
-        }
-
-        // تعداد ماه‌های باقی‌مانده تا آخرین قسط
-        calendar.add(Calendar.MONTH, monthsRequired.toInt() - 1)
-
-        // حالا که ماه مقصد مشخص است، آخرین روز مجاز همان ماه را محاسبه می‌کنیم
-        val lastDayOfMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-
-        calendar.set(
-            Calendar.DAY_OF_MONTH,
-            dueDay.coerceIn(1, lastDayOfMonth)
-        )
-
-        return calendar.timeInMillis
-    }
 }

@@ -38,14 +38,12 @@ class EncryptedAppDatabaseTest {
             .build()
 
         transactionDao = db.transactionDao()
-        AppDatabase.clearInstance()
     }
 
     @After
     @Throws(IOException::class)
     fun closeDb() {
         db.close()
-        AppDatabase.clearInstance()
     }
 
     @Test
@@ -53,8 +51,8 @@ class EncryptedAppDatabaseTest {
         val transaction = TransactionEntity(
             id = "enc-test-1",
             title = "تست رمزنگاری",
-            amount = 150_000.0,
-            category = "FOOD",
+            amount = 150_000L,
+            categoryId = "food",
             type = "EXPENSE",
             note = "رمزنگاری شده"
         )
@@ -66,7 +64,7 @@ class EncryptedAppDatabaseTest {
         assertThat(all).hasSize(1)
         assertThat(all[0].id).isEqualTo("enc-test-1")
         assertThat(all[0].title).isEqualTo("تست رمزنگاری")
-        assertThat(all[0].amount).isEqualTo(150_000.0)
+        assertThat(all[0].amount).isEqualTo(150_000L)
         assertThat(all[0].note).isEqualTo("رمزنگاری شده")
     }
 
@@ -75,16 +73,16 @@ class EncryptedAppDatabaseTest {
         val tx1 = TransactionEntity(
             id = "1",
             title = "درآمد",
-            amount = 5_000_000.0,
+            amount = 5_000_000L,
             type = "INCOME",
-            category = "SALARY"
+            categoryId = "salary"
         )
         val tx2 = TransactionEntity(
             id = "2",
             title = "هزینه",
-            amount = 250_000.0,
+            amount = 250_000L,
             type = "EXPENSE",
-            category = "FOOD"
+            categoryId = "food"
         )
 
         transactionDao.insertTransaction(tx1)
@@ -99,7 +97,7 @@ class EncryptedAppDatabaseTest {
         val tx = TransactionEntity(
             id = "to-delete",
             title = "حذف شود",
-            amount = 100.0,
+            amount = 100L,
             type = "EXPENSE"
         )
         transactionDao.insertTransaction(tx)

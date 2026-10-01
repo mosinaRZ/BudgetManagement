@@ -11,7 +11,7 @@ import io.mockk.just
 import io.mockk.mockkObject
 import io.mockk.unmockkAll
 import ir.hamedan.budgetmanagement.data.preferences.AppUsagePreferences
-import ir.hamedan.budgetmanagement.utils.NotificationHelper
+import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
@@ -34,7 +34,7 @@ class InactivityReminderWorkerTest {
         // جلوگیری از ClassCastException
         mockkObject(NotificationHelper)
         every {
-            NotificationHelper.send(any(), any(), any(), any(), any(), any(), any())
+            NotificationHelper.send(any(), any(), any(), any(), any(), any(), any(), any())
         } just Runs
     }
 

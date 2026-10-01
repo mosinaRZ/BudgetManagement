@@ -1,4 +1,4 @@
-package ir.hamedan.budgetmanagement.utils
+package ir.hamedan.budgetmanagement.data.notification
 
 import android.Manifest
 import android.app.NotificationChannel
@@ -12,6 +12,7 @@ import androidx.core.content.ContextCompat
 import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
+import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 
 object AppNotificationManager {
 

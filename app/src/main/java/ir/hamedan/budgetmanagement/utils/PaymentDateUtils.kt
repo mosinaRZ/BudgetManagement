@@ -8,6 +8,7 @@ object PaymentDateUtils {
      * محاسبه میلی‌ثانیه سررسید بعدی بر اساس روز ماه (مثلاً روز ۲۶)
      */
     fun calculateNextDueDate(dayOfMonth: Int): Long {
+        require(dayOfMonth in 1..31) { "Day of month must be between 1 and 31." }
         val calendar = Calendar.getInstance()
         val currentDay = calendar.get(Calendar.DAY_OF_MONTH)
         val maxDayCurrentMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
@@ -34,6 +35,7 @@ object PaymentDateUtils {
      * افزودن یک ماه به تاریخ سررسید فعلی (زمان پرداخت قسط جاری)
      */
     fun getNextMonthDueDate(currentDueDateMillis: Long, dayOfMonth: Int): Long {
+        require(dayOfMonth in 1..31) { "Day of month must be between 1 and 31." }
         val calendar = Calendar.getInstance().apply {
             timeInMillis = currentDueDateMillis
             add(Calendar.MONTH, 1)

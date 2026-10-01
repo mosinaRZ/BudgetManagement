@@ -6,7 +6,8 @@ import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
-import ir.hamedan.budgetmanagement.utils.NotificationHelper
+import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
+import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,7 +15,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -68,7 +68,7 @@ class CategoriesViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val normalizedTitle = title.trim()
             if (categories.value.orEmpty().any { it.title.trim().equals(normalizedTitle, ignoreCase = true) }) {
-                _errorMessage.emit(if (ir.hamedan.budgetmanagement.utils.LocaleHelper.getLanguage(context) == "fa") "این نام دسته‌بندی قبلاً استفاده شده است. نام دیگری انتخاب کنید." else "This category name is already in use. Choose another name.")
+                _errorMessage.emit(if (LocaleHelper.getLanguage(context) == "fa") "این نام دسته‌بندی قبلاً استفاده شده است. نام دیگری انتخاب کنید." else "This category name is already in use. Choose another name.")
                 return@launch
             }
             categoryRepository.insertCategory(
@@ -99,7 +99,7 @@ class CategoriesViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val normalizedTitle = newTitle.trim()
             if (categories.value.orEmpty().any { it.id != category.id && it.title.trim().equals(normalizedTitle, ignoreCase = true) }) {
-                _errorMessage.emit(if (ir.hamedan.budgetmanagement.utils.LocaleHelper.getLanguage(context) == "fa") "این نام دسته‌بندی قبلاً استفاده شده است. نام دیگری انتخاب کنید." else "This category name is already in use. Choose another name.")
+                _errorMessage.emit(if (LocaleHelper.getLanguage(context) == "fa") "این نام دسته‌بندی قبلاً استفاده شده است. نام دیگری انتخاب کنید." else "This category name is already in use. Choose another name.")
                 return@launch
             }
             categoryRepository.updateCategory(category, normalizedTitle, newEmoji)

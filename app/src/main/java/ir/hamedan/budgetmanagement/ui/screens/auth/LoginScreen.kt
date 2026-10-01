@@ -20,7 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Visibility
@@ -48,12 +47,11 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import ir.hamedan.budgetmanagement.BudgetApp
-import ir.hamedan.budgetmanagement.data.security.RememberedLoginStore
 import ir.hamedan.budgetmanagement.data.preferences.SharedPreferences
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
-import ir.hamedan.budgetmanagement.utils.LocaleHelper
-import ir.hamedan.budgetmanagement.utils.NotificationHelper
+import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
+import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import kotlinx.coroutines.launch
 
 @Composable

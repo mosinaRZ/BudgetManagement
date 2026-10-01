@@ -5,7 +5,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import ir.hamedan.budgetmanagement.data.preferences.AppUsagePreferences
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
-import ir.hamedan.budgetmanagement.utils.NotificationHelper
+import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import java.util.concurrent.TimeUnit
 
 class InactivityReminderWorker(

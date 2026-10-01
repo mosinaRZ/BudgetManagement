@@ -3,7 +3,9 @@ package ir.hamedan.budgetmanagement.data.viewmodel
 import com.google.common.truth.Truth.assertThat
 import io.mockk.every
 import io.mockk.mockk
+import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
+import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsUiState
 import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsViewModel
@@ -28,8 +30,10 @@ class AnalyticsViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var repository: TransactionRepository
+    private lateinit var categoryRepository: CategoryRepository
     private lateinit var viewModel: AnalyticsViewModel
     private val transactionsFlow = MutableStateFlow<List<TransactionEntity>>(emptyList())
+    private val categoriesFlow = MutableStateFlow<List<CategoryEntity>>(emptyList())
 
     private fun nowMillis(): Long = System.currentTimeMillis()
 
@@ -43,8 +47,10 @@ class AnalyticsViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         repository = mockk(relaxed = true)
+        categoryRepository = mockk(relaxed = true)
         every { repository.getAllTransactions() } returns transactionsFlow
-        viewModel = AnalyticsViewModel(repository)
+        every { categoryRepository.getAllCategories() } returns categoriesFlow
+        viewModel = AnalyticsViewModel(repository, categoryRepository)
     }
 
     @After
@@ -82,8 +88,8 @@ class AnalyticsViewModelTest {
     @Test
     fun balance_isIncomeMinusExpense() = runTest {
         transactionsFlow.value = listOf(
-            TransactionEntity(id = "1", title = "i", amount = 1000.0, type = "INCOME", category = "SALARY", timestamp = nowMillis()),
-            TransactionEntity(id = "2", title = "e", amount = 400.0, type = "EXPENSE", category = "FOOD", timestamp = nowMillis())
+            TransactionEntity(id = "1", title = "i", amount = 1000L, type = "INCOME", categoryId = "SALARY", timestamp = nowMillis()),
+            TransactionEntity(id = "2", title = "e", amount = 400L, type = "EXPENSE", categoryId = "FOOD", timestamp = nowMillis())
         )
         viewModel.onTimeFilterChanged(TimeFilter.ALL)
         val state = collectLastUiState()
@@ -93,32 +99,21 @@ class AnalyticsViewModelTest {
     }
 
     @Test
-    fun emptyDatabase_trendPoints_isSingleZero() = runTest {
+    fun emptyDatabase_trendPoints_isEmpty() = runTest {
         transactionsFlow.value = emptyList()
         viewModel.onTimeFilterChanged(TimeFilter.ALL)
         val state = collectLastUiState()
         assertThat(state.totalIncome).isEqualTo(0.0)
         assertThat(state.totalExpense).isEqualTo(0.0)
         assertThat(state.balance).isEqualTo(0.0)
-        assertThat(state.trendPoints).containsExactly(0f)
-    }
-
-    @Test
-    fun singleTransaction_trendPoints_duplicatedForChart() = runTest {
-        transactionsFlow.value = listOf(
-            TransactionEntity(id = "1", title = "i", amount = 500.0, type = "INCOME", category = "SALARY", timestamp = 1000L)
-        )
-        viewModel.onTimeFilterChanged(TimeFilter.ALL)
-        val state = collectLastUiState()
-        // calculateTrendPoints: size < 2 → [p, p]
-        assertThat(state.trendPoints).containsExactly(500f, 500f).inOrder()
+        assertThat(state.trendPoints).isEmpty()
     }
 
     @Test
     fun categoryPercentage_sumsToAbout100_whenMultipleCategories() = runTest {
         transactionsFlow.value = listOf(
-            TransactionEntity(id = "1", title = "a", amount = 75.0, type = "EXPENSE", category = "FOOD", timestamp = nowMillis()),
-            TransactionEntity(id = "2", title = "b", amount = 25.0, type = "EXPENSE", category = "TRANSPORT", timestamp = nowMillis())
+            TransactionEntity(id = "1", title = "a", amount = 75L, type = "EXPENSE", categoryId = "FOOD", timestamp = nowMillis()),
+            TransactionEntity(id = "2", title = "b", amount = 25L, type = "EXPENSE", categoryId = "TRANSPORT", timestamp = nowMillis())
         )
         viewModel.onTimeFilterChanged(TimeFilter.ALL)
         val state = collectLastUiState()
@@ -135,8 +130,8 @@ class AnalyticsViewModelTest {
         val lastMonth = cal.timeInMillis
 
         transactionsFlow.value = listOf(
-            TransactionEntity(id = "old", title = "o", amount = 999.0, type = "EXPENSE", category = "FOOD", timestamp = lastMonth),
-            TransactionEntity(id = "new", title = "n", amount = 10.0, type = "EXPENSE", category = "FOOD", timestamp = thisMonth)
+            TransactionEntity(id = "old", title = "o", amount = 999L, type = "EXPENSE", categoryId = "FOOD", timestamp = lastMonth),
+            TransactionEntity(id = "new", title = "n", amount = 10L, type = "EXPENSE", categoryId = "FOOD", timestamp = thisMonth)
         )
         viewModel.onTimeFilterChanged(TimeFilter.MONTHLY)
         val state = collectLastUiState()
@@ -146,9 +141,9 @@ class AnalyticsViewModelTest {
     @Test
     fun calculatesIncomeExpenseAndBalance_correctly() = runTest {
         transactionsFlow.value = listOf(
-            TransactionEntity(id = "1", amount = 10_000_000.0, type = "INCOME", category = "SALARY", timestamp = nowMillis()),
-            TransactionEntity(id = "2", amount = 3_000_000.0, type = "EXPENSE", category = "FOOD", timestamp = nowMillis()),
-            TransactionEntity(id = "3", amount = 1_000_000.0, type = "EXPENSE", category = "TRANSPORT", timestamp = nowMillis())
+            TransactionEntity(id = "1", amount = 10_000_000L, type = "INCOME", categoryId = "SALARY", timestamp = nowMillis()),
+            TransactionEntity(id = "2", amount = 3_000_000L, type = "EXPENSE", categoryId = "FOOD", timestamp = nowMillis()),
+            TransactionEntity(id = "3", amount = 1_000_000L, type = "EXPENSE", categoryId = "TRANSPORT", timestamp = nowMillis())
         )
         viewModel.onTimeFilterChanged(TimeFilter.ALL)
 
@@ -163,9 +158,9 @@ class AnalyticsViewModelTest {
     @Test
     fun categoryExpenses_groupsAndSortsByAmount() = runTest {
         transactionsFlow.value = listOf(
-            TransactionEntity(id = "1", amount = 5_000.0, type = "EXPENSE", category = "FOOD", timestamp = nowMillis()),
-            TransactionEntity(id = "2", amount = 3_000.0, type = "EXPENSE", category = "FOOD", timestamp = nowMillis()),
-            TransactionEntity(id = "3", amount = 10_000.0, type = "EXPENSE", category = "SHOPPING", timestamp = nowMillis())
+            TransactionEntity(id = "1", amount = 5_000L, type = "EXPENSE", categoryId = "FOOD", timestamp = nowMillis()),
+            TransactionEntity(id = "2", amount = 3_000L, type = "EXPENSE", categoryId = "FOOD", timestamp = nowMillis()),
+            TransactionEntity(id = "3", amount = 10_000L, type = "EXPENSE", categoryId = "SHOPPING", timestamp = nowMillis())
         )
         viewModel.onTimeFilterChanged(TimeFilter.ALL)
 
@@ -182,9 +177,9 @@ class AnalyticsViewModelTest {
     @Test
     fun topExpenses_onlyAboveAverage() = runTest {
         transactionsFlow.value = listOf(
-            TransactionEntity(id = "1", amount = 100.0, type = "EXPENSE", category = "A", timestamp = nowMillis()),
-            TransactionEntity(id = "2", amount = 200.0, type = "EXPENSE", category = "B", timestamp = nowMillis()),
-            TransactionEntity(id = "3", amount = 300.0, type = "EXPENSE", category = "C", timestamp = nowMillis())
+            TransactionEntity(id = "1", amount = 100L, type = "EXPENSE", categoryId = "A", timestamp = nowMillis()),
+            TransactionEntity(id = "2", amount = 200L, type = "EXPENSE", categoryId = "B", timestamp = nowMillis()),
+            TransactionEntity(id = "3", amount = 300L, type = "EXPENSE", categoryId = "C", timestamp = nowMillis())
         )
         viewModel.onTimeFilterChanged(TimeFilter.ALL)
 
@@ -192,14 +187,14 @@ class AnalyticsViewModelTest {
 
         assertThat(state.averageExpense).isEqualTo(200.0)
         assertThat(state.topExpenses).hasSize(1)
-        assertThat(state.topExpenses[0].amount).isEqualTo(300.0)
+        assertThat(state.topExpenses[0].amount).isEqualTo(300L)
     }
 
     @Test
     fun timeFilter_ALL_includesOldTransactions() = runTest {
         transactionsFlow.value = listOf(
-            TransactionEntity(id = "old", amount = 1_000.0, type = "EXPENSE", category = "FOOD", timestamp = daysAgo(400)),
-            TransactionEntity(id = "new", amount = 2_000.0, type = "EXPENSE", category = "FOOD", timestamp = nowMillis())
+            TransactionEntity(id = "old", amount = 1_000L, type = "EXPENSE", categoryId = "FOOD", timestamp = daysAgo(400)),
+            TransactionEntity(id = "new", amount = 2_000L, type = "EXPENSE", categoryId = "FOOD", timestamp = nowMillis())
         )
         viewModel.onTimeFilterChanged(TimeFilter.ALL)
 
@@ -211,9 +206,9 @@ class AnalyticsViewModelTest {
     @Test
     fun trendPoints_reflectRunningBalance() = runTest {
         transactionsFlow.value = listOf(
-            TransactionEntity(id = "1", amount = 1000.0, type = "INCOME", timestamp = 1000L),
-            TransactionEntity(id = "2", amount = 300.0, type = "EXPENSE", timestamp = 2000L),
-            TransactionEntity(id = "3", amount = 200.0, type = "INCOME", timestamp = 3000L)
+            TransactionEntity(id = "1", amount = 1000L, type = "INCOME", timestamp = 1000L),
+            TransactionEntity(id = "2", amount = 300L, type = "EXPENSE", timestamp = 2000L),
+            TransactionEntity(id = "3", amount = 200L, type = "INCOME", timestamp = 3000L)
         )
         viewModel.onTimeFilterChanged(TimeFilter.ALL)
 

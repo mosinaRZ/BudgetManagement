@@ -59,6 +59,16 @@ class PaymentDateUtilsTest {
         assertThat(cal.get(Calendar.SECOND)).isEqualTo(0)
     }
 
+    @Test(expected = IllegalArgumentException::class)
+    fun calculateNextDueDate_rejectsInvalidDay() {
+        PaymentDateUtils.calculateNextDueDate(0)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun getNextMonthDueDate_rejectsInvalidDay() {
+        PaymentDateUtils.getNextMonthDueDate(System.currentTimeMillis(), 32)
+    }
+
     @Test
     fun getNextMonthDueDate_fromDecember_goesToNextYear() {
         val cal = Calendar.getInstance().apply {

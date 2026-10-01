@@ -48,6 +48,21 @@ object DateUtils {
         }
     }
 
+
+    /**
+     * Returns the calendar-day distance from today to the supplied timestamp.
+     * Using local dates avoids treating a 16-hour remainder as "0 days".
+     */
+    fun daysUntil(
+        timestampMillis: Long,
+        nowMillis: Long = System.currentTimeMillis(),
+        zoneId: ZoneId = ZoneId.systemDefault()
+    ): Long {
+        val today = Instant.ofEpochMilli(nowMillis).atZone(zoneId).toLocalDate()
+        val target = Instant.ofEpochMilli(timestampMillis).atZone(zoneId).toLocalDate()
+        return java.time.temporal.ChronoUnit.DAYS.between(today, target)
+    }
+
     fun getDaysInJalaliMonth(year: Int, month: Int): Int {
         return when (month) {
             in 1..6 -> 31

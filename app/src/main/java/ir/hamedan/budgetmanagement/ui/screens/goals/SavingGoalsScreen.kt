@@ -54,7 +54,7 @@ import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.StatusBarAuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
-import ir.hamedan.budgetmanagement.utils.LocaleHelper
+import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale

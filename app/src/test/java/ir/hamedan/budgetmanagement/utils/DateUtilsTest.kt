@@ -57,6 +57,24 @@ class DateUtilsTest {
     }
 
     @Test
+    fun daysUntil_usesCalendarDaysNotTwentyFourHourBlocks() {
+        val zone = ZoneId.systemDefault()
+        val now = LocalDate.of(2026, 9, 30).atTime(18, 0).atZone(zone).toInstant().toEpochMilli()
+        val tomorrow = LocalDate.of(2026, 10, 1).atTime(9, 0).atZone(zone).toInstant().toEpochMilli()
+
+        assertThat(DateUtils.daysUntil(tomorrow, now, zone)).isEqualTo(1L)
+    }
+
+    @Test
+    fun daysUntil_returnsNegativeForPastDate() {
+        val zone = ZoneId.systemDefault()
+        val now = LocalDate.of(2026, 9, 30).atStartOfDay(zone).toInstant().toEpochMilli()
+        val yesterday = LocalDate.of(2026, 9, 29).atStartOfDay(zone).toInstant().toEpochMilli()
+
+        assertThat(DateUtils.daysUntil(yesterday, now, zone)).isEqualTo(-1L)
+    }
+
+    @Test
     fun getFormattedHeaderDate_english_containsYear() {
         val result = DateUtils.getFormattedHeaderDate(isPersian = false)
         assertThat(result).contains("202") // سال میلادی فعلی

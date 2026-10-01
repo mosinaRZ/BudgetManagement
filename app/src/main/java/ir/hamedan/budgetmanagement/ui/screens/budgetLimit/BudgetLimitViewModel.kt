@@ -11,8 +11,9 @@ import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
-import ir.hamedan.budgetmanagement.utils.NotificationHelper
+import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import ir.hamedan.budgetmanagement.data.money.MoneyContract
+import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -122,7 +123,7 @@ class BudgetLimitViewModel(
 
             val category = expenseCategories.value.firstOrNull { it.title == categoryName }
             if (category == null) {
-                _errorMessage.emit(if (ir.hamedan.budgetmanagement.utils.LocaleHelper.getLanguage(context) == "fa") "دسته‌بندی انتخاب‌شده معتبر نیست." else "The selected category is not valid.")
+                _errorMessage.emit(if (LocaleHelper.getLanguage(context) == "fa") "دسته‌بندی انتخاب‌شده معتبر نیست." else "The selected category is not valid.")
                 return@launch
             }
             val duplicate = budgetLimitsWithSpent.value.any { existing ->
@@ -130,7 +131,7 @@ class BudgetLimitViewModel(
                         existing.entity.startDate <= adjustedEndDate && existing.entity.endDate >= startDate
             }
             if (duplicate) {
-                val isPersian = ir.hamedan.budgetmanagement.utils.LocaleHelper.getLanguage(context) == "fa"
+                val isPersian = LocaleHelper.getLanguage(context) == "fa"
                 _errorMessage.emit(if (isPersian) "برای این دسته‌بندی یک محدودیت با بازه هم‌پوشان از قبل وجود دارد." else "An overlapping budget limit already exists for this category.")
                 return@launch
             }

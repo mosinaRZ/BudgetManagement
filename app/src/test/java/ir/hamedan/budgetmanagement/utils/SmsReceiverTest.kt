@@ -17,6 +17,7 @@ import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.PendingTransactionRepository
 import ir.hamedan.budgetmanagement.di.AppContainer
+import ir.hamedan.budgetmanagement.platform.sms.SmsReceiver
 import kotlinx.coroutines.flow.flowOf
 import org.junit.After
 import org.junit.Before
@@ -29,7 +30,7 @@ import org.robolectric.annotation.Config
 /**
  * SmsReceiver is a thin orchestrator. Money logic lives in SmsParser (unit-tested).
  *
- * We only test early gates here. Do NOT mockkStatic(Telephony.Sms.Intents) —
+ * We only test early gates here. Do NOT mockkStatic(Telephony.Sms.Intents) â€”
  * MockK cannot redefine that Android framework class.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -65,7 +66,7 @@ class SmsReceiverTest {
 
         mockkObject(NotificationHelper)
         every {
-            NotificationHelper.send(any(), any(), any(), any(), any(), any(), any())
+            NotificationHelper.send(any(), any(), any(), any(), any(), any(), any(), any())
         } returns Unit
 
         mockkStatic(ContextCompat::class)

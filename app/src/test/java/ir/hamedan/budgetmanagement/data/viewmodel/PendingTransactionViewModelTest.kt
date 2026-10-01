@@ -17,7 +17,7 @@ import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.PendingTransactionRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.ui.screens.home.PendingTransactionViewModel
-import ir.hamedan.budgetmanagement.utils.NotificationHelper
+import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
@@ -45,7 +45,7 @@ class PendingTransactionViewModelTest {
         id = "pt1",
         rawMessage = "برداشت مبلغ 150000 تومان",
         senderAddress = "Bank",
-        amount = 150_000.0,
+        amount = 150_000L,
         isAmountDetected = true,
         type = "EXPENSE",
         isTypeDetected = true,
@@ -69,7 +69,7 @@ class PendingTransactionViewModelTest {
 
         mockkObject(NotificationHelper)
         every {
-            NotificationHelper.send(any(), any(), any(), any(), any(), any(), any())
+            NotificationHelper.send(any(), any(), any(), any(), any(), any(), any(), any())
         } just Runs
 
         viewModel = PendingTransactionViewModel(
@@ -95,8 +95,8 @@ class PendingTransactionViewModelTest {
         viewModel.confirmTransaction(
             pending = samplePending,
             title = "خرید",
-            amount = 150_000.0,
-            category = "FOOD",
+            amount = 150_000L,
+            categoryId = "FOOD",
             isExpense = true,
             note = "از پیامک"
         )
@@ -106,7 +106,7 @@ class PendingTransactionViewModelTest {
             transactionRepository.insertTransaction(
                 match {
                     it.title == "خرید" &&
-                            it.amount == 150_000.0 &&
+                            it.amount == 150_000L &&
                             it.category == "FOOD" &&
                             it.type == "EXPENSE" &&
                             it.note == "از پیامک" &&
@@ -125,8 +125,8 @@ class PendingTransactionViewModelTest {
         viewModel.confirmTransaction(
             pending = samplePending,
             title = "واریز",
-            amount = 2_000_000.0,
-            category = "SALARY",
+            amount = 2_000_000L,
+            categoryId = "SALARY",
             isExpense = false
         )
         advanceUntilIdle()
@@ -148,8 +148,8 @@ class PendingTransactionViewModelTest {
         viewModel.confirmTransaction(
             pending = pending,
             title = "x",
-            amount = 1.0,
-            category = "FOOD",
+            amount = 1L,
+            categoryId = "FOOD",
             isExpense = true
         )
         advanceUntilIdle()
@@ -167,8 +167,8 @@ class PendingTransactionViewModelTest {
         viewModel.confirmTransaction(
             pending = samplePending,
             title = "خرید",
-            amount = 10.0,
-            category = "FOOD",
+            amount = 10L,
+            categoryId = "FOOD",
             isExpense = true
         )
         advanceUntilIdle()

@@ -5,16 +5,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import ir.hamedan.budgetmanagement.ui.screens.add.AddViewModel
 import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsViewModel
-import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitViewModel
 import ir.hamedan.budgetmanagement.ui.screens.categories.CategoriesViewModel
 import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsViewModel
 import ir.hamedan.budgetmanagement.ui.screens.devices.DevicesViewModel
 import ir.hamedan.budgetmanagement.domain.usecase.SavingGoalUseCase
 import ir.hamedan.budgetmanagement.domain.usecase.DebtCreditUseCase
+import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitViewModel
 import ir.hamedan.budgetmanagement.ui.screens.home.PendingTransactionViewModel
 import ir.hamedan.budgetmanagement.ui.screens.notification.NotificationViewModel
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
-import ir.hamedan.budgetmanagement.ui.viewmodels.DebtCreditViewModel
+import ir.hamedan.budgetmanagement.ui.screens.debtCredit.DebtCreditViewModel
 
 /**
  * Central ViewModel factory.

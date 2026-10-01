@@ -9,7 +9,7 @@ import ir.hamedan.budgetmanagement.data.preferences.AppUsagePreferences
 import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
 import ir.hamedan.budgetmanagement.data.preferences.CategorySeedPreferences
 import ir.hamedan.budgetmanagement.di.AppContainer
-import ir.hamedan.budgetmanagement.utils.AppNotificationManager
+import ir.hamedan.budgetmanagement.data.notification.AppNotificationManager
 import ir.hamedan.budgetmanagement.worker.InactivityReminderWorker
 import ir.hamedan.budgetmanagement.worker.MonthlyGoalDepositWorker
 import kotlinx.coroutines.CoroutineScope

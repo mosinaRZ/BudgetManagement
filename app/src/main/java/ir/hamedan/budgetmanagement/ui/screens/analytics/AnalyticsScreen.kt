@@ -55,7 +55,7 @@ import ir.hamedan.budgetmanagement.ui.components.ColumnBarChartCard
 import ir.hamedan.budgetmanagement.ui.components.appSkeletonShimmer
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TimeFilter
 import ir.hamedan.budgetmanagement.utils.DateUtils
-import ir.hamedan.budgetmanagement.utils.LocaleHelper
+import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
 import java.text.NumberFormat
 import java.time.LocalDate

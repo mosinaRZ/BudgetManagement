@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import android.content.Context
 import ir.hamedan.budgetmanagement.data.network.ApiException
 import ir.hamedan.budgetmanagement.data.network.DeviceApi
-import ir.hamedan.budgetmanagement.utils.LocaleHelper
+import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.data.security.DeviceIdentityStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow

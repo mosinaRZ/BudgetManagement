@@ -15,7 +15,7 @@ import io.mockk.verify
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.ui.screens.categories.CategoriesViewModel
-import ir.hamedan.budgetmanagement.utils.NotificationHelper
+import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
@@ -61,7 +61,7 @@ class CategoriesViewModelTest {
 
         mockkObject(NotificationHelper)
         every {
-            NotificationHelper.send(any(), any(), any(), any(), any(), any(), any())
+            NotificationHelper.send(any(), any(), any(), any(), any(), any(), any(), any())
         } just Runs
 
         viewModel = CategoriesViewModel(
@@ -104,7 +104,7 @@ class CategoriesViewModelTest {
 
     @Test
     fun addCategory_expense_callsInsertWithCorrectFields() = runTest(testDispatcher) {
-        coEvery { categoryRepository.insertCategory(any()) } returns 1L
+        coEvery { categoryRepository.insertCategory(any()) } just Runs
 
         viewModel.addCategory(title = "ورزش", iconEmoji = "🏋️", isExpense = true)
 
@@ -121,7 +121,7 @@ class CategoriesViewModelTest {
 
     @Test
     fun addCategory_income_setsIsExpenseFalse() = runTest(testDispatcher) {
-        coEvery { categoryRepository.insertCategory(any()) } returns 1L
+        coEvery { categoryRepository.insertCategory(any()) } just Runs
 
         viewModel.addCategory(title = "پاداش", iconEmoji = "🎁", isExpense = false)
 
@@ -134,13 +134,14 @@ class CategoriesViewModelTest {
 
     @Test
     fun addCategory_sendsSuccessNotification() = runTest(testDispatcher) {
-        coEvery { categoryRepository.insertCategory(any()) } returns 1L
+        coEvery { categoryRepository.insertCategory(any()) } just Runs
 
         viewModel.addCategory(title = "ورزش", iconEmoji = "🏋️", isExpense = true)
 
         verify(timeout = 3_000) {
             NotificationHelper.send(
                 context = context,
+                notificationType = any(),
                 type = "SUCCESS",
                 titleFa = any(),
                 titleEn = any(),
@@ -179,6 +180,7 @@ class CategoriesViewModelTest {
         verify(timeout = 3_000) {
             NotificationHelper.send(
                 context = context,
+                notificationType = any(),
                 type = "WARNING",
                 titleFa = any(),
                 titleEn = any(),

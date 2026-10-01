@@ -3,10 +3,9 @@ package ir.hamedan.budgetmanagement.ui.screens.notification
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.NotificationEntity
 import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
-import ir.hamedan.budgetmanagement.utils.AppNotificationManager
+import ir.hamedan.budgetmanagement.data.notification.AppNotificationManager
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn

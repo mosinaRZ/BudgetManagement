@@ -1,8 +1,9 @@
-package ir.hamedan.budgetmanagement.utils
+package ir.hamedan.budgetmanagement.platform.biometric
 
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 
 object BiometricPromptManager {
     fun showBiometricPrompt(

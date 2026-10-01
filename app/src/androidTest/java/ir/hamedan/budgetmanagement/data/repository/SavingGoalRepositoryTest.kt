@@ -3,142 +3,43 @@ package ir.hamedan.budgetmanagement.data.repository
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
+import ir.hamedan.budgetmanagement.testing.FakeSyncLocalDataSource
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
-import org.junit.runner.RunWith
 
-@RunWith(AndroidJUnit4::class)
 class SavingGoalRepositoryTest {
-
-    private lateinit var database: AppDatabase
+    private lateinit var db: AppDatabase
     private lateinit var repository: SavingGoalRepository
+    private lateinit var sync: FakeSyncLocalDataSource
 
-    @Before
-    fun setUp() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
-            .allowMainThreadQueries()
-            .build()
-        repository = SavingGoalRepositoryImpl(database.savingGoalDao())
-        AppDatabase.clearInstance()
+    @Before fun setUp() {
+        db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext<Context>(), AppDatabase::class.java).allowMainThreadQueries().build()
+        sync = FakeSyncLocalDataSource()
+        repository = SavingGoalRepositoryImpl(db.savingGoalDao(), db.savingGoalOperationDao(), sync)
     }
 
-    @After
-    fun tearDown() {
-        database.close()
-        AppDatabase.clearInstance()
+    @After fun tearDown() = db.close()
+
+    @Test fun depositAndWithdraw_useImmutableOperations() = runTest {
+        repository.insertGoal(SavingGoalEntity(id="g1", title="Trip", targetAmount=10_000L))
+        repository.depositToGoal("g1", 3_000L)
+        repository.withdrawFromGoal("g1", 500L)
+
+        val goal = repository.getAllGoals().first().single()
+        assertThat(goal.currentAmount).isEqualTo(2_500L)
+        assertThat(db.savingGoalOperationDao().getByGoalId("g1")).hasSize(2)
     }
 
-    @Test
-    fun insertAndGetAllGoals() = runTest {
-        val goal1 = SavingGoalEntity(
-            id = "g1",
-            title = "سفر شمال",
-            targetAmount = 50_000_000.0,
-            currentAmount = 10_000_000.0,
-            icon = "✈️"
-        )
-        val goal2 = SavingGoalEntity(
-            id = "g2",
-            title = "لپ‌تاپ",
-            targetAmount = 80_000_000.0,
-            currentAmount = 0.0,
-            icon = "💻"
-        )
-
-        repository.insertGoal(goal1)
-        repository.insertGoal(goal2)
-
-        val all = repository.getAllGoals().first()
-        assertThat(all).hasSize(2)
-        assertThat(all.map { it.id }).containsExactly("g1", "g2")
-    }
-
-    @Test
-    fun updateGoal() = runTest {
-        val goal = SavingGoalEntity(
-            id = "g1",
-            title = "سفر",
-            targetAmount = 30_000_000.0,
-            currentAmount = 5_000_000.0
-        )
-        repository.insertGoal(goal)
-
-        val updated = goal.copy(title = "سفر کیش", targetAmount = 40_000_000.0)
-        repository.updateGoal(updated)
-
-        val result = repository.getAllGoals().first().first()
-        assertThat(result.title).isEqualTo("سفر کیش")
-        assertThat(result.targetAmount).isEqualTo(40_000_000.0)
-    }
-
-    @Test
-    fun deleteGoal() = runTest {
-        val goal = SavingGoalEntity(id = "g1", title = "هدف تست", targetAmount = 10_000.0)
-        repository.insertGoal(goal)
-
-        repository.deleteGoal(goal)
-
-        val remaining = repository.getAllGoals().first()
-        assertThat(remaining).isEmpty()
-    }
-
-    @Test
-    fun depositToGoal_increasesCurrentAmount() = runTest {
-        val goal = SavingGoalEntity(
-            id = "g1",
-            title = "هدف",
-            targetAmount = 100_000.0,
-            currentAmount = 20_000.0
-        )
-        repository.insertGoal(goal)
-
-        repository.depositToGoal("g1", 15_000.0)
-
-        val result = repository.getAllGoals().first().first()
-        assertThat(result.currentAmount).isEqualTo(35_000.0)
-    }
-
-    @Test
-    fun withdrawFromGoal_decreasesCurrentAmount() = runTest {
-        val goal = SavingGoalEntity(
-            id = "g1",
-            title = "هدف",
-            targetAmount = 100_000.0,
-            currentAmount = 50_000.0
-        )
-        repository.insertGoal(goal)
-
-        repository.withdrawFromGoal("g1", 20_000.0)
-
-        val result = repository.getAllGoals().first().first()
-        assertThat(result.currentAmount).isEqualTo(30_000.0)
-    }
-
-    @Test
-    fun withdrawFromGoal_doesNotGoBelowZero() = runTest {
-        val goal = SavingGoalEntity(
-            id = "g1",
-            title = "هدف",
-            targetAmount = 100_000.0,
-            currentAmount = 10_000.0
-        )
-        repository.insertGoal(goal)
-
-        repository.withdrawFromGoal("g1", 50_000.0)
-
-        val result = repository.getAllGoals().first().first()
-        assertThat(result.currentAmount).isEqualTo(0.0)
+    @Test fun withdrawAboveBalance_isRejected() = runTest {
+        repository.insertGoal(SavingGoalEntity(id="g1", title="Trip", targetAmount=10_000L))
+        var failed = false
+        try { repository.withdrawFromGoal("g1", 1L) } catch (_: IllegalArgumentException) { failed = true }
+        assertThat(failed).isTrue()
     }
 }

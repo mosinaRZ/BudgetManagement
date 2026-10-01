@@ -1,4 +1,4 @@
-package ir.hamedan.budgetmanagement.utils
+package ir.hamedan.budgetmanagement.platform.locale
 
 import android.content.Context
 import android.content.res.Configuration

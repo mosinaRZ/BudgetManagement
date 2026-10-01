@@ -20,7 +20,10 @@ class DebtCreditUseCase(
         require(type == "DEBT" || type == "CREDIT") { "Invalid debt/credit type." }
         require(personName.isNotBlank()) { "Person name is required." }
         require(totalAmount > 0.0) { "Total amount must be greater than zero." }
-        if (isMonthly) require(monthlyAmount > 0.0) { "Monthly amount must be greater than zero." }
+        if (isMonthly) {
+            require(monthlyAmount > 0.0) { "Monthly amount must be greater than zero." }
+            require(dueDay in 1..31) { "Due day must be between 1 and 31." }
+        }
         val existing = id?.let { debtCreditRepository.getById(it) }
         val dueDate = if (isMonthly) calculateExpirationDate(totalAmount, monthlyAmount, dueDay) else oneTimeDueDateMillis
         val category = categoryRepository.getAllCategories().first().firstOrNull { it.title == if (type == "DEBT") "DEBT_CREDIT_PAYABLE" else "DEBT_CREDIT_RECEIVABLE" }
@@ -79,7 +82,10 @@ class DebtCreditUseCase(
         transactionRepository.insertTransaction(TransactionEntity(title = if (!reverse) { if (isDebt) "پرداخت بدهی به: ${item.personName}" else "دریافت طلب از: ${item.personName}" } else { if (isDebt) "اصلاح/برداشت از پرداخت بدهی: ${item.personName}" else "اصلاح/برداشت از دریافت طلب: ${item.personName}" }, amount = amount, categoryId = category.id, type = type, note = "ثبت و اصلاح واریزی بدهی و طلب"))
     }
 
-    private fun calculateExpirationDate(totalAmount: Double, monthlyAmount: Double, dueDay: Int): Long {
+    fun calculateExpirationDate(totalAmount: Double, monthlyAmount: Double, dueDay: Int): Long {
+        require(totalAmount > 0.0) { "Total amount must be greater than zero." }
+        require(monthlyAmount > 0.0) { "Monthly amount must be greater than zero." }
+        require(dueDay in 1..31) { "Due day must be between 1 and 31." }
         val monthsRequired = ceil(totalAmount / monthlyAmount).toInt().coerceAtLeast(1)
         return Calendar.getInstance().apply {
             if (get(Calendar.DAY_OF_MONTH) > dueDay) add(Calendar.MONTH, 1)

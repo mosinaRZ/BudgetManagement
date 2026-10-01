@@ -11,8 +11,8 @@ import kotlinx.coroutines.flow.first
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepository
 import ir.hamedan.budgetmanagement.domain.usecase.SavingGoalUseCase
-import ir.hamedan.budgetmanagement.utils.LocaleHelper
-import ir.hamedan.budgetmanagement.utils.NotificationHelper
+import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
+import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow

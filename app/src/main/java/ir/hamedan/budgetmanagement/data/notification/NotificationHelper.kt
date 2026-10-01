@@ -1,12 +1,10 @@
-package ir.hamedan.budgetmanagement.utils
+package ir.hamedan.budgetmanagement.data.notification
 
 import android.content.Context
 import ir.hamedan.budgetmanagement.BudgetApp
-import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.models.NotificationEntity
 import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
-import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
