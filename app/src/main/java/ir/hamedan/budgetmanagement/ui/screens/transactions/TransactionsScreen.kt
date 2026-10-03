@@ -105,6 +105,7 @@ fun TransactionsScreen(
     var showFilterSheet by remember { mutableStateOf(false) }
     var transactionToDelete by remember { mutableStateOf<TransactionEntity?>(null) }
     var transactionToEdit by remember { mutableStateOf<TransactionEntity?>(null) }
+    var transactionToShare by remember { mutableStateOf<TransactionEntity?>(null) }
 
     val numberFormatter = remember(isPersian) {
         NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
@@ -276,6 +277,7 @@ fun TransactionsScreen(
                                         ?: StringMapper.getCategoryName(transaction.categoryId, isPersian),
                                     categoryIcon = categoryInfoById[transaction.categoryId]?.second ?: "📁",
                                     onEdit = { transactionToEdit = transaction },
+                                    onShare = { transactionToShare = transaction },
                                     onDelete = { transactionToDelete = transaction }
                                 )
                             }
@@ -291,6 +293,7 @@ fun TransactionsScreen(
                                     ?: StringMapper.getCategoryName(transaction.categoryId, isPersian),
                                 categoryIcon = categoryInfoById[transaction.categoryId]?.second ?: "📁",
                                 onEdit = { transactionToEdit = transaction },
+                                onShare = { transactionToShare = transaction },
                                 onDelete = { transactionToDelete = transaction }
                             )
                         }
@@ -514,6 +517,19 @@ fun TransactionsScreen(
                     viewModel.updateTransaction(updatedTx)
                     transactionToEdit = null
                 }
+            )
+        }
+
+        // Share-as-image sheet (preview, background picker, save / share)
+        transactionToShare?.let { tx ->
+            TransactionShareSheet(
+                transaction = tx,
+                categoryTitle = categoryInfoById[tx.categoryId]?.first
+                    ?: StringMapper.getCategoryName(tx.categoryId, isPersian),
+                categoryEmoji = categoryInfoById[tx.categoryId]?.second ?: "📁",
+                currencyUnit = currencyUnit,
+                isPersian = isPersian,
+                onDismiss = { transactionToShare = null }
             )
         }
 
@@ -1555,6 +1571,7 @@ private fun TransactionRow(
     categoryTitle: String,
     categoryIcon: String,
     onEdit: () -> Unit,
+    onShare: () -> Unit,
     onDelete: () -> Unit
 ) {
     val rowShape = RoundedCornerShape(20.dp)
@@ -1562,7 +1579,8 @@ private fun TransactionRow(
     val accent = if (isExpense) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     var isRevealed by remember { mutableStateOf(false) }
 
-    val revealOffsetDp = if (isPersian) 120.dp else (-120).dp
+    // Three action buttons (share / edit / delete) need a wider reveal than the old two.
+    val revealOffsetDp = if (isPersian) 152.dp else (-152).dp
     val animatedOffset by animateDpAsState(
         targetValue = if (isRevealed) revealOffsetDp else 0.dp,
         label = "RevealAnimation"
@@ -1602,11 +1620,30 @@ private fun TransactionRow(
         ) {
             IconButton(
                 onClick = {
+                    onShare()
+                    isRevealed = false
+                },
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.14f), CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = if (isPersian) "اشتراک‌گذاری" else "Share",
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            IconButton(
+                onClick = {
                     onEdit()
                     isRevealed = false
                 },
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(40.dp)
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape)
             ) {
                 Icon(
@@ -1617,7 +1654,7 @@ private fun TransactionRow(
                 )
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(8.dp))
 
             IconButton(
                 onClick = {
@@ -1625,7 +1662,7 @@ private fun TransactionRow(
                     isRevealed = false
                 },
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(40.dp)
                     .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f), CircleShape)
             ) {
                 Icon(
@@ -1636,7 +1673,7 @@ private fun TransactionRow(
                 )
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(8.dp))
         }
 
         Row(

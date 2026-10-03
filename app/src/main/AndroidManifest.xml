@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.RECEIVE_SMS"/>
     <uses-permission android:name="android.permission.READ_SMS"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!--  فقط برای ذخیره تصویر تراکنش در گالری روی اندروید ۹ و پایین‌تر؛ از اندروید ۱۰ به بعد نیازی نیست  -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>
     <!--  🚀 اعلام می‌کنیم که قابلیت تلفن/پیامک اختیاریه، نه الزامی  -->
     <!--  بدون این تگ، گوگل‌پلی برنامه رو روی گوشی‌ها/تبلت‌های بدون سیم‌کارت اصلاً نمایش نمی‌ده  -->
     <uses-feature android:name="android.hardware.telephony" android:required="false"/>
