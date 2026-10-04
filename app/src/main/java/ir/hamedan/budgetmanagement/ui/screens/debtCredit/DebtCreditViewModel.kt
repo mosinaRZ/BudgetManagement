@@ -51,13 +51,44 @@ class DebtCreditViewModel(
     private val _errorMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val errorMessage: SharedFlow<String> = _errorMessage
 
+    fun findNameMatches(personName: String): List<DebtCreditEntity> {
+        val normalizedName = personName.trim()
+        if (normalizedName.isBlank()) return emptyList()
+        return debtCreditList.value.filter {
+            it.personName.trim().equals(normalizedName, ignoreCase = true)
+        }
+    }
+
     fun saveOrUpdate(
         id: String? = null, type: String, personName: String, totalAmount: Double,
         isMonthly: Boolean, monthlyAmount: Double, dueDay: Int, oneTimeDueDateMillis: Long,
-        note: String?, addToBalance: Boolean = true
+        note: String?, addToBalance: Boolean = true, forceDuplicateName: Boolean = false
     ) {
         viewModelScope.launch(ioDispatcher) {
             val isEdit = id != null
+            val normalizedName = personName.trim()
+            val normalizedNote = note?.trim().orEmpty()
+            val totalAmountStored = ir.hamedan.budgetmanagement.data.money.MoneyContract.fromInput(totalAmount)
+            val monthlyAmountStored = if (isMonthly) ir.hamedan.budgetmanagement.data.money.MoneyContract.fromInput(monthlyAmount) else 0L
+            val duplicate = !forceDuplicateName && debtCreditList.value.any { existing ->
+                existing.id != id &&
+                        existing.type == type &&
+                        existing.personName.trim().equals(normalizedName, ignoreCase = true) &&
+                        existing.totalAmount == totalAmountStored &&
+                        existing.isMonthly == isMonthly &&
+                        existing.monthlyAmount == monthlyAmountStored &&
+                        (!isMonthly || existing.dueDay == dueDay) &&
+                        (isMonthly || existing.dueDateMillis == oneTimeDueDateMillis) &&
+                        existing.note.orEmpty().trim().equals(normalizedNote, ignoreCase = true)
+            }
+            if (duplicate) {
+                val isPersian = LocaleHelper.getLanguage(context) == "fa"
+                _errorMessage.emit(
+                    if (isPersian) "یک بدهی/طلب با همین نام و اطلاعات از قبل ثبت شده است."
+                    else "A debt/receivable with the same name and details already exists."
+                )
+                return@launch
+            }
             if (!isEdit && type == "CREDIT" && addToBalance) {
                 val currentBalance = transactionRepository.getCurrentBalance()
                 if (currentBalance < ir.hamedan.budgetmanagement.data.money.MoneyContract.fromInput(

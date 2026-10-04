@@ -56,6 +56,7 @@ import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.ui.screens.add.ThousandsSeparatorTransformation
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
 import ir.hamedan.budgetmanagement.utils.DateUtils
+import ir.hamedan.budgetmanagement.utils.CategorySuggestionHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -1127,6 +1128,8 @@ private fun EditTransactionBottomSheet(
     var note by remember { mutableStateOf(transaction.note ?: "") }
     var category by remember { mutableStateOf(transaction.categoryId) }
     var type by remember { mutableStateOf(transaction.type) } // "EXPENSE" or "INCOME"
+    var userManuallySelectedCategory by remember { mutableStateOf(false) }
+    var suggestionRequestedAfterTypeChange by remember { mutableStateOf(false) }
 
     val maxTitleLength = 40
     val maxDigitsLength = 12
@@ -1153,8 +1156,20 @@ private fun EditTransactionBottomSheet(
 
     val selectedCategoryObj = currentCategories.find { it.id == category }
 
+    fun trySuggestCategory(inputTitle: String): Boolean {
+        if (userManuallySelectedCategory) return false
+        val suggestedTitle = CategorySuggestionHelper.suggestCategory(inputTitle, currentCategories, isPersian) ?: return false
+        val suggested = currentCategories.firstOrNull { it.title == suggestedTitle } ?: return false
+        category = suggested.id
+        categoryError = false
+        return true
+    }
+
     LaunchedEffect(type, currentCategories) {
-        if (currentCategories.isNotEmpty() && currentCategories.none { it.id == category }) {
+        val wasSuggested = if (suggestionRequestedAfterTypeChange) {
+            trySuggestCategory(title).also { suggestionRequestedAfterTypeChange = false }
+        } else false
+        if (!wasSuggested && currentCategories.isNotEmpty() && currentCategories.none { it.id == category }) {
             category = currentCategories.first().id
         }
     }
@@ -1208,7 +1223,12 @@ private fun EditTransactionBottomSheet(
                     .padding(4.dp)
             ) {
                 Button(
-                    onClick = { type = "EXPENSE" },
+                    onClick = {
+                        type = "EXPENSE"
+                        userManuallySelectedCategory = false
+                        category = ""
+                        suggestionRequestedAfterTypeChange = true
+                    },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (type == "EXPENSE") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surfaceVariant,
@@ -1220,7 +1240,12 @@ private fun EditTransactionBottomSheet(
                 }
 
                 Button(
-                    onClick = { type = "INCOME" },
+                    onClick = {
+                        type = "INCOME"
+                        userManuallySelectedCategory = false
+                        category = ""
+                        suggestionRequestedAfterTypeChange = true
+                    },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (type == "INCOME") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
@@ -1241,6 +1266,7 @@ private fun EditTransactionBottomSheet(
                     if (input.length <= maxTitleLength) {
                         title = input
                         if (titleError) titleError = false
+                        trySuggestCategory(input)
                     }
                 },
                 label = { Text(if (isPersian) "عنوان تراکنش" else "Title") },
@@ -1253,6 +1279,7 @@ private fun EditTransactionBottomSheet(
                         onResult = { spoken ->
                             title = spoken.take(maxTitleLength)
                             if (titleError) titleError = false
+                            trySuggestCategory(title)
                         },
                         language = if (isPersian) "fa-IR" else "en-US"
                     )
@@ -1383,6 +1410,7 @@ private fun EditTransactionBottomSheet(
                                 },
                                 onClick = {
                                     category = catItem.id
+                                    userManuallySelectedCategory = true
                                     isCategoryDropdownExpanded = false
                                     categoryError = false
                                 },

@@ -88,6 +88,7 @@ fun DebtCreditScreen(
     var itemForSettlement by remember { mutableStateOf<DebtCreditEntity?>(null) }
 
     var pendingSaveData by remember { mutableStateOf<PendingSaveData?>(null) }
+    var pendingDuplicateData by remember { mutableStateOf<PendingSaveData?>(null) }
 
     Box(
         modifier = Modifier
@@ -424,7 +425,7 @@ fun DebtCreditScreen(
                         )
                         selectedItemForEdit = null
                     } else {
-                        pendingSaveData = PendingSaveData(
+                        val newData = PendingSaveData(
                             id = null,
                             type = type,
                             personName = personName,
@@ -433,11 +434,128 @@ fun DebtCreditScreen(
                             monthlyAmount = monthlyAmount,
                             dueDay = dueDay,
                             oneTimeDueDateMillis = oneTimeDueDateMillis,
-                            note = note
+                            note = note,
+                            confirmedDuplicateName = false
                         )
+                        val nameMatches = viewModel.findNameMatches(personName)
+                        if (nameMatches.isNotEmpty()) {
+                            pendingDuplicateData = newData
+                        } else {
+                            pendingSaveData = newData
+                        }
                     }
                 }
             )
+        }
+
+        pendingDuplicateData?.let { data ->
+            val matches = remember(data.personName, debtCreditList) {
+                viewModel.findNameMatches(data.personName)
+            }
+            val dialogShape = RoundedCornerShape(24.dp)
+            Dialog(onDismissRequest = { pendingDuplicateData = null }) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.96f), dialogShape)
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), dialogShape)
+                        .clip(dialogShape)
+                        .padding(24.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+
+                        Text(
+                            text = if (isPersian) "مورد مشابه پیدا شد" else "A similar record already exists",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Text(
+                            text = if (isPersian)
+                                "قبلاً یک یا چند بدهی/طلب با نام «${data.personName.trim()}» ثبت شده است. آیا مطمئن هستید که این مورد جدید است؟"
+                            else
+                                "One or more debt/credit records with the name '${data.personName.trim()}' already exist. Are you sure this is a new record?",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            matches.take(3).forEach { existing ->
+                                val remaining = (existing.totalAmount - existing.paidAmount).coerceAtLeast(0L)
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                                ) {
+                                    Column(Modifier.padding(12.dp)) {
+                                        Text(
+                                            text = if (existing.type == "DEBT") {
+                                                if (isPersian) "بدهی" else "Debt"
+                                            } else {
+                                                if (isPersian) "طلب" else "Credit"
+                                            },
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (existing.type == "DEBT") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(Modifier.height(3.dp))
+                                        Text(
+                                            text = if (isPersian) {
+                                                "مبلغ: ${NumberFormat.getNumberInstance(Locale("fa", "IR")).format(existing.totalAmount)} تومان • مانده: ${NumberFormat.getNumberInstance(Locale("fa", "IR")).format(remaining)} تومان"
+                                            } else {
+                                                "Amount: ${NumberFormat.getNumberInstance(Locale.US).format(existing.totalAmount)} Toman • Remaining: ${NumberFormat.getNumberInstance(Locale.US).format(remaining)} Toman"
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedButton(
+                                onClick = { pendingDuplicateData = null },
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Text(if (isPersian) "انصراف" else "Cancel", fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = {
+                                    pendingSaveData = data.copy(confirmedDuplicateName = true)
+                                    pendingDuplicateData = null
+                                },
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Text(if (isPersian) "بله، مطمئنم" else "Yes, continue", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         pendingSaveData?.let { data ->
@@ -522,7 +640,8 @@ fun DebtCreditScreen(
                                         dueDay = data.dueDay,
                                         oneTimeDueDateMillis = data.oneTimeDueDateMillis,
                                         note = data.note,
-                                        addToBalance = true
+                                        addToBalance = true,
+                                        forceDuplicateName = data.confirmedDuplicateName
                                     )
                                     pendingSaveData = null
                                     selectedItemForEdit = null
@@ -551,7 +670,8 @@ fun DebtCreditScreen(
                                         dueDay = data.dueDay,
                                         oneTimeDueDateMillis = data.oneTimeDueDateMillis,
                                         note = data.note,
-                                        addToBalance = false
+                                        addToBalance = false,
+                                        forceDuplicateName = data.confirmedDuplicateName
                                     )
                                     pendingSaveData = null
                                     selectedItemForEdit = null
@@ -845,7 +965,8 @@ private data class PendingSaveData(
     val monthlyAmount: Double,
     val dueDay: Int,
     val oneTimeDueDateMillis: Long,
-    val note: String?
+    val note: String?,
+    val confirmedDuplicateName: Boolean = false
 )
 
 @Composable

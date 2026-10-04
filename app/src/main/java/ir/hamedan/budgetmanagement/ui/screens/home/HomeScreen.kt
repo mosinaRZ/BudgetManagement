@@ -528,7 +528,7 @@ fun HomeScreen(
                                 Text(text = if (isPersian) "درآمد" else "Income", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Spacer(Modifier.height(8.dp))
                                 val displayIncome = if (currencyUnit == "IRR") income * 10L else income
-                                val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")
+                                val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "R" else "T")
                                 val formattedIncome = numberFormatter.format(displayIncome)
                                 AnimatedContent(
                                     targetState = isAmountsHidden,
@@ -567,7 +567,7 @@ fun HomeScreen(
                                 Text(text = if (isPersian) "هزینه" else "Expense", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Spacer(Modifier.height(8.dp))
                                 val displayExpense = if (currencyUnit == "IRR") expense * 10L else expense
-                                val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")
+                                val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "R" else "T")
                                 val formattedExpense = numberFormatter.format(displayExpense)
                                 AnimatedContent(
                                     targetState = isAmountsHidden,
@@ -774,6 +774,23 @@ fun HomeScreen(
                 item {
                     val dueShape = RoundedCornerShape(24.dp)
 
+                    // فقط موارد فعال، مرتب‌شده بر اساس نزدیک‌ترین سررسید
+                    val dueSorted = remember(activeDebtCreditList) {
+                        activeDebtCreditList.sortedBy { daysUntilDue(it) }
+                    }
+                    val debtRemaining = remember(activeDebtCreditList) {
+                        activeDebtCreditList.filter { it.type == "DEBT" }
+                            .sumOf { (it.totalAmount - it.paidAmount).coerceAtLeast(0L) }
+                    }
+                    val creditRemaining = remember(activeDebtCreditList) {
+                        activeDebtCreditList.filter { it.type != "DEBT" }
+                            .sumOf { (it.totalAmount - it.paidAmount).coerceAtLeast(0L) }
+                    }
+                    val debtCount = activeDebtCreditList.count { it.type == "DEBT" }
+                    val creditCount = activeDebtCreditList.size - debtCount
+                    val curr = if (currencyUnit == "IRR") 10L else 1L
+                    val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")
+
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -803,118 +820,175 @@ fun HomeScreen(
 
                             Spacer(Modifier.height(20.dp))
 
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                items(debtCreditList) { debt ->
-
-                                    val calendarNow = Calendar.getInstance().apply {
-                                        timeInMillis = System.currentTimeMillis()
-                                        set(Calendar.HOUR_OF_DAY, 0)
-                                        set(Calendar.MINUTE, 0)
-                                        set(Calendar.SECOND, 0)
-                                        set(Calendar.MILLISECOND, 0)
-                                    }
-
-                                    val calendarDue = Calendar.getInstance().apply {
-                                        if (debt.isMonthly) {
-                                            val today = Calendar.getInstance()
-
-                                            set(Calendar.YEAR, today.get(Calendar.YEAR))
-                                            set(Calendar.MONTH, today.get(Calendar.MONTH))
-                                            set(
-                                                Calendar.DAY_OF_MONTH,
-                                                debt.dueDay.coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH))
-                                            )
-
-                                            set(Calendar.HOUR_OF_DAY, 0)
-                                            set(Calendar.MINUTE, 0)
-                                            set(Calendar.SECOND, 0)
-                                            set(Calendar.MILLISECOND, 0)
-
-                                            if (before(calendarNow)) {
-                                                add(Calendar.MONTH, 1)
-                                                set(
-                                                    Calendar.DAY_OF_MONTH,
-                                                    debt.dueDay.coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH))
+                            if (dueSorted.isNotEmpty()) {
+                                // خلاصه: مجموع مانده‌ی بدهی‌ها و طلب‌ها
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(IntrinsicSize.Max),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    listOf(
+                                        Triple(true, debtRemaining, debtCount),
+                                        Triple(false, creditRemaining, creditCount)
+                                    ).forEach { (isDebtTile, remaining, count) ->
+                                        val tileColor = if (isDebtTile) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                        val tileShape = RoundedCornerShape(16.dp)
+                                        Column(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .fillMaxHeight()
+                                                .background(tileColor.copy(alpha = 0.08f), tileShape)
+                                                .border(1.dp, tileColor.copy(alpha = 0.18f), tileShape)
+                                                .padding(12.dp)
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(text = if (isDebtTile) "💸" else "💰", style = MaterialTheme.typography.labelLarge)
+                                                Spacer(Modifier.width(6.dp))
+                                                Text(
+                                                    text = if (isPersian) (if (isDebtTile) "مانده بدهی" else "مانده طلب") else (if (isDebtTile) "Debt left" else "Credit left"),
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             }
-                                        } else {
-                                            timeInMillis = debt.dueDateMillis
-
-                                            set(Calendar.HOUR_OF_DAY, 0)
-                                            set(Calendar.MINUTE, 0)
-                                            set(Calendar.SECOND, 0)
-                                            set(Calendar.MILLISECOND, 0)
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(
+                                                text = numberFormatter.format(remaining * curr),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = tileColor,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = if (isPersian) "$currencyText • ${numberFormatter.format(count.toLong())} مورد" else "$currencyText • $count item${if (count == 1) "" else "s"}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
                                         }
                                     }
+                                }
 
-                                    val daysLeft = (
-                                            (calendarDue.timeInMillis - calendarNow.timeInMillis) /
-                                                    (24 * 60 * 60 * 1000)
-                                            ).toInt().coerceAtLeast(0)
-                                    val dueItem = HomeDueItem(
-                                        id = debt.id,
-                                        title = debt.personName,
-                                        amount = debt.totalAmount,
-                                        daysLeft = daysLeft,
-                                        type = debt.type
-                                    )
+                                Spacer(Modifier.height(16.dp))
 
-                                    val cardShape = RoundedCornerShape(16.dp)
-                                    val statusColor = MaterialTheme.colorScheme.primary
-                                    val icon = if (debt.type == "DEBT") "📸" else "💰"
-                                    val typeFa = if (debt.type == "DEBT") "بدهی" else "طلب"
-                                    val typeEn = if (debt.type == "DEBT") "Debt" else "Credit"
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    items(dueSorted, key = { it.id }) { debt ->
+                                        val daysLeft = daysUntilDue(debt)
+                                        val isDebt = debt.type == "DEBT"
+                                        val typeColor = if (isDebt) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                        val icon = if (isDebt) "💸" else "💰"
+                                        val typeFa = if (isDebt) "بدهی" else "طلب"
+                                        val typeEn = if (isDebt) "Debt" else "Credit"
 
-                                    Box(
-                                        modifier = Modifier
-                                            .width(170.dp)
-                                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f), cardShape)
-                                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), cardShape)
-                                            .clip(cardShape)
-                                            .clickable { }
-                                    ) {
-                                        Column(modifier = Modifier.padding(12.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(text = icon, fontSize = MaterialTheme.typography.titleMedium.fontSize)
+                                        val remaining = (debt.totalAmount - debt.paidAmount).coerceAtLeast(0L)
+                                        val paidFraction = if (debt.totalAmount > 0L)
+                                            (debt.paidAmount.toDouble() / debt.totalAmount.toDouble()).toFloat().coerceIn(0f, 1f)
+                                        else 0f
+                                        val paidPercent = (paidFraction * 100).toInt()
 
-                                                Box(
-                                                    modifier = Modifier
-                                                        .background(statusColor.copy(alpha = 0.12f), CircleShape)
-                                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        val isUrgent = daysLeft <= 7
+                                        val dueColor = if (isUrgent) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                                        val dueText = when {
+                                            daysLeft < 0 -> if (isPersian) "${numberFormatter.format((-daysLeft).toLong())} روز گذشته" else "${-daysLeft}d overdue"
+                                            daysLeft == 0 -> if (isPersian) "امروز سررسید" else "Due today"
+                                            else -> if (isPersian) "${numberFormatter.format(daysLeft.toLong())} روز مونده" else "${daysLeft}d left"
+                                        }
+
+                                        val cardShape = RoundedCornerShape(16.dp)
+                                        Box(
+                                            modifier = Modifier
+                                                .width(190.dp)
+                                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f), cardShape)
+                                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), cardShape)
+                                                .clip(cardShape)
+                                        ) {
+                                            // نوار رنگی نوع (بدهی/طلب) در لبه‌ی بالای کارت
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(3.dp)
+                                                    .background(typeColor.copy(alpha = 0.7f))
+                                            )
+                                            Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 15.dp, bottom = 12.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
                                                 ) {
-                                                    Text(text = if (isPersian) typeFa else typeEn, style = MaterialTheme.typography.labelSmall, color = statusColor, fontWeight = FontWeight.Bold)
+                                                    Text(text = icon, fontSize = MaterialTheme.typography.titleMedium.fontSize)
+
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .background(typeColor.copy(alpha = 0.12f), CircleShape)
+                                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                                    ) {
+                                                        Text(text = if (isPersian) typeFa else typeEn, style = MaterialTheme.typography.labelSmall, color = typeColor, fontWeight = FontWeight.Bold)
+                                                    }
                                                 }
-                                            }
 
-                                            Spacer(Modifier.height(12.dp))
+                                                Spacer(Modifier.height(10.dp))
 
-                                            Text(text = dueItem.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                Text(text = debt.personName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
 
-                                            Spacer(Modifier.height(2.dp))
+                                                Spacer(Modifier.height(8.dp))
 
-                                            val curr = if (currencyUnit == "IRR") 10L else 1L
-                                            Text(text = "${numberFormatter.format(dueItem.amount * curr)} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium)
+                                                Text(text = if (isPersian) "باقی‌مانده" else "Remaining", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Text(
+                                                    text = "${numberFormatter.format(remaining * curr)} $currencyText",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    color = typeColor,
+                                                    fontWeight = FontWeight.Bold,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    text = if (isPersian) "از ${numberFormatter.format(debt.totalAmount * curr)}" else "of ${numberFormatter.format(debt.totalAmount * curr)}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
 
-                                            if (daysLeft > 0) {
-                                                Text(text = if (isPersian) "${dueItem.daysLeft} روز مونده" else "${dueItem.daysLeft}d left", style = MaterialTheme.typography.labelSmall, color = if (daysLeft <= 7) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                                            } else if (daysLeft == 0) {
-                                                Text(text = if (isPersian) "امروز سررسید" else "Due today", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                                                Spacer(Modifier.height(10.dp))
+
+                                                LinearProgressIndicator(
+                                                    progress = { paidFraction },
+                                                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                                                    color = typeColor,
+                                                    trackColor = typeColor.copy(alpha = 0.1f)
+                                                )
+                                                Spacer(Modifier.height(4.dp))
+                                                Text(
+                                                    text = if (isPersian) "${numberFormatter.format(paidPercent.toLong())}٪ ${if (isDebt) "پرداخت شده" else "دریافت شده"}" else "$paidPercent% ${if (isDebt) "paid" else "received"}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+
+                                                Spacer(Modifier.height(10.dp))
+
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .background(dueColor.copy(alpha = if (isUrgent) 0.12f else 0.08f), CircleShape)
+                                                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                                                    ) {
+                                                        Text(text = "⏳ $dueText", style = MaterialTheme.typography.labelSmall, color = dueColor, fontWeight = FontWeight.Bold)
+                                                    }
+                                                    if (debt.isMonthly) {
+                                                        Spacer(Modifier.width(6.dp))
+                                                        Text(text = "🔁", style = MaterialTheme.typography.labelSmall)
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
 
-                            Spacer(Modifier.height(20.dp))
-
-                            if (debtCreditList.isEmpty()) {
+                                Spacer(Modifier.height(20.dp))
+                            } else {
                                 Text(
                                     text = if (isPersian) "بدهی یا طلب فعالی ندارید" else "No active debts or credits",
                                     style = MaterialTheme.typography.bodySmall,
@@ -1749,4 +1823,35 @@ fun RecentTransactionSkeletonItem() {
                 .appSkeletonShimmer()
         )
     }
+}
+
+/**
+ * تعداد روز تا سررسید بعدیِ یک بدهی/طلب (مقدار منفی یعنی از سررسید گذشته).
+ * برای موارد ماهانه همیشه سررسید بعدی محاسبه می‌شود؛ برای موارد تک‌بار، تاریخ ثبت‌شده.
+ */
+private fun daysUntilDue(item: DebtCreditEntity): Int {
+    fun Calendar.clearTime(): Calendar = apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+
+    val now = Calendar.getInstance().clearTime()
+    val due = Calendar.getInstance().apply {
+        if (item.isMonthly) {
+            set(Calendar.DAY_OF_MONTH, 1)
+            clearTime()
+            set(Calendar.DAY_OF_MONTH, item.dueDay.coerceIn(1, getActualMaximum(Calendar.DAY_OF_MONTH)))
+            if (before(now)) {
+                set(Calendar.DAY_OF_MONTH, 1)
+                add(Calendar.MONTH, 1)
+                set(Calendar.DAY_OF_MONTH, item.dueDay.coerceIn(1, getActualMaximum(Calendar.DAY_OF_MONTH)))
+            }
+        } else {
+            timeInMillis = item.dueDateMillis
+            clearTime()
+        }
+    }
+    return Math.round((due.timeInMillis - now.timeInMillis) / 86_400_000.0).toInt()
 }

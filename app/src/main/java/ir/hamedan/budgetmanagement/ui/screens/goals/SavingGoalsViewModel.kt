@@ -2,6 +2,7 @@ package ir.hamedan.budgetmanagement.ui.screens.goals
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
+import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
@@ -13,6 +14,7 @@ import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepository
 import ir.hamedan.budgetmanagement.domain.usecase.SavingGoalUseCase
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
+import ir.hamedan.budgetmanagement.ui.components.BalanceWidget
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -41,7 +43,20 @@ class SavingGoalsViewModel(
 
     fun addGoal(title: String, targetAmount: Long, monthlyAmount: Long, icon: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching { useCase.create(title, targetAmount, monthlyAmount, icon) }
+            val normalizedTitle = title.trim()
+            val duplicate = savingGoals.value.orEmpty().any { existing ->
+                existing.title.trim().equals(normalizedTitle, ignoreCase = true)
+            }
+            if (duplicate) {
+                _depositError.emit(
+                    if (LocaleHelper.getLanguage(context) == "fa")
+                        "قلکی با همین نام از قبل وجود دارد."
+                    else
+                        "A saving goal with the same name already exists."
+                )
+                return@launch
+            }
+            runCatching { useCase.create(normalizedTitle, targetAmount, monthlyAmount, icon) }
                 .onSuccess {
                     NotificationHelper.send(context, NotificationType.GOAL_ADD, "GOALS", "هدف پس‌انداز جدید", "New Saving Goal", "هدف «$title» با موفقیت ایجاد شد.", "Saving goal '$title' was created successfully.")
                 }
@@ -51,7 +66,21 @@ class SavingGoalsViewModel(
 
     fun updateGoal(goal: SavingGoalEntity) {
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching { useCase.update(goal) }
+            val normalized = goal.copy(title = goal.title.trim())
+            val duplicate = savingGoals.value.orEmpty().any { existing ->
+                existing.id != normalized.id &&
+                        existing.title.trim().equals(normalized.title, ignoreCase = true)
+            }
+            if (duplicate) {
+                _depositError.emit(
+                    if (LocaleHelper.getLanguage(context) == "fa")
+                        "قلکی با همین نام از قبل وجود دارد."
+                    else
+                        "A saving goal with the same name already exists."
+                )
+                return@launch
+            }
+            runCatching { useCase.update(normalized) }
                 .onSuccess {
                     NotificationHelper.send(context, NotificationType.GOAL_UPDATE, "GOALS", "ویرایش هدف پس‌انداز", "Saving Goal Updated", "اطلاعات هدف «${goal.title}» به‌روزرسانی شد.", "Goal '${goal.title}' details were updated.")
                 }
@@ -102,6 +131,7 @@ class SavingGoalsViewModel(
                     note = if (LocaleHelper.getLanguage(context) == "fa") "واریز دستی به قلک" else "Manual saving goal deposit"
                 )
             )
+            BalanceWidget().updateAll(context)
 
             NotificationHelper.send(
                 context = context,
@@ -171,6 +201,7 @@ class SavingGoalsViewModel(
                     note = if (LocaleHelper.getLanguage(context) == "fa") "برداشت دستی از قلک" else "Manual saving goal withdrawal"
                 )
             )
+            BalanceWidget().updateAll(context)
 
             NotificationHelper.send(
                 context = context,
@@ -184,6 +215,34 @@ class SavingGoalsViewModel(
         }
     }
 
+
+    fun deleteNonEmptyGoal(goal: SavingGoalEntity, addToBalance: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                if (addToBalance && goal.currentAmount > 0L) {
+                    val savingGoalCategory = categoryRepository.getAllCategories().first()
+                        .firstOrNull { it.title == "SAVING_GOAL" }
+                        ?: error(if (LocaleHelper.getLanguage(context) == "fa") "دسته‌بندی سیستمی قلک پیدا نشد." else "Saving goal system category is missing.")
+
+                    transactionRepository.insertTransaction(
+                        TransactionEntity(
+                            title = if (LocaleHelper.getLanguage(context) == "fa") "انتقال موجودی قلک هنگام حذف: ${goal.title}" else "Saving goal balance transferred on delete: ${goal.title}",
+                            amount = goal.currentAmount,
+                            categoryId = savingGoalCategory.id,
+                            type = "INCOME",
+                            note = if (LocaleHelper.getLanguage(context) == "fa") "انتقال موجودی قلک به تراز کل هنگام حذف" else "Saving goal balance transferred to total balance on deletion"
+                        )
+                    )
+                    BalanceWidget().updateAll(context)
+                }
+                useCase.delete(goal)
+            }.onSuccess {
+                sendDeleteNotification(goal.title)
+            }.onFailure {
+                _depositError.emit((it as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(LocaleHelper.getLanguage(context) == "fa") ?: it.message.orEmpty())
+            }
+        }
+    }
     fun softDelete(goal: SavingGoalEntity) {
         viewModelScope.launch(Dispatchers.IO) {
             useCase.delete(goal)

@@ -458,20 +458,23 @@ fun SavingGoalsScreen(
             )
         }
 
-        // ------------------ Delete Dialog (Hold to Delete) ------------------
+        // ------------------ Delete Dialog ------------------
         goalToDelete?.let { goal ->
-            // متغیرهای وضعیت برای تشخیص نگه‌داشتن دکمه و پر شدن انیمیشن
             var isPressed by remember { mutableStateOf(false) }
             val dialogShape = RoundedCornerShape(28.dp)
+            val hasBalance = goal.currentAmount > 0L
+            val displayBalance = if (currencyUnit == "IRR") goal.currentAmount * 10L else goal.currentAmount
+            val currencyText = if (isPersian) {
+                if (currencyUnit == "IRR") "ریال" else "تومان"
+            } else {
+                if (currencyUnit == "IRR") "Rial" else "Toman"
+            }
 
-            // انیمیشن محو شدن و جمع شدن دکمه انصراف (تغییر وزن از ۱ به ۰)
             val cancelWeight by animateFloatAsState(
                 targetValue = if (isPressed) 0.001f else 1f,
                 animationSpec = tween(durationMillis = 300, easing = LinearOutSlowInEasing),
                 label = "CancelWeight"
             )
-
-            // انیمیشن پر شدن دکمه حذف (از ۰ تا ۱ در طی ۱.۵ ثانیه)
             val progress by animateFloatAsState(
                 targetValue = if (isPressed) 1f else 0f,
                 animationSpec = tween(
@@ -481,32 +484,32 @@ fun SavingGoalsScreen(
                 label = "HoldProgress"
             )
 
-            // وقتی انیمیشن پر شدن به ۱۰۰٪ رسید، عملیات حذف نرم انجام می‌شود
-            LaunchedEffect(progress) {
-                if (progress >= 1f && isPressed) {
-                    isPressed = false
-                    val targetGoal = goal
-
-                    viewModel.softDelete(targetGoal)
-                    goalToDelete = null
-
-                    coroutineScope.launch {
-                        val result = snackbarHostState.showSnackbar(
-                            message = if (isPersian) "قلک «${targetGoal.title}» حذف شد" else "Goal '${targetGoal.title}' deleted",
-                            actionLabel = if (isPersian) "بازگردانی" else "Undo",
-                            duration = SnackbarDuration.Indefinite
-                        )
-
-                        if (result == SnackbarResult.ActionPerformed) {
-                            viewModel.restore(targetGoal)
-                        } else {
-                            viewModel.commitDelete(targetGoal)
-                        }
+            fun finishDelete(addToBalance: Boolean) {
+                isPressed = false
+                val targetGoal = goal
+                viewModel.deleteNonEmptyGoal(targetGoal, addToBalance)
+                goalToDelete = null
+                coroutineScope.launch {
+                    val result = snackbarHostState.showSnackbar(
+                        message = if (isPersian) "قلک «${targetGoal.title}» حذف شد" else "Goal '${targetGoal.title}' deleted",
+                        actionLabel = if (isPersian) "بازگردانی" else "Undo",
+                        duration = SnackbarDuration.Indefinite
+                    )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        viewModel.restore(targetGoal)
+                    } else {
+                        viewModel.commitDelete(targetGoal)
                     }
                 }
             }
 
-            Dialog(onDismissRequest = { goalToDelete = null }) {
+            LaunchedEffect(progress, hasBalance) {
+                if (progress >= 1f && isPressed && !hasBalance) {
+                    finishDelete(addToBalance = false)
+                }
+            }
+
+            Dialog(onDismissRequest = { if (!isPressed) goalToDelete = null }) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -548,97 +551,111 @@ fun SavingGoalsScreen(
                         )
 
                         Text(
-                            text = if (isPersian)
-                                "آیا از حذف قلک «${goal.title}» اطمینان دارید؟"
-                            else
-                                "Are you sure you want to delete '${goal.title}'?",
+                            text = if (hasBalance) {
+                                if (isPersian)
+                                    "قلک «${goal.title}» دارای ${numberFormatter.format(displayBalance)} $currencyText موجودی است. قبل از حذف مشخص کنید این مبلغ به تراز کل برگردد یا خیر."
+                                else
+                                    "'${goal.title}' contains ${numberFormatter.format(displayBalance)} $currencyText. Choose whether this balance should be returned to the total balance before deletion."
+                            } else {
+                                if (isPersian)
+                                    "آیا از حذف قلک «${goal.title}» اطمینان دارید؟"
+                                else
+                                    "Are you sure you want to delete '${goal.title}'?"
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
                         )
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // دکمه انصراف با قابلیت جمع شدن هنگام نگه داشتن دکمه حذف
-                            if (cancelWeight > 0.01f) {
-                                OutlinedButton(
-                                    onClick = { goalToDelete = null },
+                        if (hasBalance) {
+                            Button(
+                                onClick = { finishDelete(addToBalance = true) },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Text(
+                                    if (isPersian) "افزودن به تراز و حذف" else "Add to balance & delete",
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = { finishDelete(addToBalance = false) },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Text(if (isPersian) "حذف بدون افزودن به تراز" else "Delete without adding to balance")
+                            }
+                            TextButton(onClick = { goalToDelete = null }, enabled = !isPressed) {
+                                Text(if (isPersian) "انصراف" else "Cancel")
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (cancelWeight > 0.01f) {
+                                    OutlinedButton(
+                                        onClick = { goalToDelete = null },
+                                        modifier = Modifier
+                                            .weight(cancelWeight)
+                                            .height(48.dp)
+                                            .padding(end = (12 * cancelWeight).dp),
+                                        shape = RoundedCornerShape(14.dp),
+                                        enabled = !isPressed
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(Modifier.width(6.dp))
+                                            Text(if (isPersian) "انصراف" else "Cancel", maxLines = 1)
+                                        }
+                                    }
+                                }
+
+                                Box(
                                     modifier = Modifier
-                                        .weight(cancelWeight)
+                                        .weight(1f)
                                         .height(48.dp)
-                                        .padding(end = (12 * cancelWeight).dp),
-                                    shape = RoundedCornerShape(14.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(MaterialTheme.colorScheme.error)
+                                        .pointerInput(Unit) {
+                                            detectTapGestures(
+                                                onPress = {
+                                                    isPressed = true
+                                                    tryAwaitRelease()
+                                                    if (progress < 1f) isPressed = false
+                                                }
+                                            )
+                                        },
+                                    contentAlignment = Alignment.CenterStart
                                 ) {
+                                    if (progress > 0f) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxHeight()
+                                                .fillMaxWidth(progress.coerceAtLeast(0.001f))
+                                                .background(Color.White.copy(alpha = 0.25f))
+                                        )
+                                    }
                                     Row(
+                                        modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.Center
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp)
-                                        )
+                                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onError)
                                         Spacer(Modifier.width(6.dp))
                                         Text(
-                                            text = if (isPersian) "انصراف" else "Cancel",
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Clip
+                                            text = if (isPressed) {
+                                                if (isPersian) "در حال حذف..." else "Deleting..."
+                                            } else {
+                                                if (isPersian) "حذف" else "Hold to Delete"
+                                            },
+                                            color = MaterialTheme.colorScheme.onError,
+                                            maxLines = 1
                                         )
                                     }
-                                }
-                            }
-
-                            // دکمه حذف با قابلیت فشردن و نگه داشتن (Hold to Delete)
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(MaterialTheme.colorScheme.error)
-                                    .pointerInput(Unit) {
-                                        detectTapGestures(
-                                            onPress = {
-                                                isPressed = true
-                                                tryAwaitRelease()
-                                                isPressed = false
-                                            }
-                                        )
-                                    },
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                // لایه پیشرفت پرشونده روی دکمه
-                                if (progress > 0f) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxHeight()
-                                            .fillMaxWidth(progress.coerceAtLeast(0.001f))
-                                            .background(Color.White.copy(alpha = 0.25f))
-                                    )
-                                }
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp),
-                                        tint = MaterialTheme.colorScheme.onError
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(
-                                        text = if (isPressed) {
-                                            if (isPersian) "در حال حذف..." else "Deleting..."
-                                        } else {
-                                            if (isPersian) "حذف" else "Hold to Delete"
-                                        },
-                                        color = MaterialTheme.colorScheme.onError,
-                                        maxLines = 1
-                                    )
                                 }
                             }
                         }

@@ -41,6 +41,7 @@ import ir.hamedan.budgetmanagement.data.local.models.PendingTransactionEntity
 import ir.hamedan.budgetmanagement.ui.components.SwipeToConfirmButton
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.utils.StringMapper
+import ir.hamedan.budgetmanagement.utils.CategorySuggestionHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
@@ -329,16 +330,33 @@ fun PendingConfirmBottomSheet(
     var selectedCategoryKey by remember(pending.id) { mutableStateOf(pending.suggestedCategory) }
     var isExpense by remember(pending.id) { mutableStateOf(pending.type == "EXPENSE") }
     var transactionNote by remember(pending.id) { mutableStateOf("") }
+    var userManuallySelectedCategory by remember(pending.id) { mutableStateOf(false) }
 
     val maxDigitsLength = 12 // حداکثر ۱۲ رقم برای مبلغ
 
-    // یافتن دسته‌بندی انتخاب‌شده برای استخراج ایموجی
-    val selectedCategoryObj = categories.find { it.title.equals(selectedCategoryKey, ignoreCase = true) }
+    val availableCategories = remember(categories, isExpense) { categories.filter { it.isExpense == isExpense } }
 
     // وضعیت خطای اعتبارسنجی فیلدها
     var titleError by remember(pending.id) { mutableStateOf(false) }
     var amountError by remember(pending.id) { mutableStateOf(false) }
     var categoryError by remember(pending.id) { mutableStateOf(false) }
+
+    fun trySuggestCategory(inputTitle: String) {
+        if (userManuallySelectedCategory) return
+        CategorySuggestionHelper.suggestCategory(inputTitle, availableCategories, isPersian)?.let { suggested ->
+            selectedCategoryKey = suggested
+            categoryError = false
+        }
+    }
+
+    LaunchedEffect(pending.id, availableCategories) {
+        if (selectedCategoryKey.isBlank() || availableCategories.none { it.title.equals(selectedCategoryKey, ignoreCase = true) }) {
+            trySuggestCategory(transactionTitle)
+        }
+    }
+
+    // یافتن دسته‌بندی انتخاب‌شده برای استخراج ایموجی
+    val selectedCategoryObj = categories.find { it.title.equals(selectedCategoryKey, ignoreCase = true) }
 
     // وضعیت کنترل منوی کشویی دسته‌بندی
     var isCategoryDropdownExpanded by remember { mutableStateOf(false) }
@@ -446,6 +464,7 @@ fun PendingConfirmBottomSheet(
                     onClick = {
                         isExpense = true
                         selectedCategoryKey = ""
+                        userManuallySelectedCategory = false
                     },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
@@ -461,6 +480,7 @@ fun PendingConfirmBottomSheet(
                     onClick = {
                         isExpense = false
                         selectedCategoryKey = ""
+                        userManuallySelectedCategory = false
                     },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
@@ -482,6 +502,7 @@ fun PendingConfirmBottomSheet(
                     if (input.length <= 40) {
                         transactionTitle = input
                         if (titleError) titleError = false
+                        trySuggestCategory(input)
                     }
                 },
                 label = { Text(if (isPersian) "عنوان تراکنش" else "Title") },
@@ -494,6 +515,7 @@ fun PendingConfirmBottomSheet(
                         onResult = { spoken ->
                             transactionTitle = spoken.take(40)
                             if (titleError) titleError = false
+                            trySuggestCategory(transactionTitle)
                         },
                         language = if (isPersian) "fa-IR" else "en-US"
                     )
@@ -626,6 +648,7 @@ fun PendingConfirmBottomSheet(
                                 },
                                 onClick = {
                                     selectedCategoryKey = category.title
+                                    userManuallySelectedCategory = true
                                     isCategoryDropdownExpanded = false
                                     categoryError = false
                                 },
