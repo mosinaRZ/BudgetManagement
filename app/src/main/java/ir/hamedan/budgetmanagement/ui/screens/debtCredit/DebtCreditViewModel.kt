@@ -134,9 +134,22 @@ class DebtCreditViewModel(
     fun deposit(id: String, amount: Long) {
         viewModelScope.launch(ioDispatcher) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
+            val isPersian = LocaleHelper.getLanguage(context) == "fa"
+            val remaining = (item.totalAmount - item.paidAmount).coerceAtLeast(0L)
+            if (amount > remaining) {
+                _errorMessage.emit(
+                    if (isPersian) {
+                        if (item.type == "DEBT") "مبلغ پرداخت نمی‌تواند بیشتر از مانده بدهی باشد."
+                        else "مبلغ دریافت نمی‌تواند بیشتر از مانده طلب باشد."
+                    } else {
+                        if (item.type == "DEBT") "Payment cannot exceed the remaining debt."
+                        else "Received amount cannot exceed the remaining receivable."
+                    }
+                )
+                return@launch
+            }
             if (item.type == "DEBT" && transactionRepository.getCurrentBalance() < amount) {
-                val isPersian = LocaleHelper.getLanguage(context) == "fa"
-                _errorMessage.emit(if (isPersian) "موجودی حساب برای پرداخت این بدهی کافی نیست!" else "Insufficient balance for debt payment!")
+                _errorMessage.emit(if (isPersian) "موجودی حساب برای پرداخت این بدهی کافی نیست." else "Insufficient balance for debt payment.")
                 return@launch
             }
             runCatching { useCase.deposit(item, amount) }
@@ -148,6 +161,26 @@ class DebtCreditViewModel(
     fun withdraw(id: String, amount: Long) {
         viewModelScope.launch(ioDispatcher) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
+            val isPersian = LocaleHelper.getLanguage(context) == "fa"
+            if (amount > item.paidAmount) {
+                _errorMessage.emit(
+                    if (isPersian) {
+                        if (item.type == "DEBT") "مبلغ اصلاح نمی‌تواند بیشتر از مبلغ پرداخت‌شده بدهی باشد."
+                        else "مبلغ اصلاح نمی‌تواند بیشتر از مبلغ دریافت‌شده طلب باشد."
+                    } else {
+                        if (item.type == "DEBT") "Adjustment cannot exceed the amount already paid on this debt."
+                        else "Adjustment cannot exceed the amount already received for this receivable."
+                    }
+                )
+                return@launch
+            }
+            if (item.type == "CREDIT" && transactionRepository.getCurrentBalance() < amount) {
+                _errorMessage.emit(
+                    if (isPersian) "موجودی حساب برای اصلاح و برگشت این مبلغ از طلب کافی نیست."
+                    else "Insufficient balance to reverse this received receivable amount."
+                )
+                return@launch
+            }
             runCatching { useCase.withdraw(item, amount) }
                 .onSuccess { BalanceWidget().updateAll(context) }
                 .onFailure { _errorMessage.emit((it as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(LocaleHelper.getLanguage(context) == "fa") ?: it.message.orEmpty()) }

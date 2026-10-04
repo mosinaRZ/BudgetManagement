@@ -43,15 +43,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -74,7 +75,9 @@ import ir.hamedan.budgetmanagement.ui.screens.categories.CategoriesViewModel
 import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsViewModel
 import ir.hamedan.budgetmanagement.ui.screens.notification.NotificationViewModel
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
+import ir.hamedan.budgetmanagement.utils.AppHapticType
 import ir.hamedan.budgetmanagement.utils.DateUtils
+import ir.hamedan.budgetmanagement.utils.rememberAppHaptics
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.ui.screens.debtCredit.DebtCreditViewModel
 import ir.hamedan.budgetmanagement.utils.StringMapper
@@ -103,6 +106,70 @@ private fun maskedStars(realLength: Int): String {
     return "*".repeat(starCount)
 }
 
+/**
+ * فرمت فشرده‌ی مبلغ برای زمانی که عدد کامل حتی با کوچک‌ترین اندازه‌ی فونت هم در کارت جا نمی‌شود.
+ * مثال: ۱۲۵٬۰۰۰٬۰۰۰٬۰۰۰ ← «۱۲۵ میلیارد» / "125 B"
+ */
+private fun compactAmount(value: Long, isPersian: Boolean): String {
+    val absValue = abs(value).toDouble()
+    val locale = if (isPersian) Locale("fa", "IR") else Locale.US
+    val formatter = NumberFormat.getNumberInstance(locale).apply { maximumFractionDigits = 2 }
+    val (divisor, suffix) = when {
+        absValue >= 1e12 -> 1e12 to (if (isPersian) "تریلیون" else "Tn")
+        absValue >= 1e9 -> 1e9 to (if (isPersian) "میلیارد" else "B")
+        absValue >= 1e6 -> 1e6 to (if (isPersian) "میلیون" else "M")
+        absValue >= 1e3 -> 1e3 to (if (isPersian) "هزار" else "K")
+        else -> return formatter.format(absValue)
+    }
+    return "${formatter.format(absValue / divisor)} $suffix"
+}
+
+/**
+ * متن مبلغِ تک‌خطی که خودش را با عرض موجود تنظیم می‌کند:
+ * ۱) اندازه‌ی فونت تا حداقل مجاز کوچک می‌شود،
+ * ۲) اگر هنوز جا نشد، متن فشرده (fallbackText) نمایش داده می‌شود.
+ * تا زمان نهایی شدن اندازه، متن رسم نمی‌شود تا پرش/چشمک دیده نشود.
+ */
+@Composable
+private fun AutoFitAmountText(
+    text: String,
+    fallbackText: String?,
+    style: TextStyle,
+    color: Color,
+    maxFontSize: Float,
+    minFontSize: Float,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign = TextAlign.Center,
+    letterSpacing: TextUnit = TextUnit.Unspecified
+) {
+    var fontSize by remember(text, fallbackText, maxFontSize) { mutableFloatStateOf(maxFontSize) }
+    var useFallback by remember(text, fallbackText, maxFontSize) { mutableStateOf(false) }
+    var isReady by remember(text, fallbackText, maxFontSize) { mutableStateOf(false) }
+
+    Text(
+        text = if (useFallback && fallbackText != null) fallbackText else text,
+        modifier = modifier.drawWithContent { if (isReady) drawContent() },
+        style = style.copy(fontSize = fontSize.sp, letterSpacing = letterSpacing),
+        color = color,
+        textAlign = textAlign,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Clip,
+        onTextLayout = { result ->
+            if (!result.didOverflowWidth) {
+                isReady = true
+            } else if (fontSize > minFontSize + 0.1f) {
+                fontSize = maxOf(minFontSize, fontSize * 0.92f)
+            } else if (!useFallback && fallbackText != null) {
+                useFallback = true
+                fontSize = maxFontSize
+            } else {
+                isReady = true
+            }
+        }
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -123,7 +190,7 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val isPersian = LocaleHelper.getLanguage(context) == "fa"
-    val haptic = LocalHapticFeedback.current
+    val haptic = rememberAppHaptics()
 
     // ===== وضعیت مخفی/نمایان بودن مبالغ (تراز کلی، درآمد و هزینه) با SharedPreferences =====
     val privacyPrefs = remember {
@@ -137,7 +204,7 @@ fun HomeScreen(
     val eyeBlinkScale = remember { Animatable(1f) }
 
     fun toggleAmountsVisibility() {
-        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        haptic.perform(AppHapticType.LongPress)
         isAmountsHidden = !isAmountsHidden
         privacyPrefs.edit().putBoolean(KEY_AMOUNTS_HIDDEN, isAmountsHidden).apply()
         eyeToggleTrigger++
@@ -476,22 +543,27 @@ fun HomeScreen(
                             val fullBalanceText = "$sign$formattedAmount $currencyText"
                             val balanceColor = if (totalBalance >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
 
+                            val compactBalanceText = "$sign${compactAmount(displayBalance, isPersian)} $currencyText"
+
                             AnimatedContent(
                                 targetState = isAmountsHidden,
+                                modifier = Modifier.fillMaxWidth(),
                                 transitionSpec = {
                                     (fadeIn(tween(220)) + scaleIn(initialScale = 0.92f, animationSpec = tween(220)))
                                         .togetherWith(fadeOut(tween(160)) + scaleOut(targetScale = 0.92f, animationSpec = tween(160)))
                                 },
                                 label = "balance_amount"
                             ) { hidden ->
-                                Text(
+                                AutoFitAmountText(
                                     text = if (hidden) "${maskedStars(formattedAmount.length)} $currencyText" else fullBalanceText,
-                                    style = MaterialTheme.typography.headlineMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 28.sp,
-                                        letterSpacing = if (hidden) 2.sp else 0.sp
-                                    ),
-                                    color = balanceColor
+                                    fallbackText = if (hidden) null else compactBalanceText,
+                                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = balanceColor,
+                                    maxFontSize = 28f,
+                                    minFontSize = 16f,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Start,
+                                    letterSpacing = if (hidden) 2.sp else 0.sp
                                 )
                             }
                         }
@@ -521,7 +593,7 @@ fun HomeScreen(
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(16.dp),
+                                    .padding(horizontal = 12.dp, vertical = 16.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
                             ) {
@@ -532,17 +604,21 @@ fun HomeScreen(
                                 val formattedIncome = numberFormatter.format(displayIncome)
                                 AnimatedContent(
                                     targetState = isAmountsHidden,
+                                    modifier = Modifier.fillMaxWidth(),
                                     transitionSpec = {
                                         (fadeIn(tween(220)) + scaleIn(initialScale = 0.92f, animationSpec = tween(220)))
                                             .togetherWith(fadeOut(tween(160)) + scaleOut(targetScale = 0.92f, animationSpec = tween(160)))
                                     },
                                     label = "income_amount"
                                 ) { hidden ->
-                                    Text(
+                                    AutoFitAmountText(
                                         text = if (hidden) "${maskedStars(formattedIncome.length)} $currencyText" else "$formattedIncome $currencyText",
-                                        style = MaterialTheme.typography.titleMedium,
+                                        fallbackText = if (hidden) null else "${compactAmount(displayIncome, isPersian)} $currencyText",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                         color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold,
+                                        maxFontSize = 16f,
+                                        minFontSize = 10f,
+                                        modifier = Modifier.fillMaxWidth(),
                                         letterSpacing = if (hidden) 1.5.sp else 0.sp
                                     )
                                 }
@@ -560,7 +636,7 @@ fun HomeScreen(
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(16.dp),
+                                    .padding(horizontal = 12.dp, vertical = 16.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
                             ) {
@@ -571,17 +647,21 @@ fun HomeScreen(
                                 val formattedExpense = numberFormatter.format(displayExpense)
                                 AnimatedContent(
                                     targetState = isAmountsHidden,
+                                    modifier = Modifier.fillMaxWidth(),
                                     transitionSpec = {
                                         (fadeIn(tween(220)) + scaleIn(initialScale = 0.92f, animationSpec = tween(220)))
                                             .togetherWith(fadeOut(tween(160)) + scaleOut(targetScale = 0.92f, animationSpec = tween(160)))
                                     },
                                     label = "expense_amount"
                                 ) { hidden ->
-                                    Text(
+                                    AutoFitAmountText(
                                         text = if (hidden) "${maskedStars(formattedExpense.length)} $currencyText" else "$formattedExpense $currencyText",
-                                        style = MaterialTheme.typography.titleMedium,
+                                        fallbackText = if (hidden) null else "${compactAmount(displayExpense, isPersian)} $currencyText",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                         color = MaterialTheme.colorScheme.error,
-                                        fontWeight = FontWeight.Bold,
+                                        maxFontSize = 16f,
+                                        minFontSize = 10f,
+                                        modifier = Modifier.fillMaxWidth(),
                                         letterSpacing = if (hidden) 1.5.sp else 0.sp
                                     )
                                 }
@@ -1412,7 +1492,7 @@ fun HomeScreen(
                                                     horizontalArrangement = Arrangement.SpaceBetween,
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
-                                                    Text(text = if (isPersian) item.titleFa else item.titleEn, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                                    Text(text = StringMapper.localizeCategoryKeysInText(if (isPersian) item.titleFa else item.titleEn, isPersian), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
 
                                                     if (!item.isRead) {
                                                         Box(
@@ -1425,7 +1505,7 @@ fun HomeScreen(
 
                                                 Spacer(Modifier.height(4.dp))
 
-                                                Text(text = if (isPersian) item.descFa else item.descEn, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f), lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.2)
+                                                Text(text = StringMapper.localizeCategoryKeysInText(if (isPersian) item.descFa else item.descEn, isPersian), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f), lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.2)
                                             }
 
                                             Surface(

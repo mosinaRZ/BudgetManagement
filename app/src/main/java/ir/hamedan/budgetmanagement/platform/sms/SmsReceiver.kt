@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlin.math.roundToLong
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -53,7 +54,7 @@ class SmsReceiver : BroadcastReceiver() {
         }
         val smsTimestamp = messages[0].timestampMillis
 
-        if (fullBody.isBlank() || !SmsParser.isLikelyBankSms(fullBody)) {
+        if (fullBody.isBlank() || !SmsParser.isLikelyBankSms(fullBody, sender)) {
             return
         }
 
@@ -75,7 +76,8 @@ class SmsReceiver : BroadcastReceiver() {
 
                 val parseResult = SmsParser.parse(
                     fullBody,
-                    smsTimestamp
+                    smsTimestamp,
+                    sender
                 )
 
                 if (!parseResult.isAmountDetected) {
@@ -95,10 +97,13 @@ class SmsReceiver : BroadcastReceiver() {
                  * SmsParser already converts Rial to Toman when
                  * the SMS contains "ریال" and does not contain "تومان".
                  *
-                 * Therefore we only normalize the final parser result
+                 * Therefore we only round the final parser result
                  * from Double to Long here.
                  */
-                val amount = parseResult.amount.toLong()
+                val amount = parseResult.amount.roundToLong()
+                if (amount <= 0L) {
+                    return@launch
+                }
 
                 val appCurrency = CurrencySharedPreferences.getCurrency(appContext)
                 val displayMultiplier = if (appCurrency == "IRR") 10L else 1L

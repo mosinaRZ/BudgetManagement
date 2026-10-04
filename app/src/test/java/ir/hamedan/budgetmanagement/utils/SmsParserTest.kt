@@ -1,188 +1,129 @@
 package ir.hamedan.budgetmanagement.utils
 
-import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * Regression suite for [SmsParser]. Every time a real bank SMS is mis-detected
+ * (or a promo slips through), add it here as a new case, then fix the parser.
+ * Place under app/src/test/java/ir/hamedan/budgetmanagement/utils/
+ */
 class SmsParserTest {
 
-    // -------------------------------------------------------------------------
-    // Bank detection
-    // -------------------------------------------------------------------------
-
-    @Test
-    fun isLikelyBankSms_requiresAtLeastTwoIndicators() {
-        assertFalse(SmsParser.isLikelyBankSms("سلام خوبی؟"))
-        assertFalse(SmsParser.isLikelyBankSms("خرید انجام شد")) // only one weak signal
-        assertTrue(
-            SmsParser.isLikelyBankSms(
-                "برداشت از کارت 1234 مبلغ 500,000 ریال مانده 1,200,000"
-            )
-        )
+    private fun accepts(body: String, amountToman: Double, type: String, sender: String? = null) {
+        val r = SmsParser.parse(body, 0L, sender)
+        assertTrue("should be accepted: $body (reason=${r.rejectReason})", r.isAmountDetected)
+        assertEquals(amountToman, r.amount, 0.001)
+        assertEquals(type, r.type)
+        assertTrue(r.isTypeDetected)
     }
 
-    @Test
-    fun isLikelyBankSms_falseForOtpStyleMessage() {
-        assertFalse(SmsParser.isLikelyBankSms("کد تایید ورود شما 847291 است"))
+    private fun rejects(body: String, sender: String? = null) {
+        val r = SmsParser.parse(body, 0L, sender)
+        assertFalse("should be rejected: $body", r.isAmountDetected)
+        assertFalse(SmsParser.isLikelyBankSms(body, sender))
     }
 
-    // -------------------------------------------------------------------------
-    // Expense / income + Rial→Toman
-    // -------------------------------------------------------------------------
+    // ------------------------------ real transactions ------------------------------
 
-    @Test
-    fun parse_detectsExpenseAmountNearKeyword_rialConvertedToToman() {
-        val body = "برداشت مبلغ 1,500,000 ریال از حساب شما. مانده 10,000,000"
-        val result = SmsParser.parse(body, timestamp = 1_700_000_000_000L)
+    @Test fun tejaratWithdraw() = accepts(
+        "*بانک تجارت* حساب: ******** برداشت: 720,000 ریال از طريق: شتاب مانده: 31,401,793 ریال 1403/09/29 23:05",
+        72000.0, "EXPENSE"
+    )
 
-        assertTrue(result.isAmountDetected)
-        assertEquals("EXPENSE", result.type)
-        assertTrue(result.isTypeDetected)
-        assertEquals(150_000.0, result.amount, 0.01) // /10
-        assertEquals(1_700_000_000_000L, result.timestamp)
-    }
+    @Test fun signedSuffixWithdraw() = accepts(
+        "بانک ملت\nبرداشت:500,000-\nمانده:1,200,000\n1403/05/01_12:30", 50000.0, "EXPENSE"
+    )
 
-    @Test
-    fun parse_detectsIncome_rialConvertedToToman() {
-        val body = "واریز مبلغ 2,000,000 ریال به حساب. مانده 5,000,000 ریال"
-        val result = SmsParser.parse(body)
+    @Test fun signedPrefixDeposit() = accepts(
+        "بانک ملی\nحساب 0123456789\n+1,000,000\nمانده: 3,500,000\n1403/06/01 10:15", 100000.0, "INCOME"
+    )
 
-        assertTrue(result.isAmountDetected)
-        assertEquals("INCOME", result.type)
-        assertEquals(200_000.0, result.amount, 0.01)
-    }
+    @Test fun persianDigitsDeposit() = accepts(
+        "واریز ۲,۵۰۰,۰۰۰ ریال به کارت ****۱۲۳۴\nمانده ۵,۰۰۰,۰۰۰ ریال\nبانک پاسارگاد", 250000.0, "INCOME"
+    )
 
-    @Test
-    fun parse_tomanOnly_doesNotDivideByTen() {
-        val body = "برداشت مبلغ 150,000 تومان از کارت. مانده 1,000,000 تومان"
-        val result = SmsParser.parse(body)
+    @Test fun labelOnPreviousLine() = accepts(
+        "بانک سپه\nکارت ****1234\nخرید\n250,000 ریال\nمانده 3,000,000", 25000.0, "EXPENSE"
+    )
 
-        assertTrue(result.isAmountDetected)
-        assertEquals(150_000.0, result.amount, 0.01)
-    }
+    @Test fun tomanUnitIsKept() = accepts(
+        "بانک سامان\nبرداشت 45,000 تومان\nمانده 1,200,000 تومان", 45000.0, "EXPENSE"
+    )
 
-    @Test
-    fun parse_bothRialAndTomanPresent_doesNotDivideByTen() {
-        // طبق منطق فعلی: فقط وقتی «ریال» هست و «تومان» نیست تقسیم می‌شود
-        val body = "برداشت مبلغ 150,000 ریال معادل تومان از حساب. مانده 500,000"
-        val result = SmsParser.parse(body)
+    @Test fun amountBeforeVerb() = accepts(
+        "بانک رفاه\n2,000,000 ریال به حساب شما واریز شد\nمانده: 4,000,000 ریال", 200000.0, "INCOME"
+    )
 
-        assertTrue(result.isAmountDetected)
-        assertEquals(150_000.0, result.amount, 0.01)
-    }
+    @Test fun balanceBeforeAmount() = accepts(
+        "بانک صادرات\nمانده: 2,000,000\nبرداشت: 500,000\n1403/05/01", 50000.0, "EXPENSE"
+    )
 
-    // -------------------------------------------------------------------------
-    // Rejection / noise
-    // -------------------------------------------------------------------------
+    @Test fun trackingCodeIsNotAmount() = accepts(
+        "بانک آینده\nمبلغ 350,000 ریال برداشت شد\nکد رهگیری 123456789012\nمانده 1,000,000 ریال", 35000.0, "EXPENSE"
+    )
 
-    @Test
-    fun parse_ignoresNonBankMessage() {
-        val result = SmsParser.parse("کد تایید شما 12345 است")
-        assertFalse(result.isAmountDetected)
-        assertEquals(0.0, result.amount, 0.0)
-    }
+    @Test fun arabicLettersAndBidiMarks() = accepts(
+        "\u200Fبانك تجارت\nبرداشت: 720,000 ريال\nمانده: 31,401,793 ريال\n1403/09/29", 72000.0, "EXPENSE"
+    )
 
-    @Test
-    fun parse_emptyBody_notDetected() {
-        val result = SmsParser.parse("")
-        assertFalse(result.isAmountDetected)
-        assertEquals(0.0, result.amount, 0.0)
-    }
+    @Test fun genuineSmsWithLinkIsKeptWhenFullyStructured() = accepts(
+        "بانک ملت\nبرداشت:500,000-\nمانده:1,200,000\njozeiat: bank.ir/x", 50000.0, "EXPENSE", sender = "30001234"
+    )
 
-    // -------------------------------------------------------------------------
-    // Digits / separators
-    // -------------------------------------------------------------------------
+    @Test fun loanInstallmentDeduction() = accepts(
+        "بانک ملی\nکسر قسط وام 3,500,000 ریال\nمانده 8,000,000 ریال\n1403/05/01", 350000.0, "EXPENSE"
+    )
 
-    @Test
-    fun parse_convertsPersianDigitsAndThousandSeparator() {
-        val body = "برداشت مبلغ ۱٬۲۵۰٬۰۰۰ ریال از کارت. مانده موجودی ۲٬۰۰۰٬۰۰۰"
-        val result = SmsParser.parse(body)
+    @Test fun interestDeposit() = accepts(
+        "بانک سامان\nواریز سود 1,250,000 ریال\nمانده 100,000,000 ریال", 125000.0, "INCOME"
+    )
 
-        assertTrue(result.isAmountDetected)
-        assertEquals(125_000.0, result.amount, 0.01)
-    }
+    // ------------------------------ must be ignored ------------------------------
 
-    @Test
-    fun parse_prefersAmountNearKeyword_overBalanceNumber() {
-        // مبلغ تراکنش کوچک‌تر از مانده است؛ نباید مانده انتخاب شود
-        val body = "خرید مبلغ 80,000 ریال از فروشگاه. مانده کارت 5,500,000 ریال حساب"
-        val result = SmsParser.parse(body)
+    @Test fun lotteryPromo() = rejects(
+        "مشتری گرامی؛ برای شرکت در قرعه کشی بانک ملت نسبت به افزایش موجودی حساب قرض الحسنه خود تا 31 مردادماه به مبلغ حداقل 1,000,000 ریال اقدام فرمایید. هر یک میلیون ریال در هر روز یک امتیاز"
+    )
 
-        assertTrue(result.isAmountDetected)
-        assertEquals(8_000.0, result.amount, 0.01) // 80000/10
-    }
+    @Test fun discountPromoWithLink() = rejects(
+        "بانک ملی: با خرید از فروشگاه ما تا 30% تخفیف ویژه! همین حالا کلیک کنید https://shop.example.ir/x لغو 11"
+    )
 
-    // -------------------------------------------------------------------------
-    // Type conflicts & keywords
-    // -------------------------------------------------------------------------
+    @Test fun loanOfferPromo() = rejects(
+        "بانک ملت: وام 100,000,000 تومانی با شرایط ویژه برای شما آماده است. مراجعه به شعبه. لغو 11"
+    )
 
-    @Test
-    fun parse_bothIncomeAndExpenseKeywords_defaultsToExpense() {
-        val body = "انتقال به حساب و واریز و برداشت مبلغ 100,000 ریال مانده 200,000 کارت"
-        val result = SmsParser.parse(body)
+    @Test fun otpMessage() = rejects("رمز پویا: 123456 برای خرید 500,000 ریال از فروشگاه X. بانک ملت")
 
-        assertTrue(result.isAmountDetected)
-        assertEquals("EXPENSE", result.type)
-        assertTrue(result.isTypeDetected)
-    }
+    @Test fun confirmationIdMessage() = rejects(
+        "بانک ملی (هشدار)؛ شناسه تایید برداشت از حساب شما: 98765 مبلغ 500,000 به حساب 6037991234567890"
+    )
 
-    @Test
-    fun parse_transferKeyword_treatedAsExpense() {
-        val body = "انتقال به شماره کارت مبلغ 250,000 ریال. مانده حساب 1,000,000"
-        val result = SmsParser.parse(body)
+    @Test fun installmentReminder() = rejects(
+        "سر رسید قسط بانکی صادر شد. برای پرداخت قسط ماهانه وام مسکن به مبلغ 3,500,000 ریال طی دو روز آتی اقدام کنید. باتشکر بانک ملّی"
+    )
 
-        assertTrue(result.isAmountDetected)
-        assertEquals("EXPENSE", result.type)
-    }
+    @Test fun failedTransaction() = rejects(
+        "تراکنش ناموفق بود. برداشت 500,000 ریال از کارت ****1234 انجام نشد. بانک ملت"
+    )
 
-    // -------------------------------------------------------------------------
-    // 10/12 digit filter (fallback path)
-    // -------------------------------------------------------------------------
+    @Test fun insufficientFunds() = rejects("بانک ملت: موجودی کافی نیست. برداشت 500,000 ریال از کارت ****1234")
 
-    @Test
-    fun parse_fallbackIgnoresTenDigitPhoneLikeNumber() {
-        // بدون «مبلغ» کنار کلیدواژه تا fallback درگیر شود؛
-        // عدد ۱۰ رقمی شبیه موبایل نباید amount شود
-        val body = "برداشت از کارت انجام شد 09121234567 مانده حساب 500000 ریال"
-        val result = SmsParser.parse(body)
+    @Test fun balanceInquiryOnly() = rejects("بانک ملی\nمانده حساب شما 5,000,000 ریال است\n1403/05/01")
 
-        // اگر amount تشخیص داده شود باید مانده/مبلغ منطقی باشد نه شماره موبایل
-        if (result.isAmountDetected) {
-            val digits = result.amount.toLong().toString().replace(".", "")
-            // بعد از /10 ممکن است طول عوض شود؛ اصل: برابر کل شماره ۱۰ رقمی خام نباشد
-            assertFalse(result.amount == 9121234567.0 || result.amount == 912123456.7)
-        }
-    }
+    @Test fun friendMessage() = rejects("سلام واریز کردم 500,000 تومان به حسابت", sender = "+989121234567")
 
-    // -------------------------------------------------------------------------
-    // Category suggestion
-    // -------------------------------------------------------------------------
+    @Test fun friendMessageWithBankWords() = rejects(
+        "برداشت 500,000 ریال از حساب بانک ملت مانده 2,000,000", sender = "09121234567"
+    )
 
-    @Test
-    fun suggestCategory_matchesTitleInBody() {
-        val categories = listOf(
-            CategoryEntity(title = "FOOD", iconEmoji = "🍕", isExpense = true),
-            CategoryEntity(title = "TRANSPORT", iconEmoji = "🚗", isExpense = true)
-        )
-        val full = "خرید از فروشگاه FOOD مبلغ 100000 ریال مانده 500000 کارت حساب"
-        assertEquals("FOOD", SmsParser.suggestCategory(full, categories))
-    }
+    @Test fun nonBankPayment() = rejects("پرداخت 150,000 تومان با موفقیت انجام شد. از خرید شما متشکریم")
 
-    @Test
-    fun suggestCategory_returnsEmptyWhenNoMatch() {
-        val categories = listOf(
-            CategoryEntity(title = "FOOD", iconEmoji = "🍕", isExpense = true)
-        )
-        assertEquals("", SmsParser.suggestCategory("برداشت کارت مانده", categories))
-    }
+    @Test fun ordinaryTextWithNumber() = rejects("سلام، فردا ساعت 5 جلسه داریم. هزینه 200,000 تومان")
 
-    @Test
-    fun suggestCategory_isCaseInsensitive() {
-        val categories = listOf(
-            CategoryEntity(title = "FOOD", iconEmoji = "🍕", isExpense = true)
-        )
-        assertEquals("FOOD", SmsParser.suggestCategory("paid at food store کارت مانده", categories))
-    }
+    @Test fun cardActivation() = rejects("کارت 6037991234567890 شما فعال شد. بانک ملی")
+
+    @Test fun telecomPromo() = rejects("همراه گرامی، با شارژ 100,000 تومانی هدیه بگیرید. جشنواره ویژه. لغو 11")
 }

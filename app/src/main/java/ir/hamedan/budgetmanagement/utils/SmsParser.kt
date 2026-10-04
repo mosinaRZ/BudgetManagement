@@ -9,133 +9,196 @@ data class SmsParseResult(
     val isTypeDetected: Boolean,
     val suggestedTitle: String,
     val timestamp: Long,
-    /** Unit of the returned amount. Rial amounts are converted to Toman. */
-    val currencyUnit: String = "تومان"
+    /** Unit of the returned amount. Rial amounts are always converted to Toman. */
+    val currencyUnit: String = "تومان",
+    /** 0..100. How strongly the SMS looks like a real bank transaction. */
+    val confidence: Int = 0,
+    /** Why the SMS was rejected (null when accepted). Useful for logs/tests. */
+    val rejectReason: String? = null
 )
 
 /**
- * High-precision parser for Iranian bank SMS messages.
+ * Precision-first parser for Iranian bank transaction SMS messages.
  *
- * The parser intentionally prefers rejecting an ambiguous SMS over creating a
- * wrong transaction. A parser cannot honestly guarantee a universal "<1%"
- * error rate because bank templates change, but this implementation is
- * conservative: only strong bank/transaction contexts are auto-accepted and
- * ambiguous numeric candidates are ignored.
+ * Design (based on how Iranian bank SMS and service/promotional lines work):
+ *  - Real transaction SMS are structured: bank name, masked account/card,
+ *    a transaction word (برداشت/واریز/خرید...), a signed or labelled amount,
+ *    a balance ("مانده") and a date/time.
+ *  - Promotional/informational SMS (even from the SAME bank sender) lack that
+ *    structure and contain marketing words, links, deadlines, OTP codes, etc.
+ *
+ * Pipeline: normalize -> hard rejects (OTP, failed tx, reminders, personal
+ * sender, 2+ promo markers) -> mask noise (dates, card/account numbers, URLs,
+ * phones) -> classify every number by its context (amount / balance / ref /
+ * fee / limit) -> score -> accept only if structure score is high enough.
+ *
+ * NOTE: no parser can honestly promise 100%; the rules below are deliberately
+ * conservative (a wrong rejection is cheaper than a wrong transaction), and
+ * [SmsParserTest] documents the covered formats so new bank formats can be
+ * added as regression cases.
  */
 object SmsParser {
 
-    private val incomeKeywords = listOf(
-        "واریز", "واریزی", "بستانکار", "افزایش موجودی", "دریافت"
+    /** Iranian banks report Rial. Used only when the SMS states no unit at all. */
+    private const val ASSUME_RIAL_WHEN_UNIT_MISSING = true
+    private const val MIN_CANDIDATE_SCORE = 5
+    private const val MIN_STRUCTURE_SCORE = 6
+
+    // ---------------------------------------------------------------------
+    // Hard-reject rules
+    // ---------------------------------------------------------------------
+
+    /** A person texting "واریز کردم 500,000" must never become a bank transaction. */
+    private val personalSenderRegex = Regex("""^(?:\+?98|0098|0)?9\d{9}\z""")
+
+    private val otpRegex = Regex(
+        """رمز\s*(?:پویا|دوم|یکبار|یک بار|ورود|عبور|ایستا)""" +
+                """|کد\s*(?:تایید|تاییدیه|فعال\s*سازی|ورود|امنیتی|احراز|یکبار|یک بار)""" +
+                """|شناسه\s*(?:تایید|تاییدیه)""" +
+                """|(?<![a-z])otp(?![a-z])|(?<![a-z])cvv2?(?![a-z0-9])|(?<![a-z])pin(?![a-z])"""
     )
 
-    private val expenseKeywords = listOf(
-        "برداشت", "خرید", "برداشتی", "بدهکار", "کسر", "پرداخت",
-        "انتقال به", "انتقال وجه", "کارمزد"
+    /** Failed / cancelled / rejected: no money moved, so it is not a transaction. */
+    private val failedRegex = Regex(
+        """ناموفق|نا موفق|موفق نبود|انجام نشد|(?<!\p{L})رد شد|(?<!\p{L})رد گردید""" +
+                """|لغو شد|لغو گردید|منقضی|کافی نیست|ناکافی|(?<!\p{L})خطا|عدم موفقیت|نشد(?!ه)"""
     )
 
-    private val bankIndicators = listOf(
-        "مانده", "موجودی", "کارت", "حساب", "واریز", "برداشت",
-        "خرید", "تراکنش", "کد رهگیری", "ساتنا", "پایا",
-        "شبا", "بستانکار", "بدهکار", "درگاه", "شاپرک"
+    /** Due-date reminders / bills: informational, not an executed transaction. */
+    private val reminderRegex = Regex(
+        """سر ?رسید|مهلت|موعد|معوق|یادآوری|تا تاریخ|قابل پرداخت|صورت ?حساب"""
     )
 
-    private val transactionVerbs = incomeKeywords + expenseKeywords
+    private val urlRegex = Regex(
+        """https?://|www\.|(?<![a-z0-9])[a-z0-9][a-z0-9-]*\.(?:ir|com|net|org|ai|co|me|app)(?![a-z])|bit\.ly|t\.me|\*\d{2,4}#"""
+    )
 
+    /** Marketing / campaign vocabulary. Two or more distinct hits = rejected. */
+    private val promoRegexes: List<Regex> = listOf(
+        "تخفیف", "جایزه", "قرعه", "برنده", "هدیه", "کمپین", "جشنواره", "حراج",
+        "فروش ویژه", "پیشنهاد", "ویژه", "رایگان", "باشگاه", "همین حالا", "فرصت",
+        "ثبت نام", "پیش ثبت", "دانلود", "نصب", "اپلیکیشن", "کلیک", "عضویت",
+        "بخشنامه", "اطلاعیه", "تبریک", "مناسبت", "دعوت", "شرکت در",
+        "حداقل", "حداکثر", "سقف", "چنانچه", "در صورت", "مراجعه", "کد تخفیف"
+    ).map { Regex(it) }
+
+    // ---------------------------------------------------------------------
+    // Vocabulary
+    // ---------------------------------------------------------------------
+
+    private val incomeWordRegex = Regex("""واریز|بستانکار|سود|عودت|برگشت|ایداع|سپرده گذاری""")
+    private val expenseWordRegex = Regex("""برداشت|خرید|پرداخت|کسر|بدهکار|کارمزد|قبض|شارژ""")
+    private val transactionRegex = Regex(
+        incomeWordRegex.pattern + "|" + expenseWordRegex.pattern +
+                """|انتقال|حواله|ساتنا|پایا|شتاب|پوز|خودپرداز|کارت به کارت|تراکنش"""
+    )
+    private val postVerbRegex = Regex("""واریز|برداشت|خرید|پرداخت|کسر|انتقال|بستانکار|بدهکار""")
+
+    private val bankWordRegex = Regex(
+        """بانک|(?<![a-z])bank(?![a-z])|شتاب|پایا|ساتنا|پوز|(?<![a-z])pos(?![a-z])|(?<![a-z])atm(?![a-z])""" +
+                """|خودپرداز|همراه بانک|اینترنت بانک|کارت به کارت|ملت|تجارت|صادرات|سپه|پاسارگاد|سامان""" +
+                """|پارسیان|رفاه|کشاورزی|آینده|سینا|نوین|کارآفرین|قوامین|توسعه|ایران زمین|گردشگری|حکمت|انصار|رسالت|بلو"""
+    )
+
+    private val balanceRegex = Regex("""مانده|موجودی|باقیمانده|بالانس|balance""")
+    private val refRegex = Regex(
+        """(?<!\p{L})(?:رهگیری|پیگیری|مرجع|سند|سریال|شناسه|ترمینال|پذیرنده|ref|rrn|stan|شماره|کد|حساب|کارت|شبا|سپرده|تلفن|موبایل)"""
+    )
+    private val feeRegex = Regex("""کارمزد|هزینه|مالیات|ارزش افزوده""")
+    private val limitRegex = Regex("""سقف|حداکثر|حداقل|امتیاز|اعتبار""")
     private val amountLabelRegex = Regex(
-        """(?:مبلغ|مقدار|برداشت|خرید|واریز|بستانکار|بدهکار|پرداخت|کسر|انتقال(?:\s+وجه)?(?:\s+به)?)\s*(?:[:=]|به\s*)?\s*[-+]?\s*([\d۰-۹٠-٩][\d۰-۹٠-٩,٬،\s]{2,})""",
-        RegexOption.IGNORE_CASE
+        """مبلغ|مقدار|وجه|برداشت|واریز|خرید|پرداخت|کسر|بستانکار|بدهکار|انتقال|سود|شارژ|قبض|حواله|عودت|برگشت|ایداع"""
     )
 
-    private val explicitAmountRegex = Regex(
-        """(?:مبلغ|مقدار)\s*(?:[:=]|به\s*)?\s*[-+]?\s*([\d۰-۹٠-٩][\d۰-۹٠-٩,٬،\s]{2,})""",
-        RegexOption.IGNORE_CASE
+    private val maskedEvidenceRegex = Regex("""[*•]{2,}|x{3,}|(?:حساب|کارت|شبا|سپرده)\s*:?\s*[\d*•#]{3,}""")
+    private val dateTimeEvidenceRegex = Regex(
+        """(?<!\d)\d{2,4}[/\-]\d{1,2}[/\-]\d{1,2}(?!\d)|(?<!\d)\d{1,2}:\d{2}(?!\d)"""
     )
 
-    private val numberRegex = Regex("""[\d۰-۹٠-٩][\d۰-۹٠-٩,٬،\s]{2,}""")
+    private val numberRegex = Regex("""(?<![\d,.])(\d{1,3}(?:,\d{3})+|\d+)(?!\d)""")
+    private val unitAfterRegex = Regex("""^[+\-]?[\s:]{0,3}(ریال|تومان|irr|irt|rls|rials?|toman)""")
+    private val unitBeforeRegex = Regex("""(ریال|تومان|irr|irt|rials?|toman)[\s:]{0,3}[+\-]?\z""")
 
-    private val balanceMarkers = listOf("مانده", "موجودی", "موجودی کارت", "مانده حساب")
-    private val currencyRegex = Regex("""(?:ریال|رِیال|تومان|irr|irt)""", RegexOption.IGNORE_CASE)
+    /** Patterns whose digits must never be mistaken for an amount (same length replaced by '#'). */
+    private val noisePatterns: List<Regex> = listOf(
+        Regex("""https?://\S+|www\.\S+"""),
+        Regex("""(?<![a-z0-9])[a-z0-9][a-z0-9.-]*\.(?:ir|com|net|org|ai|co|me|app)(?![a-z])\S*"""),
+        Regex("""ir\d{24}"""),
+        Regex("""(?<!\d)(?:\+98|0098|0)9\d{9}(?!\d)"""),
+        Regex("""\d{0,6}[*•]{2,}\d{0,6}|x{3,}\d{0,6}"""),
+        Regex("""(?<!\d)\d{1,4}[/\-.]\d{1,2}[/\-.]\d{1,4}(?!\d)"""),
+        Regex("""(?<!\d)\d{1,2}/\d{1,2}(?!\d)"""),
+        Regex("""(?<!\d)\d{1,2}:\d{2}(?::\d{2})?(?!\d)"""),
+        Regex("""\d+(?:\.\d+)?\s*(?:%|درصد)""")
+    )
 
-    // Raw values with these lengths are much more likely to be identifiers than money.
-    private val identifierLengths = setOf(10, 11, 12, 13, 14, 16, 19)
+    // ---------------------------------------------------------------------
+    // Public API
+    // ---------------------------------------------------------------------
 
-    fun isLikelyBankSms(body: String): Boolean {
-        val normalized = normalizeText(body)
-        if (normalized.isBlank()) return false
+    /**
+     * @param sender optional originating address; personal mobile numbers are rejected.
+     */
+    fun isLikelyBankSms(body: String, sender: String? = null): Boolean =
+        analyze(body, sender).accepted
 
-        val hasTransactionVerb = transactionVerbs.any { normalized.contains(it) }
-        val indicatorCount = bankIndicators.count { normalized.contains(it) }
-        val hasCurrency = currencyRegex.containsMatchIn(normalized)
-        val hasAmountLabel = explicitAmountRegex.containsMatchIn(normalized)
+    fun parse(
+        body: String,
+        timestamp: Long = System.currentTimeMillis(),
+        sender: String? = null
+    ): SmsParseResult {
+        val analysis = analyze(body, sender)
+        val candidate = analysis.candidate
 
-        // A transaction verb alone is not enough. Require another independent
-        // banking/amount signal to keep ordinary shopping/OTP messages out.
-        return hasTransactionVerb && (
-                indicatorCount >= 2 ||
-                        (hasAmountLabel && hasCurrency) ||
-                        (hasAmountLabel && normalized.contains("کارت")) ||
-                        (hasAmountLabel && normalized.contains("حساب"))
-                )
-    }
-
-    fun parse(body: String, timestamp: Long = System.currentTimeMillis()): SmsParseResult {
-        val normalized = normalizeText(body)
-
-        if (!isLikelyBankSms(normalized)) {
+        if (!analysis.accepted || candidate == null) {
             return SmsParseResult(
                 amount = 0.0,
                 isAmountDetected = false,
                 type = "EXPENSE",
                 isTypeDetected = false,
                 suggestedTitle = "",
-                timestamp = timestamp
+                timestamp = timestamp,
+                confidence = 0,
+                rejectReason = analysis.reason
             )
         }
 
-        val hasIncome = incomeKeywords.any { normalized.contains(it) }
-        val hasExpense = expenseKeywords.any { normalized.contains(it) }
+        val text = analysis.normalized
 
-        val type = when {
-            hasIncome && !hasExpense -> "INCOME"
-            hasExpense && !hasIncome -> "EXPENSE"
-            // Transfers that contain both words are ambiguous. Keep the
-            // historical EXPENSE fallback, but mark the type as uncertain.
-            else -> "EXPENSE"
+        // ---- direction -------------------------------------------------
+        var type = "EXPENSE"
+        var isTypeDetected = true
+        when {
+            candidate.sign == '+' -> type = "INCOME"
+            candidate.sign == '-' -> type = "EXPENSE"
+            else -> {
+                val byLabel = candidate.label?.let { directionOf(it) } ?: 0
+                if (byLabel != 0) {
+                    type = if (byLabel > 0) "INCOME" else "EXPENSE"
+                } else {
+                    val hasIncome = incomeWordRegex.containsMatchIn(text)
+                    val hasExpense = expenseWordRegex.containsMatchIn(text)
+                    when {
+                        hasIncome && !hasExpense -> type = "INCOME"
+                        hasExpense && !hasIncome -> type = "EXPENSE"
+                        else -> isTypeDetected = false // ambiguous: user must confirm
+                    }
+                }
+            }
         }
 
-        val isTypeDetected = hasIncome || hasExpense
-
-        val rawAmount = findBestAmount(normalized)
-        if (rawAmount <= 0.0) {
-            return SmsParseResult(
-                amount = 0.0,
-                isAmountDetected = false,
-                type = type,
-                isTypeDetected = isTypeDetected,
-                suggestedTitle = "",
-                timestamp = timestamp
-            )
+        // ---- unit (Rial -> Toman) ----------------------------------------
+        val hasRialWord = Regex("""ریال|irr|rls|rial""").containsMatchIn(text)
+        val hasTomanWord = Regex("""تومان|irt|toman""").containsMatchIn(text)
+        val unit = candidate.unit ?: when {
+            hasRialWord && !hasTomanWord -> "rial"
+            hasTomanWord && !hasRialWord -> "toman"
+            ASSUME_RIAL_WHEN_UNIT_MISSING -> "rial"
+            else -> "toman"
         }
+        val amount = if (unit == "rial") candidate.value / 10.0 else candidate.value.toDouble()
 
-        val explicitlyRial = Regex("""(?:ریال|رِیال|irr)""", RegexOption.IGNORE_CASE)
-            .containsMatchIn(normalized)
-        val explicitlyToman = Regex("""(?:تومان|irt)""", RegexOption.IGNORE_CASE)
-            .containsMatchIn(normalized)
-
-        // If the SMS explicitly says Rial, internal app amounts are Toman.
-        // When no unit is stated, do not invent a conversion.
-        val amount = if (explicitlyRial && !explicitlyToman) rawAmount / 10.0 else rawAmount
-        val currencyUnit = when {
-            explicitlyRial && !explicitlyToman -> "تومان"
-            explicitlyToman -> "تومان"
-            else -> "واحد پول حساب"
-        }
-
-        val suggestedTitle = when {
-            hasIncome && !hasExpense -> "واریز پیامکی"
-            hasExpense && !hasIncome -> "تراکنش پیامکی"
-            else -> "تراکنش پیامکی"
-        }
+        val suggestedTitle = if (isTypeDetected && type == "INCOME") "واریز پیامکی" else "تراکنش پیامکی"
 
         return SmsParseResult(
             amount = amount,
@@ -144,7 +207,9 @@ object SmsParser {
             isTypeDetected = isTypeDetected,
             suggestedTitle = suggestedTitle,
             timestamp = timestamp,
-            currencyUnit = currencyUnit
+            currencyUnit = "تومان",
+            confidence = analysis.confidence,
+            rejectReason = null
         )
     }
 
@@ -159,118 +224,252 @@ object SmsParser {
             .orEmpty()
     }
 
-    private fun findBestAmount(text: String): Double {
-        // 1) Explicit "مبلغ ..." is the highest-confidence source.
-        val explicitCandidates = explicitAmountRegex.findAll(text)
-            .mapNotNull { parseCandidate(it.groupValues[1]) }
-            .filter { it.value > 0 }
-            .toList()
+    // ---------------------------------------------------------------------
+    // Analysis
+    // ---------------------------------------------------------------------
 
-        if (explicitCandidates.isNotEmpty()) {
-            return explicitCandidates
-                .filterNot { isNearBalanceMarker(text, it.start) }
-                .maxByOrNull { it.confidence }
-                ?.value
-                ?: explicitCandidates.maxByOrNull { it.confidence }!!.value
-        }
+    private enum class Ctx { BALANCE, REF, FEE, LIMIT, AMOUNT }
 
-        // 2) Transaction keyword + amount is the second-highest confidence.
-        val keywordCandidates = amountLabelRegex.findAll(text)
-            .mapNotNull { match ->
-                parseCandidate(match.groupValues[1])?.let { candidate ->
-                    candidate.copy(start = match.range.first, confidence = candidate.confidence + 2)
-                }
-            }
-            .filterNot { isNearBalanceMarker(text, it.start) }
-            .toList()
+    private data class Label(val ctx: Ctx, val word: String, val end: Int)
 
-        if (keywordCandidates.isNotEmpty()) {
-            return keywordCandidates.maxBy { it.confidence }.value
-        }
-
-        // 3) Conservative fallback: only accept a number when it is followed
-        // closely by an explicit currency marker. This is deliberately stricter
-        // than "first number in SMS" because balances/card numbers are common.
-        val fallback = numberRegex.findAll(text).mapNotNull { match ->
-            val candidate = parseCandidate(match.value) ?: return@mapNotNull null
-            val tail = text.substring(match.range.last + 1).take(18)
-            if (!currencyRegex.containsMatchIn(tail)) return@mapNotNull null
-            if (isNearBalanceMarker(text, match.range.first)) return@mapNotNull null
-            candidate.copy(start = match.range.first, confidence = candidate.confidence + 1)
-        }.toList()
-
-        return fallback.maxByOrNull { it.confidence }?.value ?: 0.0
-    }
-
-    private data class AmountCandidate(
-        val value: Double,
+    private data class Candidate(
+        val value: Long,
         val start: Int,
-        val confidence: Int
+        val score: Int,
+        val sign: Char?,
+        val unit: String?,   // "rial" | "toman" | null
+        val label: String?,
+        val hasLabel: Boolean
     )
 
-    private fun parseCandidate(raw: String): AmountCandidate? {
-        val digits = raw
-            .replace(" ", "")
-            .replace(",", "")
-            .replace("٬", "")
-            .replace("،", "")
+    private data class Analysis(
+        val accepted: Boolean,
+        val reason: String?,
+        val candidate: Candidate?,
+        val confidence: Int,
+        val normalized: String
+    )
 
-        if (digits.isBlank()) return null
+    private fun analyze(body: String, sender: String?): Analysis {
+        val text = normalizeText(body)
+        fun reject(reason: String) = Analysis(false, reason, null, 0, text)
 
-        val numeric = digits.toLongOrNull() ?: return null
-        if (numeric <= 0L) return null
+        if (text.isBlank()) return reject("blank")
+        if (isPersonalSender(sender)) return reject("personal_sender")
+        if (otpRegex.containsMatchIn(text)) return reject("otp")
+        if (failedRegex.containsMatchIn(text)) return reject("failed_transaction")
+        if (reminderRegex.containsMatchIn(text)) return reject("reminder")
 
-        val length = digits.length
-        // Identifier-like values are rejected unless they came from an explicit
-        // "مبلغ" context (handled before fallback).
-        if (length in identifierLengths) {
-            return null
+        val promoHits = promoRegexes.count { it.containsMatchIn(text) } +
+                if (urlRegex.containsMatchIn(text)) 1 else 0
+        if (promoHits >= 2) return reject("promotional")
+
+        val masked = maskNoise(text)
+        val tokens = numberRegex.findAll(masked).toList()
+
+        var hasBalance = false
+        val candidates = ArrayList<Candidate>()
+
+        tokens.forEachIndexed { i, m ->
+            val s = m.range.first
+            val e = m.range.last + 1
+            val raw = m.value
+            val digits = raw.replace(",", "")
+            val hasSep = raw.contains(',')
+
+            if (digits.length > 15) return@forEachIndexed
+            if (!hasSep && digits.length >= 13) return@forEachIndexed
+            if (!hasSep && digits.length >= 4 && digits.startsWith("0")) return@forEachIndexed
+            val value = digits.toLongOrNull() ?: return@forEachIndexed
+            if (value < 10L) return@forEachIndexed
+
+            val prevEnd = if (i > 0) tokens[i - 1].range.last + 1 else 0
+            val nextStart = if (i < tokens.lastIndex) tokens[i + 1].range.first else masked.length
+
+            val seg = masked.substring(maxOf(prevEnd, s - 40, 0), s)
+            val hit = classify(seg, plainLength = if (hasSep) 0 else digits.length)
+
+            when (hit?.ctx) {
+                Ctx.BALANCE -> { hasBalance = true; return@forEachIndexed }
+                Ctx.REF, Ctx.LIMIT -> return@forEachIndexed
+                else -> Unit
+            }
+
+            val postSeg = masked.substring(e, minOf(nextStart, e + 35, masked.length))
+            if (hit == null && i == tokens.lastIndex && balanceRegex.containsMatchIn(postSeg.take(20)) &&
+                !postVerbRegex.containsMatchIn(postSeg)
+            ) {
+                hasBalance = true
+                return@forEachIndexed
+            }
+
+            val sign = signOf(masked, s, e)
+            val unit = unitOf(masked, s, e, prevEnd, nextStart)
+            val postVerb = if (hit == null) postVerbRegex.find(postSeg)?.value else null
+            val hasLabel = hit?.ctx == Ctx.AMOUNT
+
+            // Long plain digit strings (10-12) are usually account/card/ref numbers.
+            if (!hasSep && digits.length in 10..12 && !(hasLabel && unit != null)) {
+                return@forEachIndexed
+            }
+
+            var score = 0
+            if (sign != null) score += 5
+            when {
+                hasLabel -> score += if (hit!!.word in strongLabels) 6 else 5
+                hit?.ctx == Ctx.FEE -> score += 3
+                postVerb != null -> score += 3
+            }
+            if (unit != null) score += 3
+            score += if (hasSep) 2 else if (digits.length in 4..9) 1 else 0
+
+            if (score >= MIN_CANDIDATE_SCORE) {
+                candidates += Candidate(
+                    value = value,
+                    start = s,
+                    score = score,
+                    sign = sign,
+                    unit = unit,
+                    label = hit?.word ?: postVerb,
+                    hasLabel = hasLabel
+                )
+            }
         }
 
-        val separators = raw.count { it == ',' || it == '٬' || it == '،' }
-        val confidence = when {
-            separators >= 1 -> 4
-            length >= 4 -> 3
-            else -> 1
+        val sorted = candidates.sortedWith(compareByDescending<Candidate> { it.score }.thenBy { it.start })
+        val best = sorted.firstOrNull() ?: return reject("no_amount")
+        val runnerUp = sorted.getOrNull(1)
+        val ambiguous = runnerUp != null && runnerUp.score == best.score &&
+                runnerUp.value != best.value && best.sign == null
+
+        val signed = best.sign != null
+        if (promoHits == 1 && !(signed && hasBalance)) return reject("promotional")
+
+        val maskedEvidence = maskedEvidenceRegex.containsMatchIn(text)
+        val bankWord = bankWordRegex.containsMatchIn(text)
+        val txnWord = transactionRegex.containsMatchIn(text)
+
+        if (!(hasBalance || maskedEvidence || bankWord || signed)) return reject("no_bank_evidence")
+        if (!(txnWord || signed)) return reject("no_transaction_word")
+
+        var structure = 0
+        if (signed) structure += 3
+        if (best.hasLabel) structure += 2
+        if (hasBalance) structure += 2
+        if (maskedEvidence) structure += 2
+        if (dateTimeEvidenceRegex.containsMatchIn(text)) structure += 1
+        if (best.unit != null) structure += 1
+        if (bankWord) structure += 2
+        if (txnWord) structure += 2
+
+        if (structure < MIN_STRUCTURE_SCORE) return reject("weak_structure")
+
+        var confidence = minOf(100, structure * 100 / 12)
+        if (ambiguous) confidence -= 15
+        return Analysis(true, null, best, confidence.coerceIn(0, 100), text)
+    }
+
+    private val strongLabels = setOf("مبلغ", "مقدار", "وجه")
+
+    /** Finds the closest meaningful keyword before a number and decides what the number is. */
+    private fun classify(seg: String, plainLength: Int): Label? {
+        val hits = ArrayList<Label>()
+        fun collect(re: Regex, ctx: Ctx) {
+            re.findAll(seg).forEach { hits += Label(ctx, it.value, it.range.last + 1) }
         }
+        collect(balanceRegex, Ctx.BALANCE)
+        collect(refRegex, Ctx.REF)
+        collect(feeRegex, Ctx.FEE)
+        collect(limitRegex, Ctx.LIMIT)
+        collect(amountLabelRegex, Ctx.AMOUNT)
 
-        return AmountCandidate(
-            value = numeric.toDouble(),
-            start = 0,
-            confidence = confidence
-        )
+        for (h in hits.sortedByDescending { it.end }) {
+            val gap = seg.length - h.end
+            val between = seg.substring(h.end)
+            val ok = when (h.ctx) {
+                Ctx.BALANCE -> gap <= 25
+                Ctx.LIMIT, Ctx.FEE -> gap <= 14
+                Ctx.AMOUNT -> gap <= 30
+                // "حساب شما 500,000" must not make 500,000 an account number:
+                // a ref label only counts when it is directly attached to the number.
+                Ctx.REF -> (gap <= 5 && between.none { it.isLetter() }) || (plainLength >= 8 && gap <= 12)
+            }
+            if (ok) return h
+        }
+        return null
     }
 
-    private fun isNearBalanceMarker(text: String, start: Int): Boolean {
-        val windowStart = (start - 24).coerceAtLeast(0)
-        val prefix = text.substring(windowStart, start)
-        return balanceMarkers.any { prefix.contains(it) }
+    private fun signOf(t: String, s: Int, e: Int): Char? {
+        fun isSign(c: Char) = c == '+' || c == '-'
+        if (s >= 1 && isSign(t[s - 1]) && (s < 2 || !t[s - 2].isLetterOrDigit())) return t[s - 1]
+        if (e < t.length && isSign(t[e]) && (e + 1 >= t.length || !t[e + 1].isDigit())) return t[e]
+        return null
     }
 
-    /** Convert Persian/Arabic digits to Latin and strip bidi marks. */
+    private fun unitOf(t: String, s: Int, e: Int, prevEnd: Int, nextStart: Int): String? {
+        val after = t.substring(e, minOf(t.length, nextStart, e + 14))
+        unitAfterRegex.find(after)?.let { return toUnit(it.groupValues[1]) }
+        val before = t.substring(maxOf(s - 12, prevEnd, 0), s)
+        unitBeforeRegex.find(before)?.let { return toUnit(it.groupValues[1]) }
+        return null
+    }
+
+    private fun toUnit(word: String): String =
+        if (word == "ریال" || word == "irr" || word == "rls" || word.startsWith("rial")) "rial" else "toman"
+
+    private fun directionOf(word: String): Int = when {
+        incomeWordRegex.containsMatchIn(word) -> 1
+        expenseWordRegex.containsMatchIn(word) -> -1
+        else -> 0
+    }
+
+    private fun isPersonalSender(sender: String?): Boolean {
+        if (sender.isNullOrBlank()) return false
+        if (sender.any { it.isLetter() }) return false
+        val cleaned = sender.filter { it.isDigit() || it == '+' }
+        return personalSenderRegex.matches(cleaned)
+    }
+
+    private fun maskNoise(text: String): String {
+        var s = text
+        for (p in noisePatterns) {
+            s = p.replace(s) { "#".repeat(it.value.length) }
+        }
+        return s
+    }
+
+    /**
+     * Persian/Arabic digits -> Latin, Arabic letter variants -> Persian, strips bidi marks,
+     * ZWNJ -> space, unifies separators/minus signs, lowercases.
+     */
     private fun normalizeText(input: String): String {
         val fa = "۰۱۲۳۴۵۶۷۸۹"
         val ar = "٠١٢٣٤٥٦٧٨٩"
         val sb = StringBuilder(input.length)
 
         for (c in input) {
-            if (c == '\u200E' || c == '\u200F' || c == '\u202A' ||
-                c == '\u202B' || c == '\u202C' || c == '\u2066' || c == '\u2067'
-            ) continue
-
             when (c) {
-                '٬', '，' -> sb.append(',')
+                '\u200E', '\u200F', '\u202A', '\u202B', '\u202C', '\u202D', '\u202E',
+                '\u2066', '\u2067', '\u2068', '\u2069', '\uFEFF', '\u0640' -> Unit
+                '\u200C', '\u00A0', '\t' -> sb.append(' ')
+                '٬', '،', '，' -> sb.append(',')
+                '٫' -> sb.append('.')
+                'ي', 'ى' -> sb.append('ی')
+                'ك' -> sb.append('ک')
+                'ۀ', 'ة' -> sb.append('ه')
+                'أ', 'إ', 'ٱ' -> sb.append('ا')
+                '−', '–', '—', '‐', '‑' -> sb.append('-')
                 else -> {
                     val faIdx = fa.indexOf(c)
                     val arIdx = ar.indexOf(c)
                     when {
                         faIdx != -1 -> sb.append(faIdx)
                         arIdx != -1 -> sb.append(arIdx)
-                        else -> sb.append(c)
+                        else -> sb.append(c.lowercaseChar())
                     }
                 }
             }
         }
-        return sb.toString()
+        return sb.toString().replace(Regex(""" {2,}"""), " ").trim()
     }
 }

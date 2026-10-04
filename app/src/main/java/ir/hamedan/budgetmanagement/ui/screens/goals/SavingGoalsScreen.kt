@@ -32,6 +32,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -460,7 +462,9 @@ fun SavingGoalsScreen(
 
         // ------------------ Delete Dialog ------------------
         goalToDelete?.let { goal ->
-            var isPressed by remember { mutableStateOf(false) }
+            // 0 = بدون فشار، 1 = دکمه‌ی اول در حال نگه‌داشتن، 2 = دکمه‌ی دوم در حال نگه‌داشتن
+            var holdingMode by remember { mutableStateOf(0) }
+            val isPressed = holdingMode != 0
             val dialogShape = RoundedCornerShape(28.dp)
             val hasBalance = goal.currentAmount > 0L
             val displayBalance = if (currencyUnit == "IRR") goal.currentAmount * 10L else goal.currentAmount
@@ -475,17 +479,11 @@ fun SavingGoalsScreen(
                 animationSpec = tween(durationMillis = 300, easing = LinearOutSlowInEasing),
                 label = "CancelWeight"
             )
-            val progress by animateFloatAsState(
-                targetValue = if (isPressed) 1f else 0f,
-                animationSpec = tween(
-                    durationMillis = if (isPressed) 1500 else 300,
-                    easing = LinearEasing
-                ),
-                label = "HoldProgress"
-            )
 
+            // سیستم Undo: بدون تغییر؛ حذف انجام می‌شود، اسنک‌بار «بازگردانی» نمایش داده می‌شود
+            // و در صورت نزدن Undo، حذف نهایی (commitDelete) ثبت می‌شود.
             fun finishDelete(addToBalance: Boolean) {
-                isPressed = false
+                holdingMode = 0
                 val targetGoal = goal
                 viewModel.deleteNonEmptyGoal(targetGoal, addToBalance)
                 goalToDelete = null
@@ -500,12 +498,6 @@ fun SavingGoalsScreen(
                     } else {
                         viewModel.commitDelete(targetGoal)
                     }
-                }
-            }
-
-            LaunchedEffect(progress, hasBalance) {
-                if (progress >= 1f && isPressed && !hasBalance) {
-                    finishDelete(addToBalance = false)
                 }
             }
 
@@ -550,45 +542,97 @@ fun SavingGoalsScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
 
-                        Text(
-                            text = if (hasBalance) {
-                                if (isPersian)
-                                    "قلک «${goal.title}» دارای ${numberFormatter.format(displayBalance)} $currencyText موجودی است. قبل از حذف مشخص کنید این مبلغ به تراز کل برگردد یا خیر."
+                        if (hasBalance) {
+                            Text(
+                                text = if (isPersian)
+                                    "قلک «${goal.title}» موجودی دارد. قبل از حذف مشخص کنید این مبلغ به تراز کل برگردد یا خیر."
                                 else
-                                    "'${goal.title}' contains ${numberFormatter.format(displayBalance)} $currencyText. Choose whether this balance should be returned to the total balance before deletion."
-                            } else {
-                                if (isPersian)
+                                    "'${goal.title}' has a balance. Choose whether it should be returned to the total balance before deletion.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp, horizontal = 12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = if (isPersian) "موجودی قلک" else "Goal balance",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "${numberFormatter.format(displayBalance)} $currencyText",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                HoldToConfirmButton(
+                                    label = if (isPersian) "افزودن به تراز و حذف" else "Add to balance & delete",
+                                    holdingLabel = if (isPersian) "در حال حذف..." else "Deleting...",
+                                    icon = Icons.Default.Delete,
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                                    enabled = holdingMode == 0 || holdingMode == 1,
+                                    onHoldChange = { holding -> holdingMode = if (holding) 1 else 0 },
+                                    onConfirmed = { finishDelete(addToBalance = true) },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                HoldToConfirmButton(
+                                    label = if (isPersian) "حذف بدون افزودن به تراز" else "Delete without adding to balance",
+                                    holdingLabel = if (isPersian) "در حال حذف..." else "Deleting...",
+                                    icon = Icons.Default.Delete,
+                                    containerColor = MaterialTheme.colorScheme.error,
+                                    contentColor = MaterialTheme.colorScheme.onError,
+                                    enabled = holdingMode == 0 || holdingMode == 2,
+                                    onHoldChange = { holding -> holdingMode = if (holding) 2 else 0 },
+                                    onConfirmed = { finishDelete(addToBalance = false) },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                OutlinedButton(
+                                    onClick = { goalToDelete = null },
+                                    enabled = !isPressed,
+                                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(if (isPersian) "انصراف" else "Cancel", maxLines = 1)
+                                }
+                            }
+
+                            Text(
+                                text = if (isPersian) "برای تأیید، دکمه‌ی حذف را نگه دارید" else "Press and hold a delete button to confirm",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                textAlign = TextAlign.Center
+                            )
+                        } else {
+                            Text(
+                                text = if (isPersian)
                                     "آیا از حذف قلک «${goal.title}» اطمینان دارید؟"
                                 else
-                                    "Are you sure you want to delete '${goal.title}'?"
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
+                                    "Are you sure you want to delete '${goal.title}'?",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
 
-                        if (hasBalance) {
-                            Button(
-                                onClick = { finishDelete(addToBalance = true) },
-                                modifier = Modifier.fillMaxWidth().height(48.dp),
-                                shape = RoundedCornerShape(14.dp)
-                            ) {
-                                Text(
-                                    if (isPersian) "افزودن به تراز و حذف" else "Add to balance & delete",
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            OutlinedButton(
-                                onClick = { finishDelete(addToBalance = false) },
-                                modifier = Modifier.fillMaxWidth().height(48.dp),
-                                shape = RoundedCornerShape(14.dp)
-                            ) {
-                                Text(if (isPersian) "حذف بدون افزودن به تراز" else "Delete without adding to balance")
-                            }
-                            TextButton(onClick = { goalToDelete = null }, enabled = !isPressed) {
-                                Text(if (isPersian) "انصراف" else "Cancel")
-                            }
-                        } else {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
@@ -614,54 +658,103 @@ fun SavingGoalsScreen(
                                     }
                                 }
 
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(48.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(MaterialTheme.colorScheme.error)
-                                        .pointerInput(Unit) {
-                                            detectTapGestures(
-                                                onPress = {
-                                                    isPressed = true
-                                                    tryAwaitRelease()
-                                                    if (progress < 1f) isPressed = false
-                                                }
-                                            )
-                                        },
-                                    contentAlignment = Alignment.CenterStart
-                                ) {
-                                    if (progress > 0f) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxHeight()
-                                                .fillMaxWidth(progress.coerceAtLeast(0.001f))
-                                                .background(Color.White.copy(alpha = 0.25f))
-                                        )
-                                    }
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onError)
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(
-                                            text = if (isPressed) {
-                                                if (isPersian) "در حال حذف..." else "Deleting..."
-                                            } else {
-                                                if (isPersian) "حذف" else "Hold to Delete"
-                                            },
-                                            color = MaterialTheme.colorScheme.onError,
-                                            maxLines = 1
-                                        )
-                                    }
-                                }
+                                HoldToConfirmButton(
+                                    label = if (isPersian) "حذف" else "Hold to Delete",
+                                    holdingLabel = if (isPersian) "در حال حذف..." else "Deleting...",
+                                    icon = Icons.Default.Delete,
+                                    containerColor = MaterialTheme.colorScheme.error,
+                                    contentColor = MaterialTheme.colorScheme.onError,
+                                    enabled = true,
+                                    onHoldChange = { holding -> holdingMode = if (holding) 1 else 0 },
+                                    onConfirmed = { finishDelete(addToBalance = false) },
+                                    modifier = Modifier.weight(1f)
+                                )
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * دکمه‌ی «نگه‌دار تا تأیید شود» (۱.۵ ثانیه) با نوار پیشرفت؛ همان رفتار دکمه‌ی حذف قلک خالی،
+ * به‌صورت مشترک برای همه‌ی حالت‌های دیالوگ حذف.
+ */
+@Composable
+private fun HoldToConfirmButton(
+    label: String,
+    holdingLabel: String,
+    icon: ImageVector,
+    containerColor: Color,
+    contentColor: Color,
+    enabled: Boolean,
+    onHoldChange: (Boolean) -> Unit,
+    onConfirmed: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isPressed by remember { mutableStateOf(false) }
+    val progress by animateFloatAsState(
+        targetValue = if (isPressed) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = if (isPressed) 1500 else 300,
+            easing = LinearEasing
+        ),
+        label = "HoldProgress"
+    )
+    val currentEnabled by rememberUpdatedState(enabled)
+    val currentOnHoldChange by rememberUpdatedState(onHoldChange)
+
+    LaunchedEffect(progress) {
+        if (progress >= 1f && isPressed) {
+            isPressed = false
+            onConfirmed()
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .height(48.dp)
+            .alpha(if (enabled) 1f else 0.38f)
+            .clip(RoundedCornerShape(14.dp))
+            .background(containerColor)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        if (currentEnabled) {
+                            isPressed = true
+                            currentOnHoldChange(true)
+                            tryAwaitRelease()
+                            isPressed = false
+                            currentOnHoldChange(false)
+                        }
+                    }
+                )
+            },
+        contentAlignment = Alignment.CenterStart
+    ) {
+        if (progress > 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(progress.coerceAtLeast(0.001f))
+                    .background(Color.White.copy(alpha = 0.25f))
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = contentColor)
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = if (isPressed) holdingLabel else label,
+                color = contentColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

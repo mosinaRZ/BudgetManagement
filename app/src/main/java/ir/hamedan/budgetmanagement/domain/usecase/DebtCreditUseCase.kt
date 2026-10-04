@@ -46,14 +46,17 @@ class DebtCreditUseCase(
 
     suspend fun deposit(item: DebtCreditEntity, amount: Long) {
         require(amount > 0L) { "Payment amount must be greater than zero." }
-        val newPaid = (item.paidAmount + amount).coerceAtMost(item.totalAmount)
+        val remaining = (item.totalAmount - item.paidAmount).coerceAtLeast(0L)
+        require(amount <= remaining) { "Payment amount cannot exceed the remaining amount." }
+        val newPaid = item.paidAmount + amount
         debtCreditRepository.insertOrUpdate(item.copy(paidAmount = newPaid, isSettled = newPaid >= item.totalAmount))
         insertPaymentTransaction(item, amount, reverse = false)
     }
 
     suspend fun withdraw(item: DebtCreditEntity, amount: Long) {
         require(amount > 0L) { "Adjustment amount must be greater than zero." }
-        val newPaid = (item.paidAmount - amount).coerceAtLeast(0L)
+        require(amount <= item.paidAmount) { "Adjustment amount cannot exceed the amount already paid or received." }
+        val newPaid = item.paidAmount - amount
         debtCreditRepository.insertOrUpdate(item.copy(paidAmount = newPaid, isSettled = newPaid >= item.totalAmount))
         insertPaymentTransaction(item, amount, reverse = true)
     }

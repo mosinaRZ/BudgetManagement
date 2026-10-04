@@ -41,9 +41,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
@@ -1181,19 +1183,25 @@ private fun BalanceTrendChartCard(
                                 .clip(RoundedCornerShape(8.dp))
                         ) {
                             if (isScrollable) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxHeight()
-                                        .horizontalScroll(scrollState)
-                                ) {
-                                    TrendLineCanvas(
-                                        dataPoints = dataPoints,
-                                        lineColor = lineColor,
-                                        averageColor = averageColor,
+                                // محور زمان نمودار همیشه از چپ (قدیمی‌ترین) به راست (جدیدترین) رسم می‌شود.
+                                // در حالت فارسی (RTL) مبدأ اسکرول افقی راست است و نمودار از آخر به اول
+                                // اسکرول می‌شد؛ با جهت LTR فقط برای خودِ نمودار، اسکرول (و اسکرول خودکار
+                                // به نقطه‌ی فعلی) در هر دو زبان از اول به آخر خواهد بود.
+                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                    Row(
                                         modifier = Modifier
-                                            .width(chartWidth!!)
                                             .fillMaxHeight()
-                                    )
+                                            .horizontalScroll(scrollState)
+                                    ) {
+                                        TrendLineCanvas(
+                                            dataPoints = dataPoints,
+                                            lineColor = lineColor,
+                                            averageColor = averageColor,
+                                            modifier = Modifier
+                                                .width(chartWidth!!)
+                                                .fillMaxHeight()
+                                        )
+                                    }
                                 }
                             } else {
                                 TrendLineCanvas(

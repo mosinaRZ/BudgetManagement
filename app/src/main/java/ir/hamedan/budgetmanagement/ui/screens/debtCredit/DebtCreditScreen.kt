@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -44,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import ir.hamedan.budgetmanagement.data.local.models.DebtCreditEntity
+import ir.hamedan.budgetmanagement.data.money.MoneyContract
+import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.StatusBarAuroraBackground
@@ -71,6 +74,7 @@ fun DebtCreditScreen(
     val coroutineScope = rememberCoroutineScope()
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }
     val debtCreditList by viewModel.debtCreditList.collectAsState()
+    val currencyUnit by CurrencySharedPreferences.currencyFlow.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -169,6 +173,7 @@ fun DebtCreditScreen(
                     DebtCreditItemCard(
                         item = item,
                         isPersian = isPersian,
+                        currencyUnit = currencyUnit,
                         onDepositClick = { itemForDeposit = item },
                         onWithdrawClick = { itemForWithdraw = item },
                         onEditClick = {
@@ -276,7 +281,7 @@ fun DebtCreditScreen(
             AmountActionDialog(
                 title = if (isPersian) "ثبت واریزی/پرداختی برای «${item.personName}»" else "Deposit for '${item.personName}'",
                 isPersian = isPersian,
-                currencyUnit = "IRT",
+                currencyUnit = currencyUnit,
                 isDeposit = true,
                 onDismiss = { itemForDeposit = null },
                 onConfirm = { amount ->
@@ -290,96 +295,83 @@ fun DebtCreditScreen(
             val remaining = (item.totalAmount - item.paidAmount).coerceAtLeast(0L)
             val isDebt = item.type == "DEBT"
             val accent = if (isDebt) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-            val dialogShape = RoundedCornerShape(28.dp)
 
             Dialog(onDismissRequest = { itemForSettlement = null }) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface, dialogShape)
-                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), dialogShape)
-                        .clip(dialogShape)
-                        .padding(24.dp)
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                ThemedDialogCard {
+                    DialogIconBadge(
+                        icon = Icons.Default.AccountBalanceWallet,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+
+                    Text(
+                        text = if (isPersian) "تسویه «${item.personName}»" else "Settle '${item.personName}'",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .background(accent.copy(alpha = 0.1f), CircleShape)
-                                .border(1.dp, accent.copy(alpha = 0.18f), CircleShape),
-                            contentAlignment = Alignment.Center
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp, horizontal = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Icon(
-                                Icons.Default.AccountBalanceWallet,
-                                contentDescription = null,
-                                tint = accent,
-                                modifier = Modifier.size(30.dp)
+                            Text(
+                                text = if (isPersian) "مانده قابل تسویه" else "Remaining balance",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = formatDebtCreditAmount(remaining, currencyUnit, isPersian),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = accent,
+                                textAlign = TextAlign.Center
                             )
                         }
+                    }
 
-                        Text(
-                            text = if (isPersian) "تسویه «${item.personName}»؟" else "Settle “${item.personName}”?",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.ExtraBold,
-                            textAlign = TextAlign.Center
-                        )
+                    Text(
+                        text = if (isPersian)
+                            "با تأیید، مبلغ مانده به‌عنوان تراکنش ${if (isDebt) "برداشت" else "واریز"} در تراز حساب ثبت می‌شود."
+                        else
+                            "Confirming will record the remaining amount as a ${if (isDebt) "withdrawal" else "income"} transaction in your account balance.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
 
-                        Text(
-                            text = if (isPersian) "مانده قابل تسویه" else "Remaining balance",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        Text(
-                            text = "${NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US).format(remaining)} ${if (isPersian) "تومان" else "Toman"}",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = accent
-                        )
-
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                            shape = RoundedCornerShape(16.dp)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(
+                            onClick = { itemForSettlement = null },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(14.dp)
                         ) {
-                            Row(
-                                Modifier.fillMaxWidth().padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.Warning, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
-                                Spacer(Modifier.width(9.dp))
-                                Text(
-                                    if (isPersian) "با تأیید، مبلغ مانده به‌عنوان تراکنش ${if (isDebt) "برداشت" else "واریز"} در تراز حساب ثبت می‌شود."
-                                    else "Confirming will record the remaining amount as a ${if (isDebt) "withdrawal" else "income"} transaction in your account balance.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (isPersian) "انصراف" else "Cancel", maxLines = 1)
                         }
-
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            OutlinedButton(
-                                onClick = { itemForSettlement = null },
-                                modifier = Modifier.weight(1f).height(50.dp),
-                                shape = RoundedCornerShape(15.dp)
-                            ) {
-                                Text(if (isPersian) "انصراف" else "Cancel", fontWeight = FontWeight.Bold)
-                            }
-                            Button(
-                                onClick = {
-                                    viewModel.settleWithRemainingBalance(item.id)
-                                    itemForSettlement = null
-                                },
-                                modifier = Modifier.weight(1f).height(50.dp),
-                                shape = RoundedCornerShape(15.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = accent)
-                            ) {
-                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(if (isPersian) "بله، تسویه کن" else "Yes, settle", fontWeight = FontWeight.Bold)
-                            }
+                        Button(
+                            onClick = {
+                                viewModel.settleWithRemainingBalance(item.id)
+                                itemForSettlement = null
+                            },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = if (isPersian) "تسویه کن" else "Settle",
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
                         }
                     }
                 }
@@ -390,7 +382,7 @@ fun DebtCreditScreen(
             AmountActionDialog(
                 title = if (isPersian) "کاهش مبلغ برای «${item.personName}»" else "Withdraw for '${item.personName}'",
                 isPersian = isPersian,
-                currencyUnit = "IRT",
+                currencyUnit = currencyUnit,
                 isDeposit = false,
                 onDismiss = { itemForWithdraw = null },
                 onConfirm = { amount ->
@@ -404,6 +396,7 @@ fun DebtCreditScreen(
             AddOrEditDebtCreditDialog(
                 initialItem = selectedItemForEdit,
                 isPersian = isPersian,
+                currencyUnit = currencyUnit,
                 onDismiss = {
                     showAddDialog = false
                     selectedItemForEdit = null
@@ -452,106 +445,118 @@ fun DebtCreditScreen(
             val matches = remember(data.personName, debtCreditList) {
                 viewModel.findNameMatches(data.personName)
             }
-            val dialogShape = RoundedCornerShape(24.dp)
             Dialog(onDismissRequest = { pendingDuplicateData = null }) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.96f), dialogShape)
-                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), dialogShape)
-                        .clip(dialogShape)
-                        .padding(24.dp)
-                ) {
+                ThemedDialogCard {
+                    DialogIconBadge(
+                        icon = Icons.Default.Warning,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+
+                    Text(
+                        text = if (isPersian) "مورد مشابه پیدا شد" else "A similar record already exists",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Text(
+                        text = if (isPersian)
+                            "قبلاً یک یا چند بدهی/طلب با نام «${data.personName.trim()}» ثبت شده است. آیا مطمئن هستید که این مورد جدید است؟"
+                        else
+                            "One or more debt/credit records with the name '${data.personName.trim()}' already exist. Are you sure this is a new record?",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+
                     Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-
-                        Text(
-                            text = if (isPersian) "مورد مشابه پیدا شد" else "A similar record already exists",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
-                        )
-
-                        Text(
-                            text = if (isPersian)
-                                "قبلاً یک یا چند بدهی/طلب با نام «${data.personName.trim()}» ثبت شده است. آیا مطمئن هستید که این مورد جدید است؟"
-                            else
-                                "One or more debt/credit records with the name '${data.personName.trim()}' already exist. Are you sure this is a new record?",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            matches.take(3).forEach { existing ->
-                                val remaining = (existing.totalAmount - existing.paidAmount).coerceAtLeast(0L)
-                                Surface(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                        matches.take(3).forEach { existing ->
+                            val remaining = (existing.totalAmount - existing.paidAmount).coerceAtLeast(0L)
+                            val isExistingDebt = existing.type == "DEBT"
+                            val typeColor = if (isExistingDebt) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Column(Modifier.padding(12.dp)) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(4.dp)
+                                            .height(38.dp)
+                                            .clip(RoundedCornerShape(2.dp))
+                                            .background(typeColor)
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = if (existing.type == "DEBT") {
+                                            text = if (isExistingDebt) {
                                                 if (isPersian) "بدهی" else "Debt"
                                             } else {
                                                 if (isPersian) "طلب" else "Credit"
                                             },
                                             style = MaterialTheme.typography.labelMedium,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (existing.type == "DEBT") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                            color = typeColor
                                         )
-                                        Spacer(Modifier.height(3.dp))
+                                        Spacer(Modifier.height(2.dp))
                                         Text(
-                                            text = if (isPersian) {
-                                                "مبلغ: ${NumberFormat.getNumberInstance(Locale("fa", "IR")).format(existing.totalAmount)} تومان • مانده: ${NumberFormat.getNumberInstance(Locale("fa", "IR")).format(remaining)} تومان"
-                                            } else {
-                                                "Amount: ${NumberFormat.getNumberInstance(Locale.US).format(existing.totalAmount)} Toman • Remaining: ${NumberFormat.getNumberInstance(Locale.US).format(remaining)} Toman"
-                                            },
+                                            text = if (isPersian) "مانده: ${formatDebtCreditAmount(remaining, currencyUnit, true)}"
+                                            else "Remaining: ${formatDebtCreditAmount(remaining, currencyUnit, false)}",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Spacer(Modifier.width(8.dp))
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text(
+                                            text = if (isPersian) "مبلغ کل" else "Total",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = formatDebtCreditAmount(existing.totalAmount, currencyUnit, isPersian),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                     }
                                 }
                             }
                         }
+                    }
 
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            OutlinedButton(
-                                onClick = { pendingDuplicateData = null },
-                                modifier = Modifier.weight(1f).height(48.dp),
-                                shape = RoundedCornerShape(14.dp)
-                            ) {
-                                Text(if (isPersian) "انصراف" else "Cancel", fontWeight = FontWeight.Bold)
-                            }
-                            Button(
-                                onClick = {
-                                    pendingSaveData = data.copy(confirmedDuplicateName = true)
-                                    pendingDuplicateData = null
-                                },
-                                modifier = Modifier.weight(1f).height(48.dp),
-                                shape = RoundedCornerShape(14.dp)
-                            ) {
-                                Text(if (isPersian) "بله، مطمئنم" else "Yes, continue", fontWeight = FontWeight.Bold)
-                            }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(
+                            onClick = { pendingDuplicateData = null },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (isPersian) "انصراف" else "Cancel", maxLines = 1)
+                        }
+                        Button(
+                            onClick = {
+                                pendingSaveData = data.copy(confirmedDuplicateName = true)
+                                pendingDuplicateData = null
+                            },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text(
+                                text = if (isPersian) "بله، مطمئنم" else "Yes, continue",
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
                         }
                     }
                 }
@@ -614,9 +619,9 @@ fun DebtCreditScreen(
 
                         Text(
                             text = if (isPersian)
-                                "آیا می‌خواهید مبلغ «%,.0f» مربوط به «${data.personName}» $actionText".format(data.totalAmount)
+                                "آیا می‌خواهید مبلغ «${formatDebtCreditAmount(MoneyContract.fromInput(data.totalAmount), currencyUnit, true)}» مربوط به «${data.personName}» $actionText"
                             else
-                                "Do you want the amount of '%,.0f' for '${data.personName}' $actionText".format(data.totalAmount),
+                                "Do you want the amount of '${formatDebtCreditAmount(MoneyContract.fromInput(data.totalAmount), currencyUnit, false)}' for '${data.personName}' $actionText",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
@@ -969,10 +974,55 @@ private data class PendingSaveData(
     val confirmedDuplicateName: Boolean = false
 )
 
+/** کارت یکپارچه دیالوگ‌ها؛ هم‌رنگ و هم‌فرم با دیالوگ حذف (surfaceVariant، گوشه ۲۸، حاشیه ظریف). */
+@Composable
+private fun ThemedDialogCard(content: @Composable ColumnScope.() -> Unit) {
+    val dialogShape = RoundedCornerShape(28.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f), dialogShape)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), dialogShape)
+            .clip(dialogShape)
+            .padding(24.dp)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            content = content
+        )
+    }
+}
+
+@Composable
+private fun DialogIconBadge(icon: ImageVector, tint: Color) {
+    Box(
+        modifier = Modifier
+            .size(56.dp)
+            .background(tint.copy(alpha = 0.12f), CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(28.dp))
+    }
+}
+
+private fun formatDebtCreditAmount(amountInToman: Long, currencyUnit: String, isPersian: Boolean): String {
+    val displayedAmount = MoneyContract.displayFromStorage(amountInToman, currencyUnit)
+    val locale = if (isPersian) Locale("fa", "IR") else Locale.US
+    val unit = when {
+        currencyUnit == MoneyContract.DISPLAY_RIAL && isPersian -> "ریال"
+        currencyUnit == MoneyContract.DISPLAY_RIAL -> "Rial"
+        isPersian -> "تومان"
+        else -> "Toman"
+    }
+    return "${NumberFormat.getNumberInstance(locale).format(displayedAmount)} $unit"
+}
+
 @Composable
 fun DebtCreditItemCard(
     item: DebtCreditEntity,
     isPersian: Boolean,
+    currencyUnit: String,
     onDepositClick: () -> Unit,
     onWithdrawClick: () -> Unit,
     onEditClick: () -> Unit,
@@ -1046,18 +1096,18 @@ fun DebtCreditItemCard(
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(text = if (isPersian) "مبلغ کل:" else "Total Amount:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(text = "%,.0f".format(item.totalAmount.toDouble()), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text(text = formatDebtCreditAmount(item.totalAmount, currencyUnit, isPersian), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
             }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(text = if (isPersian) "پرداخت/دریافت شده:" else "Paid/Received:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(text = "%,.0f".format(item.paidAmount.toDouble()), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text(text = formatDebtCreditAmount(item.paidAmount, currencyUnit, isPersian), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(text = if (isPersian) "باقی‌مانده:" else "Remaining:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
-                    text = "%,d".format(remainingAmount),
+                    text = formatDebtCreditAmount(remainingAmount, currencyUnit, isPersian),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold,
                     color = if (remainingAmount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
