@@ -298,10 +298,10 @@ private fun BackgroundThumbnail(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val thumbnail by produceState<ImageBitmap?>(null, index) {
+    val thumbnail by produceState<ImageBitmap?>(null, index, isPersian) {
         value = withContext(Dispatchers.Default) {
             try {
-                TransactionShareCardRenderer.renderBackgroundThumbnail(context, index, 144, 180).asImageBitmap()
+                TransactionShareCardRenderer.renderBackgroundThumbnail(context, index, 144, 180, isPersian).asImageBitmap()
             } catch (e: Exception) {
                 null
             }
@@ -325,7 +325,8 @@ private fun BackgroundThumbnail(
         thumbnail?.let {
             Image(
                 bitmap = it,
-                contentDescription = if (isPersian) "پس‌زمینه ${index + 1}" else "Background ${index + 1}",
+                contentDescription = (if (isPersian) "پس‌زمینه " else "Background ") +
+                        TransactionShareCardRenderer.backgroundLabel(index, isPersian),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
