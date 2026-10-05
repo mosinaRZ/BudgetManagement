@@ -13,6 +13,7 @@ import ir.hamedan.budgetmanagement.domain.usecase.DebtCreditUseCase
 import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitViewModel
 import ir.hamedan.budgetmanagement.ui.screens.home.PendingTransactionViewModel
 import ir.hamedan.budgetmanagement.ui.screens.notification.NotificationViewModel
+import ir.hamedan.budgetmanagement.ui.screens.profile.ProfileViewModel
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
 import ir.hamedan.budgetmanagement.ui.screens.debtCredit.DebtCreditViewModel
 
@@ -28,6 +29,12 @@ class AppViewModelFactory(
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         return when {
+            modelClass.isAssignableFrom(ProfileViewModel::class.java) -> {
+                ProfileViewModel(
+                    repository = container.profileRepository,
+                    context = appContext
+                ) as T
+            }
             modelClass.isAssignableFrom(TransactionViewModel::class.java) -> {
                 TransactionViewModel(
                     context = appContext,

@@ -49,7 +49,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         SyncMetadataEntity::class,
         SyncStateEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -64,6 +64,16 @@ abstract class AppDatabase : RoomDatabase() {
                 INSTANCE ?: buildDatabase(context.applicationContext).also {
                     INSTANCE = it
                 }
+            }
+        }
+
+        private val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(database: androidx.sqlite.db.SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE users ADD COLUMN firstName TEXT NOT NULL DEFAULT ''")
+                database.execSQL("ALTER TABLE users ADD COLUMN lastName TEXT NOT NULL DEFAULT ''")
+                database.execSQL("ALTER TABLE users ADD COLUMN gender TEXT NOT NULL DEFAULT 'prefer_not_to_say'")
+                database.execSQL("ALTER TABLE users ADD COLUMN birthDate TEXT")
+                database.execSQL("ALTER TABLE users ADD COLUMN emailVerified INTEGER NOT NULL DEFAULT 0")
             }
         }
 
@@ -82,6 +92,7 @@ abstract class AppDatabase : RoomDatabase() {
                 "budget_management.db"
             )
                 .openHelperFactory(factory)
+                .addMigrations(MIGRATION_1_2)
                 .build()
         }
     }

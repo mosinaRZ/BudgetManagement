@@ -9,6 +9,7 @@ import ir.hamedan.budgetmanagement.data.network.ApiHttpClient
 import ir.hamedan.budgetmanagement.data.network.AuthenticatedApiClient
 import ir.hamedan.budgetmanagement.data.network.AuthApi
 import ir.hamedan.budgetmanagement.data.network.DeviceApi
+import ir.hamedan.budgetmanagement.data.network.ProfileApi
 import ir.hamedan.budgetmanagement.data.network.SyncApi
 import ir.hamedan.budgetmanagement.data.repository.AuthRepository
 import ir.hamedan.budgetmanagement.data.repository.AuthRepositoryImpl
@@ -22,6 +23,8 @@ import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import ir.hamedan.budgetmanagement.data.repository.NotificationRepositoryImpl
 import ir.hamedan.budgetmanagement.data.repository.PendingTransactionRepository
 import ir.hamedan.budgetmanagement.data.repository.PendingTransactionRepositoryImpl
+import ir.hamedan.budgetmanagement.data.repository.ProfileRepository
+import ir.hamedan.budgetmanagement.data.repository.ProfileRepositoryImpl
 import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepository
 import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepositoryImpl
 import ir.hamedan.budgetmanagement.data.repository.SyncStateRepository
@@ -51,6 +54,7 @@ class AppContainer(context: Context) {
         AuthenticatedApiClient(apiHttpClient, authApi, authSessionStore)
     }
     val deviceApi: DeviceApi by lazy { DeviceApi(authenticatedApiClient) }
+    val profileApi: ProfileApi by lazy { ProfileApi(authenticatedApiClient) }
     val accountApi: AccountApi by lazy { AccountApi(authenticatedApiClient) }
     val deviceInfoProvider: DeviceInfoProvider by lazy { DeviceInfoProvider(appContext) }
     val syncApi: SyncApi by lazy { SyncApi(authenticatedApiClient) }
@@ -75,6 +79,17 @@ class AppContainer(context: Context) {
             syncScheduler = syncScheduler,
             accountApi = accountApi,
             deviceInfoProvider = deviceInfoProvider
+        )
+    }
+
+
+
+    val profileRepository: ProfileRepository by lazy {
+        ProfileRepositoryImpl(
+            profileApi = profileApi,
+            authApi = authApi,
+            userDao = database.userDao(),
+            sessionStore = authSessionStore
         )
     }
 

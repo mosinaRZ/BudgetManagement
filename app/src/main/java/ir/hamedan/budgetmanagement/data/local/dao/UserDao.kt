@@ -8,6 +8,7 @@ import androidx.room.Update
 import ir.hamedan.budgetmanagement.data.local.models.UserEntity
 import kotlinx.coroutines.flow.Flow
 
+
 @Dao
 interface UserDao {
 
@@ -20,14 +21,14 @@ interface UserDao {
     )
     fun getAllUsers(): Flow<List<UserEntity>>
 
-    @Query(
-        """
-        SELECT *
-        FROM users
-        WHERE id = :id
-        LIMIT 1
-        """
-    )
+    @Query("""
+        SELECT * FROM users WHERE id = :id LIMIT 1
+    """)
+    fun observeUserById(id: String): Flow<UserEntity?>
+
+    @Query("""
+        SELECT * FROM users WHERE id = :id LIMIT 1
+    """)
     suspend fun getById(id: String): UserEntity?
 
     @Query(

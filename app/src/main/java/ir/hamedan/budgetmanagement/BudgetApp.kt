@@ -12,6 +12,7 @@ import ir.hamedan.budgetmanagement.di.AppContainer
 import ir.hamedan.budgetmanagement.data.notification.AppNotificationManager
 import ir.hamedan.budgetmanagement.worker.InactivityReminderWorker
 import ir.hamedan.budgetmanagement.worker.MonthlyGoalDepositWorker
+import ir.hamedan.budgetmanagement.worker.ProfileOccasionWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -99,6 +100,17 @@ class BudgetApp : Application() {
             "inactivity_reminder",
             ExistingPeriodicWorkPolicy.KEEP,
             inactivityWork
+        )
+
+        // مناسبت‌های شخصی پروفایل: تولد و مناسبت‌های جنسیتی.
+        val profileOccasionWork = PeriodicWorkRequestBuilder<ProfileOccasionWorker>(
+            1, TimeUnit.DAYS
+        ).build()
+
+        workManager.enqueueUniquePeriodicWork(
+            "profile_occasion_notifications",
+            ExistingPeriodicWorkPolicy.KEEP,
+            profileOccasionWork
         )
     }
 }

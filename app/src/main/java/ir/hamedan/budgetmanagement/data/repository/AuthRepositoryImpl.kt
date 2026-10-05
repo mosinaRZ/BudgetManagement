@@ -217,12 +217,23 @@ class AuthRepositoryImpl(
             role = response.role
         )
         userDao.clearLoggedInState(System.currentTimeMillis())
+        val existingUser = userDao.getById(response.userId)
         userDao.insert(
             UserEntity(
                 id = response.userId,
-                phoneNumber = phoneNumber ?: identifier?.takeIf { !it.contains("@") }.orEmpty(),
-                email = email ?: identifier?.takeIf { it.contains("@") },
-                isLoggedIn = true
+                phoneNumber = phoneNumber
+                    ?: identifier?.takeIf { !it.contains("@") }
+                    ?: existingUser?.phoneNumber.orEmpty(),
+                fullName = existingUser?.fullName.orEmpty(),
+                firstName = existingUser?.firstName.orEmpty(),
+                lastName = existingUser?.lastName.orEmpty(),
+                gender = existingUser?.gender ?: "prefer_not_to_say",
+                birthDate = existingUser?.birthDate,
+                email = email ?: identifier?.takeIf { it.contains("@") } ?: existingUser?.email,
+                emailVerified = existingUser?.emailVerified ?: false,
+                isLoggedIn = true,
+                createdAt = existingUser?.createdAt ?: System.currentTimeMillis(),
+                updatedAt = System.currentTimeMillis()
             )
         )
         rememberedLoginStore.saveIdentifier((identifier ?: phoneNumber ?: email).orEmpty())

@@ -20,8 +20,12 @@ data class UserEntity(
     val phoneNumber: String = "",
 
     val fullName: String = "",
-
+    val firstName: String = "",
+    val lastName: String = "",
+    val gender: String = "prefer_not_to_say",
+    val birthDate: String? = null,
     val email: String? = null,
+    val emailVerified: Boolean = false,
 
     /**
      * Indicates the currently active local account.

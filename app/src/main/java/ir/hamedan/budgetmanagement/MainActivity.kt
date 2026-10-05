@@ -62,6 +62,7 @@ import ir.hamedan.budgetmanagement.ui.components.PermissionReminderBanner
 import ir.hamedan.budgetmanagement.ui.components.onboardingPermissions
 import ir.hamedan.budgetmanagement.ui.navigation.AppRoute
 import ir.hamedan.budgetmanagement.ui.navigation.MainTabRoute
+import ir.hamedan.budgetmanagement.ui.screens.profile.ProfileScreen
 import ir.hamedan.budgetmanagement.ui.screens.add.AddScreen
 import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsScreen
 import ir.hamedan.budgetmanagement.ui.screens.home.HomeScreen
@@ -312,6 +313,7 @@ class MainActivity : FragmentActivity() {
                 route.isNotBlank() &&
                 !route.contains("Login") &&
                 !route.contains("Register") &&
+                !route.contains("PasswordReset") &&
                 !route.contains("Splash")
             ) {
                 navController.navigate(AppRoute.Login()) {
@@ -438,6 +440,13 @@ class MainActivity : FragmentActivity() {
                 )
             }
 
+            composable<AppRoute.Profile> {
+                ProfileScreen(
+                    onBack = { navController.popBackStack() },
+                    onForgotPassword = { navController.navigate(AppRoute.PasswordReset) }
+                )
+            }
+
             composable<AppRoute.Devices> {
                 DevicesScreen(onBack = { navController.popBackStack() })
             }
@@ -546,6 +555,7 @@ class MainActivity : FragmentActivity() {
                         composable<MainTabRoute.Settings> {
                             SettingsScreen(
                                 onThemeToggle = onThemeToggle,
+                                onProfileClick = { navController.navigate(AppRoute.Profile) },
                                 onAddScreenClick = {
                                     navController.navigate(AppRoute.AddScreen(highlightId = "category"))
                                 },

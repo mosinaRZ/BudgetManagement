@@ -269,6 +269,15 @@ enum class NotificationType(
         defaultEnabled = true
     ),
 
+    PROFILE_OCCASION(
+        NotificationCategory.SYSTEM,
+        "مناسبت‌های پروفایل",
+        "Profile Occasions",
+        "تبریک تولد و مناسبت‌های مرتبط با پروفایل.",
+        "Birthday and profile-related occasion messages.",
+        defaultEnabled = true
+    ),
+
     SETTINGS_CHANGED(
         NotificationCategory.SYSTEM,
         "تغییر تنظیمات",

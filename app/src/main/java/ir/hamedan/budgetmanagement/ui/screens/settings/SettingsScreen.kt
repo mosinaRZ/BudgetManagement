@@ -83,6 +83,7 @@ private data class SettingsSearchItem(
 )
 
 private val ALL_SETTINGS_ITEMS = listOf(
+    SettingsSearchItem("پروفایل من", "My Profile", "اطلاعات شخصی، ایمیل و امنیت حساب", "Personal information, email and account security"),
     SettingsSearchItem("ظاهر برنامه", "App Theme", "تغییر حالت تاریک و روشن", "Switch between Dark and Light mode"),
     SettingsSearchItem("زبان برنامه", "App Language", "انتخاب زبان کاربری (فارسی / انگلیسی)", "Choose UI language (Persian / English)"),
     SettingsSearchItem("واحد پولی", "Currency", "نمایش مبالغ بر اساس تومان یا ریال", "Display amounts in Toman or Rial"),
@@ -102,7 +103,8 @@ fun SettingsScreen(
     onAddScreenClick: () -> Unit = {},
     onThemeToggle: () -> Unit = {},
     onNotificationCalibrationClick: () -> Unit = {},
-    onDevicesClick: () -> Unit = {}
+    onDevicesClick: () -> Unit = {},
+    onProfileClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val isPersian = isPersianLocale()
@@ -251,6 +253,18 @@ fun SettingsScreen(
                             Text(if (isPersian) "نمایش همه تنظیمات" else "Show all settings")
                         }
                     }
+                }
+            }
+
+            // پروفایل کاربر
+            if (matchesSearch("پروفایل من", "My Profile", "اطلاعات شخصی، ایمیل و امنیت حساب", "Personal information, email and account security")) {
+                item {
+                    SettingsSimpleItem(
+                        title = if (isPersian) "پروفایل من" else "My Profile",
+                        subtitle = if (isPersian) "اطلاعات شخصی، ایمیل و امنیت حساب" else "Personal information, email and account security",
+                        icon = Icons.Default.AccountCircle,
+                        onClick = onProfileClick
+                    )
                 }
             }
 
@@ -1409,7 +1423,8 @@ fun ChangePasswordDialog(
     isPersian: Boolean,
     onDismiss: () -> Unit,
     onSubmit: suspend (currentPassword: String, newPassword: String) -> Result<Unit>,
-    onSuccess: () -> Unit
+    onSuccess: () -> Unit,
+    onForgotPassword: (() -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
     var currentPassword by remember { mutableStateOf("") }
@@ -1552,6 +1567,15 @@ fun ChangePasswordDialog(
 
                 AnimatedVisibility(visible = errorMessage != null) {
                     errorMessage?.let { AuthErrorBanner(message = it) }
+                }
+                if (onForgotPassword != null) {
+                    TextButton(
+                        onClick = onForgotPassword,
+                        enabled = !isSubmitting,
+                        modifier = Modifier.align(Alignment.Start)
+                    ) {
+                        Text(if (isPersian) "رمز عبورم را فراموش کرده‌ام" else "I forgot my password")
+                    }
                 }
             }
         },

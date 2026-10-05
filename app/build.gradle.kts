@@ -45,7 +45,7 @@ android {
     buildTypes {
         debug {
             isMinifyEnabled = false
-            buildConfigField("String", "BASE_URL", "\"http://10.245.184.19:8080/\"")
+            buildConfigField("String", "BASE_URL", "\"http://192.168.94.17:8080/\"")
             buildConfigField("Boolean", "ENABLE_LOGS", "true")
         }
 

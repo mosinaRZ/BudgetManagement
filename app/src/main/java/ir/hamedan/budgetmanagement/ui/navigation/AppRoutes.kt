@@ -24,6 +24,9 @@ sealed interface AppRoute {
     data object MainStructure : AppRoute
 
     @Serializable
+    data object Profile : AppRoute
+
+    @Serializable
     data object Devices : AppRoute
 
     @Serializable
