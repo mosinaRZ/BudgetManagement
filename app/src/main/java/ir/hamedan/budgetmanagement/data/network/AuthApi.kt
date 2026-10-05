@@ -32,6 +32,7 @@ class AuthApi(private val client: ApiHttpClient) {
             .put("recovery_key_hash", input.recoveryKeyHash)
             .put("recovery_key_envelope", input.recoveryKeyEnvelope)
             .put("recovery_key_nonce", input.recoveryKeyNonce)
+        input.deviceInfo?.let { body.put("device_info", it) }
         input.email?.takeIf { it.isNotBlank() }?.let { body.put("email", it.trim()) }
         input.emailOtpChallengeId?.takeIf { it.isNotBlank() }?.let { body.put("email_otp_challenge_id", it) }
         input.emailOtpCode?.takeIf { it.isNotBlank() }?.let { body.put("email_otp_code", it) }
@@ -41,11 +42,12 @@ class AuthApi(private val client: ApiHttpClient) {
         return parseRegisterResponse(response.json())
     }
 
-    fun login(identifier: String, password: String, deviceId: String): LoginResponse {
+    fun login(identifier: String, password: String, deviceId: String, deviceInfo: JSONObject? = null): LoginResponse {
         val body = JSONObject()
             .put("identifier", identifier)
             .put("password", password)
             .put("device_id", deviceId)
+        deviceInfo?.let { body.put("device_info", it) }
 
         val response = client.request("POST", "/auth/login", body)
         ensureSuccess(response, "ورود ناموفق بود.")
@@ -89,6 +91,7 @@ class AuthApi(private val client: ApiHttpClient) {
             .put("kdf_salt", input.kdfSalt)
             .put("password_key_envelope", input.passwordKeyEnvelope)
             .put("password_key_nonce", input.passwordKeyNonce)
+        input.deviceInfo?.let { body.put("device_info", it) }
         val response = client.request("POST", "/auth/password/reset", body)
         ensureSuccess(response, "تغییر گذرواژه ناموفق بود.")
         val json = response.json()
@@ -159,7 +162,8 @@ class AuthApi(private val client: ApiHttpClient) {
         val passwordKeyNonce: String,
         val recoveryKeyHash: String,
         val recoveryKeyEnvelope: String,
-        val recoveryKeyNonce: String
+        val recoveryKeyNonce: String,
+        val deviceInfo: JSONObject? = null
     )
 
     data class LoginResponse(
@@ -207,7 +211,8 @@ class AuthApi(private val client: ApiHttpClient) {
         val deviceId: String,
         val kdfSalt: String,
         val passwordKeyEnvelope: String,
-        val passwordKeyNonce: String
+        val passwordKeyNonce: String,
+        val deviceInfo: JSONObject? = null
     )
 
     data class ResetPasswordResponse(

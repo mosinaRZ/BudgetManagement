@@ -4,6 +4,7 @@ import android.content.Context
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.SyncLocalDataSource
 import ir.hamedan.budgetmanagement.data.local.SyncLocalDataSourceImpl
+import ir.hamedan.budgetmanagement.data.network.AccountApi
 import ir.hamedan.budgetmanagement.data.network.ApiHttpClient
 import ir.hamedan.budgetmanagement.data.network.AuthenticatedApiClient
 import ir.hamedan.budgetmanagement.data.network.AuthApi
@@ -29,6 +30,7 @@ import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepositoryImpl
 import ir.hamedan.budgetmanagement.data.security.AuthSessionStore
 import ir.hamedan.budgetmanagement.data.security.DeviceIdentityStore
+import ir.hamedan.budgetmanagement.data.security.DeviceInfoProvider
 import ir.hamedan.budgetmanagement.data.security.RememberedLoginStore
 import ir.hamedan.budgetmanagement.data.security.SyncKeyManager
 import ir.hamedan.budgetmanagement.data.sync.SyncEngine
@@ -49,6 +51,8 @@ class AppContainer(context: Context) {
         AuthenticatedApiClient(apiHttpClient, authApi, authSessionStore)
     }
     val deviceApi: DeviceApi by lazy { DeviceApi(authenticatedApiClient) }
+    val accountApi: AccountApi by lazy { AccountApi(authenticatedApiClient) }
+    val deviceInfoProvider: DeviceInfoProvider by lazy { DeviceInfoProvider(appContext) }
     val syncApi: SyncApi by lazy { SyncApi(authenticatedApiClient) }
     val deviceIdentityStore: DeviceIdentityStore by lazy { DeviceIdentityStore(appContext) }
     val rememberedLoginStore: RememberedLoginStore by lazy { RememberedLoginStore(appContext) }
@@ -68,7 +72,9 @@ class AppContainer(context: Context) {
             syncLocalDataSource = syncLocalDataSource,
             deviceIdentityStore = deviceIdentityStore,
             rememberedLoginStore = rememberedLoginStore,
-            syncScheduler = syncScheduler
+            syncScheduler = syncScheduler,
+            accountApi = accountApi,
+            deviceInfoProvider = deviceInfoProvider
         )
     }
 

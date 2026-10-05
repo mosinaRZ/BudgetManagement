@@ -16,6 +16,8 @@ interface AuthRepository {
         kdfSalt: String,
         userId: String
     ): Result<Unit>
+    /** Changes the password of the signed-in account; other sessions are revoked server-side. */
+    suspend fun changePassword(currentPassword: String, newPassword: String): Result<Unit>
     suspend fun logout(): Result<Unit>
     fun isAuthenticated(): Boolean
 

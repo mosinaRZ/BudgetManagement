@@ -15,6 +15,12 @@ class DeviceApi(private val client: AuthenticatedApiClient) {
                 add(
                     Device(
                         id = item.getString("id"),
+                        name = item.text("name"),
+                        model = item.text("model"),
+                        platform = item.text("platform"),
+                        osVersion = item.text("os_version"),
+                        appVersion = item.text("app_version"),
+                        lastIp = item.text("last_ip"),
                         lastSeenAt = item.optLong("last_seen_at", 0L) * 1000L,
                         createdAt = item.optLong("created_at", 0L) * 1000L
                     )
@@ -31,7 +37,23 @@ class DeviceApi(private val client: AuthenticatedApiClient) {
         }
     }
 
-    data class Device(val id: String, val lastSeenAt: Long, val createdAt: Long)
+    /**
+     * Everything except [id] is display-only and may be blank (older installs, or clients that
+     * never sent a description). [lastIp] is already masked by the server (e.g. "203.0.113.*").
+     */
+    data class Device(
+        val id: String,
+        val name: String = "",
+        val model: String = "",
+        val platform: String = "",
+        val osVersion: String = "",
+        val appVersion: String = "",
+        val lastIp: String = "",
+        val lastSeenAt: Long,
+        val createdAt: Long
+    )
+
+    private fun JSONObject.text(key: String): String = if (isNull(key)) "" else optString(key).trim()
 
     private fun String.urlEncode(): String = java.net.URLEncoder.encode(this, Charsets.UTF_8.name())
 }
