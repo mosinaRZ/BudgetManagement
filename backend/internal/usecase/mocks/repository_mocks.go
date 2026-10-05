@@ -15,6 +15,8 @@ type MockUserRepository struct {
 	FindByEmailHashFunc         func(ctx context.Context, emailHash string) (*entity.User, error)
 	FindByIDFunc                func(ctx context.Context, id string) (*entity.User, error)
 	UpdateFunc                  func(ctx context.Context, u *entity.User) error
+	UpdateProfileFunc           func(ctx context.Context, userID, firstName, lastName string, gender entity.Gender, birthDate string) error
+	UpdateEmailFunc             func(ctx context.Context, userID, emailHash, email string, verified bool) error
 	UpdateCredentialsFunc       func(ctx context.Context, userID, passwordHash, authSalt, kdfSalt string, passwordKeyEnvelope, passwordKeyNonce []byte) error
 	AddDeviceFunc               func(ctx context.Context, userID, deviceID string) error
 	UpdateRoleFunc              func(ctx context.Context, userID string, role entity.Role) error
@@ -23,6 +25,9 @@ type MockUserRepository struct {
 	GetSessionVersionFunc       func(ctx context.Context, userID string) (uint64, error)
 	IncrementSessionVersionFunc func(ctx context.Context, userID string) (uint64, error)
 }
+
+// Compile-time contract check: keep this mock synchronized with UserRepository.
+var _ repository.UserRepository = (*MockUserRepository)(nil)
 
 func (m *MockUserRepository) Create(ctx context.Context, u *entity.User) error {
 	if m.CreateFunc != nil {
@@ -55,6 +60,20 @@ func (m *MockUserRepository) FindByID(ctx context.Context, id string) (*entity.U
 func (m *MockUserRepository) Update(ctx context.Context, u *entity.User) error {
 	if m.UpdateFunc != nil {
 		return m.UpdateFunc(ctx, u)
+	}
+	return nil
+}
+
+func (m *MockUserRepository) UpdateProfile(ctx context.Context, userID, firstName, lastName string, gender entity.Gender, birthDate string) error {
+	if m.UpdateProfileFunc != nil {
+		return m.UpdateProfileFunc(ctx, userID, firstName, lastName, gender, birthDate)
+	}
+	return nil
+}
+
+func (m *MockUserRepository) UpdateEmail(ctx context.Context, userID, emailHash, email string, verified bool) error {
+	if m.UpdateEmailFunc != nil {
+		return m.UpdateEmailFunc(ctx, userID, emailHash, email, verified)
 	}
 	return nil
 }

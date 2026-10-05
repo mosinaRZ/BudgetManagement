@@ -73,6 +73,9 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 
 		if deps.AuthHandler != nil {
 			r.Post("/api/v1/auth/password/change", deps.AuthHandler.ChangePassword)
+			r.Get("/api/v1/account/profile", deps.AuthHandler.GetProfile)
+			r.Put("/api/v1/account/profile", deps.AuthHandler.UpdateProfile)
+			r.Put("/api/v1/account/email", deps.AuthHandler.UpdateEmail)
 		}
 		if deps.SyncHandler != nil {
 			r.Post("/api/v1/sync", deps.SyncHandler.HandleSync)

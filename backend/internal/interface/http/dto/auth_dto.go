@@ -149,3 +149,27 @@ type UpdateUserRoleResponse struct {
 	UserID string      `json:"user_id"`
 	Role   entity.Role `json:"role"`
 }
+
+type ProfileResponse struct {
+	UserID        string        `json:"user_id"`
+	PhoneNumber   string        `json:"phone_number"`
+	Email         string        `json:"email,omitempty"`
+	EmailVerified bool          `json:"email_verified"`
+	FirstName     string        `json:"first_name,omitempty"`
+	LastName      string        `json:"last_name,omitempty"`
+	Gender        entity.Gender `json:"gender"`
+	BirthDate     string        `json:"birth_date,omitempty"`
+}
+
+type UpdateProfileRequest struct {
+	FirstName string        `json:"first_name" validate:"max=80"`
+	LastName  string        `json:"last_name" validate:"max=80"`
+	Gender    entity.Gender `json:"gender" validate:"required"`
+	BirthDate string        `json:"birth_date" validate:"omitempty,len=10"`
+}
+
+type UpdateEmailRequest struct {
+	Email          string `json:"email" validate:"required,email,max=320"`
+	OTPChallengeID string `json:"otp_challenge_id" validate:"required"`
+	OTPCode        string `json:"otp_code" validate:"required,len=6,numeric"`
+}

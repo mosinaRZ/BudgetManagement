@@ -197,6 +197,98 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 }
 
 // ChangePassword changes the password of the authenticated user (route is behind Auth).
+func (h *AuthHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
+	userID, ok := contextkeys.UserID(r.Context())
+	if !ok || userID == "" {
+		response.Error(w, apperror.ErrUnauthorized("authentication required"))
+		return
+	}
+	service, ok := h.usecase.(auth.ProfileService)
+	if !ok {
+		response.Error(w, apperror.ErrInternal("profile service is not configured"))
+		return
+	}
+	out, err := service.GetProfile(r.Context(), userID)
+	if err != nil {
+		response.Error(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, dto.ProfileResponse{
+		UserID: out.UserID, PhoneNumber: out.PhoneNumber, Email: out.Email,
+		EmailVerified: out.EmailVerified, FirstName: out.FirstName, LastName: out.LastName,
+		Gender: out.Gender, BirthDate: out.BirthDate,
+	})
+}
+
+func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	userID, ok := contextkeys.UserID(r.Context())
+	if !ok || userID == "" {
+		response.Error(w, apperror.ErrUnauthorized("authentication required"))
+		return
+	}
+	var q dto.UpdateProfileRequest
+	if err := decodeJSON(w, r, &q); err != nil {
+		response.Error(w, err)
+		return
+	}
+	if err := validateRequest(h.validate, q); err != nil {
+		response.Error(w, err)
+		return
+	}
+	service, ok := h.usecase.(auth.ProfileService)
+	if !ok {
+		response.Error(w, apperror.ErrInternal("profile service is not configured"))
+		return
+	}
+	out, err := service.UpdateProfile(r.Context(), auth.UpdateProfileInput{
+		UserID: userID, FirstName: q.FirstName, LastName: q.LastName,
+		Gender: q.Gender, BirthDate: q.BirthDate,
+	})
+	if err != nil {
+		response.Error(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, dto.ProfileResponse{
+		UserID: out.UserID, PhoneNumber: out.PhoneNumber, Email: out.Email,
+		EmailVerified: out.EmailVerified, FirstName: out.FirstName, LastName: out.LastName,
+		Gender: out.Gender, BirthDate: out.BirthDate,
+	})
+}
+
+func (h *AuthHandler) UpdateEmail(w http.ResponseWriter, r *http.Request) {
+	userID, ok := contextkeys.UserID(r.Context())
+	if !ok || userID == "" {
+		response.Error(w, apperror.ErrUnauthorized("authentication required"))
+		return
+	}
+	var q dto.UpdateEmailRequest
+	if err := decodeJSON(w, r, &q); err != nil {
+		response.Error(w, err)
+		return
+	}
+	if err := validateRequest(h.validate, q); err != nil {
+		response.Error(w, err)
+		return
+	}
+	service, ok := h.usecase.(auth.ProfileService)
+	if !ok {
+		response.Error(w, apperror.ErrInternal("profile service is not configured"))
+		return
+	}
+	out, err := service.UpdateEmail(r.Context(), auth.UpdateEmailInput{
+		UserID: userID, Email: q.Email, OTPChallengeID: q.OTPChallengeID, OTPCode: q.OTPCode,
+	})
+	if err != nil {
+		response.Error(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, dto.ProfileResponse{
+		UserID: out.UserID, PhoneNumber: out.PhoneNumber, Email: out.Email,
+		EmailVerified: out.EmailVerified, FirstName: out.FirstName, LastName: out.LastName,
+		Gender: out.Gender, BirthDate: out.BirthDate,
+	})
+}
+
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	userID, ok := contextkeys.UserID(r.Context())
 	if !ok || userID == "" {

@@ -109,3 +109,29 @@ type ExtendedService interface {
 type PasswordChanger interface {
 	ChangePassword(context.Context, ChangePasswordInput) (ChangePasswordOutput, error)
 }
+
+type Profile struct {
+	UserID        string
+	PhoneNumber   string
+	Email         string
+	EmailVerified bool
+	FirstName     string
+	LastName      string
+	Gender        entity.Gender
+	BirthDate     string
+}
+
+type UpdateProfileInput struct {
+	UserID, FirstName, LastName, BirthDate string
+	Gender                                 entity.Gender
+}
+
+type UpdateEmailInput struct {
+	UserID, Email, OTPChallengeID, OTPCode string
+}
+
+type ProfileService interface {
+	GetProfile(context.Context, string) (Profile, error)
+	UpdateProfile(context.Context, UpdateProfileInput) (Profile, error)
+	UpdateEmail(context.Context, UpdateEmailInput) (Profile, error)
+}

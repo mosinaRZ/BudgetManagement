@@ -122,7 +122,9 @@ func (s *ServiceImpl) Register(ctx context.Context, in RegisterInput) (RegisterO
 	user := &entity.User{
 		Role:                entity.RoleUser,
 		PhoneHash:           phoneHash,
+		PhoneNumber:         phone,
 		EmailHash:           emailHash,
+		Email:               strings.ToLower(strings.TrimSpace(in.Email)),
 		PhoneVerified:       true,
 		EmailVerified:       emailVerified,
 		PasswordHash:        passwordHash,
@@ -586,6 +588,105 @@ func (s *ServiceImpl) ChangePassword(ctx context.Context, in ChangePasswordInput
 		return ChangePasswordOutput{}, err
 	}
 	return ChangePasswordOutput{AccessToken: sess.AccessToken, RefreshToken: sess.RefreshToken, Role: u.Role, KdfSalt: u.KdfSalt, UserID: u.ID, PasswordKeyEnvelope: u.PasswordKeyEnvelope, PasswordKeyNonce: u.PasswordKeyNonce, RecoveryKeyEnvelope: u.RecoveryKeyEnvelope, RecoveryKeyNonce: u.RecoveryKeyNonce}, nil
+}
+
+func (s *ServiceImpl) GetProfile(ctx context.Context, userID string) (Profile, error) {
+	if strings.TrimSpace(userID) == "" {
+		return Profile{}, apperror.ErrUnauthorized("authentication required")
+	}
+	u, err := s.users.FindByID(ctx, userID)
+	if err != nil {
+		return Profile{}, err
+	}
+	return profileFromUser(u), nil
+}
+
+func (s *ServiceImpl) UpdateProfile(ctx context.Context, in UpdateProfileInput) (Profile, error) {
+	if strings.TrimSpace(in.UserID) == "" {
+		return Profile{}, apperror.ErrUnauthorized("authentication required")
+	}
+	first := strings.TrimSpace(in.FirstName)
+	last := strings.TrimSpace(in.LastName)
+	if len([]rune(first)) > 80 || len([]rune(last)) > 80 {
+		return Profile{}, apperror.ErrValidation("name fields must be at most 80 characters")
+	}
+	if !in.Gender.Valid() {
+		return Profile{}, apperror.ErrValidation("invalid gender")
+	}
+	if len(in.BirthDate) > 10 {
+		return Profile{}, apperror.ErrValidation("invalid birth date")
+	}
+	if in.BirthDate != "" {
+		parsed, err := time.Parse("2006-01-02", in.BirthDate)
+		if err != nil {
+			return Profile{}, apperror.ErrValidation("birth date must use YYYY-MM-DD")
+		}
+		if parsed.After(time.Now().UTC()) {
+			return Profile{}, apperror.ErrValidation("birth date cannot be in the future")
+		}
+	}
+	if err := s.users.UpdateProfile(ctx, in.UserID, first, last, in.Gender, in.BirthDate); err != nil {
+		return Profile{}, err
+	}
+	u, err := s.users.FindByID(ctx, in.UserID)
+	if err != nil {
+		return Profile{}, err
+	}
+	return profileFromUser(u), nil
+}
+
+func (s *ServiceImpl) UpdateEmail(ctx context.Context, in UpdateEmailInput) (Profile, error) {
+	if strings.TrimSpace(in.UserID) == "" {
+		return Profile{}, apperror.ErrUnauthorized("authentication required")
+	}
+	email := strings.ToLower(strings.TrimSpace(in.Email))
+	if email == "" || len(email) > 320 || !strings.Contains(email, "@") {
+		return Profile{}, apperror.ErrValidation("invalid email address")
+	}
+	if s.otp == nil {
+		return Profile{}, apperror.ErrInternal("OTP service is not configured")
+	}
+	emailHash := hashIdentifier(email, s.secret)
+	existing, err := s.users.FindByEmailHash(ctx, emailHash)
+	if err == nil && existing != nil && existing.ID != in.UserID {
+		return Profile{}, apperror.ErrConflict("email already exists")
+	}
+	if err != nil {
+		code, ok := apperror.CodeOf(err)
+		if !ok || code != apperror.CodeNotFound {
+			return Profile{}, err
+		}
+	}
+	destination, err := s.otp.Verify(ctx, VerifyOTPInput{
+		ChallengeID: in.OTPChallengeID,
+		Code:        in.OTPCode,
+		Purpose:     entity.OTPPurposeEmailVerification,
+	})
+	if err != nil {
+		return Profile{}, err
+	}
+	if !hmac.Equal([]byte(destination), []byte(emailHash)) {
+		return Profile{}, apperror.ErrUnauthorized("email OTP destination does not match")
+	}
+	if err := s.users.UpdateEmail(ctx, in.UserID, emailHash, email, true); err != nil {
+		return Profile{}, err
+	}
+	u, err := s.users.FindByID(ctx, in.UserID)
+	if err != nil {
+		return Profile{}, err
+	}
+	return profileFromUser(u), nil
+}
+
+func profileFromUser(u *entity.User) Profile {
+	gender := u.Gender
+	if !gender.Valid() {
+		gender = entity.GenderPreferNotToSay
+	}
+	return Profile{
+		UserID: u.ID, PhoneNumber: u.PhoneNumber, Email: u.Email, EmailVerified: u.EmailVerified,
+		FirstName: u.FirstName, LastName: u.LastName, Gender: gender, BirthDate: u.BirthDate,
+	}
 }
 
 // newDeviceRecord builds the device row for a successful authentication. Descriptive
