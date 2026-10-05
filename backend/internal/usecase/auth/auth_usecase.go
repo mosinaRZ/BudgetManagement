@@ -143,12 +143,7 @@ func (s *ServiceImpl) Register(ctx context.Context, in RegisterInput) (RegisterO
 	}
 
 	if s.devices != nil {
-		if err := s.devices.Register(ctx, &entity.Device{
-			ID:         in.DeviceID,
-			UserID:     user.ID,
-			CreatedAt:  now,
-			LastSeenAt: now,
-		}); err != nil {
+		if err := s.devices.Register(ctx, newDeviceRecord(in.DeviceID, user.ID, now, in.Device)); err != nil {
 			return RegisterOutput{}, err
 		}
 	}
@@ -284,7 +279,7 @@ func (s *ServiceImpl) Login(ctx context.Context, in LoginInput) (LoginOutput, er
 	}
 	if s.devices != nil {
 		now := time.Now().UTC()
-		if err := s.devices.Register(ctx, &entity.Device{ID: in.DeviceID, UserID: u.ID, CreatedAt: now, LastSeenAt: now}); err != nil {
+		if err := s.devices.Register(ctx, newDeviceRecord(in.DeviceID, u.ID, now, in.Device)); err != nil {
 			return LoginOutput{}, err
 		}
 	}
@@ -466,7 +461,7 @@ func (s *ServiceImpl) ResetPassword(ctx context.Context, in ResetPasswordInput) 
 	}
 	if s.devices != nil {
 		now := time.Now().UTC()
-		if err := s.devices.Register(ctx, &entity.Device{ID: in.DeviceID, UserID: u.ID, CreatedAt: now, LastSeenAt: now}); err != nil {
+		if err := s.devices.Register(ctx, newDeviceRecord(in.DeviceID, u.ID, now, in.Device)); err != nil {
 			return ResetPasswordOutput{}, err
 		}
 	}
@@ -476,6 +471,131 @@ func (s *ServiceImpl) ResetPassword(ctx context.Context, in ResetPasswordInput) 
 	}
 	return ResetPasswordOutput{AccessToken: sess.AccessToken, RefreshToken: sess.RefreshToken, Role: u.Role, KdfSalt: u.KdfSalt, UserID: u.ID, PasswordKeyEnvelope: u.PasswordKeyEnvelope, PasswordKeyNonce: u.PasswordKeyNonce, RecoveryKeyEnvelope: u.RecoveryKeyEnvelope, RecoveryKeyNonce: u.RecoveryKeyNonce}, nil
 }
+
+// ChangePassword replaces the password of an authenticated user.
+//
+// The current password is always re-verified (a stolen access token alone must not be
+// enough to take over an account) and wrong attempts count towards the same lockout as
+// sign-in. Because the data key is wrapped client-side, the client sends the freshly
+// wrapped envelope; the server stores it opaquely, rotates the credential hash, revokes
+// every existing session and returns a new session for the calling device only.
+func (s *ServiceImpl) ChangePassword(ctx context.Context, in ChangePasswordInput) (ChangePasswordOutput, error) {
+	if strings.TrimSpace(in.UserID) == "" {
+		return ChangePasswordOutput{}, apperror.ErrUnauthorized("invalid session")
+	}
+	if s.devices == nil {
+		return ChangePasswordOutput{}, apperror.ErrInternal("device service is not configured")
+	}
+	if err := validDevice(in.DeviceID); err != nil {
+		return ChangePasswordOutput{}, err
+	}
+	if len(in.NewPassword) < 8 || len(in.NewPassword) > 256 {
+		return ChangePasswordOutput{}, apperror.ErrValidation("password must be between 8 and 256 characters")
+	}
+	if in.CurrentPassword == "" {
+		return ChangePasswordOutput{}, apperror.ErrValidation("current password is required")
+	}
+	if in.NewPassword == in.CurrentPassword {
+		return ChangePasswordOutput{}, apperror.ErrValidation("new password must differ from the current password")
+	}
+	newKdfSalt, err := decodeAndValidateKdfSalt(in.KdfSalt)
+	if err != nil {
+		return ChangePasswordOutput{}, apperror.ErrValidation("invalid KDF salt")
+	}
+	if err := validatePasswordKeyMaterial(in.PasswordKeyEnvelope, in.PasswordKeyNonce); err != nil {
+		return ChangePasswordOutput{}, err
+	}
+
+	u, err := s.users.FindByID(ctx, in.UserID)
+	if err != nil {
+		if code, ok := apperror.CodeOf(err); ok && code == apperror.CodeNotFound {
+			return ChangePasswordOutput{}, apperror.ErrUnauthorized("invalid session")
+		}
+		return ChangePasswordOutput{}, err
+	}
+	if u == nil {
+		return ChangePasswordOutput{}, apperror.ErrUnauthorized("invalid session")
+	}
+
+	now := time.Now().UTC()
+	if u.LockedUntil != nil && u.LockedUntil.After(now) {
+		// Refuse before spending an Argon2 verification on a locked account.
+		return ChangePasswordOutput{}, apperror.ErrRateLimited("too many failed attempts; try again later")
+	}
+
+	storedKdfSalt, err := decodeAndValidateKdfSalt(u.KdfSalt)
+	if err != nil || !bytes.Equal(storedKdfSalt, newKdfSalt) {
+		return ChangePasswordOutput{}, apperror.ErrValidation("KDF salt must match the account salt")
+	}
+
+	registered, err := s.devices.Exists(ctx, u.ID, in.DeviceID)
+	if err != nil {
+		return ChangePasswordOutput{}, err
+	}
+	if !registered {
+		return ChangePasswordOutput{}, apperror.ErrForbidden("device is not registered")
+	}
+
+	if len(in.CurrentPassword) > 256 {
+		return ChangePasswordOutput{}, apperror.ErrInvalidPassword("current password is incorrect")
+	}
+	ok, _ := infraauth.VerifyPassword(in.CurrentPassword, u.AuthSalt, u.PasswordHash)
+	if !ok {
+		if err := s.users.RecordFailedLogin(ctx, u.ID, now, loginLockThreshold, loginLockDuration); err != nil {
+			return ChangePasswordOutput{}, err
+		}
+		return ChangePasswordOutput{}, apperror.ErrInvalidPassword("current password is incorrect")
+	}
+	if err := s.users.ResetFailedLogin(ctx, u.ID); err != nil {
+		return ChangePasswordOutput{}, err
+	}
+
+	salt, err := infraauth.GenerateSalt()
+	if err != nil {
+		return ChangePasswordOutput{}, apperror.ErrInternal("failed to generate password salt")
+	}
+	passwordHash, err := infraauth.HashPassword(in.NewPassword, salt)
+	if err != nil {
+		return ChangePasswordOutput{}, apperror.ErrInternal("failed to hash password")
+	}
+	newAuthSalt := base64.RawStdEncoding.EncodeToString(salt)
+	newKdfSaltB64 := base64.RawStdEncoding.EncodeToString(newKdfSalt)
+	if err := s.users.UpdateCredentials(ctx, u.ID, passwordHash, newAuthSalt, newKdfSaltB64, in.PasswordKeyEnvelope, in.PasswordKeyNonce); err != nil {
+		return ChangePasswordOutput{}, err
+	}
+	u.PasswordHash = passwordHash
+	u.AuthSalt = newAuthSalt
+	u.KdfSalt = newKdfSaltB64
+	u.PasswordKeyEnvelope = in.PasswordKeyEnvelope
+	u.PasswordKeyNonce = in.PasswordKeyNonce
+
+	newSessionVersion, err := s.users.IncrementSessionVersion(ctx, u.ID)
+	if err != nil {
+		return ChangePasswordOutput{}, err
+	}
+	u.SessionVersion = newSessionVersion
+	if err := s.refresh.RevokeAllForUser(ctx, u.ID); err != nil {
+		return ChangePasswordOutput{}, err
+	}
+	if err := s.devices.Register(ctx, newDeviceRecord(in.DeviceID, u.ID, now, in.Device)); err != nil {
+		return ChangePasswordOutput{}, err
+	}
+
+	sess, err := s.issueRefreshAndAccess(ctx, u, in.DeviceID)
+	if err != nil {
+		return ChangePasswordOutput{}, err
+	}
+	return ChangePasswordOutput{AccessToken: sess.AccessToken, RefreshToken: sess.RefreshToken, Role: u.Role, KdfSalt: u.KdfSalt, UserID: u.ID, PasswordKeyEnvelope: u.PasswordKeyEnvelope, PasswordKeyNonce: u.PasswordKeyNonce, RecoveryKeyEnvelope: u.RecoveryKeyEnvelope, RecoveryKeyNonce: u.RecoveryKeyNonce}, nil
+}
+
+// newDeviceRecord builds the device row for a successful authentication. Descriptive
+// values come from the client and are sanitised by ApplyMetadata.
+func newDeviceRecord(deviceID, userID string, now time.Time, info DeviceInfo) *entity.Device {
+	d := &entity.Device{ID: deviceID, UserID: userID, CreatedAt: now, LastSeenAt: now}
+	d.ApplyMetadata(info.Name, info.Model, info.Platform, info.OSVersion, info.AppVersion, info.IP)
+	return d
+}
+
 func (s *ServiceImpl) findByDestinationHash(ctx context.Context, h string) (*entity.User, error) {
 	if u, err := s.users.FindByPhoneHash(ctx, h); err == nil {
 		return u, nil

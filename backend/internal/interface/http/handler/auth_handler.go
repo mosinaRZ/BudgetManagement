@@ -7,6 +7,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/apperror"
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
+	"github.com/mosinaRZ/finance-sync-backend/internal/interface/http/contextkeys"
 	"github.com/mosinaRZ/finance-sync-backend/internal/interface/http/dto"
 	"github.com/mosinaRZ/finance-sync-backend/internal/pkg/response"
 	"github.com/mosinaRZ/finance-sync-backend/internal/usecase/auth"
@@ -96,6 +97,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		RecoveryKeyHash:     recoveryKeyHash,
 		RecoveryKeyEnvelope: recoveryKeyEnvelope,
 		RecoveryKeyNonce:    recoveryKeyNonce,
+		Device:              deviceInfoFrom(r, q.DeviceInfo),
 	}
 	out, err := h.usecase.Register(r.Context(), in)
 	if err != nil {
@@ -114,7 +116,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, err)
 		return
 	}
-	out, err := h.usecase.Login(r.Context(), auth.LoginInput{Identifier: q.Identifier, Password: q.Password, DeviceID: q.DeviceID})
+	out, err := h.usecase.Login(r.Context(), auth.LoginInput{Identifier: q.Identifier, Password: q.Password, DeviceID: q.DeviceID, Device: deviceInfoFrom(r, q.DeviceInfo)})
 	if err != nil {
 		response.Error(w, err)
 		return
@@ -186,13 +188,70 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, apperror.ErrValidation("password_key_nonce must be valid base64"))
 		return
 	}
-	out, err := extended.ResetPassword(r.Context(), auth.ResetPasswordInput{RecoverySessionToken: q.RecoverySessionToken, NewPassword: q.NewPassword, DeviceID: q.DeviceID, KdfSalt: q.KdfSalt, PasswordKeyEnvelope: passwordKeyEnvelope, PasswordKeyNonce: passwordKeyNonce})
+	out, err := extended.ResetPassword(r.Context(), auth.ResetPasswordInput{RecoverySessionToken: q.RecoverySessionToken, NewPassword: q.NewPassword, DeviceID: q.DeviceID, KdfSalt: q.KdfSalt, PasswordKeyEnvelope: passwordKeyEnvelope, PasswordKeyNonce: passwordKeyNonce, Device: deviceInfoFrom(r, q.DeviceInfo)})
 	if err != nil {
 		response.Error(w, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, dto.ResetPasswordResponse{AccessToken: out.AccessToken, RefreshToken: out.RefreshToken, KdfSalt: out.KdfSalt, UserID: out.UserID, PasswordKeyEnvelope: enc(out.PasswordKeyEnvelope), PasswordKeyNonce: enc(out.PasswordKeyNonce), RecoveryKeyEnvelope: enc(out.RecoveryKeyEnvelope), RecoveryKeyNonce: enc(out.RecoveryKeyNonce), Role: out.Role})
 }
+
+// ChangePassword changes the password of the authenticated user (route is behind Auth).
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	userID, ok := contextkeys.UserID(r.Context())
+	if !ok || userID == "" {
+		response.Error(w, apperror.ErrUnauthorized("authentication required"))
+		return
+	}
+	var q dto.ChangePasswordRequest
+	if err := decodeJSON(w, r, &q); err != nil {
+		response.Error(w, err)
+		return
+	}
+	if err := validateRequest(h.validate, q); err != nil {
+		response.Error(w, err)
+		return
+	}
+	changer, ok := h.usecase.(auth.PasswordChanger)
+	if !ok {
+		response.Error(w, apperror.ErrInternal("password change service is not configured"))
+		return
+	}
+	passwordKeyEnvelope, err := decodeB64(q.PasswordKeyEnvelope)
+	if err != nil {
+		response.Error(w, apperror.ErrValidation("password_key_envelope must be valid base64"))
+		return
+	}
+	passwordKeyNonce, err := decodeB64(q.PasswordKeyNonce)
+	if err != nil {
+		response.Error(w, apperror.ErrValidation("password_key_nonce must be valid base64"))
+		return
+	}
+	out, err := changer.ChangePassword(r.Context(), auth.ChangePasswordInput{
+		UserID: userID, CurrentPassword: q.CurrentPassword, NewPassword: q.NewPassword, DeviceID: q.DeviceID,
+		KdfSalt: q.KdfSalt, PasswordKeyEnvelope: passwordKeyEnvelope, PasswordKeyNonce: passwordKeyNonce,
+		Device: deviceInfoFrom(r, q.DeviceInfo),
+	})
+	if err != nil {
+		response.Error(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, dto.ChangePasswordResponse{AccessToken: out.AccessToken, RefreshToken: out.RefreshToken, KdfSalt: out.KdfSalt, UserID: out.UserID, Role: out.Role, PasswordKeyEnvelope: enc(out.PasswordKeyEnvelope), PasswordKeyNonce: enc(out.PasswordKeyNonce), RecoveryKeyEnvelope: enc(out.RecoveryKeyEnvelope), RecoveryKeyNonce: enc(out.RecoveryKeyNonce)})
+}
+
+// deviceInfoFrom merges the optional client-supplied description with the client IP
+// resolved by trusted middleware. The IP is never read from the request body.
+func deviceInfoFrom(r *http.Request, in *dto.DeviceInfoRequest) auth.DeviceInfo {
+	info := auth.DeviceInfo{}
+	if in != nil {
+		info = auth.DeviceInfo{Name: in.Name, Model: in.Model, Platform: in.Platform, OSVersion: in.OSVersion, AppVersion: in.AppVersion}
+	}
+	if ip, ok := contextkeys.ClientIP(r.Context()); ok {
+		info.IP = ip
+	}
+	return info
+}
+
 func enc(b []byte) string {
 	if len(b) == 0 {
 		return ""
