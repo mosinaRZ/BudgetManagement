@@ -119,6 +119,29 @@ class SyncKeyManager(private val context: Context) {
         )
     }
 
+    /**
+     * Re-wraps the data key this device already holds under [newPassword] for an in-session
+     * password change. The account KDF salt MUST stay unchanged because the recovery envelope
+     * is derived with it; the server rejects a different salt.
+     */
+    fun createPasswordChangeMaterial(newPassword: CharArray, kdfSaltB64: String): PasswordResetMaterial {
+        val dataKey = getDataKey() ?: error("Sync data key is not initialized.")
+        require(dataKey.size == 32) { "Invalid sync data key length." }
+        val salt = Base64.decode(kdfSaltB64, Base64.DEFAULT)
+        require(salt.size == 16) { "Invalid KDF salt." }
+        val wrappingKey = deriveWrappingKey(newPassword, salt)
+        val nonce = ByteArray(12).also { SecureRandom().nextBytes(it) }
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, wrappingKey, GCMParameterSpec(128, nonce))
+        val envelope = cipher.doFinal(dataKey)
+        return PasswordResetMaterial(
+            dataKey = dataKey,
+            kdfSalt = Base64.encodeToString(salt, Base64.NO_WRAP),
+            passwordKeyEnvelope = Base64.encodeToString(envelope, Base64.NO_WRAP),
+            passwordKeyNonce = Base64.encodeToString(nonce, Base64.NO_WRAP)
+        )
+    }
+
     fun storeRecoveredDataKey(dataKey: ByteArray) {
         require(dataKey.size == 32) { "Invalid sync data key length." }
         storeDataKey(dataKey.copyOf())

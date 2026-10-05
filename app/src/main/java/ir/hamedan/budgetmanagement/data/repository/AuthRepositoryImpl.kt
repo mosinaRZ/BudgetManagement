@@ -4,9 +4,11 @@ import ir.hamedan.budgetmanagement.data.local.SyncLocalDataSource
 import ir.hamedan.budgetmanagement.data.local.dao.UserDao
 import ir.hamedan.budgetmanagement.data.local.models.SyncStateEntity
 import ir.hamedan.budgetmanagement.data.local.models.UserEntity
+import ir.hamedan.budgetmanagement.data.network.AccountApi
 import ir.hamedan.budgetmanagement.data.network.AuthApi
 import ir.hamedan.budgetmanagement.data.security.AuthSessionStore
 import ir.hamedan.budgetmanagement.data.security.DeviceIdentityStore
+import ir.hamedan.budgetmanagement.data.security.DeviceInfoProvider
 import ir.hamedan.budgetmanagement.data.security.RememberedLoginStore
 import ir.hamedan.budgetmanagement.data.security.SyncKeyManager
 import ir.hamedan.budgetmanagement.data.sync.SyncEngine
@@ -24,7 +26,9 @@ class AuthRepositoryImpl(
     private val syncLocalDataSource: SyncLocalDataSource,
     private val deviceIdentityStore: DeviceIdentityStore,
     private val rememberedLoginStore: RememberedLoginStore,
-    private val syncScheduler: SyncScheduler
+    private val syncScheduler: SyncScheduler,
+    private val accountApi: AccountApi,
+    private val deviceInfoProvider: DeviceInfoProvider
 ) : AuthRepository {
 
     override suspend fun requestOtp(destination: String, channel: String, purpose: String): Result<AuthApi.OtpResponse> =
@@ -34,7 +38,7 @@ class AuthRepositoryImpl(
         if (identifier.isBlank()) return Result.failure(IllegalArgumentException("Identifier must not be blank."))
         if (password.isBlank()) return Result.failure(IllegalArgumentException("Password must not be blank."))
         return withContext(Dispatchers.IO) {
-            runCatching { persistSession(authApi.login(identifier.trim(), password, deviceIdentityStore.getOrCreate()), password, identifier = identifier.trim()) }
+            runCatching { persistSession(authApi.login(identifier.trim(), password, deviceIdentityStore.getOrCreate(), deviceInfoProvider.toJson()), password, identifier = identifier.trim()) }
         }
     }
 
@@ -59,7 +63,8 @@ class AuthRepositoryImpl(
                     passwordKeyNonce = material.passwordKeyNonce,
                     recoveryKeyHash = material.recoveryKeyHash,
                     recoveryKeyEnvelope = material.recoveryKeyEnvelope,
-                    recoveryKeyNonce = material.recoveryKeyNonce
+                    recoveryKeyNonce = material.recoveryKeyNonce,
+                    deviceInfo = deviceInfoProvider.toJson()
                 )
             )
             persistSession(response, input.password, phoneNumber = input.phoneNumber, email = input.email)
@@ -101,11 +106,53 @@ class AuthRepositoryImpl(
                     deviceId = deviceId,
                     kdfSalt = passwordMaterial.kdfSalt,
                     passwordKeyEnvelope = passwordMaterial.passwordKeyEnvelope,
-                    passwordKeyNonce = passwordMaterial.passwordKeyNonce
+                    passwordKeyNonce = passwordMaterial.passwordKeyNonce,
+                    deviceInfo = deviceInfoProvider.toJson()
                 )
             )
             syncKeyManager.storeRecoveredDataKey(passwordMaterial.dataKey)
             persistSession(response, newPassword, expectedUserId = userId)
+        }
+    }
+
+    override suspend fun changePassword(currentPassword: String, newPassword: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            require(currentPassword.isNotEmpty()) { "Current password must not be empty." }
+            require(newPassword.length in 8..256) { "Password must be between 8 and 256 characters." }
+            require(sessionStore.isAuthenticated()) { "Not signed in." }
+            val kdfSalt = sessionStore.kdfSalt()?.takeIf { it.isNotBlank() } ?: error("Account key salt is missing.")
+            val deviceId = sessionStore.deviceId()?.takeIf { it.isNotBlank() } ?: deviceIdentityStore.getOrCreate()
+            val material = syncKeyManager.createPasswordChangeMaterial(newPassword.toCharArray(), kdfSalt)
+            accountApi.changePassword(
+                AccountApi.ChangePasswordInput(
+                    currentPassword = currentPassword,
+                    newPassword = newPassword,
+                    deviceId = deviceId,
+                    kdfSalt = material.kdfSalt,
+                    passwordKeyEnvelope = material.passwordKeyEnvelope,
+                    passwordKeyNonce = material.passwordKeyNonce,
+                    deviceInfo = deviceInfoProvider.toJson()
+                )
+            ) { issued ->
+                // Runs under the API client's lock: the old refresh token is already revoked,
+                // so the new pair must be persisted before any other request can refresh.
+                sessionStore.save(
+                    accessToken = issued.accessToken,
+                    refreshToken = issued.refreshToken,
+                    userId = issued.userId,
+                    deviceId = deviceId,
+                    kdfSalt = issued.kdfSalt,
+                    passwordKeyEnvelope = issued.passwordKeyEnvelope,
+                    passwordKeyNonce = issued.passwordKeyNonce,
+                    recoveryKeyEnvelope = issued.recoveryKeyEnvelope,
+                    recoveryKeyNonce = issued.recoveryKeyNonce,
+                    role = issued.role ?: sessionStore.role()
+                )
+            }
+            // Local re-authentication must follow the new password; the fingerprint credential
+            // still wraps the OLD one, so it is dropped and can be re-enabled from Settings.
+            rememberedLoginStore.savePasswordVerifier(newPassword)
+            rememberedLoginStore.clearBiometricCredential()
         }
     }
 

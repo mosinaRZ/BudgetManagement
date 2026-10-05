@@ -17,6 +17,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -44,7 +46,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
+import ir.hamedan.budgetmanagement.ui.screens.auth.AuthContext
+import ir.hamedan.budgetmanagement.ui.screens.auth.AuthErrorBanner
+import ir.hamedan.budgetmanagement.ui.screens.auth.PasswordPolicy
+import ir.hamedan.budgetmanagement.ui.screens.auth.PasswordStrengthMeter
+import ir.hamedan.budgetmanagement.ui.screens.auth.authErrorMessage
+import ir.hamedan.budgetmanagement.ui.screens.auth.credentialTextStyle
 import ir.hamedan.budgetmanagement.data.security.RememberedLoginStore
 import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
@@ -554,7 +563,7 @@ fun SettingsScreen(
                             }
 
                             SecurityActionRow(
-                                title = if (isPersian) "تغییر رمز عبور برنامه" else "Change App Passcode",
+                                title = if (isPersian) "تغییر گذرواژه حساب" else "Change Password",
                                 icon = Icons.Default.Password
                             ) {
                                 showChangePasswordDialog = true
@@ -746,18 +755,24 @@ fun SettingsScreen(
         }
 
         if (showChangePasswordDialog) {
+            val authRepository = remember(context) { (context.applicationContext as BudgetApp).container.authRepository }
             ChangePasswordDialog(
                 isPersian = isPersian,
                 onDismiss = { showChangePasswordDialog = false },
-                onConfirm = { oldPassword, secureNewPassword ->
+                onSubmit = { currentPassword, newPassword -> authRepository.changePassword(currentPassword, newPassword) },
+                onSuccess = {
+                    showChangePasswordDialog = false
+                    // The fingerprint credential wrapped the old password and was dropped by the repository.
+                    isBiometricEnabled = false
+                    SharedPreferences.setBiometricEnabled(context, false)
                     NotificationHelper.send(
                         context = context,
                         notificationType = NotificationType.SETTINGS_CHANGED,
                         type = "SYSTEM",
                         titleFa = "تنظیمات به‌روزرسانی شد",
                         titleEn = "Settings Updated",
-                        descFa = "گذرواژه با موفقیت تغییر کرد.",
-                        descEn = "Password have been updated successfully.",
+                        descFa = "گذرواژه با موفقیت تغییر کرد. برای ورود با اثر انگشت، آن را دوباره فعال کنید.",
+                        descEn = "Password changed successfully. Re-enable fingerprint login if you use it.",
                         tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
                     )
                 }
@@ -1393,48 +1408,51 @@ private fun EnableBiometricLoginDialog(
 fun ChangePasswordDialog(
     isPersian: Boolean,
     onDismiss: () -> Unit,
-    onConfirm: (String, String) -> Unit
+    onSubmit: suspend (currentPassword: String, newPassword: String) -> Result<Unit>,
+    onSuccess: () -> Unit
 ) {
+    val scope = rememberCoroutineScope()
     var currentPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
-
-    var isCurrentPasswordVisible by remember { mutableStateOf(false) }
-    var isNewPasswordVisible by remember { mutableStateOf(false) }
-    var isConfirmPasswordVisible by remember { mutableStateOf(false) }
-
+    var isCurrentVisible by remember { mutableStateOf(false) }
+    var isNewVisible by remember { mutableStateOf(false) }
+    var isSubmitting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-
-    val maxPasswordLength = 32
-
-    val hasMinLength = newPassword.length >= 8
-    val hasUpperCase = newPassword.any { it.isUpperCase() }
-    val hasDigit = newPassword.any { it.isDigit() }
-    val hasSpecialChar = newPassword.any { !it.isLetterOrDigit() }
-
-    val strengthScore = listOf(hasMinLength, hasUpperCase, hasDigit, hasSpecialChar).count { it }
-
-    val (strengthColor, strengthText) = remember(strengthScore, newPassword) {
-        if (newPassword.isEmpty()) {
-            Color.Transparent to ""
-        } else {
-            when (strengthScore) {
-                1 -> Color(0xFFE57373) to (if (isPersian) "ضعیف" else "Weak")
-                2 -> Color(0xFFFFB74D) to (if (isPersian) "متوسط" else "Medium")
-                3 -> Color(0xFFFFF176) to (if (isPersian) "خوب" else "Good")
-                4 -> Color(0xFF81C784) to (if (isPersian) "قوی" else "Strong")
-                else -> Color(0xFFE57373) to (if (isPersian) "خیلی ضعیف" else "Very Weak")
-            }
-        }
-    }
 
     val englishKeyboardOptions = KeyboardOptions(
         keyboardType = KeyboardType.Password,
         hintLocales = LocaleList(Locale("en"))
     )
 
+    fun submit() {
+        if (isSubmitting) return
+        val problem = when {
+            currentPassword.isEmpty() || newPassword.isEmpty() || confirmPassword.isEmpty() ->
+                if (isPersian) "لطفاً تمام فیلدها را پر کنید" else "Please fill all fields"
+            newPassword != confirmPassword ->
+                if (isPersian) "گذرواژه جدید و تکرار آن مطابقت ندارند" else "New passwords do not match"
+            newPassword == currentPassword ->
+                if (isPersian) "گذرواژه جدید باید با گذرواژه فعلی متفاوت باشد" else "The new password must differ from the current one"
+            else -> PasswordPolicy.validate(newPassword, isPersian)
+        }
+        if (problem != null) {
+            errorMessage = problem
+            return
+        }
+        isSubmitting = true
+        errorMessage = null
+        scope.launch {
+            onSubmit(currentPassword, newPassword)
+                .onSuccess { onSuccess() }
+                .onFailure { errorMessage = authErrorMessage(it, isPersian, AuthContext.CHANGE_PASSWORD) }
+            isSubmitting = false
+        }
+    }
+
     AlertDialog(
-        onDismissRequest = onDismiss,
+        // The request cannot be cancelled half-way, so the dialog stays until it finishes.
+        onDismissRequest = { if (!isSubmitting) onDismiss() },
         shape = RoundedCornerShape(28.dp),
         containerColor = MaterialTheme.colorScheme.surface,
         icon = {
@@ -1447,40 +1465,40 @@ fun ChangePasswordDialog(
         },
         title = {
             Text(
-                text = if (isPersian) "تغییر رمز عبور" else "Change Passcode",
+                text = if (isPersian) "تغییر گذرواژه حساب" else "Change account password",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Text(
-                    text = if (isPersian) "رمزهای ورود فقط باید شامل کاراکترهای انگلیسی (حداکثر $maxPasswordLength کاراکتر) باشند." else "Passcodes must contain English characters only (max $maxPasswordLength chars).",
+                    text = if (isPersian)
+                        "با تغییر گذرواژه، سایر دستگاه‌های متصل از حساب خارج می‌شوند و باید دوباره وارد شوند."
+                    else
+                        "Changing your password signs every other device out of your account.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
 
                 OutlinedTextField(
                     value = currentPassword,
-                    onValueChange = { input ->
-                        if (input.length <= maxPasswordLength && input.all { it.code <= 127 }) {
-                            currentPassword = input
-                            errorMessage = null
-                        }
-                    },
-                    label = { Text(if (isPersian) "رمز عبور فعلی" else "Current Passcode") },
+                    onValueChange = { currentPassword = it.take(256); errorMessage = null },
+                    enabled = !isSubmitting,
+                    label = { Text(if (isPersian) "گذرواژه فعلی" else "Current password") },
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
+                    textStyle = credentialTextStyle(),
                     keyboardOptions = englishKeyboardOptions,
-                    visualTransformation = if (isCurrentPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    visualTransformation = if (isCurrentVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
-                        IconButton(onClick = { isCurrentPasswordVisible = !isCurrentPasswordVisible }) {
+                        IconButton(onClick = { isCurrentVisible = !isCurrentVisible }) {
                             Icon(
-                                imageVector = if (isCurrentPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = null
+                                imageVector = if (isCurrentVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (isPersian) "نمایش یا پنهان کردن گذرواژه" else "Toggle password visibility"
                             )
                         }
                     },
@@ -1489,134 +1507,73 @@ fun ChangePasswordDialog(
 
                 OutlinedTextField(
                     value = newPassword,
-                    onValueChange = { input ->
-                        if (input.length <= maxPasswordLength && input.all { it.code <= 127 }) {
-                            newPassword = input
-                            errorMessage = null
-                        }
-                    },
-                    label = { Text(if (isPersian) "رمز عبور جدید" else "New Passcode") },
+                    onValueChange = { newPassword = it.take(PasswordPolicy.MAX_LENGTH + 1); errorMessage = null },
+                    enabled = !isSubmitting,
+                    label = { Text(if (isPersian) "گذرواژه جدید" else "New password") },
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
+                    textStyle = credentialTextStyle(),
                     keyboardOptions = englishKeyboardOptions,
-                    visualTransformation = if (isNewPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    visualTransformation = if (isNewVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
-                        IconButton(onClick = { isNewPasswordVisible = !isNewPasswordVisible }) {
+                        IconButton(onClick = { isNewVisible = !isNewVisible }) {
                             Icon(
-                                imageVector = if (isNewPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = null
+                                imageVector = if (isNewVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (isPersian) "نمایش یا پنهان کردن گذرواژه" else "Toggle password visibility"
                             )
                         }
                     },
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                if (newPassword.isNotEmpty()) {
-                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = if (isPersian) "امنیت رمز عبور:" else "Password Strength:",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                            Text(
-                                text = strengthText,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = strengthColor
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(6.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(fraction = (strengthScore / 4f).coerceAtLeast(0.05f))
-                                    .fillMaxHeight()
-                                    .background(strengthColor, CircleShape)
-                            )
-                        }
-                    }
-                }
+                PasswordStrengthMeter(password = newPassword, isPersian = isPersian)
 
                 OutlinedTextField(
                     value = confirmPassword,
-                    onValueChange = { input ->
-                        if (input.length <= maxPasswordLength && input.all { it.code <= 127 }) {
-                            confirmPassword = input
-                            errorMessage = null
-                        }
-                    },
-                    label = { Text(if (isPersian) "تایید رمز عبور جدید" else "Confirm New Passcode") },
+                    onValueChange = { confirmPassword = it.take(PasswordPolicy.MAX_LENGTH + 1); errorMessage = null },
+                    enabled = !isSubmitting,
+                    label = { Text(if (isPersian) "تکرار گذرواژه جدید" else "Confirm new password") },
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
-                    keyboardOptions = englishKeyboardOptions,
-                    visualTransformation = if (isConfirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { isConfirmPasswordVisible = !isConfirmPasswordVisible }) {
-                            Icon(
-                                imageVector = if (isConfirmPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = null
-                            )
-                        }
-                    },
+                    textStyle = credentialTextStyle(),
+                    isError = confirmPassword.isNotEmpty() && confirmPassword != newPassword,
+                    keyboardOptions = englishKeyboardOptions.copy(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { submit() }),
+                    visualTransformation = if (isNewVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                Text(
+                    text = if (isPersian) "حداقل ${PasswordPolicy.MIN_LENGTH} کاراکتر؛ فقط حروف انگلیسی، عدد و نماد (بدون فاصله)."
+                    else "At least ${PasswordPolicy.MIN_LENGTH} characters; English letters, digits and symbols only (no spaces).",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                )
+
                 AnimatedVisibility(visible = errorMessage != null) {
-                    errorMessage?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(horizontal = 4.dp)
-                        )
-                    }
+                    errorMessage?.let { AuthErrorBanner(message = it) }
                 }
             }
         },
         confirmButton = {
             Button(
-                onClick = {
-                    val hasNonEnglish = listOf(currentPassword, newPassword, confirmPassword).any { text ->
-                        text.any { it.code > 127 }
-                    }
-
-                    when {
-                        currentPassword.isBlank() || newPassword.isBlank() || confirmPassword.isBlank() -> {
-                            errorMessage = if (isPersian) "لطفاً تمام فیلدها را پر کنید" else "Please fill all fields"
-                        }
-                        hasNonEnglish -> {
-                            errorMessage = if (isPersian) "لطفاً فقط از حروف و اعداد انگلیسی استفاده کنید" else "Please use English characters only"
-                        }
-                        newPassword != confirmPassword -> {
-                            errorMessage = if (isPersian) "رمز عبور جدید و تایید آن مطابقت ندارند" else "New passwords do not match"
-                        }
-                        strengthScore < 2 -> {
-                            errorMessage = if (isPersian) "رمز عبور خیلی ضعیف است" else "Password is too weak"
-                        }
-                        else -> {
-                            onConfirm(currentPassword, newPassword)
-                        }
-                    }
-                },
+                onClick = { submit() },
+                enabled = !isSubmitting,
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text(if (isPersian) "تایید" else "Confirm")
+                if (isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text(if (isPersian) "تغییر گذرواژه" else "Change password")
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = onDismiss, enabled = !isSubmitting) {
                 Text(if (isPersian) "انصراف" else "Cancel")
             }
         }
