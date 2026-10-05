@@ -13,6 +13,8 @@ type UserRepository interface {
 	FindByEmailHash(context.Context, string) (*entity.User, error)
 	FindByID(context.Context, string) (*entity.User, error)
 	Update(context.Context, *entity.User) error
+	UpdateProfile(context.Context, string, string, string, entity.Gender, string) error
+	UpdateEmail(context.Context, string, string, string, bool) error
 	UpdateCredentials(context.Context, string, string, string, string, []byte, []byte) error
 	AddDevice(context.Context, string, string) error
 	UpdateRole(context.Context, string, entity.Role) error

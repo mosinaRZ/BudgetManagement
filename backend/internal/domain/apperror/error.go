@@ -20,6 +20,11 @@ const (
 	CodeInternal     Code = "INTERNAL_ERROR"
 )
 
+// CodeInvalidPassword means the caller is authenticated but supplied a wrong
+// *current* password for a sensitive operation. It is deliberately distinct from
+// CodeUnauthorized so clients never mistake it for an expired session.
+const CodeInvalidPassword Code = "INVALID_PASSWORD"
+
 type AppError struct {
 	Code    Code
 	Message string
@@ -67,6 +72,9 @@ func ErrConflict(message string, wrapped ...error) *AppError {
 }
 func ErrRateLimited(message string, wrapped ...error) *AppError {
 	return newAppError(CodeRateLimited, message, firstOrNil(wrapped))
+}
+func ErrInvalidPassword(message string, wrapped ...error) *AppError {
+	return newAppError(CodeInvalidPassword, message, firstOrNil(wrapped))
 }
 func ErrInternal(message string, wrapped ...error) *AppError {
 	return newAppError(CodeInternal, message, firstOrNil(wrapped))

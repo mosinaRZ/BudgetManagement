@@ -37,6 +37,7 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logging)
 	r.Use(middleware.Recover)
+	r.Use(middleware.ClientIPContext(deps.TrustedProxyCIDRs))
 	r.Use(middleware.SecurityHeaders(deps.Env))
 	r.Use(middleware.CORS(deps.CORSAllowedOrigins))
 
@@ -70,6 +71,12 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 		r.Use(middleware.Auth(deps.JWTSecret, deps.UserRepository))
 		r.Use(protectedRateLimiter.LimitByUser)
 
+		if deps.AuthHandler != nil {
+			r.Post("/api/v1/auth/password/change", deps.AuthHandler.ChangePassword)
+			r.Get("/api/v1/account/profile", deps.AuthHandler.GetProfile)
+			r.Put("/api/v1/account/profile", deps.AuthHandler.UpdateProfile)
+			r.Put("/api/v1/account/email", deps.AuthHandler.UpdateEmail)
+		}
 		if deps.SyncHandler != nil {
 			r.Post("/api/v1/sync", deps.SyncHandler.HandleSync)
 		}

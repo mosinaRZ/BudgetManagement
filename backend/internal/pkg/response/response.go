@@ -63,6 +63,9 @@ func statusForCode(code apperror.Code) int {
 		return http.StatusConflict
 	case apperror.CodeRateLimited:
 		return http.StatusTooManyRequests
+	case apperror.CodeInvalidPassword:
+		// Never 401: the access token is fine, only the supplied current password is wrong.
+		return http.StatusUnprocessableEntity
 	default:
 		return http.StatusInternalServerError
 	}

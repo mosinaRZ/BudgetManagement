@@ -6,9 +6,15 @@ type User struct {
 	ID                  string
 	Role                Role
 	PhoneHash           string
+	PhoneNumber         string
 	EmailHash           string
+	Email               string
 	PhoneVerified       bool
 	EmailVerified       bool
+	FirstName           string
+	LastName            string
+	Gender              Gender
+	BirthDate           string
 	PasswordHash        string
 	AuthSalt            string
 	KdfSalt             string

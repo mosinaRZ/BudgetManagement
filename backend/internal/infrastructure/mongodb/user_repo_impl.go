@@ -75,6 +75,44 @@ func (r *userRepo) Update(ctx context.Context, u *entity.User) error {
 	}
 	return nil
 }
+func (r *userRepo) UpdateProfile(ctx context.Context, userID, firstName, lastName string, gender entity.Gender, birthDate string) error {
+	oid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return apperror.ErrNotFound("user not found")
+	}
+	res, err := r.c.UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$set": bson.M{
+		"firstName": firstName, "lastName": lastName, "gender": gender, "birthDate": birthDate,
+		"updatedAt": time.Now().UTC(),
+	}})
+	if err != nil {
+		return apperror.ErrInternal("failed to update profile", err)
+	}
+	if res.MatchedCount == 0 {
+		return apperror.ErrNotFound("user not found")
+	}
+	return nil
+}
+
+func (r *userRepo) UpdateEmail(ctx context.Context, userID, emailHash, email string, verified bool) error {
+	oid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return apperror.ErrNotFound("user not found")
+	}
+	res, err := r.c.UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$set": bson.M{
+		"emailHash": emailHash, "email": email, "emailVerified": verified, "updatedAt": time.Now().UTC(),
+	}})
+	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return apperror.ErrConflict("email already exists")
+		}
+		return apperror.ErrInternal("failed to update email", err)
+	}
+	if res.MatchedCount == 0 {
+		return apperror.ErrNotFound("user not found")
+	}
+	return nil
+}
+
 func (r *userRepo) UpdateCredentials(ctx context.Context, userID, passwordHash, authSalt, kdfSalt string, passwordKeyEnvelope, passwordKeyNonce []byte) error {
 	oid, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
