@@ -6,11 +6,15 @@ import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.local.models.UserEntity
 import ir.hamedan.budgetmanagement.data.repository.ProfileRepository
+import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+
+/** One-shot confirmations the screen turns into a localized snackbar. */
+enum class ProfileNotice { PROFILE_SAVED, EMAIL_VERIFIED }
 
 data class ProfileUiState(
     val user: UserEntity? = null,
@@ -20,7 +24,8 @@ data class ProfileUiState(
     val emailOtpSent: Boolean = false,
     val emailOtpChallengeId: String? = null,
     val emailOtpExpiresAt: Long? = null,
-    val emailPending: String? = null
+    val emailPending: String? = null,
+    val notice: ProfileNotice? = null
 )
 
 class ProfileViewModel(
@@ -44,7 +49,10 @@ class ProfileViewModel(
             }
             refresh()
         } else {
-            _state.value = ProfileUiState(isLoading = false, error = "نشست کاربر پیدا نشد.")
+            _state.value = ProfileUiState(
+                isLoading = false,
+                error = if (isPersian()) "نشست کاربر پیدا نشد." else "Your session could not be found."
+            )
         }
     }
 
@@ -61,7 +69,7 @@ class ProfileViewModel(
         viewModelScope.launch {
             _state.value = _state.value.copy(isSaving = true, error = null)
             repository.updateProfile(firstName, lastName, gender, birthDate)
-                .onSuccess { _state.value = _state.value.copy(isSaving = false) }
+                .onSuccess { _state.value = _state.value.copy(isSaving = false, notice = ProfileNotice.PROFILE_SAVED) }
                 .onFailure { _state.value = _state.value.copy(isSaving = false, error = it.userMessage()) }
         }
     }
@@ -97,7 +105,8 @@ class ProfileViewModel(
                         emailOtpSent = false,
                         emailOtpChallengeId = null,
                         emailOtpExpiresAt = null,
-                        emailPending = null
+                        emailPending = null,
+                        notice = ProfileNotice.EMAIL_VERIFIED
                     )
                 }
                 .onFailure { _state.value = _state.value.copy(isSaving = false, error = it.userMessage()) }
@@ -117,6 +126,13 @@ class ProfileViewModel(
         _state.value = _state.value.copy(error = null)
     }
 
+    fun consumeNotice() {
+        _state.value = _state.value.copy(notice = null)
+    }
+
+    private fun isPersian(): Boolean = LocaleHelper.getLanguage(context) == "fa"
+
     private fun Throwable.userMessage(): String =
-        message?.takeIf { it.isNotBlank() } ?: "عملیات انجام نشد. دوباره تلاش کنید."
+        message?.takeIf { it.isNotBlank() }
+            ?: if (isPersian()) "عملیات انجام نشد. دوباره تلاش کنید." else "Something went wrong. Please try again."
 }
