@@ -23,12 +23,16 @@ type AccessTokenClaims struct {
 	UserID         string
 	Role           entity.Role
 	SessionVersion uint64
+	// DeviceID is the device the session was issued to. It is empty for tokens issued
+	// before the claim existed; callers must treat an empty value as "unknown device".
+	DeviceID string
 }
 
 type accessClaims struct {
 	TokenType      string      `json:"token_type"`
 	Role           entity.Role `json:"role"`
 	SessionVersion uint64      `json:"session_version"`
+	DeviceID       string      `json:"device_id,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -41,6 +45,13 @@ func GenerateAccessTokenWithRole(userID string, role entity.Role, ttl time.Durat
 }
 
 func GenerateAccessTokenWithRoleAndSession(userID string, role entity.Role, sessionVersion uint64, ttl time.Duration, secret string) (string, error) {
+	return GenerateAccessTokenForDevice(userID, role, sessionVersion, "", ttl, secret)
+}
+
+// GenerateAccessTokenForDevice issues an access token bound to deviceID. The device id lets
+// the server know which device is calling (e.g. to protect the primary device from being
+// removed by another device) without trusting any client-supplied header.
+func GenerateAccessTokenForDevice(userID string, role entity.Role, sessionVersion uint64, deviceID string, ttl time.Duration, secret string) (string, error) {
 	if strings.TrimSpace(userID) == "" || !role.Valid() || ttl <= 0 || strings.TrimSpace(secret) == "" {
 		return "", errors.New("invalid access token parameters")
 	}
@@ -49,6 +60,7 @@ func GenerateAccessTokenWithRoleAndSession(userID string, role entity.Role, sess
 		TokenType:      accessTokenType,
 		Role:           role,
 		SessionVersion: sessionVersion,
+		DeviceID:       strings.TrimSpace(deviceID),
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    jwtIssuer,
 			Subject:   userID,
@@ -111,5 +123,5 @@ func ParseAndValidateAccessTokenClaims(tokenString, secret string) (AccessTokenC
 	if !role.Valid() {
 		return AccessTokenClaims{}, errors.New("invalid access token role")
 	}
-	return AccessTokenClaims{UserID: claims.Subject, Role: role, SessionVersion: claims.SessionVersion}, nil
+	return AccessTokenClaims{UserID: claims.Subject, Role: role, SessionVersion: claims.SessionVersion, DeviceID: claims.DeviceID}, nil
 }

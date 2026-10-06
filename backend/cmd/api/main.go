@@ -111,7 +111,7 @@ func run() error {
 	corsOrigins := splitCSV(cfg.CORSAllowedOrigins)
 	router := httpiface.NewRouter(httpiface.RouterDependencies{
 		AuthHandler: authHandler, SyncHandler: syncHandler, AdminHandler: handler.NewAdminHandler(roleUC, validate),
-		DeviceHandler: handler.NewDeviceHandler(deviceUC), JWTSecret: cfg.JWTSecret, UserRepository: userRepo, Env: cfg.Env,
+		DeviceHandler: handler.NewDeviceHandler(deviceUC), JWTSecret: cfg.JWTSecret, UserRepository: userRepo, DeviceRepository: deviceRepo, Env: cfg.Env,
 		TrustedProxyCIDRs: trustedProxies, CORSAllowedOrigins: corsOrigins, RateLimitStore: rateStore,
 	})
 

@@ -108,3 +108,29 @@ func TestAccessTokenCarriesSessionVersion(t *testing.T) {
 		t.Fatalf("session version=%d, want 7", claims.SessionVersion)
 	}
 }
+
+func TestAccessTokenCarriesDeviceID(t *testing.T) {
+	tok, err := GenerateAccessTokenForDevice("user-1", entity.RoleUser, 1, "device-9", time.Minute, jwtTestSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := ParseAndValidateAccessTokenClaims(tok, jwtTestSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claims.DeviceID != "device-9" {
+		t.Fatalf("device id=%q, want device-9", claims.DeviceID)
+	}
+
+	legacy, err := GenerateAccessTokenWithRoleAndSession("user-1", entity.RoleUser, 1, time.Minute, jwtTestSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyClaims, err := ParseAndValidateAccessTokenClaims(legacy, jwtTestSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacyClaims.DeviceID != "" {
+		t.Fatalf("legacy token device id=%q, want empty", legacyClaims.DeviceID)
+	}
+}

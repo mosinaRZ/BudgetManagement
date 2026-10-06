@@ -55,7 +55,7 @@ func statusForCode(code apperror.Code) int {
 		return http.StatusBadRequest
 	case apperror.CodeUnauthorized:
 		return http.StatusUnauthorized
-	case apperror.CodeForbidden:
+	case apperror.CodeForbidden, apperror.CodePrimaryDeviceProtected:
 		return http.StatusForbidden
 	case apperror.CodeNotFound:
 		return http.StatusNotFound
