@@ -104,7 +104,8 @@ fun SettingsScreen(
     onThemeToggle: () -> Unit = {},
     onNotificationCalibrationClick: () -> Unit = {},
     onDevicesClick: () -> Unit = {},
-    onProfileClick: () -> Unit = {}
+    onProfileClick: () -> Unit = {},
+    onForgotPassword: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val isPersian = isPersianLocale()
@@ -774,6 +775,10 @@ fun SettingsScreen(
                 isPersian = isPersian,
                 onDismiss = { showChangePasswordDialog = false },
                 onSubmit = { currentPassword, newPassword -> authRepository.changePassword(currentPassword, newPassword) },
+                onForgotPassword = {
+                    showChangePasswordDialog = false
+                    onForgotPassword()
+                },
                 onSuccess = {
                     showChangePasswordDialog = false
                     // The fingerprint credential wrapped the old password and was dropped by the repository.

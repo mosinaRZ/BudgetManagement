@@ -56,6 +56,13 @@ class DevicesViewModel(
         // The server cannot tell which device is "this one" from the access token, so the
         // client refuses to remove itself (that would be a sign-out, handled in Settings).
         if (deviceId == currentDeviceId || _revokingId.value != null) return
+        // The primary (first) device can only be removed from itself. The server enforces this
+        // too; checking here just avoids a pointless request and a confusing error.
+        if (_devices.value.any { it.id == deviceId && it.isPrimary }) {
+            _error.value = if (isPersian) "دستگاه اصلی فقط از خود همان دستگاه قابل حذف است."
+            else "The primary device can only be removed from the primary device itself."
+            return
+        }
         viewModelScope.launch(Dispatchers.IO) {
             _revokingId.value = deviceId
             runCatching { deviceApi.revoke(deviceId) }
@@ -79,7 +86,11 @@ class DevicesViewModel(
     fun consumeNotice() { _notice.value = null }
 
     private fun sorted(list: List<DeviceApi.Device>): List<DeviceApi.Device> =
-        list.sortedWith(compareByDescending<DeviceApi.Device> { it.id == currentDeviceId }.thenByDescending { it.lastSeenAt })
+        list.sortedWith(
+            compareByDescending<DeviceApi.Device> { it.id == currentDeviceId }
+                .thenByDescending { it.isPrimary }
+                .thenByDescending { it.lastSeenAt }
+        )
 
     private fun message(error: Throwable): String =
         (error as? ApiException)?.userMessage(isPersian)

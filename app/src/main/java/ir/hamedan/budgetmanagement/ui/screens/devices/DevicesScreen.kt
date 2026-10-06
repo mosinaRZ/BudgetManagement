@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -84,6 +85,10 @@ fun DevicesScreen(onBack: () -> Unit) {
     val notice by vm.notice.collectAsState()
     val isPersian = isPersianLocale()
 
+    // The primary device is the first one ever registered on the account.
+    val thisDeviceIsPrimary = devices.any { it.id == vm.currentDeviceId && it.isPrimary }
+    val primaryExists = devices.any { it.isPrimary }
+
     var pendingRevoke by remember { mutableStateOf<DeviceApi.Device?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -111,6 +116,23 @@ fun DevicesScreen(onBack: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
                 )
+                if (primaryExists) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = when {
+                            thisDeviceIsPrimary && isPersian ->
+                                "این دستگاه، دستگاه اصلی حساب شماست و می‌تواند سایر دستگاه‌ها را حذف کند."
+                            thisDeviceIsPrimary ->
+                                "This is your account's primary device and it can remove all other devices."
+                            isPersian ->
+                                "دستگاه اصلی، اولین دستگاهی است که وارد حساب شده و فقط از خودش قابل حذف است."
+                            else ->
+                                "The primary device is the first one that signed in and can only be removed from itself."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+                    )
+                }
             }
 
             error?.let { message -> item { AuthErrorBanner(message = message) } }
@@ -149,6 +171,7 @@ fun DevicesScreen(onBack: () -> Unit) {
                 DeviceCard(
                     device = device,
                     isCurrent = device.id == vm.currentDeviceId,
+                    isPrimary = device.isPrimary,
                     isRevoking = revokingId == device.id,
                     removeEnabled = revokingId == null,
                     isPersian = isPersian,
@@ -267,6 +290,7 @@ fun DevicesScreen(onBack: () -> Unit) {
 private fun DeviceCard(
     device: DeviceApi.Device,
     isCurrent: Boolean,
+    isPrimary: Boolean,
     isRevoking: Boolean,
     removeEnabled: Boolean,
     isPersian: Boolean,
@@ -309,22 +333,20 @@ private fun DeviceCard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (isCurrent) {
-                    Row(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
-                            .padding(horizontal = 10.dp, vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.VerifiedUser, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(12.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = if (isPersian) "این دستگاه" else "This device",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                if (isCurrent || isPrimary) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (isCurrent) {
+                            DeviceBadge(
+                                icon = Icons.Default.VerifiedUser,
+                                text = if (isPersian) "این دستگاه" else "This device"
+                            )
+                        }
+                        if (isPrimary) {
+                            DeviceBadge(
+                                icon = Icons.Default.Star,
+                                text = if (isPersian) "دستگاه اصلی" else "Primary device"
+                            )
+                        }
                     }
                 }
             }
@@ -372,7 +394,17 @@ private fun DeviceCard(
             }
         }
 
-        if (!isCurrent) {
+        if (!isCurrent && isPrimary) {
+            // Only the primary device itself may remove it, so no remove button on other devices.
+            Text(
+                text = if (isPersian) "این دستگاه فقط از خودش قابل حذف است."
+                else "This device can only be removed from itself.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+        } else if (!isCurrent) {
             OutlinedButton(
                 onClick = onRemove,
                 enabled = removeEnabled,
@@ -390,6 +422,26 @@ private fun DeviceCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DeviceBadge(icon: ImageVector, text: String) {
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+            .padding(horizontal = 10.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(12.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
     }
 }
 

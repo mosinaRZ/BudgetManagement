@@ -70,7 +70,7 @@ class SyncEngine(
                 syncApi.sync(requestId, deviceId, cursor, changes)
             } catch (e: ir.hamedan.budgetmanagement.data.network.ApiException) {
                 if (e.code == "UNAUTHORIZED" || e.statusCode == 401 || e.statusCode == 403) {
-                    sessionStore.clearSession()
+                    sessionStore.clearSession(unexpected = true)
                     return SyncResult.ReauthenticationRequired
                 }
                 throw e

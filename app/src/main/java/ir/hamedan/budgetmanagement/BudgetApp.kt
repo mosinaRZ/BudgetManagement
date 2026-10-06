@@ -1,6 +1,10 @@
 package ir.hamedan.budgetmanagement
 
 import android.app.Application
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -43,6 +47,41 @@ class BudgetApp : Application() {
         }
         scheduleWorkers()
         container.syncScheduler.schedulePeriodic()
+        observeConnectivity()
+    }
+
+    /**
+     * Runs a sync (which also validates the session) every time the device gets a working
+     * internet connection. A device that was removed from the account while it was offline
+     * therefore learns about it right away, instead of at the next periodic sync, and the
+     * navigation guard sends it to the login screen from whatever screen it is on.
+     */
+    private fun observeConnectivity() {
+        val connectivityManager = getSystemService(ConnectivityManager::class.java) ?: return
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        runCatching {
+            connectivityManager.registerNetworkCallback(request, object : ConnectivityManager.NetworkCallback() {
+                private var validatedNetwork: Network? = null
+
+                override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+                    val validated = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                    if (validated && validatedNetwork != network) {
+                        validatedNetwork = network
+                        if (container.authRepository.isAuthenticated()) {
+                            container.syncScheduler.enqueueNow()
+                        }
+                    } else if (!validated && validatedNetwork == network) {
+                        validatedNetwork = null
+                    }
+                }
+
+                override fun onLost(network: Network) {
+                    if (validatedNetwork == network) validatedNetwork = null
+                }
+            })
+        }
     }
 
     // ساخت دسته‌بندی‌های پیش‌فرض، فقط یک‌بار در طول عمر نصب اپ.

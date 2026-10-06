@@ -23,6 +23,21 @@ class AuthSessionStore(context: Context) {
     private val _authenticated = MutableStateFlow(readAuthenticated())
     val authenticated: StateFlow<Boolean> = _authenticated.asStateFlow()
 
+    /**
+     * True when the session was ended by the server side (expired/revoked refresh token, or this
+     * device was removed from the account) rather than by the user signing out. In-memory only:
+     * it exists so the login screen can explain why the user was sent back to it.
+     */
+    @Volatile
+    private var endedUnexpectedly = false
+
+    /** Returns true once if the last session end was unexpected, then resets the flag. */
+    fun consumeUnexpectedEnd(): Boolean {
+        val value = endedUnexpectedly
+        endedUnexpectedly = false
+        return value
+    }
+
     fun save(
         accessToken: String,
         refreshToken: String,
@@ -64,7 +79,8 @@ class AuthSessionStore(context: Context) {
     fun isAuthenticated(): Boolean = readAuthenticated()
 
     /** Clears only credentials. Local encrypted financial data is retained for re-authentication. */
-    fun clearSession() {
+    fun clearSession(unexpected: Boolean = false) {
+        endedUnexpectedly = unexpected
         prefs.edit()
             .remove(KEY_ACCESS)
             .remove(KEY_REFRESH)

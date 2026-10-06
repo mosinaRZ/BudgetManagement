@@ -42,6 +42,8 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity // اضافه شدن فرگمنت اکتیویتی برای بیومتریک
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -82,6 +84,7 @@ import ir.hamedan.budgetmanagement.ui.theme.BudgetManagementTheme
 import ir.hamedan.budgetmanagement.data.notification.AppNotificationManager
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Suppress("DEPRECATION")
@@ -90,6 +93,7 @@ class MainActivity : FragmentActivity() {
 
     companion object {
         const val ACTION_ADD_TRANSACTION = "ir.hamedan.budgetmanagement.action.ADD_TRANSACTION"
+        private const val SESSION_CHECK_INTERVAL_MS = 60_000L
     }
 
     override fun onStart() {
@@ -141,6 +145,22 @@ class MainActivity : FragmentActivity() {
 
         AppNotificationManager.createChannel(applicationContext)
         handleShortcutIntent(intent)
+
+        // While the app is visible, periodically verify the session with the server. If this
+        // device was removed from the account, the check fails with 401/403, the session is
+        // cleared and the navigation guard in TheApp sends the user to the login screen,
+        // whichever screen they are on. The first check runs as soon as the app is shown.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                val app = applicationContext as BudgetApp
+                while (true) {
+                    if (app.container.authRepository.isAuthenticated()) {
+                        app.container.syncScheduler.enqueueNow()
+                    }
+                    delay(SESSION_CHECK_INTERVAL_MS)
+                }
+            }
+        }
 
         // 🚀 درخواست خودکار مجوزها از اینجا حذف شد.
         // حالا دیالوگ آنبوردینگ (اولین ورود کاربر) با توضیح هر مجوز، خودش این درخواست را می‌زند.
@@ -297,13 +317,24 @@ class MainActivity : FragmentActivity() {
         LaunchedEffect(sessionAuthenticated, currentRouteEntry?.destination?.route, lifecycleResumeTrigger) {
             val route = currentRouteEntry?.destination?.route.orEmpty()
 
+            // The lock must apply to EVERY signed-in screen (Profile, Devices, Categories, Add...),
+            // not only the tabbed MainStructure: those screens are siblings of MainStructure in the
+            // root NavHost, so checking for "MainStructure" alone let the user stay on them forever.
+            val isAuthOrSplashRoute = route.contains("Login") ||
+                    route.contains("Register") ||
+                    route.contains("PasswordReset") ||
+                    route.contains("Splash")
+
             if (sessionAuthenticated &&
-                appLockPreferences.shouldLockNow() &&
-                route.contains("MainStructure")
+                route.isNotBlank() &&
+                !isAuthOrSplashRoute &&
+                appLockPreferences.shouldLockNow()
             ) {
                 appLockPreferences.markLockRequired()
                 navController.navigate(AppRoute.Login(localUnlockOnly = true)) {
-                    popUpTo(AppRoute.MainStructure) { inclusive = true }
+                    // Clear the whole back stack so Back from the lock screen can never return
+                    // to the screen that was open when the app was locked.
+                    popUpTo(navController.graph.id) { inclusive = true }
                     launchSingleTop = true
                 }
                 return@LaunchedEffect
@@ -358,6 +389,19 @@ class MainActivity : FragmentActivity() {
             // 🚀 ۲. صفحه لاگین هوشمند (اثر انگشت + فرم متنی)
             composable<AppRoute.Login> { backStackEntry ->
                 val loginRoute = backStackEntry.toRoute<AppRoute.Login>()
+
+                // The server session can end while the local-unlock screen is showing (for example
+                // this device was removed from the account while the app was in the background).
+                // Local unlock is meaningless then: switch to the full sign-in form.
+                LaunchedEffect(sessionAuthenticated, loginRoute.localUnlockOnly) {
+                    if (loginRoute.localUnlockOnly && !sessionAuthenticated) {
+                        navController.navigate(AppRoute.Login()) {
+                            popUpTo(navController.graph.id) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
+                }
+
                 LoginScreen(
                     localUnlockOnly = loginRoute.localUnlockOnly,
                     onLoginSuccess = {
@@ -556,6 +600,7 @@ class MainActivity : FragmentActivity() {
                             SettingsScreen(
                                 onThemeToggle = onThemeToggle,
                                 onProfileClick = { navController.navigate(AppRoute.Profile) },
+                                onForgotPassword = { navController.navigate(AppRoute.PasswordReset) },
                                 onAddScreenClick = {
                                     navController.navigate(AppRoute.AddScreen(highlightId = "category"))
                                 },

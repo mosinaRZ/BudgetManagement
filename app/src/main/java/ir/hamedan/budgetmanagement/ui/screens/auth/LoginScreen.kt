@@ -79,6 +79,18 @@ fun LoginScreen(
     val passwordFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
 
+    // The server ended this session (expired, or this device was removed from the account):
+    // tell the user why they are back here instead of showing an unexplained login form.
+    LaunchedEffect(localUnlockOnly) {
+        if (!localUnlockOnly && app.container.authSessionStore.consumeUnexpectedEnd()) {
+            errorMessage = if (isPersian) {
+                "نشست شما پایان یافته یا این دستگاه از حساب حذف شده است. برای ادامه دوباره وارد شوید."
+            } else {
+                "Your session has ended or this device was removed from the account. Please sign in again."
+            }
+        }
+    }
+
     val biometricLoginEnabled = remember(context) { SharedPreferences.getBiometricEnabled(context) }
     val biometricReady = biometricLoginEnabled && rememberedLoginStore.hasBiometricCredential() && rememberedLoginStore.canUseStrongBiometric()
     val passwordUnlockReady = rememberedLoginStore.hasPasswordVerifier()

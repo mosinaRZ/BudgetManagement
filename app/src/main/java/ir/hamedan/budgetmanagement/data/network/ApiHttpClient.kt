@@ -104,6 +104,7 @@ class ApiException(
         "NETWORK_ERROR" -> if (isPersian) "اتصال به سرور برقرار نشد. اینترنت و اتصال سرور را بررسی کنید." else "Could not connect to the server. Check your internet connection."
         "UNAUTHORIZED" -> if (isPersian) "نشست شما منقضی شده است. دوباره وارد شوید." else "Your session has expired. Please sign in again."
         "FORBIDDEN" -> if (isPersian) "شما اجازه انجام این عملیات را ندارید." else "You are not allowed to perform this operation."
+        "PRIMARY_DEVICE_PROTECTED" -> if (isPersian) "دستگاه اصلی فقط از خود همان دستگاه قابل حذف است." else "The primary device can only be removed from the primary device itself."
         "NOT_FOUND" -> if (isPersian) "اطلاعات موردنظر پیدا نشد." else "The requested information was not found."
         "CONFLICT" -> if (isPersian) "این عملیات با وضعیت فعلی اطلاعات سازگار نیست." else "The operation conflicts with the current data."
         "RATE_LIMITED" -> if (isPersian) "درخواست‌های زیادی ارسال شده است. کمی بعد دوباره تلاش کنید." else "Too many requests. Please try again later."

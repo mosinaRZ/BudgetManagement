@@ -22,7 +22,8 @@ class DeviceApi(private val client: AuthenticatedApiClient) {
                         appVersion = item.text("app_version"),
                         lastIp = item.text("last_ip"),
                         lastSeenAt = item.optLong("last_seen_at", 0L) * 1000L,
-                        createdAt = item.optLong("created_at", 0L) * 1000L
+                        createdAt = item.optLong("created_at", 0L) * 1000L,
+                        isPrimary = item.optBoolean("is_primary", false)
                     )
                 )
             }
@@ -50,7 +51,12 @@ class DeviceApi(private val client: AuthenticatedApiClient) {
         val appVersion: String = "",
         val lastIp: String = "",
         val lastSeenAt: Long,
-        val createdAt: Long
+        val createdAt: Long,
+        /**
+         * The first device ever registered on the account. It can remove every other device,
+         * but no other device can remove it. False when talking to an older server.
+         */
+        val isPrimary: Boolean = false
     )
 
     private fun JSONObject.text(key: String): String = if (isNull(key)) "" else optString(key).trim()
