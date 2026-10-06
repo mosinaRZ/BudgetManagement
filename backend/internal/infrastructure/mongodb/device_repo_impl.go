@@ -66,30 +66,51 @@ func (r *deviceRepo) List(ctx context.Context, userID string) ([]*entity.Device,
 	defer cur.Close(ctx)
 	var out []*entity.Device
 	for cur.Next(ctx) {
-		var m struct {
-			ID         primitive.ObjectID `bson:"_id"`
-			UserID     string             `bson:"userId"`
-			DeviceID   string             `bson:"deviceId"`
-			Name       string             `bson:"name"`
-			Model      string             `bson:"model"`
-			Platform   string             `bson:"platform"`
-			OSVersion  string             `bson:"osVersion"`
-			AppVersion string             `bson:"appVersion"`
-			LastIP     string             `bson:"lastIp"`
-			LastSeenAt time.Time          `bson:"lastSeenAt"`
-			CreatedAt  time.Time          `bson:"createdAt"`
-		}
+		var m deviceModel
 		if err := cur.Decode(&m); err != nil {
 			return nil, apperror.ErrInternal("failed to decode device", err)
 		}
-		out = append(out, &entity.Device{
-			ID: m.DeviceID, UserID: m.UserID,
-			Name: m.Name, Model: m.Model, Platform: m.Platform, OSVersion: m.OSVersion, AppVersion: m.AppVersion, LastIP: m.LastIP,
-			LastSeenAt: m.LastSeenAt, CreatedAt: m.CreatedAt,
-		})
+		out = append(out, m.toEntity())
 	}
 	return out, cur.Err()
 }
+
+// Primary returns the earliest-registered device of the user. Ties on createdAt are broken by
+// deviceId so the result is deterministic.
+func (r *deviceRepo) Primary(ctx context.Context, userID string) (*entity.Device, error) {
+	var m deviceModel
+	err := r.c.FindOne(ctx, bson.M{"userId": userID}, options.FindOne().SetSort(bson.D{{Key: "createdAt", Value: 1}, {Key: "deviceId", Value: 1}})).Decode(&m)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, apperror.ErrInternal("failed to load primary device", err)
+	}
+	return m.toEntity(), nil
+}
+
+type deviceModel struct {
+	ID         primitive.ObjectID `bson:"_id"`
+	UserID     string             `bson:"userId"`
+	DeviceID   string             `bson:"deviceId"`
+	Name       string             `bson:"name"`
+	Model      string             `bson:"model"`
+	Platform   string             `bson:"platform"`
+	OSVersion  string             `bson:"osVersion"`
+	AppVersion string             `bson:"appVersion"`
+	LastIP     string             `bson:"lastIp"`
+	LastSeenAt time.Time          `bson:"lastSeenAt"`
+	CreatedAt  time.Time          `bson:"createdAt"`
+}
+
+func (m deviceModel) toEntity() *entity.Device {
+	return &entity.Device{
+		ID: m.DeviceID, UserID: m.UserID,
+		Name: m.Name, Model: m.Model, Platform: m.Platform, OSVersion: m.OSVersion, AppVersion: m.AppVersion, LastIP: m.LastIP,
+		LastSeenAt: m.LastSeenAt, CreatedAt: m.CreatedAt,
+	}
+}
+
 func (r *deviceRepo) Revoke(ctx context.Context, userID, deviceID string) error {
 	res, err := r.c.DeleteOne(ctx, bson.M{"userId": userID, "deviceId": deviceID})
 	if err != nil {

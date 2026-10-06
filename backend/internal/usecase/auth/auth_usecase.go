@@ -720,7 +720,7 @@ func (s *ServiceImpl) issueSession(ctx context.Context, u *entity.User, d string
 type sessionOutput struct{ AccessToken, RefreshToken string }
 
 func (s *ServiceImpl) issueRefreshAndAccess(ctx context.Context, u *entity.User, d string) (sessionOutput, error) {
-	a, e := infraauth.GenerateAccessTokenWithRoleAndSession(u.ID, u.Role, u.SessionVersion, s.accessTTL, s.secret)
+	a, e := infraauth.GenerateAccessTokenForDevice(u.ID, u.Role, u.SessionVersion, d, s.accessTTL, s.secret)
 	if e != nil {
 		return sessionOutput{}, apperror.ErrInternal("failed to create access token")
 	}

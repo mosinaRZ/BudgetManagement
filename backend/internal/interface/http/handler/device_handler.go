@@ -25,17 +25,18 @@ func (h *DeviceHandler) List(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, apperror.ErrUnauthorized("authentication required"))
 		return
 	}
-	devices, err := h.service.List(r.Context(), userID)
+	overview, err := h.service.Overview(r.Context(), userID)
 	if err != nil {
 		response.Error(w, err)
 		return
 	}
-	out := make([]dto.DeviceResponse, 0, len(devices))
-	for _, d := range devices {
+	out := make([]dto.DeviceResponse, 0, len(overview.Devices))
+	for _, d := range overview.Devices {
 		out = append(out, dto.DeviceResponse{
 			ID: d.ID, Name: d.Name, Model: d.Model, Platform: d.Platform, OSVersion: d.OSVersion, AppVersion: d.AppVersion,
 			LastIP:     maskIP(d.LastIP),
 			LastSeenAt: d.LastSeenAt.Unix(), CreatedAt: d.CreatedAt.Unix(),
+			IsPrimary: overview.PrimaryID != "" && d.ID == overview.PrimaryID,
 		})
 	}
 	response.JSON(w, http.StatusOK, dto.DeviceListResponse{Devices: out})
@@ -47,7 +48,9 @@ func (h *DeviceHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, apperror.ErrUnauthorized("authentication required"))
 		return
 	}
-	if err := h.service.Revoke(r.Context(), userID, chi.URLParam(r, "deviceID")); err != nil {
+	// Empty for legacy tokens issued before access tokens carried the device id.
+	callerDeviceID, _ := contextkeys.DeviceID(r.Context())
+	if err := h.service.Revoke(r.Context(), userID, callerDeviceID, chi.URLParam(r, "deviceID")); err != nil {
 		response.Error(w, err)
 		return
 	}

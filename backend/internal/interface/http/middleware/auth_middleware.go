@@ -13,6 +13,13 @@ import (
 )
 
 func Auth(secret string, users repository.UserRepository) func(http.Handler) http.Handler {
+	return AuthWithDevices(secret, users, nil)
+}
+
+// AuthWithDevices behaves like Auth and additionally rejects access tokens whose device has
+// been removed from the account. Without this, a removed device would keep working until its
+// short-lived access token expired. When devices is nil the extra check is skipped.
+func AuthWithDevices(secret string, users repository.UserRepository, devices repository.DeviceRepository) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
@@ -38,7 +45,24 @@ func Auth(secret string, users repository.UserRepository) func(http.Handler) htt
 				return
 			}
 
+			if devices != nil && claims.DeviceID != "" {
+				registered, err := devices.Exists(r.Context(), claims.UserID, claims.DeviceID)
+				if err != nil {
+					// A storage failure must never look like "device removed": that would sign
+					// the user out on a transient outage. Surface it as a retryable server error.
+					response.Error(w, apperror.ErrInternal("failed to verify device"))
+					return
+				}
+				if !registered {
+					response.Error(w, apperror.ErrUnauthorized("This device has been removed from the account"))
+					return
+				}
+			}
+
 			ctx := contextkeys.WithUserID(r.Context(), claims.UserID)
+			if claims.DeviceID != "" {
+				ctx = contextkeys.WithDeviceID(ctx, claims.DeviceID)
+			}
 			ctx = contextkeys.WithRole(ctx, string(claims.Role))
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

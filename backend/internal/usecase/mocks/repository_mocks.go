@@ -182,6 +182,14 @@ type MockDeviceRepository struct {
 	RevokeFunc   func(context.Context, string, string) error
 	ExistsFunc   func(context.Context, string, string) (bool, error)
 	TouchFunc    func(context.Context, string, string) error
+	PrimaryFunc  func(context.Context, string) (*entity.Device, error)
+}
+
+func (m *MockDeviceRepository) Primary(ctx context.Context, userID string) (*entity.Device, error) {
+	if m.PrimaryFunc != nil {
+		return m.PrimaryFunc(ctx, userID)
+	}
+	return nil, nil
 }
 
 func (m *MockDeviceRepository) Register(

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mosinaRZ/finance-sync-backend/internal/domain/apperror"
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
 	infraauth "github.com/mosinaRZ/finance-sync-backend/internal/infrastructure/auth"
 	"github.com/mosinaRZ/finance-sync-backend/internal/interface/http/contextkeys"
@@ -114,5 +115,68 @@ func TestRequireRolesAllowsAdmin(t *testing.T) {
 	Auth(secret, &mocks.MockUserRepository{})(RequireRoles(entity.RoleAdmin)(r)).ServeHTTP(rec, req)
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204", rec.Code)
+	}
+}
+
+func TestAuthWithDevicesRejectsRemovedDevice(t *testing.T) {
+	secret := "01234567890123456789012345678901"
+	token, err := infraauth.GenerateAccessTokenForDevice("user-1", entity.RoleUser, 0, "device-1", time.Minute, secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	devices := &mocks.MockDeviceRepository{ExistsFunc: func(_ context.Context, u, d string) (bool, error) {
+		return !(u == "user-1" && d == "device-1"), nil // device-1 has been removed
+	}}
+	h := AuthWithDevices(secret, &mocks.MockUserRepository{}, devices)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("removed device reached handler")
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/account/profile", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d, want 401", rec.Code)
+	}
+}
+
+func TestAuthWithDevicesAllowsRegisteredDeviceAndExposesIt(t *testing.T) {
+	secret := "01234567890123456789012345678901"
+	token, err := infraauth.GenerateAccessTokenForDevice("user-1", entity.RoleUser, 0, "device-1", time.Minute, secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	devices := &mocks.MockDeviceRepository{ExistsFunc: func(context.Context, string, string) (bool, error) { return true, nil }}
+	var got string
+	h := AuthWithDevices(secret, &mocks.MockUserRepository{}, devices)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got, _ = contextkeys.DeviceID(r.Context())
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent || got != "device-1" {
+		t.Fatalf("status=%d device=%q", rec.Code, got)
+	}
+}
+
+func TestAuthWithDevicesDoesNotSignOutOnStorageFailure(t *testing.T) {
+	secret := "01234567890123456789012345678901"
+	token, err := infraauth.GenerateAccessTokenForDevice("user-1", entity.RoleUser, 0, "device-1", time.Minute, secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	devices := &mocks.MockDeviceRepository{ExistsFunc: func(context.Context, string, string) (bool, error) {
+		return false, apperror.ErrInternal("db down")
+	}}
+	h := AuthWithDevices(secret, &mocks.MockUserRepository{}, devices)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("handler must not run when device state is unknown")
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d, want 500 (must not look like a removed device)", rec.Code)
 	}
 }

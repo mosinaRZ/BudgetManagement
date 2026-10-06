@@ -25,6 +25,7 @@ type RouterDependencies struct {
 	DeviceHandler      *handler.DeviceHandler
 	JWTSecret          string
 	UserRepository     repository.UserRepository
+	DeviceRepository   repository.DeviceRepository
 	Env                string
 	TrustedProxyCIDRs  []*net.IPNet
 	CORSAllowedOrigins []string
@@ -68,7 +69,7 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 	})
 
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Auth(deps.JWTSecret, deps.UserRepository))
+		r.Use(middleware.AuthWithDevices(deps.JWTSecret, deps.UserRepository, deps.DeviceRepository))
 		r.Use(protectedRateLimiter.LimitByUser)
 
 		if deps.AuthHandler != nil {

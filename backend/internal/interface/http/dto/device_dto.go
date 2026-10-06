@@ -11,6 +11,8 @@ type DeviceResponse struct {
 	LastIP     string `json:"last_ip,omitempty"`
 	LastSeenAt int64  `json:"last_seen_at"`
 	CreatedAt  int64  `json:"created_at"`
+	// IsPrimary marks the first device registered on the account. Only that device can remove it.
+	IsPrimary bool `json:"is_primary"`
 }
 
 type DeviceListResponse struct {

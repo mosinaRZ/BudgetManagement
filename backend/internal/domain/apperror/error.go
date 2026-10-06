@@ -25,6 +25,11 @@ const (
 // CodeUnauthorized so clients never mistake it for an expired session.
 const CodeInvalidPassword Code = "INVALID_PASSWORD"
 
+// CodePrimaryDeviceProtected means the caller tried to remove the account's primary
+// (first-registered) device from a different device. Clients show a dedicated message
+// instead of treating it as a generic permission error.
+const CodePrimaryDeviceProtected Code = "PRIMARY_DEVICE_PROTECTED"
+
 type AppError struct {
 	Code    Code
 	Message string
@@ -75,6 +80,9 @@ func ErrRateLimited(message string, wrapped ...error) *AppError {
 }
 func ErrInvalidPassword(message string, wrapped ...error) *AppError {
 	return newAppError(CodeInvalidPassword, message, firstOrNil(wrapped))
+}
+func ErrPrimaryDeviceProtected(message string, wrapped ...error) *AppError {
+	return newAppError(CodePrimaryDeviceProtected, message, firstOrNil(wrapped))
 }
 func ErrInternal(message string, wrapped ...error) *AppError {
 	return newAppError(CodeInternal, message, firstOrNil(wrapped))
