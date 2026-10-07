@@ -81,6 +81,27 @@ class SmsParserTest {
         "بانک سامان\nواریز سود 1,250,000 ریال\nمانده 100,000,000 ریال", 125000.0, "INCOME"
     )
 
+    // ------------------------------ Blu (neo-bank) ------------------------------
+
+    @Test fun bluTransferOut() = accepts(
+        "بلو\nانتقال پل\nمحمدسینا عزیز، 25,000,000 ریال از حساب شما پرید.\nموجودی: 66,144,957 ریال\n۲۱:۴۱\n۱۴۰۵.۰۷.۱۵",
+        2500000.0, "EXPENSE", sender = "Blu"
+    )
+
+    @Test fun bluDepositWithoutSpaceBeforeUnit() = accepts(
+        "بلو\nواریز پول\nمحمدسینا عزیز، 60,000,000ریال به حساب شما نشست.\nموجودی: 91,152,957 ریال\n۱۴:۲۰\n۱۴۰۵.۰۷.۱۵",
+        6000000.0, "INCOME", sender = "Blu"
+    )
+
+    @Test fun bluWithoutHeaderLines() = accepts(
+        "علی عزیز، ۲۵٬۰۰۰٬۰۰۰ ریال از حساب شما پرید. موجودی: ۶۶٬۱۴۴٬۹۵۷ ریال",
+        2500000.0, "EXPENSE"
+    )
+
+    @Test fun bluDepositOnlyBySenderEvidence() = accepts(
+        "علی عزیز، 60,000,000ریال به حساب شما نشست.", 6000000.0, "INCOME", sender = "BluBank"
+    )
+
     // ------------------------------ must be ignored ------------------------------
 
     @Test fun lotteryPromo() = rejects(
@@ -126,4 +147,8 @@ class SmsParserTest {
     @Test fun cardActivation() = rejects("کارت 6037991234567890 شما فعال شد. بانک ملی")
 
     @Test fun telecomPromo() = rejects("همراه گرامی، با شارژ 100,000 تومانی هدیه بگیرید. جشنواره ویژه. لغو 11")
+
+    @Test fun bluStyleWordingFromPersonalNumber() = rejects(
+        "علی عزیز، 60,000,000ریال به حساب شما نشست.", sender = "09121234567"
+    )
 }

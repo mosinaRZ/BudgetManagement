@@ -66,4 +66,27 @@ class OnboardingPreferencesTest {
     fun note_isCompletedOnlyHasSetCompleted() {
         assertThat(OnboardingPreferences.isCompleted(context)).isFalse()
     }
+
+    @Test
+    fun isReminderGracePeriodOver_legacyUserWithoutTimestamp_returnsTrue() {
+        assertThat(OnboardingPreferences.isReminderGracePeriodOver(context)).isTrue()
+    }
+
+    @Test
+    fun isReminderGracePeriodOver_rightAfterOnboarding_returnsFalse() {
+        OnboardingPreferences.setCompleted(context)
+        assertThat(OnboardingPreferences.isReminderGracePeriodOver(context)).isFalse()
+    }
+
+    @Test
+    fun isReminderGracePeriodOver_afterGracePeriod_returnsTrue() {
+        context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+            .edit()
+            .putLong(
+                OnboardingPreferences.KEY_ONBOARDING_COMPLETED_AT,
+                System.currentTimeMillis() - OnboardingPreferences.REMINDER_GRACE_MILLIS - 1_000L
+            )
+            .commit()
+        assertThat(OnboardingPreferences.isReminderGracePeriodOver(context)).isTrue()
+    }
 }

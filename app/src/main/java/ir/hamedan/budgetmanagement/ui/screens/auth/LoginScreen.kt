@@ -20,7 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Visibility
@@ -47,6 +46,7 @@ import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import ir.hamedan.budgetmanagement.ui.components.AppLogoIcon
 import ir.hamedan.budgetmanagement.data.security.AuthSessionStore
 import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.preferences.SharedPreferences
@@ -258,7 +258,7 @@ fun LoginScreen(
 
     AuthScreenContainer {
         AuthHeader(
-            icon = Icons.Default.AccountBalanceWallet,
+            icon = AppLogoIcon,
             title = if (isPersian) "خوش آمدید" else "Welcome back",
             subtitle = when {
                 localUnlockOnly -> if (isPersian) "برای ادامه، هویت خود را تأیید کنید" else "Verify your identity to continue"

@@ -4,8 +4,10 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -38,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity // اضافه شدن فرگمنت اکتیویتی برای بیومتریک
 import androidx.lifecycle.Lifecycle
@@ -60,7 +63,8 @@ import ir.hamedan.budgetmanagement.ui.components.CapsuleBottomNavigation
 import ir.hamedan.budgetmanagement.ui.components.InAppNotificationHint
 import ir.hamedan.budgetmanagement.ui.components.OnboardingDialog
 import ir.hamedan.budgetmanagement.ui.components.OnboardingPermission
-import ir.hamedan.budgetmanagement.ui.components.PermissionReminderBanner
+import ir.hamedan.budgetmanagement.ui.components.PermissionReminderItem
+import ir.hamedan.budgetmanagement.ui.components.PermissionReminderSheet
 import ir.hamedan.budgetmanagement.ui.components.onboardingPermissions
 import ir.hamedan.budgetmanagement.ui.navigation.AppRoute
 import ir.hamedan.budgetmanagement.ui.navigation.MainTabRoute
@@ -141,6 +145,42 @@ class MainActivity : FragmentActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
         permissionRefreshTrigger++
+    }
+
+    private fun isPermissionGranted(permission: OnboardingPermission): Boolean =
+        permission.permissions.all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
+
+    /**
+     * کاربر قبلاً درخواست سیستمی را دیده و (دوبار) رد کرده؛ اندروید دیگر دیالوگ نشان نمی‌دهد
+     * و تنها راه، تنظیمات برنامه است. پیش از اولین درخواست، این تابع false برمی‌گرداند.
+     */
+    private fun isPermanentlyDenied(permission: OnboardingPermission): Boolean {
+        if (isPermissionGranted(permission)) return false
+        if (!PermissionReminderPreferences.wasRequested(this, permission.key)) return false
+        return permission.permissions.any {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED &&
+                    !ActivityCompat.shouldShowRequestPermissionRationale(this, it)
+        }
+    }
+
+    /** درخواست سیستمی؛ و اگر دیگر ممکن نیست، مستقیم صفحهٔ تنظیمات برنامه. */
+    private fun requestOrOpenSettings(permission: OnboardingPermission) {
+        if (isPermanentlyDenied(permission)) {
+            openAppSettings()
+            return
+        }
+        PermissionReminderPreferences.markRequested(this, permission.key)
+        requestPermissionsLauncher.launch(permission.permissions.toTypedArray())
+    }
+
+    private fun openAppSettings() {
+        val intent = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", packageName, null)
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { startActivity(intent) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -240,7 +280,17 @@ class MainActivity : FragmentActivity() {
                                 ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
                             },
                             onRequestPermissions = { perms ->
-                                requestPermissionsLauncher.launch(perms.toTypedArray())
+                                val permission = onboardingPermissions(Build.VERSION.SDK_INT)
+                                    .firstOrNull { it.permissions == perms }
+                                if (permission != null) {
+                                    requestOrOpenSettings(permission)
+                                } else {
+                                    requestPermissionsLauncher.launch(perms.toTypedArray())
+                                }
+                            },
+                            isPermissionBlocked = { permission ->
+                                permissionRefreshTrigger // وابستگی به state برای ری‌کامپوز
+                                isPermanentlyDenied(permission)
                             },
                             onFinish = {
                                 OnboardingPreferences.setCompleted(context)
@@ -552,24 +602,40 @@ class MainActivity : FragmentActivity() {
                 val context = LocalContext.current
                 val isPersian = LocaleHelper.getLanguage(context) == "fa"
 
-                // ===== یادآوری ملایمِ مجوزهای داده‌نشده (بنر، نه دیالوگ مسدودکننده) =====
-                var reminderPermission by remember { mutableStateOf<OnboardingPermission?>(null) }
+                // ===== یادآوری ملایمِ مجوزهای داده‌نشده (Bottom Sheet، نه دیالوگ مسدودکننده) =====
+                // فقط مجوزهای «remindable» که هنوز داده نشده‌اند و زمانشان رسیده باعث نمایش شیت می‌شوند؛
+                // ولی داخل شیت همهٔ مجوزهای مهم (با وضعیت زنده) دیده می‌شوند تا پیشرفت معنا داشته باشد.
+                var showPermissionSheet by remember { mutableStateOf(false) }
+                var reminderItems by remember { mutableStateOf<List<PermissionReminderItem>>(emptyList()) }
 
                 LaunchedEffect(permissionRefreshTrigger) {
-                    reminderPermission = if (OnboardingPreferences.isCompleted(context)) {
-                        onboardingPermissions(Build.VERSION.SDK_INT).firstOrNull { perm ->
-                            val granted = perm.permissions.all {
-                                ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
-                            }
-                            !granted && PermissionReminderPreferences.shouldRemindNow(context, perm.key)
-                        }
-                    } else null
-                }
+                    // مجوزی که کاربر صریحاً گفته «دیگه نشون نده» (و هنوز داده نشده) اصلاً در شیت نمی‌آید.
+                    val remindable = onboardingPermissions(Build.VERSION.SDK_INT).filter {
+                        it.remindable &&
+                                (isPermissionGranted(it) || !PermissionReminderPreferences.isDismissedForever(context, it.key))
+                    }
+                    reminderItems = remindable.map { perm ->
+                        PermissionReminderItem(
+                            permission = perm,
+                            granted = isPermissionGranted(perm),
+                            permanentlyDenied = isPermanentlyDenied(perm)
+                        )
+                    }
 
-                // همین که بنر واقعاً روی صفحه اومد، فاصلهٔ عادی (۴ روزه) رو براش ثبت کن
-                LaunchedEffect(reminderPermission) {
-                    reminderPermission?.let {
-                        PermissionReminderPreferences.markShownNow(context, it.key)
+                    if (!showPermissionSheet &&
+                        OnboardingPreferences.isCompleted(context) &&
+                        OnboardingPreferences.isReminderGracePeriodOver(context)
+                    ) {
+                        val due = reminderItems.filter {
+                            !it.granted && PermissionReminderPreferences.shouldRemindNow(context, it.permission.key)
+                        }
+                        if (due.isNotEmpty()) {
+                            // شیت همهٔ مجوزهای هنوز-داده‌نشده را با هم نشان می‌دهد؛ پس زمان‌بندی همه هم‌زمان می‌ماند.
+                            reminderItems.filter { !it.granted }.forEach {
+                                PermissionReminderPreferences.markShownNow(context, it.permission.key)
+                            }
+                            showPermissionSheet = true
+                        }
                     }
                 }
 
@@ -649,24 +715,26 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
-                    // ===== بنر یادآوری مجوز (بالای صفحه، شناور روی محتوا) =====
-                    reminderPermission?.let { perm ->
-                        PermissionReminderBanner(
-                            visible = true,
+                    // ===== شیت یادآوری مجوز =====
+                    if (showPermissionSheet && reminderItems.isNotEmpty()) {
+                        PermissionReminderSheet(
                             isPersian = isPersian,
-                            permission = perm,
-                            onAllow = {
-                                requestPermissionsLauncher.launch(perm.permissions.toTypedArray())
-                                reminderPermission = null
-                            },
+                            items = reminderItems,
+                            onAllow = { perm -> requestOrOpenSettings(perm) },
                             onLater = {
-                                PermissionReminderPreferences.snooze(context, perm.key)
-                                reminderPermission = null
+                                // «بعداً» (و کشیدن/لمس بیرون/Back): زمان‌بندیِ مجوزهای هنوز-داده‌نشده
+                                reminderItems.filter { !it.granted }.forEach {
+                                    PermissionReminderPreferences.snooze(context, it.permission.key)
+                                }
+                                showPermissionSheet = false
                             },
                             onNeverAskAgain = {
-                                PermissionReminderPreferences.dismissForever(context, perm.key)
-                                reminderPermission = null
-                            }
+                                reminderItems.filter { !it.granted }.forEach {
+                                    PermissionReminderPreferences.dismissForever(context, it.permission.key)
+                                }
+                                showPermissionSheet = false
+                            },
+                            onAllGranted = { showPermissionSheet = false }
                         )
                     }
 

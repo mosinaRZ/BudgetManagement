@@ -96,4 +96,80 @@ class PermissionReminderPreferencesTest {
     fun SNOOZE_MILLIS_isCorrect() {
         assertThat(PermissionReminderPreferences.SNOOZE_MILLIS).isEqualTo(1L * 24 * 60 * 60 * 1000L)
     }
+
+    // ---------------- یادآوری افزایشی (۴ ← ۸ ← ۱۶ روز) و سقف تعداد ----------------
+
+    private fun setLastShown(key: String, millis: Long) {
+        context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+            .edit()
+            .putLong("perm_reminder_last_shown_$key", millis)
+            .commit()
+    }
+
+    private val day = 24L * 60 * 60 * 1000L
+
+    @Test
+    fun markShownNow_incrementsShownCount() {
+        assertThat(PermissionReminderPreferences.shownCount(context, "SMS")).isEqualTo(0)
+        PermissionReminderPreferences.markShownNow(context, "SMS")
+        PermissionReminderPreferences.markShownNow(context, "SMS")
+        assertThat(PermissionReminderPreferences.shownCount(context, "SMS")).isEqualTo(2)
+    }
+
+    @Test
+    fun intervalFor_growsWithShownCount() {
+        assertThat(PermissionReminderPreferences.intervalFor(1)).isEqualTo(4 * day)
+        assertThat(PermissionReminderPreferences.intervalFor(2)).isEqualTo(8 * day)
+        assertThat(PermissionReminderPreferences.intervalFor(3)).isEqualTo(16 * day)
+    }
+
+    @Test
+    fun shouldRemindNow_secondInterval_isEightDays() {
+        PermissionReminderPreferences.markShownNow(context, "SMS")
+        PermissionReminderPreferences.markShownNow(context, "SMS")
+
+        setLastShown("SMS", System.currentTimeMillis() - 7 * day)
+        assertThat(PermissionReminderPreferences.shouldRemindNow(context, "SMS")).isFalse()
+
+        setLastShown("SMS", System.currentTimeMillis() - 8 * day - 1_000L)
+        assertThat(PermissionReminderPreferences.shouldRemindNow(context, "SMS")).isTrue()
+    }
+
+    @Test
+    fun shouldRemindNow_afterMaxAutoReminders_returnsFalse() {
+        repeat(PermissionReminderPreferences.MAX_AUTO_REMINDERS) {
+            PermissionReminderPreferences.markShownNow(context, "SMS")
+        }
+        setLastShown("SMS", 0L)
+        assertThat(PermissionReminderPreferences.shouldRemindNow(context, "SMS")).isFalse()
+    }
+
+    @Test
+    fun snooze_firstTime_remindsAfterOneDay() {
+        PermissionReminderPreferences.markShownNow(context, "SMS")
+        PermissionReminderPreferences.snooze(context, "SMS")
+
+        val lastShown = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+            .getLong("perm_reminder_last_shown_SMS", 0L)
+        val dueIn = lastShown + PermissionReminderPreferences.intervalFor(1) - System.currentTimeMillis()
+        assertThat(dueIn).isAtMost(PermissionReminderPreferences.SNOOZE_MILLIS)
+        assertThat(dueIn).isGreaterThan(PermissionReminderPreferences.SNOOZE_MILLIS - 60_000L)
+    }
+
+    @Test
+    fun snooze_afterSecondShow_keepsFullInterval() {
+        PermissionReminderPreferences.markShownNow(context, "SMS")
+        PermissionReminderPreferences.markShownNow(context, "SMS")
+        PermissionReminderPreferences.snooze(context, "SMS")
+
+        assertThat(PermissionReminderPreferences.shouldRemindNow(context, "SMS")).isFalse()
+    }
+
+    @Test
+    fun wasRequested_roundTrip() {
+        assertThat(PermissionReminderPreferences.wasRequested(context, "mic")).isFalse()
+        PermissionReminderPreferences.markRequested(context, "mic")
+        assertThat(PermissionReminderPreferences.wasRequested(context, "mic")).isTrue()
+        assertThat(PermissionReminderPreferences.wasRequested(context, "sms")).isFalse()
+    }
 }

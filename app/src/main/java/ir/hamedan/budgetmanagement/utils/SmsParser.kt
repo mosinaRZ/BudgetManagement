@@ -86,19 +86,46 @@ object SmsParser {
     // Vocabulary
     // ---------------------------------------------------------------------
 
-    private val incomeWordRegex = Regex("""واریز|بستانکار|سود|عودت|برگشت|ایداع|سپرده گذاری""")
-    private val expenseWordRegex = Regex("""برداشت|خرید|پرداخت|کسر|بدهکار|کارمزد|قبض|شارژ""")
+    private val incomeWordRegex = Regex(
+        """واریز|بستانکار|سود|عودت|برگشت|ایداع|سپرده گذاری""" +
+                // Colloquial neo-bank wording (e.g. Blu): "به حساب شما نشست"
+                """|(?<!\p{L})نشست(?!\p{L})"""
+    )
+    private val expenseWordRegex = Regex(
+        """برداشت|خرید|پرداخت|کسر|بدهکار|کارمزد|قبض|شارژ""" +
+                // Colloquial neo-bank wording (e.g. Blu): "از حساب شما پرید"
+                """|(?<!\p{L})پرید(?!\p{L})"""
+    )
     private val transactionRegex = Regex(
         incomeWordRegex.pattern + "|" + expenseWordRegex.pattern +
-                """|انتقال|حواله|ساتنا|پایا|شتاب|پوز|خودپرداز|کارت به کارت|تراکنش"""
+                """|انتقال|حواله|ساتنا|پایا|شتاب|پوز|خودپرداز|کارت به کارت|تراکنش""" +
+                """|(?:از|به) حساب (?:شما|ت|تون)"""
     )
-    private val postVerbRegex = Regex("""واریز|برداشت|خرید|پرداخت|کسر|انتقال|بستانکار|بدهکار""")
+    private val postVerbRegex = Regex(
+        """واریز|برداشت|خرید|پرداخت|کسر|انتقال|بستانکار|بدهکار""" +
+                """|(?<!\p{L})پرید(?!\p{L})|(?<!\p{L})نشست(?!\p{L})"""
+    )
 
     private val bankWordRegex = Regex(
         """بانک|(?<![a-z])bank(?![a-z])|شتاب|پایا|ساتنا|پوز|(?<![a-z])pos(?![a-z])|(?<![a-z])atm(?![a-z])""" +
                 """|خودپرداز|همراه بانک|اینترنت بانک|کارت به کارت|ملت|تجارت|صادرات|سپه|پاسارگاد|سامان""" +
-                """|پارسیان|رفاه|کشاورزی|آینده|سینا|نوین|کارآفرین|قوامین|توسعه|ایران زمین|گردشگری|حکمت|انصار|رسالت|بلو"""
+                """|پارسیان|رفاه|کشاورزی|آینده|سینا|نوین|کارآفرین|قوامین|توسعه|ایران زمین|گردشگری|حکمت|انصار|رسالت|بلو""" +
+                """|(?<![a-z])blu(?:\s*bank)?(?![a-z])"""
     )
+
+    /**
+     * Alphanumeric sender ids of banks / neo-banks. A message from one of these that also
+     * has transaction structure counts as having bank evidence even when the body never
+     * repeats the bank name (Blu texts only "<name> عزیز، X ریال از حساب شما پرید").
+     */
+    private val bankSenderRegex = Regex(
+        """blu|melli|mellat|tejarat|saderat|sepah|pasargad|saman|parsian|refah|keshavarzi|ayandeh""" +
+                """|karafarin|ghavamin|resalat|ansar|hekmat|iranzamin|postbank|eghtesad|bank|بلو|بانک""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /** "از حساب شما ..." / "به حساب شما ..." – typical statement phrasing of neo-banks. */
+    private val accountPhraseRegex = Regex("""(?:از|به) حساب (?:شما|ت|تون)""")
 
     private val balanceRegex = Regex("""مانده|موجودی|باقیمانده|بالانس|balance""")
     private val refRegex = Regex(
@@ -346,7 +373,7 @@ object SmsParser {
         if (promoHits == 1 && !(signed && hasBalance)) return reject("promotional")
 
         val maskedEvidence = maskedEvidenceRegex.containsMatchIn(text)
-        val bankWord = bankWordRegex.containsMatchIn(text)
+        val bankWord = bankWordRegex.containsMatchIn(text) || isBankSender(sender)
         val txnWord = transactionRegex.containsMatchIn(text)
 
         if (!(hasBalance || maskedEvidence || bankWord || signed)) return reject("no_bank_evidence")
@@ -359,6 +386,7 @@ object SmsParser {
         if (maskedEvidence) structure += 2
         if (dateTimeEvidenceRegex.containsMatchIn(text)) structure += 1
         if (best.unit != null) structure += 1
+        if (accountPhraseRegex.containsMatchIn(text)) structure += 1
         if (bankWord) structure += 2
         if (txnWord) structure += 2
 
@@ -421,6 +449,12 @@ object SmsParser {
         incomeWordRegex.containsMatchIn(word) -> 1
         expenseWordRegex.containsMatchIn(word) -> -1
         else -> 0
+    }
+
+    private fun isBankSender(sender: String?): Boolean {
+        if (sender.isNullOrBlank()) return false
+        val letters = sender.filter { it.isLetter() }
+        return letters.isNotEmpty() && bankSenderRegex.containsMatchIn(letters)
     }
 
     private fun isPersonalSender(sender: String?): Boolean {

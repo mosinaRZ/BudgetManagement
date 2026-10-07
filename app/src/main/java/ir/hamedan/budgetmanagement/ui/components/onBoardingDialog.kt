@@ -35,7 +35,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.AccountBalance
-import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -167,7 +166,12 @@ data class OnboardingPermission(
     val titleFa: String,
     val titleEn: String,
     val reasonFa: String,
-    val reasonEn: String
+    val reasonEn: String,
+    /**
+     * آیا این مجوز مستحق یادآوریِ دوره‌ای است؟ مجوزهایی که فقط هنگام استفادهٔ آگاهانه از یک قابلیت لازم‌اند
+     * (مثل میکروفون) مزاحم کاربر نمی‌شوند و همان لحظه درخواست می‌شوند.
+     */
+    val remindable: Boolean = true
 )
 
 fun onboardingPermissions(sdkInt: Int): List<OnboardingPermission> = buildList {
@@ -203,7 +207,8 @@ fun onboardingPermissions(sdkInt: Int): List<OnboardingPermission> = buildList {
             titleFa = "میکروفون",
             titleEn = "Microphone",
             reasonFa = "برای ثبت تراکنش با گفتار به متن، فقط وقتی خودت این گزینه رو انتخاب کنی.",
-            reasonEn = "To record a transaction via voice-to-text, only when you choose that option."
+            reasonEn = "To record a transaction via voice-to-text, only when you choose that option.",
+            remindable = false
         )
     )
 }
@@ -221,7 +226,8 @@ fun OnboardingDialog(
     isPersian: Boolean,
     isPermissionGranted: (String) -> Boolean,
     onRequestPermissions: (List<String>) -> Unit,
-    onFinish: () -> Unit
+    onFinish: () -> Unit,
+    isPermissionBlocked: (OnboardingPermission) -> Boolean = { false }
 ) {
     val pageCount = 4
     val pagerState = rememberPagerState(pageCount = { pageCount })
@@ -283,7 +289,7 @@ fun OnboardingDialog(
                             0 -> WelcomePage(isPersian)
                             1 -> FeaturesPage(
                                 isPersian = isPersian,
-                                icon = Icons.Rounded.AccountBalanceWallet,
+                                icon = AppLogoIcon,
                                 titleFa = "هر آنچه برای مدیریت پولتان لازم است",
                                 titleEn = "Everything you need to manage your money",
                                 features = coreFeatures
@@ -298,6 +304,7 @@ fun OnboardingDialog(
                             else -> PermissionsPage(
                                 isPersian = isPersian,
                                 isPermissionGranted = isPermissionGranted,
+                                isPermissionBlocked = isPermissionBlocked,
                                 onRequestPermissions = onRequestPermissions
                             )
                         }
@@ -396,7 +403,7 @@ private fun WelcomePage(isPersian: Boolean) {
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.AccountBalanceWallet,
+                    imageVector = AppLogoIcon,
                     contentDescription = null,
                     tint = colors.onPrimary,
                     modifier = Modifier.size(56.dp)
@@ -536,7 +543,7 @@ private fun FeatureCard(icon: ImageVector, title: String, description: String) {
 
 // ---------- مرحلهٔ ۴: دسترسی‌ها ----------
 
-private fun permissionIcon(key: String): ImageVector = when (key) {
+internal fun permissionIcon(key: String): ImageVector = when (key) {
     "sms" -> Icons.Rounded.Sms
     "notifications" -> Icons.Rounded.Notifications
     "mic" -> Icons.Rounded.Mic
@@ -547,6 +554,7 @@ private fun permissionIcon(key: String): ImageVector = when (key) {
 private fun PermissionsPage(
     isPersian: Boolean,
     isPermissionGranted: (String) -> Boolean,
+    isPermissionBlocked: (OnboardingPermission) -> Boolean,
     onRequestPermissions: (List<String>) -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
@@ -591,7 +599,10 @@ private fun PermissionsPage(
                     reason = if (isPersian) perm.reasonFa else perm.reasonEn,
                     granted = granted,
                     grantedLabel = if (isPersian) "فعال" else "Granted",
-                    allowLabel = if (isPersian) "اجازه دادن" else "Allow",
+                    allowLabel = when {
+                        isPermissionBlocked(perm) -> if (isPersian) "باز کردن تنظیمات" else "Open settings"
+                        else -> if (isPersian) "اجازه دادن" else "Allow"
+                    },
                     onAllow = { onRequestPermissions(perm.permissions) }
                 )
             }

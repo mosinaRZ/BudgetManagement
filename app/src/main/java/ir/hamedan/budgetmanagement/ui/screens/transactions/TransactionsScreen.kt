@@ -1629,7 +1629,7 @@ private fun TransactionRow(
     val currencySuffix = if (isPersian) {
         if (currencyUnit == "IRR") "ریال" else "تومان"
     } else {
-        if (currencyUnit == "IRR") "IRR" else "T"
+        if (currencyUnit == "IRR") "IRR" else "IRT"
     }
 
     Box(

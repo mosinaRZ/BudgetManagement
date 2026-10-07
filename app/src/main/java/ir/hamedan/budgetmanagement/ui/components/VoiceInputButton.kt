@@ -1,9 +1,14 @@
 package ir.hamedan.budgetmanagement.ui.components
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -21,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
 /**
@@ -55,11 +61,22 @@ fun VoiceInputButton(
                 onRecognizerCreated = { speechRecognizer = it }
             )
         } else {
+            // اگر اندروید دیگر دیالوگ نشان نمی‌دهد (رد دائمی)، تنها راه فعال‌سازی تنظیمات برنامه است.
+            val activity = context.findActivity()
+            val permanentlyDenied = activity != null &&
+                    !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.RECORD_AUDIO)
+            val isFa = language.startsWith("fa")
             Toast.makeText(
                 context,
-                if (language.startsWith("fa")) "دسترسی به میکروفون لازم است" else "Microphone permission required",
-                Toast.LENGTH_SHORT
+                when {
+                    permanentlyDenied && isFa -> "برای ثبت با صدا، دسترسی میکروفون را از تنظیمات فعال کنید"
+                    permanentlyDenied -> "Enable microphone access in Settings to use voice entry"
+                    isFa -> "دسترسی به میکروفون لازم است"
+                    else -> "Microphone permission required"
+                },
+                if (permanentlyDenied) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
             ).show()
+            if (permanentlyDenied) context.openAppSettings()
         }
     }
 
@@ -109,6 +126,23 @@ fun VoiceInputButton(
             modifier = Modifier.size(24.dp)
         )
     }
+}
+
+private fun Context.findActivity(): Activity? {
+    var current: Context? = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return null
+}
+
+private fun Context.openAppSettings() {
+    val intent = Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.fromParts("package", packageName, null)
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { startActivity(intent) }
 }
 
 private fun startListening(
