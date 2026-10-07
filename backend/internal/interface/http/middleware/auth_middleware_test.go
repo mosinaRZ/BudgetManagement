@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -136,6 +137,10 @@ func TestAuthWithDevicesRejectsRemovedDevice(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status=%d, want 401", rec.Code)
+	}
+	// Clients rely on this code to tell "device removed" apart from an ordinary expired session.
+	if !strings.Contains(rec.Body.String(), "DEVICE_REMOVED") {
+		t.Fatalf("body=%s, want DEVICE_REMOVED error code", rec.Body.String())
 	}
 }
 

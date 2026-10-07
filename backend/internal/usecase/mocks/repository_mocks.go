@@ -235,6 +235,26 @@ func (m *MockDeviceRepository) Revoke(ctx context.Context, u, d string) error {
 	return nil
 }
 
+// MockDeviceEventRepository is an in-memory-friendly stand-in for DeviceEventRepository.
+type MockDeviceEventRepository struct {
+	RecordFunc    func(context.Context, *entity.DeviceEvent) error
+	ListAfterFunc func(ctx context.Context, userID string, after time.Time, limit int) ([]*entity.DeviceEvent, error)
+}
+
+func (m *MockDeviceEventRepository) Record(ctx context.Context, e *entity.DeviceEvent) error {
+	if m.RecordFunc != nil {
+		return m.RecordFunc(ctx, e)
+	}
+	return nil
+}
+
+func (m *MockDeviceEventRepository) ListAfter(ctx context.Context, userID string, after time.Time, limit int) ([]*entity.DeviceEvent, error) {
+	if m.ListAfterFunc != nil {
+		return m.ListAfterFunc(ctx, userID, after, limit)
+	}
+	return nil, nil
+}
+
 type MockAuditLogRepository struct {
 	CreateFunc func(context.Context, *entity.AuditLog) error
 }

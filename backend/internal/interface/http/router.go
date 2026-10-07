@@ -83,6 +83,7 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 		}
 		if deps.DeviceHandler != nil {
 			r.Get("/api/v1/devices", deps.DeviceHandler.List)
+			r.Get("/api/v1/devices/events", deps.DeviceHandler.Events)
 			r.Delete("/api/v1/devices/{deviceID}", deps.DeviceHandler.Revoke)
 		}
 		if deps.AdminHandler != nil {

@@ -95,3 +95,88 @@ func TestDeviceHandlerRevokeProtectsPrimaryDevice(t *testing.T) {
 	require.Equal(t, http.StatusNoContent, rec.Code)
 	require.True(t, deleted)
 }
+
+func TestDeviceHandlerRevokeRefusesNonPrimaryCallers(t *testing.T) {
+	deleted := false
+	dev := &mocks.MockDeviceRepository{
+		PrimaryFunc: func(context.Context, string) (*entity.Device, error) { return &entity.Device{ID: "first"}, nil },
+		RevokeFunc:  func(context.Context, string, string) error { deleted = true; return nil },
+	}
+	h := NewDeviceHandler(deviceusecase.NewService(dev, deviceRefreshMock{}))
+
+	// A secondary device may not remove another secondary device...
+	rec := httptest.NewRecorder()
+	h.Revoke(rec, revokeRequest("second", "third"))
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	require.Contains(t, rec.Body.String(), "DEVICE_REMOVAL_FORBIDDEN")
+	require.False(t, deleted)
+
+	// ...nor can a caller that cannot be identified (legacy token).
+	rec = httptest.NewRecorder()
+	h.Revoke(rec, revokeRequest("", "third"))
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	require.False(t, deleted)
+
+	// Every device may still sign itself out.
+	rec = httptest.NewRecorder()
+	h.Revoke(rec, revokeRequest("second", "second"))
+	require.Equal(t, http.StatusNoContent, rec.Code)
+	require.True(t, deleted)
+}
+
+func eventsRequest(rawQuery, callerDeviceID string) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/events"+rawQuery, nil)
+	ctx := contextkeys.WithUserID(req.Context(), "u1")
+	if callerDeviceID != "" {
+		ctx = contextkeys.WithDeviceID(ctx, callerDeviceID)
+	}
+	return req.WithContext(ctx)
+}
+
+func TestDeviceHandlerEventsReturnsActivityAfterTheCallerJoined(t *testing.T) {
+	joined := time.UnixMilli(1_000_000)
+	dev := &mocks.MockDeviceRepository{
+		ListFunc: func(context.Context, string) ([]*entity.Device, error) {
+			return []*entity.Device{{ID: "me", CreatedAt: joined}}, nil
+		},
+	}
+	events := &mocks.MockDeviceEventRepository{
+		ListAfterFunc: func(_ context.Context, _ string, after time.Time, _ int) ([]*entity.DeviceEvent, error) {
+			require.True(t, after.Equal(joined), "the feed must start at the moment the caller joined")
+			return []*entity.DeviceEvent{{
+				ID: "e1", Type: entity.DeviceEventSignedIn, DeviceID: "new", DeviceName: "Pixel 8",
+				ActorDeviceID: "new", ActorName: "Pixel 8", CreatedAt: time.UnixMilli(2_000_000),
+			}}, nil
+		},
+	}
+	svc := deviceusecase.NewService(dev, deviceRefreshMock{})
+	svc.SetEventRepository(events)
+	h := NewDeviceHandler(svc)
+
+	rec := httptest.NewRecorder()
+	h.Events(rec, eventsRequest("?after=0", "me"))
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	require.Contains(t, body, `"type":"signed_in"`)
+	require.Contains(t, body, `"device_name":"Pixel 8"`)
+	require.Contains(t, body, `"created_at_ms":2000000`)
+	require.Contains(t, body, `"cursor_ms":2000000`)
+}
+
+func TestDeviceHandlerEventsRejectsMalformedCursor(t *testing.T) {
+	h := NewDeviceHandler(deviceusecase.NewService(&mocks.MockDeviceRepository{}, deviceRefreshMock{}))
+	for _, query := range []string{"?after=abc", "?after=-5"} {
+		rec := httptest.NewRecorder()
+		h.Events(rec, eventsRequest(query, "me"))
+		require.Equal(t, http.StatusBadRequest, rec.Code, query)
+	}
+}
+
+func TestDeviceHandlerEventsIsEmptyWithoutAFeed(t *testing.T) {
+	h := NewDeviceHandler(deviceusecase.NewService(&mocks.MockDeviceRepository{}, deviceRefreshMock{}))
+	rec := httptest.NewRecorder()
+	h.Events(rec, eventsRequest("", "me"))
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), `"events":[]`)
+	require.Contains(t, rec.Body.String(), `"cursor_ms":0`)
+}

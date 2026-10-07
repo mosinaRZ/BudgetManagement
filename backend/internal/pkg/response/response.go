@@ -53,9 +53,9 @@ func statusForCode(code apperror.Code) int {
 	switch code {
 	case apperror.CodeValidation, apperror.CodeBadRequest:
 		return http.StatusBadRequest
-	case apperror.CodeUnauthorized:
+	case apperror.CodeUnauthorized, apperror.CodeDeviceRemoved:
 		return http.StatusUnauthorized
-	case apperror.CodeForbidden, apperror.CodePrimaryDeviceProtected:
+	case apperror.CodeForbidden, apperror.CodePrimaryDeviceProtected, apperror.CodeDeviceRemovalForbidden:
 		return http.StatusForbidden
 	case apperror.CodeNotFound:
 		return http.StatusNotFound
