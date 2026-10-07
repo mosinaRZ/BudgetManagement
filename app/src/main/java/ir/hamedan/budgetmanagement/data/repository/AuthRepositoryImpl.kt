@@ -184,6 +184,23 @@ class AuthRepositoryImpl(
         }
     }
 
+    override suspend fun prepareAccountSwitch(): Result<Boolean> = withContext(Dispatchers.IO) {
+        runCatching {
+            if (sessionStore.isAuthenticated()) {
+                val result = runCatching { syncEngine.sync() }.getOrNull()
+                val fullySynced = result is SyncEngine.SyncResult.Success &&
+                        !syncStateRepository.get().syncRequired
+                // Never end the session while this account still has changes only this device
+                // knows about: signing in to another account wipes the local copy.
+                if (!fullySynced) return@runCatching false
+                logout().getOrThrow()
+            }
+            // The fingerprint credential and local password verifier belong to the old account.
+            rememberedLoginStore.clearLocalReauthentication()
+            true
+        }
+    }
+
     override fun isAuthenticated(): Boolean = sessionStore.isAuthenticated()
 
     private suspend fun persistSession(

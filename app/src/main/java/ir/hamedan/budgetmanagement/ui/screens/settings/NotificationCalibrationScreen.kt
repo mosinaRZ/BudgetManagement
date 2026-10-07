@@ -273,5 +273,6 @@ private fun categoryIcon(category: NotificationCategory): ImageVector = when (ca
     NotificationCategory.GOALS -> Icons.Default.Savings
     NotificationCategory.DEBT_CREDIT -> Icons.Default.AccountBalance
     NotificationCategory.REMINDERS -> Icons.Default.Alarm
+    NotificationCategory.SECURITY -> Icons.Default.Security
     NotificationCategory.SYSTEM -> Icons.Default.Settings
 }

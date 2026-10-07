@@ -23,20 +23,26 @@ class AuthSessionStore(context: Context) {
     private val _authenticated = MutableStateFlow(readAuthenticated())
     val authenticated: StateFlow<Boolean> = _authenticated.asStateFlow()
 
+    /** Why the last session ended. */
+    enum class SessionEnd { NONE, EXPIRED, DEVICE_REMOVED }
+
     /**
-     * True when the session was ended by the server side (expired/revoked refresh token, or this
+     * Set when the session was ended by the server side (expired/revoked refresh token, or this
      * device was removed from the account) rather than by the user signing out. In-memory only:
      * it exists so the login screen can explain why the user was sent back to it.
      */
     @Volatile
-    private var endedUnexpectedly = false
+    private var sessionEnd = SessionEnd.NONE
 
-    /** Returns true once if the last session end was unexpected, then resets the flag. */
-    fun consumeUnexpectedEnd(): Boolean {
-        val value = endedUnexpectedly
-        endedUnexpectedly = false
+    /** Returns why the last session ended (once), then resets it. */
+    fun consumeEnd(): SessionEnd {
+        val value = sessionEnd
+        sessionEnd = SessionEnd.NONE
         return value
     }
+
+    /** Returns true once if the last session end was unexpected, then resets the flag. */
+    fun consumeUnexpectedEnd(): Boolean = consumeEnd() != SessionEnd.NONE
 
     fun save(
         accessToken: String,
@@ -50,6 +56,7 @@ class AuthSessionStore(context: Context) {
         recoveryKeyNonce: String,
         role: String? = null
     ) {
+        sessionEnd = SessionEnd.NONE
         check(prefs.edit()
             .putString(KEY_ACCESS, accessToken)
             .putString(KEY_REFRESH, refreshToken)
@@ -79,8 +86,14 @@ class AuthSessionStore(context: Context) {
     fun isAuthenticated(): Boolean = readAuthenticated()
 
     /** Clears only credentials. Local encrypted financial data is retained for re-authentication. */
-    fun clearSession(unexpected: Boolean = false) {
-        endedUnexpectedly = unexpected
+    fun clearSession(unexpected: Boolean = false, deviceRemoved: Boolean = false) {
+        // A more specific reason is never downgraded by a later generic "unexpected" clear
+        // (several layers may report the same 401).
+        sessionEnd = when {
+            deviceRemoved -> SessionEnd.DEVICE_REMOVED
+            unexpected -> if (sessionEnd == SessionEnd.DEVICE_REMOVED) SessionEnd.DEVICE_REMOVED else SessionEnd.EXPIRED
+            else -> SessionEnd.NONE
+        }
         prefs.edit()
             .remove(KEY_ACCESS)
             .remove(KEY_REFRESH)

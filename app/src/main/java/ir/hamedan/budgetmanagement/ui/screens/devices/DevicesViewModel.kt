@@ -13,6 +13,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+/**
+ * Only the account's primary (first) device may remove other devices; every other device is
+ * view-only. When the server did not flag any primary (an older server), stay permissive and let
+ * the server decide, which also enforces the rule.
+ */
+internal fun canRemoveOtherDevices(devices: List<DeviceApi.Device>, currentDeviceId: String): Boolean =
+    devices.none { it.isPrimary } || devices.any { it.id == currentDeviceId && it.isPrimary }
+
 class DevicesViewModel(
     private val deviceApi: DeviceApi,
     private val deviceIdentityStore: DeviceIdentityStore,
@@ -53,9 +61,15 @@ class DevicesViewModel(
     }
 
     fun revoke(deviceId: String) {
-        // The server cannot tell which device is "this one" from the access token, so the
-        // client refuses to remove itself (that would be a sign-out, handled in Settings).
+        // Removing this very device would be a sign-out, which is handled in Settings.
         if (deviceId == currentDeviceId || _revokingId.value != null) return
+        // Only the primary device may remove others. The server enforces this too; checking here
+        // avoids a pointless request and shows a clear message.
+        if (!canRemoveOtherDevices(_devices.value, currentDeviceId)) {
+            _error.value = if (isPersian) "فقط دستگاه اصلی می‌تواند دستگاه‌های دیگر را حذف کند."
+            else "Only the primary device can remove other devices."
+            return
+        }
         // The primary (first) device can only be removed from itself. The server enforces this
         // too; checking here just avoids a pointless request and a confusing error.
         if (_devices.value.any { it.id == deviceId && it.isPrimary }) {
@@ -63,22 +77,47 @@ class DevicesViewModel(
             else "The primary device can only be removed from the primary device itself."
             return
         }
+        val removedName = _devices.value.firstOrNull { it.id == deviceId }
+            ?.let { it.name.ifBlank { it.model } }
+            .orEmpty()
         viewModelScope.launch(Dispatchers.IO) {
             _revokingId.value = deviceId
-            runCatching { deviceApi.revoke(deviceId) }
-                .onSuccess {
-                    _devices.value = _devices.value.filterNot { it.id == deviceId }
+            val result = runCatching { deviceApi.revoke(deviceId) }
+
+            // The server is the source of truth. Never edit the list locally and assume it worked:
+            // always reload it, so the screen can only show a device as gone when it really is.
+            val reloaded = runCatching { deviceApi.list() }.getOrNull()
+            if (reloaded != null) _devices.value = sorted(reloaded)
+            val stillListed = reloaded?.any { it.id == deviceId } ?: false
+
+            val failure = result.exceptionOrNull()
+            when {
+                // Removed on the server and confirmed by the fresh list.
+                failure == null && reloaded != null && !stillListed -> {
                     _error.value = null
-                    _notice.value = if (isPersian) "دستگاه از حساب حذف شد." else "Device removed from your account."
-                }
-                .onFailure { failure ->
-                    if ((failure as? ApiException)?.statusCode == 404) {
-                        // Already gone (removed from another device): just resync the list.
-                        _devices.value = _devices.value.filterNot { it.id == deviceId }
-                    } else {
-                        _error.value = message(failure)
+                    _notice.value = when {
+                        removedName.isBlank() && isPersian -> "دستگاه از حساب حذف شد."
+                        removedName.isBlank() -> "Device removed from your account."
+                        isPersian -> "«$removedName» از حساب حذف شد و دسترسی‌اش قطع شد."
+                        else -> "\"$removedName\" was removed and no longer has access."
                     }
                 }
+                // The server said "done" but the device is still on the account.
+                failure == null && stillListed -> {
+                    _error.value = if (isPersian) "حذف دستگاه انجام نشد؛ دستگاه هنوز در حساب است."
+                    else "The device could not be removed; it is still on your account."
+                }
+                // Success but the list could not be reloaded: report the request, not a guess.
+                failure == null -> {
+                    _error.value = null
+                    _notice.value = if (isPersian) "درخواست حذف ارسال شد. برای اطمینان لیست را بازخوانی کنید."
+                    else "Removal requested. Refresh the list to confirm."
+                }
+                (failure as? ApiException)?.statusCode == 404 && reloaded != null && !stillListed -> {
+                    _error.value = null // it was already gone (removed from elsewhere)
+                }
+                else -> _error.value = message(failure)
+            }
             _revokingId.value = null
         }
     }

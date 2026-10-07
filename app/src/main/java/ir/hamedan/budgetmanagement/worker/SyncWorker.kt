@@ -5,7 +5,10 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.network.ApiException
+import ir.hamedan.budgetmanagement.data.notification.DeviceSecurityNotifier
 import ir.hamedan.budgetmanagement.data.sync.SyncEngine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class SyncWorker(
     appContext: Context,
@@ -21,6 +24,10 @@ class SyncWorker(
                 SyncEngine.SyncResult.NotAuthenticated,
                 SyncEngine.SyncResult.ReauthenticationRequired -> Result.success()
                 is SyncEngine.SyncResult.Success -> {
+                    // Device alerts are best-effort and must never change the sync outcome.
+                    runCatching {
+                        withContext(Dispatchers.IO) { DeviceSecurityNotifier.pollAndNotify(applicationContext) }
+                    }
                     if (app.container.syncStateRepository.get().syncRequired) Result.retry()
                     else Result.success()
                 }

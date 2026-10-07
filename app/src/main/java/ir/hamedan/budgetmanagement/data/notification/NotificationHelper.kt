@@ -77,7 +77,11 @@ object NotificationHelper {
         titleEn: String,
         descFa: String,
         descEn: String,
-        tag: String = ""
+        tag: String = "",
+        /** Marks account-security alerts: they use the security channel and icon. */
+        security: Boolean = false,
+        /** Screen a tapped system notification should open (see AppNotificationManager.ROUTE_*). */
+        openRoute: String? = null
     ) {
         if (tag != "WELCOME" && !NotificationPreferences.isTypeEnabled(context, notificationType)) return
 
@@ -104,7 +108,9 @@ object NotificationHelper {
                     titleFa = titleFa,
                     titleEn = titleEn,
                     bodyFa = descFa,
-                    bodyEn = descEn
+                    bodyEn = descEn,
+                    security = security,
+                    openRoute = openRoute
                 )
             }
         }
@@ -115,7 +121,9 @@ object NotificationHelper {
         titleFa: String,
         titleEn: String,
         bodyFa: String,
-        bodyEn: String
+        bodyEn: String,
+        security: Boolean = false,
+        openRoute: String? = null
     ) {
         val app = context.applicationContext as? BudgetApp
         if (app?.isAppInForeground == true) {
@@ -133,7 +141,9 @@ object NotificationHelper {
                 titleFa = titleFa,
                 titleEn = titleEn,
                 bodyFa = bodyFa,
-                bodyEn = bodyEn
+                bodyEn = bodyEn,
+                security = security,
+                openRoute = openRoute
             )
         }
     }

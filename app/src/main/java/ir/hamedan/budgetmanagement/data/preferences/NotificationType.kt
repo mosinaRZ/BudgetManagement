@@ -11,6 +11,7 @@ enum class NotificationCategory(
     GOALS("اهداف پس‌انداز", "Saving Goals"),
     DEBT_CREDIT("بدهی و طلب", "Debt & Credit"),
     REMINDERS("یادآوری‌ها", "Reminders"),
+    SECURITY("امنیت حساب", "Account Security"),
     SYSTEM("سیستم", "System")
 }
 
@@ -275,6 +276,23 @@ enum class NotificationType(
         "Profile Occasions",
         "تبریک تولد و مناسبت‌های مرتبط با پروفایل.",
         "Birthday and profile-related occasion messages.",
+        defaultEnabled = true
+    ),
+
+    DEVICE_SIGN_IN(
+        NotificationCategory.SECURITY,
+        "ورود از دستگاه جدید",
+        "New Device Sign-in",
+        "وقتی دستگاه جدیدی وارد حساب شما می‌شود.",
+        "When a new device signs in to your account.",
+        defaultEnabled = true
+    ),
+    DEVICE_REMOVED(
+        NotificationCategory.SECURITY,
+        "حذف دستگاه از حساب",
+        "Device Removed",
+        "وقتی دستگاهی از حساب شما حذف می‌شود، یا همین دستگاه حذف شود.",
+        "When a device is removed from your account, including this one.",
         defaultEnabled = true
     ),
 

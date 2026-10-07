@@ -88,6 +88,8 @@ fun DevicesScreen(onBack: () -> Unit) {
     // The primary device is the first one ever registered on the account.
     val thisDeviceIsPrimary = devices.any { it.id == vm.currentDeviceId && it.isPrimary }
     val primaryExists = devices.any { it.isPrimary }
+    // Only the primary device may remove other devices; everyone else sees a read-only list.
+    val canRemoveOthers = canRemoveOtherDevices(devices, vm.currentDeviceId)
 
     var pendingRevoke by remember { mutableStateOf<DeviceApi.Device?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -121,13 +123,13 @@ fun DevicesScreen(onBack: () -> Unit) {
                     Text(
                         text = when {
                             thisDeviceIsPrimary && isPersian ->
-                                "این دستگاه، دستگاه اصلی حساب شماست و می‌تواند سایر دستگاه‌ها را حذف کند."
+                                "این دستگاه، دستگاه اصلی حساب شماست و فقط از اینجا می‌توان دستگاه‌های دیگر را حذف کرد."
                             thisDeviceIsPrimary ->
-                                "This is your account's primary device and it can remove all other devices."
+                                "This is your account's primary device. Other devices can only be removed from here."
                             isPersian ->
-                                "دستگاه اصلی، اولین دستگاهی است که وارد حساب شده و فقط از خودش قابل حذف است."
+                                "فقط دستگاه اصلی (اولین دستگاهِ واردشده) می‌تواند دستگاه‌های دیگر را حذف کند. اگر دستگاهی را نمی‌شناسید، از دستگاه اصلی آن را حذف کنید."
                             else ->
-                                "The primary device is the first one that signed in and can only be removed from itself."
+                                "Only the primary device (the first one that signed in) can remove other devices. If you don't recognise one, remove it from the primary device."
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
@@ -173,6 +175,7 @@ fun DevicesScreen(onBack: () -> Unit) {
                     isCurrent = device.id == vm.currentDeviceId,
                     isPrimary = device.isPrimary,
                     isRevoking = revokingId == device.id,
+                    canRemove = canRemoveOthers,
                     removeEnabled = revokingId == null,
                     isPersian = isPersian,
                     onRemove = { pendingRevoke = device }
@@ -292,6 +295,7 @@ private fun DeviceCard(
     isCurrent: Boolean,
     isPrimary: Boolean,
     isRevoking: Boolean,
+    canRemove: Boolean,
     removeEnabled: Boolean,
     isPersian: Boolean,
     onRemove: () -> Unit
@@ -399,6 +403,16 @@ private fun DeviceCard(
             Text(
                 text = if (isPersian) "این دستگاه فقط از خودش قابل حذف است."
                 else "This device can only be removed from itself.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+        } else if (!isCurrent && !canRemove) {
+            // View-only: this device is not the primary one.
+            Text(
+                text = if (isPersian) "فقط دستگاه اصلی می‌تواند این دستگاه را حذف کند."
+                else "Only the primary device can remove this device.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                 modifier = Modifier.fillMaxWidth(),

@@ -7,6 +7,7 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -22,7 +23,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
@@ -60,6 +63,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.DebtCreditEntity
@@ -324,6 +328,7 @@ fun HomeScreen(
     var hasCapturedDueReminders by remember { mutableStateOf(false) }
     var currentDueReminder by remember { mutableStateOf<DebtCreditEntity?>(null) }
     var pendingDueReminders by remember { mutableStateOf<List<DebtCreditEntity>>(emptyList()) }
+    var dueReminderTotal by remember { mutableIntStateOf(0) }
     var showChangeDueDateDialog by remember { mutableStateOf(false) }
 
     fun goToNextDueReminder() {
@@ -343,6 +348,7 @@ fun HomeScreen(
                 .filter { !it.isSettled && it.dueDateMillis > 0 && it.dueDateMillis <= threeDaysAheadMillis }
                 .sortedBy { it.dueDateMillis }
             if (relevant.isNotEmpty()) {
+                dueReminderTotal = relevant.size
                 currentDueReminder = relevant.first()
                 pendingDueReminders = relevant.drop(1)
             }
@@ -1562,6 +1568,8 @@ fun HomeScreen(
                 DueDateReminderDialog(
                     isPersian = isPersian,
                     item = reminder,
+                    position = dueReminderTotal - pendingDueReminders.size,
+                    total = dueReminderTotal,
                     currencyUnit = currencyUnit,
                     numberFormatter = numberFormatter,
                     onMarkAsPaid = {
@@ -1592,14 +1600,17 @@ fun HomeScreen(
 }
 
 /**
- * دیالوگ یادآوری سررسید بدهی/طلب که به محض ورود کاربر به HomeScreen، برای هر آیتم
- * سررسیدگذشته‌ی تسویه‌نشده نمایش داده می‌شود. شامل تمام اطلاعات لازم به‌همراه دو دکمه:
- * «پرداخت شد» (ثبت تراکنش واقعی) و «تغییر تاریخ سررسید».
+ * دیالوگ یادآوری سررسید بدهی/طلب؛ هم‌زبان با کارت «بدهی و طلب‌ها» در صفحه‌ی خانه:
+ * همان نوار رنگی نوع در بالا، کاشی‌های خلاصه‌ی رنگی، نوار پیشرفت پرداخت و نشان وضعیت سررسید.
+ * برای هر آیتمِ سررسیدگذشته یا نزدیک به سررسید (یکی‌یکی) نمایش داده می‌شود و دو اقدام اصلی
+ * دارد: «ثبت پرداخت» (کشیدن) و «تغییر تاریخ سررسید».
  */
 @Composable
 private fun DueDateReminderDialog(
     isPersian: Boolean,
     item: DebtCreditEntity,
+    position: Int,
+    total: Int,
     currencyUnit: String,
     numberFormatter: NumberFormat,
     onMarkAsPaid: () -> Unit,
@@ -1607,7 +1618,6 @@ private fun DueDateReminderDialog(
     onDismiss: () -> Unit
 ) {
     val isDebt = item.type == "DEBT"
-    val remaining = (item.totalAmount - item.paidAmount).coerceAtLeast(0L)
     val curr = if (currencyUnit == "IRR") 10L else 1L
     val currencyText = if (isPersian) {
         if (currencyUnit == "IRR") "ریال" else "تومان"
@@ -1615,149 +1625,342 @@ private fun DueDateReminderDialog(
         if (currencyUnit == "IRR") "Rial" else "T"
     }
 
-    val oneDayMillis = 24 * 60 * 60 * 1000L
-    val daysDiff = ((item.dueDateMillis - System.currentTimeMillis()).toFloat() / oneDayMillis).toInt()
-    val isOverdue = item.dueDateMillis < System.currentTimeMillis()
-    val statusColor = if (isOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    val remaining = (item.totalAmount - item.paidAmount).coerceAtLeast(0L)
+    val paidFraction = if (item.totalAmount > 0L)
+        (item.paidAmount.toDouble() / item.totalAmount.toDouble()).toFloat().coerceIn(0f, 1f)
+    else 0f
+    val paidPercent = (paidFraction * 100).toInt()
 
-    Dialog(onDismissRequest = onDismiss) {
-        val dialogShape = RoundedCornerShape(24.dp)
-        Box(
-            modifier = Modifier
-                .background(MaterialTheme.colorScheme.surface, dialogShape)
-                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), dialogShape)
-                .padding(24.dp)
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .background(statusColor.copy(alpha = 0.12f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = statusColor,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
+    val daysLeft = daysUntilDue(item)
+    val isOverdue = daysLeft < 0
+    val isToday = daysLeft == 0
 
-                Spacer(Modifier.height(12.dp))
+    val typeColor = if (isDebt) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    val statusColor = when {
+        isOverdue -> MaterialTheme.colorScheme.error
+        daysLeft <= 1 -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.primary
+    }
 
-                Text(
-                    text = if (isOverdue) {
-                        if (isPersian) {
-                            if (isDebt) "سررسید بدهی فرا رسیده" else "سررسید طلب فرا رسیده"
-                        } else {
-                            if (isDebt) "Debt Due Date Passed" else "Credit Due Date Passed"
-                        }
-                    } else {
-                        if (isPersian) {
-                            if (isDebt) "سررسید بدهی نزدیک است" else "سررسید طلب نزدیک است"
-                        } else {
-                            if (isDebt) "Debt Due Soon" else "Credit Due Soon"
-                        }
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center
-                )
+    val title = when {
+        isOverdue -> if (isPersian) "سررسید گذشته است" else "Payment overdue"
+        isToday -> if (isPersian) "امروز سررسید است" else "Due today"
+        else -> if (isPersian) "سررسید نزدیک است" else "Due soon"
+    }
+    val subtitle = if (isPersian) {
+        if (isDebt) "بدهی شما به «${item.personName}»" else "طلب شما از «${item.personName}»"
+    } else {
+        if (isDebt) "You owe '${item.personName}'" else "'${item.personName}' owes you"
+    }
+    val dueText = when {
+        isOverdue -> if (isPersian) "${numberFormatter.format((-daysLeft).toLong())} روز گذشته" else "${-daysLeft}d overdue"
+        isToday -> if (isPersian) "امروز سررسید" else "Due today"
+        else -> if (isPersian) "${numberFormatter.format(daysLeft.toLong())} روز مانده" else "${daysLeft}d left"
+    }
 
-                Spacer(Modifier.height(4.dp))
-
-                Text(
-                    text = if (isOverdue) {
-                        val overdueDays = (-daysDiff).coerceAtLeast(0)
-                        if (isPersian) "$overdueDays روز از سررسید «${item.personName}» گذشته است"
-                        else "$overdueDays day(s) past due for '${item.personName}'"
-                    } else if (daysDiff == 0) {
-                        if (isPersian) "امروز سررسید «${item.personName}» است"
-                        else "'${item.personName}' is due today"
-                    } else {
-                        if (isPersian) "$daysDiff روز تا سررسید «${item.personName}» مانده است"
-                        else "$daysDiff day(s) left until '${item.personName}' is due"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(Modifier.height(16.dp))
-
-                val infoShape = RoundedCornerShape(16.dp)
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        // کلید روی آیتم: با رفتن به یادآوری بعدی، ورود کارت دوباره انیمیت می‌شود.
+        key(item.id) {
+            val visibleState = remember { MutableTransitionState(false).apply { targetState = true } }
+            AnimatedVisibility(
+                visibleState = visibleState,
+                enter = fadeIn(tween(240)) + scaleIn(initialScale = 0.92f, animationSpec = tween(240))
+            ) {
+                val cardShape = RoundedCornerShape(28.dp)
                 Column(
                     modifier = Modifier
+                        .padding(horizontal = 20.dp)
+                        .widthIn(max = 420.dp)
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), infoShape)
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .background(MaterialTheme.colorScheme.surface, cardShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), cardShape)
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), cardShape)
+                        .clip(cardShape)
                 ) {
-                    DueReminderInfoRow(
-                        label = if (isPersian) "شخص" else "Person",
-                        value = item.personName
+                    // نوار رنگی نوع (بدهی/طلب) در لبه‌ی بالا، مثل کارت‌های صفحه‌ی خانه
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .background(typeColor.copy(alpha = 0.7f))
                     )
-                    DueReminderInfoRow(
-                        label = if (isPersian) "نوع" else "Type",
-                        value = if (isPersian) {
-                            if (isDebt) "بدهی" else "طلب"
-                        } else {
-                            if (isDebt) "Debt" else "Credit"
+
+                    Column(
+                        modifier = Modifier
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 20.dp, vertical = 20.dp)
+                    ) {
+                        // ===== سربرگ =====
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(statusColor.copy(alpha = 0.12f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isOverdue) Icons.Default.Warning else Icons.Default.Notifications,
+                                    contentDescription = null,
+                                    tint = statusColor,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
+
+                            Spacer(Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = subtitle,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            if (total > 1) {
+                                Spacer(Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f), CircleShape)
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = if (isPersian) "${numberFormatter.format(position.toLong())} از ${numberFormatter.format(total.toLong())}"
+                                        else "$position of $total",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
-                    )
-                    DueReminderInfoRow(
-                        label = if (isPersian) "مبلغ کل" else "Total Amount",
-                        value = "${numberFormatter.format(item.totalAmount * curr)} $currencyText"
-                    )
-                    DueReminderInfoRow(
-                        label = if (isPersian) "مانده قابل پرداخت" else "Remaining",
-                        value = "${numberFormatter.format(remaining * curr)} $currencyText"
-                    )
-                    DueReminderInfoRow(
-                        label = if (isPersian) "تاریخ سررسید" else "Due Date",
-                        value = DateUtils.formatTimestamp(item.dueDateMillis, isPersian)
-                    )
-                    val noteText = item.note
-                    if (!noteText.isNullOrBlank()) {
-                        DueReminderInfoRow(
-                            label = if (isPersian) "یادداشت" else "Note",
-                            value = noteText
+
+                        Spacer(Modifier.height(16.dp))
+
+                        // ===== نشان‌ها: نوع، وضعیت سررسید، ماهانه =====
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .background(typeColor.copy(alpha = 0.12f), CircleShape)
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = (if (isDebt) "💸 " else "💰 ") +
+                                            if (isPersian) (if (isDebt) "بدهی" else "طلب") else (if (isDebt) "Debt" else "Credit"),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = typeColor,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Spacer(Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .background(statusColor.copy(alpha = if (isOverdue || daysLeft <= 1) 0.12f else 0.08f), CircleShape)
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = "⏳ $dueText",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = statusColor,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            if (item.isMonthly) {
+                                Spacer(Modifier.width(6.dp))
+                                Text(text = "🔁", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+
+                        Spacer(Modifier.height(16.dp))
+
+                        // ===== کاشی‌های خلاصه: باقی‌مانده و مبلغ کل =====
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(IntrinsicSize.Max),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            DueReminderTile(
+                                emoji = "🧾",
+                                label = if (isPersian) "باقی‌مانده" else "Remaining",
+                                amount = remaining * curr,
+                                currencyText = currencyText,
+                                isPersian = isPersian,
+                                numberFormatter = numberFormatter,
+                                color = typeColor,
+                                modifier = Modifier.weight(1f).fillMaxHeight()
+                            )
+                            DueReminderTile(
+                                emoji = "💼",
+                                label = if (isPersian) "مبلغ کل" else "Total",
+                                amount = item.totalAmount * curr,
+                                currencyText = currencyText,
+                                isPersian = isPersian,
+                                numberFormatter = numberFormatter,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f).fillMaxHeight()
+                            )
+                        }
+
+                        Spacer(Modifier.height(14.dp))
+
+                        // ===== پیشرفت پرداخت =====
+                        LinearProgressIndicator(
+                            progress = { paidFraction },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(CircleShape),
+                            color = typeColor,
+                            trackColor = typeColor.copy(alpha = 0.1f)
                         )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = if (isPersian) {
+                                "${numberFormatter.format(paidPercent.toLong())}٪ ${if (isDebt) "پرداخت شده" else "دریافت شده"}"
+                            } else {
+                                "$paidPercent% ${if (isDebt) "paid" else "received"}"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(Modifier.height(14.dp))
+
+                        // ===== تاریخ سررسید و یادداشت =====
+                        val infoShape = RoundedCornerShape(16.dp)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f), infoShape)
+                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), infoShape)
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            DueReminderInfoRow(
+                                label = if (isPersian) "📅 تاریخ سررسید" else "📅 Due date",
+                                value = DateUtils.formatTimestamp(item.dueDateMillis, isPersian)
+                            )
+                            val noteText = item.note
+                            if (!noteText.isNullOrBlank()) {
+                                DueReminderInfoRow(
+                                    label = if (isPersian) "📝 یادداشت" else "📝 Note",
+                                    value = noteText
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(20.dp))
+
+                        SwipeToConfirmButton(
+                            text = if (isPersian) {
+                                if (isDebt) "برای ثبت پرداخت بکشید" else "برای ثبت دریافت بکشید"
+                            } else {
+                                if (isDebt) "Swipe to confirm payment" else "Swipe to confirm receipt"
+                            },
+                            isPersian = isPersian,
+                            resetTrigger = false,
+                            onConfirm = onMarkAsPaid,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(Modifier.height(10.dp))
+
+                        OutlinedButton(
+                            onClick = onChangeDueDate,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text(text = "📅", style = MaterialTheme.typography.titleMedium)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = if (isPersian) "تغییر تاریخ سررسید" else "Change due date",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        TextButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        ) {
+                            Text(
+                                text = if (total > 1 && position < total) {
+                                    if (isPersian) "بعداً · مورد بعدی" else "Later · next reminder"
+                                } else {
+                                    if (isPersian) "بعداً یادم بنداز" else "Remind me later"
+                                },
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
-                }
-
-                Spacer(Modifier.height(20.dp))
-
-                key(item.id) {
-                    SwipeToConfirmButton(
-                        text = if (isPersian) "برای ثبت پرداخت بکشید" else "Swipe to Confirm Payment",
-                        isPersian = isPersian,
-                        resetTrigger = false,
-                        onConfirm = onMarkAsPaid,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                Spacer(Modifier.height(10.dp))
-
-                OutlinedButton(
-                    onClick = onChangeDueDate,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text(text = "📅", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = if (isPersian) "تغییر تاریخ سررسید" else "Change Due Date",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold
-                    )
                 }
             }
         }
+    }
+}
+
+/** کاشی‌ی خلاصه‌ی رنگی (هم‌سبک کاشی‌های «مانده بدهی / مانده طلب» صفحه‌ی خانه). */
+@Composable
+private fun DueReminderTile(
+    emoji: String,
+    label: String,
+    amount: Long,
+    currencyText: String,
+    isPersian: Boolean,
+    numberFormatter: NumberFormat,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    val tileShape = RoundedCornerShape(16.dp)
+    val formatted = numberFormatter.format(amount)
+    Column(
+        modifier = modifier
+            .background(color.copy(alpha = 0.08f), tileShape)
+            .border(1.dp, color.copy(alpha = 0.18f), tileShape)
+            .padding(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(text = emoji, style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        AutoFitAmountText(
+            text = formatted,
+            fallbackText = compactAmount(amount, isPersian),
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = color,
+            maxFontSize = 16f,
+            minFontSize = 10f,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Start
+        )
+        Text(
+            text = currencyText,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -1770,7 +1973,7 @@ private fun DueReminderInfoRow(label: String, value: String) {
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
@@ -1778,9 +1981,10 @@ private fun DueReminderInfoRow(label: String, value: String) {
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 12.dp)
+            textAlign = TextAlign.End,
+            modifier = Modifier.padding(start = 12.dp).weight(1f, fill = false)
         )
     }
 }

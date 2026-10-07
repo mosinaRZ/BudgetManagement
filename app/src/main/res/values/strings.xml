@@ -1,6 +1,9 @@
 <resources>
     <string name="app_name">Cidna</string>
 
+    <string name="notification_channel_security">Account security</string>
+    <string name="notification_channel_security_desc">Alerts when a new device signs in or a device is removed from your account</string>
+
     <string name="shortcut_add_transaction_short">Add transaction</string>
     <string name="shortcut_add_transaction_long">Add a new transaction</string>
 </resources>

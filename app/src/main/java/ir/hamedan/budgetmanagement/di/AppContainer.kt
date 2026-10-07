@@ -4,6 +4,7 @@ import android.content.Context
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.SyncLocalDataSource
 import ir.hamedan.budgetmanagement.data.local.SyncLocalDataSourceImpl
+import ir.hamedan.budgetmanagement.data.notification.DeviceSecurityNotifier
 import ir.hamedan.budgetmanagement.data.network.AccountApi
 import ir.hamedan.budgetmanagement.data.network.ApiHttpClient
 import ir.hamedan.budgetmanagement.data.network.AuthenticatedApiClient
@@ -51,7 +52,12 @@ class AppContainer(context: Context) {
     val authSessionStore: AuthSessionStore by lazy { AuthSessionStore(appContext) }
     val authApi: AuthApi by lazy { AuthApi(apiHttpClient) }
     private val authenticatedApiClient: AuthenticatedApiClient by lazy {
-        AuthenticatedApiClient(apiHttpClient, authApi, authSessionStore)
+        AuthenticatedApiClient(
+            client = apiHttpClient,
+            authApi = authApi,
+            sessionStore = authSessionStore,
+            onDeviceRemoved = { DeviceSecurityNotifier.notifyThisDeviceRemoved(appContext) }
+        )
     }
     val deviceApi: DeviceApi by lazy { DeviceApi(authenticatedApiClient) }
     val profileApi: ProfileApi by lazy { ProfileApi(authenticatedApiClient) }

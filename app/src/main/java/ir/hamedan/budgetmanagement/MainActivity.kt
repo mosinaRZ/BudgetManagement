@@ -120,8 +120,15 @@ class MainActivity : FragmentActivity() {
 
     private var shortcutOpenAddTransaction by mutableStateOf(false)
 
+    // Set when the user taps a device-security notification: open the Devices screen.
+    private var openDevicesRequested by mutableStateOf(false)
+
     private fun handleShortcutIntent(intent: Intent?) {
         shortcutOpenAddTransaction = intent?.action == ACTION_ADD_TRANSACTION
+        openDevicesRequested =
+            intent?.getStringExtra(AppNotificationManager.EXTRA_OPEN_ROUTE) == AppNotificationManager.ROUTE_DEVICES
+        // Consume it so a configuration change does not re-open the screen.
+        intent?.removeExtra(AppNotificationManager.EXTRA_OPEN_ROUTE)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -205,6 +212,8 @@ class MainActivity : FragmentActivity() {
                         modifier = Modifier.fillMaxSize(),
                         openAddTransactionRequested = shortcutOpenAddTransaction,
                         onShortcutConsumed = { shortcutOpenAddTransaction = false },
+                        openDevicesRequested = openDevicesRequested,
+                        onDevicesConsumed = { openDevicesRequested = false },
                         onThemeToggle = {
                             // جابه‌جایی سریع و بدون دردسر تم
                             val newMode = when (themeMode) {
@@ -266,6 +275,8 @@ class MainActivity : FragmentActivity() {
         modifier: Modifier = Modifier,
         openAddTransactionRequested: Boolean = false,
         onShortcutConsumed: () -> Unit = {},
+        openDevicesRequested: Boolean = false,
+        onDevicesConsumed: () -> Unit = {},
         onThemeToggle: () -> Unit = {}
     ) {
 
@@ -287,6 +298,22 @@ class MainActivity : FragmentActivity() {
             ) {
                 navController.navigate(AppRoute.AddScreen())
                 onShortcutConsumed()
+            }
+        }
+
+        // Tapped a "new device" / "device removed" alert: go straight to the device list.
+        LaunchedEffect(openDevicesRequested, sessionAuthenticated, currentRouteEntry?.destination?.route) {
+            val route = currentRouteEntry?.destination?.route.orEmpty()
+            if (openDevicesRequested &&
+                sessionAuthenticated &&
+                route.isNotBlank() &&
+                !route.contains("Login") &&
+                !route.contains("Register") &&
+                !route.contains("PasswordReset") &&
+                !route.contains("Splash")
+            ) {
+                if (!route.contains("Devices")) navController.navigate(AppRoute.Devices)
+                onDevicesConsumed()
             }
         }
 

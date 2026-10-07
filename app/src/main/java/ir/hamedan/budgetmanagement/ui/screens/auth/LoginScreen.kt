@@ -47,6 +47,7 @@ import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import ir.hamedan.budgetmanagement.data.security.AuthSessionStore
 import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.preferences.SharedPreferences
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
@@ -82,11 +83,19 @@ fun LoginScreen(
     // The server ended this session (expired, or this device was removed from the account):
     // tell the user why they are back here instead of showing an unexplained login form.
     LaunchedEffect(localUnlockOnly) {
-        if (!localUnlockOnly && app.container.authSessionStore.consumeUnexpectedEnd()) {
-            errorMessage = if (isPersian) {
-                "نشست شما پایان یافته یا این دستگاه از حساب حذف شده است. برای ادامه دوباره وارد شوید."
-            } else {
-                "Your session has ended or this device was removed from the account. Please sign in again."
+        if (!localUnlockOnly) {
+            errorMessage = when (app.container.authSessionStore.consumeEnd()) {
+                AuthSessionStore.SessionEnd.DEVICE_REMOVED -> if (isPersian) {
+                    "این دستگاه از حساب شما حذف شده است. برای استفاده دوباره، با رمز عبور وارد شوید. اگر این کار را شما انجام نداده‌اید، پس از ورود رمز عبور خود را تغییر دهید."
+                } else {
+                    "This device was removed from your account. Sign in with your password to use it again. If you didn't do this, change your password after signing in."
+                }
+                AuthSessionStore.SessionEnd.EXPIRED -> if (isPersian) {
+                    "نشست شما پایان یافته است. برای ادامه دوباره وارد شوید."
+                } else {
+                    "Your session has ended. Please sign in again."
+                }
+                AuthSessionStore.SessionEnd.NONE -> errorMessage
             }
         }
     }
