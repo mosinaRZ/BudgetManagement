@@ -30,6 +30,17 @@ const CodeInvalidPassword Code = "INVALID_PASSWORD"
 // instead of treating it as a generic permission error.
 const CodePrimaryDeviceProtected Code = "PRIMARY_DEVICE_PROTECTED"
 
+// CodeDeviceRemovalForbidden means the caller tried to remove another device from a device
+// that is not the account's primary device. Only the primary (first-registered) device may
+// remove other devices; every device may still sign itself out.
+const CodeDeviceRemovalForbidden Code = "DEVICE_REMOVAL_FORBIDDEN"
+
+// CodeDeviceRemoved means the access token itself is still valid but the device it was issued
+// to has been removed from the account. It is deliberately distinct from CodeUnauthorized so
+// the client can tell the user *why* they were signed out instead of showing a generic
+// "session expired" message. The HTTP status is still 401.
+const CodeDeviceRemoved Code = "DEVICE_REMOVED"
+
 type AppError struct {
 	Code    Code
 	Message string
@@ -83,6 +94,12 @@ func ErrInvalidPassword(message string, wrapped ...error) *AppError {
 }
 func ErrPrimaryDeviceProtected(message string, wrapped ...error) *AppError {
 	return newAppError(CodePrimaryDeviceProtected, message, firstOrNil(wrapped))
+}
+func ErrDeviceRemovalForbidden(message string, wrapped ...error) *AppError {
+	return newAppError(CodeDeviceRemovalForbidden, message, firstOrNil(wrapped))
+}
+func ErrDeviceRemoved(message string, wrapped ...error) *AppError {
+	return newAppError(CodeDeviceRemoved, message, firstOrNil(wrapped))
 }
 func ErrInternal(message string, wrapped ...error) *AppError {
 	return newAppError(CodeInternal, message, firstOrNil(wrapped))

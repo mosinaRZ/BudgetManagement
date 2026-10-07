@@ -54,7 +54,7 @@ func AuthWithDevices(secret string, users repository.UserRepository, devices rep
 					return
 				}
 				if !registered {
-					response.Error(w, apperror.ErrUnauthorized("This device has been removed from the account"))
+					response.Error(w, apperror.ErrDeviceRemoved("This device has been removed from the account"))
 					return
 				}
 			}

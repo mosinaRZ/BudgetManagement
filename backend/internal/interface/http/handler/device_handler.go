@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/apperror"
@@ -40,6 +42,48 @@ func (h *DeviceHandler) List(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	response.JSON(w, http.StatusOK, dto.DeviceListResponse{Devices: out})
+}
+
+// Events returns the device activity (new devices, removed devices) the calling device has not
+// seen yet. The client passes the cursor it received last time as ?after=<unix milliseconds>.
+func (h *DeviceHandler) Events(w http.ResponseWriter, r *http.Request) {
+	userID, ok := contextkeys.UserID(r.Context())
+	if !ok || userID == "" {
+		response.Error(w, apperror.ErrUnauthorized("authentication required"))
+		return
+	}
+	// Empty for legacy tokens issued before access tokens carried the device id.
+	callerDeviceID, _ := contextkeys.DeviceID(r.Context())
+
+	var after time.Time
+	if raw := r.URL.Query().Get("after"); raw != "" {
+		ms, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || ms < 0 {
+			response.Error(w, apperror.ErrValidation("after must be a non-negative Unix timestamp in milliseconds"))
+			return
+		}
+		if ms > 0 {
+			after = time.UnixMilli(ms).UTC()
+		}
+	}
+
+	feed, err := h.service.Events(r.Context(), userID, callerDeviceID, after)
+	if err != nil {
+		response.Error(w, err)
+		return
+	}
+	out := make([]dto.DeviceEventResponse, 0, len(feed.Events))
+	for _, e := range feed.Events {
+		out = append(out, dto.DeviceEventResponse{
+			ID: e.ID, Type: string(e.Type), DeviceID: e.DeviceID, DeviceName: e.DeviceName,
+			Platform: e.Platform, ActorName: e.ActorName, CreatedAtMs: e.CreatedAt.UnixMilli(),
+		})
+	}
+	var cursorMs int64
+	if !feed.Cursor.IsZero() {
+		cursorMs = feed.Cursor.UnixMilli()
+	}
+	response.JSON(w, http.StatusOK, dto.DeviceEventListResponse{Events: out, CursorMs: cursorMs})
 }
 
 func (h *DeviceHandler) Revoke(w http.ResponseWriter, r *http.Request) {

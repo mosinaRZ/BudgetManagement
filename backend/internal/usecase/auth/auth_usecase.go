@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -30,6 +31,7 @@ type ServiceImpl struct {
 	users                 repository.UserRepository
 	refresh               repository.RefreshTokenRepository
 	devices               repository.DeviceRepository
+	deviceEvents          repository.DeviceEventRepository
 	recoverySessions      repository.RecoverySessionRepository
 	otp                   OTPService
 	secret                string
@@ -59,6 +61,12 @@ func NewService(
 	}
 }
 func (s *ServiceImpl) SetDeviceRepository(d repository.DeviceRepository) { s.devices = d }
+
+// SetDeviceEventRepository enables sign-in events: when a device that was not yet part of the
+// account signs in, the account's other devices are told so they can alert the user.
+func (s *ServiceImpl) SetDeviceEventRepository(r repository.DeviceEventRepository) {
+	s.deviceEvents = r
+}
 func (s *ServiceImpl) SetRecoverySessionRepository(r repository.RecoverySessionRepository) {
 	s.recoverySessions = r
 }
@@ -279,11 +287,8 @@ func (s *ServiceImpl) Login(ctx context.Context, in LoginInput) (LoginOutput, er
 	if err := s.users.AddDevice(ctx, u.ID, in.DeviceID); err != nil {
 		return LoginOutput{}, err
 	}
-	if s.devices != nil {
-		now := time.Now().UTC()
-		if err := s.devices.Register(ctx, newDeviceRecord(in.DeviceID, u.ID, now, in.Device)); err != nil {
-			return LoginOutput{}, err
-		}
+	if err := s.registerDevice(ctx, u.ID, in.DeviceID, time.Now().UTC(), in.Device); err != nil {
+		return LoginOutput{}, err
 	}
 	sess, err := s.issueRefreshAndAccess(ctx, u, in.DeviceID)
 	if err != nil {
@@ -305,6 +310,16 @@ func (s *ServiceImpl) Refresh(ctx context.Context, in RefreshInput) (RefreshOutp
 	}
 
 	if old.RevokedAt != nil {
+		// Removing a device revokes its refresh tokens too. When the removed device later tries
+		// to refresh, that is not a replay of a stolen token and must not sign every other
+		// device out: it just learns that it was removed. If the device still exists the token
+		// was revoked by rotation or sign-out, so a second use is genuine reuse. When the
+		// device state cannot be read, fall through to the stricter reuse handling.
+		if s.devices != nil && old.DeviceID != "" {
+			if exists, existsErr := s.devices.Exists(ctx, old.UserID, old.DeviceID); existsErr == nil && !exists {
+				return RefreshOutput{}, apperror.ErrDeviceRemoved("this device has been removed from the account")
+			}
+		}
 		_ = s.refresh.RevokeAllForUser(ctx, old.UserID)
 		_, _ = s.users.IncrementSessionVersion(ctx, old.UserID)
 
@@ -461,11 +476,8 @@ func (s *ServiceImpl) ResetPassword(ctx context.Context, in ResetPasswordInput) 
 	if err := s.refresh.RevokeAllForUser(ctx, u.ID); err != nil {
 		return ResetPasswordOutput{}, err
 	}
-	if s.devices != nil {
-		now := time.Now().UTC()
-		if err := s.devices.Register(ctx, newDeviceRecord(in.DeviceID, u.ID, now, in.Device)); err != nil {
-			return ResetPasswordOutput{}, err
-		}
+	if err := s.registerDevice(ctx, u.ID, in.DeviceID, time.Now().UTC(), in.Device); err != nil {
+		return ResetPasswordOutput{}, err
 	}
 	sess, err := s.issueRefreshAndAccess(ctx, u, in.DeviceID)
 	if err != nil {
@@ -687,6 +699,44 @@ func profileFromUser(u *entity.User) Profile {
 		UserID: u.ID, PhoneNumber: u.PhoneNumber, Email: u.Email, EmailVerified: u.EmailVerified,
 		FirstName: u.FirstName, LastName: u.LastName, Gender: gender, BirthDate: u.BirthDate,
 	}
+}
+
+// registerDevice stores the device row for a successful sign-in. When the device was not yet
+// part of the account it also records a sign-in event, which is how the account's other
+// devices learn about it. Recording is best-effort: it must never block the sign-in itself.
+func (s *ServiceImpl) registerDevice(ctx context.Context, userID, deviceID string, now time.Time, info DeviceInfo) error {
+	if s.devices == nil {
+		return nil
+	}
+	known := true
+	if s.deviceEvents != nil {
+		exists, err := s.devices.Exists(ctx, userID, deviceID)
+		if err != nil {
+			return err
+		}
+		known = exists
+	}
+	record := newDeviceRecord(deviceID, userID, now, info)
+	if err := s.devices.Register(ctx, record); err != nil {
+		return err
+	}
+	if known || s.deviceEvents == nil {
+		return nil
+	}
+	event := &entity.DeviceEvent{
+		UserID:        userID,
+		Type:          entity.DeviceEventSignedIn,
+		DeviceID:      deviceID,
+		DeviceName:    record.DisplayName(),
+		Platform:      record.Platform,
+		ActorDeviceID: deviceID,
+		ActorName:     record.DisplayName(),
+		CreatedAt:     now,
+	}
+	if err := s.deviceEvents.Record(ctx, event); err != nil {
+		slog.Warn("failed to record device sign-in event", "user_id", userID, "device_id", deviceID, "error", err)
+	}
+	return nil
 }
 
 // newDeviceRecord builds the device row for a successful authentication. Descriptive

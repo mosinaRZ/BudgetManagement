@@ -69,6 +69,18 @@ func (d *Device) ApplyMetadata(name, model, platform, osVersion, appVersion, ip 
 	d.LastIP = normalizeDeviceIP(ip)
 }
 
+// DisplayName is the label shown to the user for this device: the name the client reported,
+// falling back to the hardware model. It is empty for very old clients that sent neither.
+func (d *Device) DisplayName() string {
+	if d == nil {
+		return ""
+	}
+	if d.Name != "" {
+		return d.Name
+	}
+	return d.Model
+}
+
 func sanitizeDisplayText(value string, maxRunes int) string {
 	value = strings.ToValidUTF8(value, "")
 	var b strings.Builder

@@ -65,5 +65,12 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	}); err != nil {
 		return fmt.Errorf("devices indexes: %w", err)
 	}
+	if _, err := db.Collection(deviceEventsCollectionName).Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: 1}}, Options: options.Index().SetName("idx_device_event_user_created")},
+		// Device activity is only useful for a while; MongoDB expires old entries on its own.
+		{Keys: bson.D{{Key: "createdAt", Value: 1}}, Options: options.Index().SetName("ttl_device_event_created").SetExpireAfterSeconds(int32(deviceEventTTL / time.Second))},
+	}); err != nil {
+		return fmt.Errorf("device_events indexes: %w", err)
+	}
 	return nil
 }

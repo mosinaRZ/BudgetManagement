@@ -80,10 +80,13 @@ func run() error {
 	recoverySessionRepo := mongodb.NewRecoverySessionRepository(db)
 	authUC := authUsecase.NewService(userRepo, refreshRepo, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL, otpUC)
 	authUC.SetDeviceRepository(deviceRepo)
+	deviceEventRepo := mongodb.NewDeviceEventRepository(db)
+	authUC.SetDeviceEventRepository(deviceEventRepo)
 	authUC.SetRecoverySessionRepository(recoverySessionRepo)
 	auditRepo := mongodb.NewAuditLogRepository(db)
 	roleUC := adminUsecase.NewRoleService(userRepo, auditRepo)
 	deviceUC := deviceUsecase.NewService(deviceRepo, refreshRepo)
+	deviceUC.SetEventRepository(deviceEventRepo)
 	authHandler := handler.NewAuthHandler(authUC, validate, otpUC)
 
 	trustedProxies, err := parseCIDRs(cfg.TrustedProxyCIDRs)

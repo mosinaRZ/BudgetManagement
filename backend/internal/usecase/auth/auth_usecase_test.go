@@ -124,6 +124,107 @@ func TestLoginSuccessAndWrongPassword(t *testing.T) {
 	}
 }
 
+// signInFixture builds a service whose user can log in with the given password and which
+// reports `known` as the devices already registered on the account.
+func signInFixture(known map[string]bool, events *mocks.MockDeviceEventRepository) *ServiceImpl {
+	salt, _ := infraauth.GenerateSalt()
+	hash, _ := infraauth.HashPassword("correct horse battery", salt)
+	user := &entity.User{ID: "u1", PasswordHash: hash, AuthSalt: encode(salt), KdfSalt: encode(make([]byte, 16))}
+	users := &mocks.MockUserRepository{
+		FindByPhoneHashFunc: func(context.Context, string) (*entity.User, error) { return user, nil },
+		AddDeviceFunc:       func(context.Context, string, string) error { return nil },
+	}
+	devices := &mocks.MockDeviceRepository{ExistsFunc: func(_ context.Context, _, d string) (bool, error) { return known[d], nil }}
+	s := newService(users, &mocks.MockRefreshTokenRepository{})
+	s.SetDeviceRepository(devices)
+	s.SetDeviceEventRepository(events)
+	return s
+}
+
+func TestLoginFromANewDeviceRecordsSignInEvent(t *testing.T) {
+	var recorded []*entity.DeviceEvent
+	events := &mocks.MockDeviceEventRepository{RecordFunc: func(_ context.Context, e *entity.DeviceEvent) error {
+		recorded = append(recorded, e)
+		return nil
+	}}
+	s := signInFixture(map[string]bool{"existing": true}, events)
+
+	// A device that is already part of the account signing in again is not news.
+	if _, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: "correct horse battery", DeviceID: "existing"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(recorded) != 0 {
+		t.Fatalf("known device recorded %d events, want 0", len(recorded))
+	}
+
+	// A device that was not part of the account is.
+	in := LoginInput{Identifier: "+989121234567", Password: "correct horse battery", DeviceID: "new-phone", Device: DeviceInfo{Name: "Pixel 8", Platform: "android"}}
+	if _, err := s.Login(context.Background(), in); err != nil {
+		t.Fatal(err)
+	}
+	if len(recorded) != 1 {
+		t.Fatalf("new device recorded %d events, want 1", len(recorded))
+	}
+	got := recorded[0]
+	if got.Type != entity.DeviceEventSignedIn || got.UserID != "u1" || got.DeviceID != "new-phone" ||
+		got.DeviceName != "Pixel 8" || got.Platform != "android" || got.ActorDeviceID != "new-phone" {
+		t.Fatalf("unexpected event: %+v", got)
+	}
+}
+
+func TestLoginSucceedsEvenWhenTheSignInEventCannotBeRecorded(t *testing.T) {
+	events := &mocks.MockDeviceEventRepository{RecordFunc: func(context.Context, *entity.DeviceEvent) error {
+		return apperror.ErrInternal("event store down")
+	}}
+	s := signInFixture(nil, events)
+	if _, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: "correct horse battery", DeviceID: "new-phone"}); err != nil {
+		t.Fatalf("login must not depend on the event feed: %v", err)
+	}
+}
+
+func TestRefreshWithTokenOfRemovedDeviceDoesNotSignOutTheAccount(t *testing.T) {
+	raw := "removed-device-token"
+	revokedAt := time.Now().Add(-time.Minute)
+	token := &entity.RefreshToken{TokenHash: infraauth.HashRefreshToken(raw), UserID: "u1", DeviceID: "gone", RevokedAt: &revokedAt, ExpiresAt: time.Now().Add(time.Hour)}
+	allRevoked, versionBumped := false, false
+	refresh := &mocks.MockRefreshTokenRepository{
+		FindByHashFunc:       func(context.Context, string) (*entity.RefreshToken, error) { return token, nil },
+		RevokeAllForUserFunc: func(context.Context, string) error { allRevoked = true; return nil },
+	}
+	users := &mocks.MockUserRepository{IncrementSessionVersionFunc: func(context.Context, string) (uint64, error) { versionBumped = true; return 1, nil }}
+	s := newService(users, refresh)
+	s.SetDeviceRepository(&mocks.MockDeviceRepository{ExistsFunc: func(context.Context, string, string) (bool, error) { return false, nil }})
+
+	_, err := s.Refresh(context.Background(), RefreshInput{RefreshToken: raw})
+	if code, ok := apperror.CodeOf(err); !ok || code != apperror.CodeDeviceRemoved {
+		t.Fatalf("err = %v, want DEVICE_REMOVED", err)
+	}
+	if allRevoked || versionBumped {
+		t.Fatalf("a removed device signed out the whole account: revokeAll=%v versionBumped=%v", allRevoked, versionBumped)
+	}
+}
+
+func TestRefreshReuseOfRotatedTokenStillSignsOutTheAccountWhenDeviceExists(t *testing.T) {
+	raw := "rotated-token"
+	revokedAt := time.Now().Add(-time.Minute)
+	token := &entity.RefreshToken{TokenHash: infraauth.HashRefreshToken(raw), UserID: "u1", DeviceID: "d1", RevokedAt: &revokedAt, ExpiresAt: time.Now().Add(time.Hour)}
+	allRevoked := false
+	refresh := &mocks.MockRefreshTokenRepository{
+		FindByHashFunc:       func(context.Context, string) (*entity.RefreshToken, error) { return token, nil },
+		RevokeAllForUserFunc: func(context.Context, string) error { allRevoked = true; return nil },
+	}
+	s := newService(&mocks.MockUserRepository{}, refresh)
+	s.SetDeviceRepository(&mocks.MockDeviceRepository{ExistsFunc: func(context.Context, string, string) (bool, error) { return true, nil }})
+
+	_, err := s.Refresh(context.Background(), RefreshInput{RefreshToken: raw})
+	if code, ok := apperror.CodeOf(err); !ok || code != apperror.CodeUnauthorized {
+		t.Fatalf("err = %v, want UNAUTHORIZED", err)
+	}
+	if !allRevoked {
+		t.Fatal("genuine token reuse must still revoke every session")
+	}
+}
+
 func encode(b []byte) string { return base64.RawStdEncoding.EncodeToString(b) }
 
 func TestRefreshSuccess(t *testing.T) {
