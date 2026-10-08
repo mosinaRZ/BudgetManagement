@@ -10,6 +10,8 @@ type DeviceInfoRequest struct {
 	Platform   string `json:"platform,omitempty" validate:"max=32"`
 	OSVersion  string `json:"os_version,omitempty" validate:"max=128"`
 	AppVersion string `json:"app_version,omitempty" validate:"max=64"`
+	// Fingerprint is a client-side hash of the installation (hex). See entity.Device.Fingerprint.
+	Fingerprint string `json:"fingerprint,omitempty" validate:"max=128"`
 }
 
 type OTPRequest struct {

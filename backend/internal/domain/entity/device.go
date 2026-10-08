@@ -13,6 +13,7 @@ const (
 	maxDeviceModelRunes      = 64
 	maxDeviceOSVersionRunes  = 64
 	maxDeviceAppVersionRunes = 32
+	maxDeviceFingerprintLen  = 128
 )
 
 // Device represents a single client device (Android install) that a user
@@ -44,6 +45,12 @@ type Device struct {
 	// LastIP is the client address seen at the last authentication. It is stored
 	// in full for security auditing but must only ever be exposed masked.
 	LastIP string
+
+	// Fingerprint is an opaque, client-derived value that identifies one physical installation
+	// across reinstalls and cleared data. It is a one-way hash computed on the device, never a raw
+	// hardware identifier. It lets the server recognise that a new device id is an installation
+	// that is already on the account, so the same device is never counted twice.
+	Fingerprint string
 
 	// LastSeenAt is the timestamp of the device's most recent activity
 	// (e.g. last successful sync or authentication).
@@ -79,6 +86,25 @@ func (d *Device) DisplayName() string {
 		return d.Name
 	}
 	return d.Model
+}
+
+// SetFingerprint stores the client's installation fingerprint. Only lowercase or uppercase hex
+// up to maxDeviceFingerprintLen characters is accepted; anything else is dropped.
+func (d *Device) SetFingerprint(value string) {
+	d.Fingerprint = normalizeFingerprint(value)
+}
+
+func normalizeFingerprint(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > maxDeviceFingerprintLen {
+		return ""
+	}
+	for _, r := range value {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f' || r >= 'A' && r <= 'F') {
+			return ""
+		}
+	}
+	return strings.ToLower(value)
 }
 
 func sanitizeDisplayText(value string, maxRunes int) string {

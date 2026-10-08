@@ -10,7 +10,7 @@ import (
 // and is sanitised by entity.Device.ApplyMetadata before it is stored. IP is the
 // client address resolved by the HTTP layer (never taken from the request body).
 type DeviceInfo struct {
-	Name, Model, Platform, OSVersion, AppVersion, IP string
+	Name, Model, Platform, OSVersion, AppVersion, IP, Fingerprint string
 }
 
 type RegisterInput struct {

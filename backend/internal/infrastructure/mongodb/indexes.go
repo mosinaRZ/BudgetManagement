@@ -62,6 +62,7 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "deviceId", Value: 1}}, Options: options.Index().SetUnique(true).SetName("uniq_device")},
 		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "lastSeenAt", Value: -1}}, Options: options.Index().SetName("idx_device_last_seen")},
 		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: 1}, {Key: "deviceId", Value: 1}}, Options: options.Index().SetName("idx_device_created")},
+		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "fingerprint", Value: 1}}, Options: options.Index().SetSparse(true).SetName("idx_device_fingerprint")},
 	}); err != nil {
 		return fmt.Errorf("devices indexes: %w", err)
 	}
