@@ -11,8 +11,11 @@ object OnboardingPreferences {
     internal const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
     internal const val KEY_ONBOARDING_COMPLETED_AT = "onboarding_completed_at"
 
-    /** بعد از پایان راهنما، تا این مدت یادآوری مجوز نشان داده نمی‌شود (کاربر همین الان تصمیمش را گرفته). */
-    internal const val REMINDER_GRACE_MILLIS = 24L * 60 * 60 * 1000L
+    /**
+     * بعد از پایان راهنما، تا این مدت یادآوری مجوز نشان داده نمی‌شود (کاربر همین الان تصمیمش را گرفته).
+     * یک ساعت: کافی است که کاربر چند دقیقه‌ای با برنامه کار کند، اما خیلی دیر یادآوری نمی‌شود.
+     */
+    internal const val REMINDER_GRACE_MILLIS = 60L * 60 * 1000L
 
     fun isCompleted(context: Context): Boolean {
         val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

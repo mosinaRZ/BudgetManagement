@@ -80,6 +80,12 @@ fun LoginScreen(
     val passwordFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
 
+    // The account whose session is still on this device (the one the local unlock belongs to).
+    val rememberedIdentifier = remember { rememberedLoginStore.identifier().orEmpty() }
+    // Set once the user chose to sign in to a different account: the form then acts as a full sign-in.
+    var accountSwitchRequested by remember(localUnlockOnly) { mutableStateOf(false) }
+    val unlockMode = localUnlockOnly && !accountSwitchRequested
+
     // The server ended this session (expired, or this device was removed from the account):
     // tell the user why they are back here instead of showing an unexplained login form.
     LaunchedEffect(localUnlockOnly) {
@@ -110,8 +116,46 @@ fun LoginScreen(
         onLoginSuccess()
     }
 
+    /**
+     * True when the identifier typed in unlock mode is not the account this device is unlocking.
+     * The remembered password and fingerprint belong to that account, so they must never unlock
+     * the app for a different identifier.
+     */
+    fun typedAccountDiffers(): Boolean {
+        if (!unlockMode || rememberedIdentifier.isBlank()) return false
+        val typed = AuthInputNormalizer.identifier(username) ?: username.trim()
+        return !typed.equals(rememberedIdentifier, ignoreCase = true)
+    }
+
+    /**
+     * Signs the current account out of this device (after its unsynced changes are synced; refused
+     * when that is not possible), so the user can sign in to the other account with its own password.
+     */
+    fun switchAccount() {
+        if (isLoggingIn) return
+        isLoggingIn = true
+        errorMessage = null
+        scope.launch {
+            val ready = authRepository.prepareAccountSwitch().getOrDefault(false)
+            isLoggingIn = false
+            if (ready) {
+                accountSwitchRequested = true
+            } else {
+                errorMessage = if (isPersian) {
+                    "برای ورود به حساب دیگر، ابتدا تغییرات حساب فعلی باید همگام‌سازی شود. اتصال اینترنت را بررسی کنید و دوباره تلاش کنید."
+                } else {
+                    "Before switching accounts, the current account's changes must sync. Check your connection and try again."
+                }
+            }
+        }
+    }
+
     fun startBiometricUnlock() {
         if (isLoggingIn || biometricPromptShown) return
+        if (typedAccountDiffers()) {
+            errorMessage = if (isPersian) "اثر انگشت فقط برای حساب ذخیره‌شده روی این دستگاه است. برای حساب دیگر، رمز عبورش را وارد کنید." else "Fingerprint only unlocks the account saved on this device. For another account, enter its password."
+            return
+        }
         val activity = context as? FragmentActivity
         val cipher = rememberedLoginStore.prepareDecryptionCipher()
         if (activity == null || cipher == null) {
@@ -153,6 +197,10 @@ fun LoginScreen(
 
     fun submitLocalPassword() {
         if (isLoggingIn) return
+        if (typedAccountDiffers()) {
+            switchAccount()
+            return
+        }
         if (!passwordUnlockReady) {
             errorMessage = if (isPersian) "رمز ورود محلی هنوز آماده نیست؛ یک‌بار با اتصال به سرور وارد شوید." else "Local password verification is not initialized; sign in once with the server."
             return
@@ -239,8 +287,8 @@ fun LoginScreen(
         }
     }
 
-    LaunchedEffect(localUnlockOnly, biometricReady) {
-        if (localUnlockOnly && biometricReady) {
+    LaunchedEffect(unlockMode, biometricReady) {
+        if (unlockMode && biometricReady) {
             startBiometricUnlock()
         }
     }
@@ -261,7 +309,7 @@ fun LoginScreen(
             icon = AppLogoIcon,
             title = if (isPersian) "خوش آمدید" else "Welcome back",
             subtitle = when {
-                localUnlockOnly -> if (isPersian) "برای ادامه، هویت خود را تأیید کنید" else "Verify your identity to continue"
+                unlockMode -> if (isPersian) "برای ادامه، هویت خود را تأیید کنید" else "Verify your identity to continue"
                 else -> if (isPersian) "برای ورود، مشخصات حساب خود را وارد کنید" else "Sign in with your account details"
             }
         )
@@ -270,7 +318,6 @@ fun LoginScreen(
             OutlinedTextField(
                 value = username,
                 onValueChange = { username = it; errorMessage = null },
-                readOnly = localUnlockOnly,
                 enabled = !isLoggingIn,
                 label = { Text(if (isPersian) "شماره موبایل یا ایمیل" else "Phone or email") },
                 leadingIcon = { Icon(Icons.Default.Person, null) },
@@ -292,7 +339,7 @@ fun LoginScreen(
                 shape = RoundedCornerShape(16.dp),
                 textStyle = credentialTextStyle(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
-                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus(); if (localUnlockOnly) submitLocalPassword() else submitServerLogin() }),
+                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus(); if (unlockMode) submitLocalPassword() else submitServerLogin() }),
                 visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
@@ -311,14 +358,14 @@ fun LoginScreen(
 
             LoadingButton(
                 text = when {
-                    !localUnlockOnly -> if (isPersian) "ورود به حساب" else "Sign In"
+                    !unlockMode -> if (isPersian) "ورود به حساب" else "Sign In"
                     password.isBlank() && biometricReady -> if (isPersian) "ورود با اثر انگشت" else "Sign in with fingerprint"
                     else -> if (isPersian) "ورود با رمز عبور" else "Sign in with password"
                 },
                 isLoading = isLoggingIn,
-                loadingText = if (localUnlockOnly) (if (isPersian) "در حال بررسی..." else "Verifying...") else null,
+                loadingText = if (unlockMode) (if (isPersian) "در حال بررسی..." else "Verifying...") else null,
                 onClick = when {
-                    !localUnlockOnly -> ::submitServerLogin
+                    !unlockMode -> ::submitServerLogin
                     password.isBlank() && biometricReady -> ::startBiometricUnlock
                     else -> ::submitLocalPassword
                 }

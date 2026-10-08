@@ -1608,7 +1608,7 @@ private fun TransactionRow(
     var isRevealed by remember { mutableStateOf(false) }
 
     // Three action buttons (share / edit / delete) need a wider reveal than the old two.
-    val revealOffsetDp = if (isPersian) 152.dp else (-152).dp
+    val revealOffsetDp = if (isPersian) 164.dp else (-164).dp
     val animatedOffset by animateDpAsState(
         targetValue = if (isRevealed) revealOffsetDp else 0.dp,
         label = "RevealAnimation"
@@ -1663,7 +1663,7 @@ private fun TransactionRow(
                 )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
             IconButton(
                 onClick = {
@@ -1682,7 +1682,7 @@ private fun TransactionRow(
                 )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
             IconButton(
                 onClick = {

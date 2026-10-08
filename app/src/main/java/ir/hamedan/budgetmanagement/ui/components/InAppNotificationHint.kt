@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,9 +37,71 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlin.math.ceil
+
+/**
+ * Size and timing of the hint for one notification, derived from how much text it has.
+ *
+ *  - Display time grows with the amount of text (people need time to read it), within
+ *    [MIN_DISPLAY_MS]..[MAX_DISPLAY_MS].
+ *  - Short notices use a larger island and larger letters; long notices use a wider island with
+ *    smaller letters so they fit in a few more lines instead of being cut off.
+ */
+internal data class InAppHintLayout(
+    val displayMillis: Long,
+    val expandedWidth: Dp,
+    val expandedHeight: Dp,
+    val bodyFontSize: TextUnit,
+    val bodyMaxLines: Int
+)
+
+internal const val MIN_DISPLAY_MS = 3_200L
+internal const val MAX_DISPLAY_MS = 9_000L
+
+/** Text length (title + body) at which the hint reaches its largest/widest size. */
+private const val LONG_TEXT_CHARS = 140f
+private const val MAX_BODY_LINES = 4
+private const val BASE_DISPLAY_MS = 2_400L
+private const val MS_PER_CHAR = 45L
+
+private fun lerpFloat(from: Float, to: Float, fraction: Float): Float = from + (to - from) * fraction
+
+internal fun inAppHintLayoutFor(title: String, body: String): InAppHintLayout {
+    val cleanTitle = title.trim()
+    val cleanBody = body.trim()
+    val length = cleanTitle.length + cleanBody.length
+
+    // 0 = very short notice, 1 = long notice.
+    val fraction = (length / LONG_TEXT_CHARS).coerceIn(0f, 1f)
+
+    val displayMillis = (BASE_DISPLAY_MS + length * MS_PER_CHAR).coerceIn(MIN_DISPLAY_MS, MAX_DISPLAY_MS)
+
+    val width = lerpFloat(300f, 360f, fraction)
+    val fontSp = lerpFloat(14f, 11f, fraction)
+    val lineHeightSp = fontSp * 1.35f
+
+    // Rough line estimate for the body: characters that fit on one line at this size.
+    val usableWidth = width - 70f // icon, paddings and spacing
+    val charsPerLine = (usableWidth / (fontSp * 0.55f)).coerceAtLeast(1f)
+    val bodyLines = if (cleanBody.isEmpty()) 1
+    else ceil(cleanBody.length / charsPerLine).toInt().coerceIn(1, MAX_BODY_LINES)
+
+    // Title line + gap + body lines + vertical padding.
+    val height = (14f + 16f + 2f + bodyLines * lineHeightSp + 10f).coerceAtLeast(62f)
+
+    return InAppHintLayout(
+        displayMillis = displayMillis,
+        expandedWidth = width.dp,
+        expandedHeight = height.dp,
+        bodyFontSize = fontSp.sp,
+        bodyMaxLines = bodyLines
+    )
+}
 
 /**
  * In-app notification with the same expanding/collapsing visual language as
@@ -58,16 +121,20 @@ fun InAppNotificationHint(
 ) {
     if (!visible) return
 
+    val title = if (isPersian) titleFa else titleEn
+    val body = if (isPersian) bodyFa else bodyEn
+    val layout = remember(title, body) { inAppHintLayoutFor(title, body) }
+
     var expanded by remember(visible) { mutableStateOf(false) }
     var showMessage by remember(visible) { mutableStateOf(false) }
 
     val width by animateDpAsState(
-        targetValue = if (expanded) 332.dp else 58.dp,
+        targetValue = if (expanded) layout.expandedWidth else 58.dp,
         animationSpec = tween(650, easing = FastOutSlowInEasing),
         label = "notificationHintWidth"
     )
     val height by animateDpAsState(
-        targetValue = if (expanded) 62.dp else 30.dp,
+        targetValue = if (expanded) layout.expandedHeight else 30.dp,
         animationSpec = tween(650, easing = FastOutSlowInEasing),
         label = "notificationHintHeight"
     )
@@ -82,7 +149,8 @@ fun InAppNotificationHint(
         expanded = true
         delay(520)
         showMessage = true
-        delay(4200)
+        // Time on screen depends on how much there is to read.
+        delay(layout.displayMillis)
         showMessage = false
         delay(180)
         expanded = false
@@ -158,13 +226,13 @@ fun InAppNotificationHint(
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
-                    androidx.compose.foundation.layout.Column(
+                    Column(
                         modifier = Modifier
                             .weight(1f)
                             .graphicsLayer { alpha = contentAlpha }
                     ) {
                         Text(
-                            text = if (isPersian) titleFa else titleEn,
+                            text = title,
                             color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
@@ -172,13 +240,13 @@ fun InAppNotificationHint(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = if (isPersian) bodyFa else bodyEn,
+                            text = body,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 11.sp,
-                            lineHeight = 15.sp,
+                            fontSize = layout.bodyFontSize,
+                            lineHeight = (layout.bodyFontSize.value * 1.35f).sp,
                             fontWeight = FontWeight.SemiBold,
                             textAlign = TextAlign.Start,
-                            maxLines = 3
+                            maxLines = layout.bodyMaxLines
                         )
                     }
                 }

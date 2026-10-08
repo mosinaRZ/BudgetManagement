@@ -26,7 +26,12 @@ object DeviceSecurityNotifier {
     private const val PREFS_NAME = "app_prefs"
     private const val KEY_CURSOR_PREFIX = "device_event_cursor_"
 
-    /** Blocking network call: run it off the main thread. */
+    /**
+     * Blocking network call: run it off the main thread. Synchronised because the foreground loop and
+     * the background sync can both ask for the feed at the same time; the cursor is only advanced once
+     * the alerts were handed off, so a failed poll is simply retried next time.
+     */
+    @Synchronized
     fun pollAndNotify(context: Context) {
         val app = context.applicationContext as BudgetApp
         val userId = app.container.authSessionStore.userId()?.takeIf { it.isNotBlank() } ?: return

@@ -86,10 +86,13 @@ import ir.hamedan.budgetmanagement.ui.screens.settings.NotificationCalibrationSc
 import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsScreen
 import ir.hamedan.budgetmanagement.ui.theme.BudgetManagementTheme
 import ir.hamedan.budgetmanagement.data.notification.AppNotificationManager
+import ir.hamedan.budgetmanagement.data.notification.DeviceSecurityNotifier
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Suppress("DEPRECATION")
 // 🚀 تغییر مهم: ارث‌بری از FragmentActivity برای جلوگیری از کرش اثر انگشت
@@ -203,6 +206,14 @@ class MainActivity : FragmentActivity() {
                 while (true) {
                     if (app.container.authRepository.isAuthenticated()) {
                         app.container.syncScheduler.enqueueNow()
+                        // Sign-ins and removals on the account's other devices are read from the
+                        // activity feed directly, so they are announced within about a minute while
+                        // the app is open, instead of waiting for the next background sync.
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                DeviceSecurityNotifier.pollAndNotify(applicationContext)
+                            }
+                        }
                     }
                     delay(SESSION_CHECK_INTERVAL_MS)
                 }

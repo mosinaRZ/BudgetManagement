@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Wallet
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -803,7 +804,7 @@ fun CategoryItemCard(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Icon(
-                            imageVector = AppLogoIcon,
+                            imageVector = Icons.Default.Wallet,
                             contentDescription = null,
                             tint = if (category.isExpense) {
                                 MaterialTheme.colorScheme.error.copy(alpha = 0.8f)

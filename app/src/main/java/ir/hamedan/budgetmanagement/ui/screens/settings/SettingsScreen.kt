@@ -676,6 +676,11 @@ fun SettingsScreen(
                                 icon = Icons.Default.AlternateEmail,
                                 color = Color(0xFF1DA1F2)
                             ) { openUrl(context, "https://twitter.com/CidnaApp") }
+                            SocialLinkRow(
+                                title = if (isPersian) "اینستاگرام" else "Instagram",
+                                icon = Icons.Default.CameraAlt,
+                                color = Color(0xFFE1306C)
+                            ) { openUrl(context, INSTAGRAM_URL) }
                         }
                     }
                 }
@@ -1781,6 +1786,9 @@ private fun SettingsTopBar(
         }
     }
 }
+
+/** Official Instagram page of the app. */
+private const val INSTAGRAM_URL = "https://www.instagram.com/cidnaapp"
 
 private fun openUrl(context: Context, url: String) {
     try {
