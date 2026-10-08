@@ -127,9 +127,9 @@ fun DevicesScreen(onBack: () -> Unit) {
                             thisDeviceIsPrimary ->
                                 "This is your account's primary device. Other devices can only be removed from here."
                             isPersian ->
-                                "فقط دستگاه اصلی (اولین دستگاهِ واردشده) می‌تواند دستگاه‌های دیگر را حذف کند. اگر دستگاهی را نمی‌شناسید، از دستگاه اصلی آن را حذف کنید."
+                                "فقط دستگاه اصلی (اولین دستگاهِ واردشده) می‌تواند دستگاه‌های دیگر را حذف کند. اگر دستگاهی را نمی‌شناسید، از دستگاه اصلی آن را حذف کنید. اگر دستگاه اصلی از حساب خارج شود، قدیمی‌ترین دستگاه باقی‌مانده نقش دستگاه اصلی را می‌گیرد."
                             else ->
-                                "Only the primary device (the first one that signed in) can remove other devices. If you don't recognise one, remove it from the primary device."
+                                "Only the primary device (the first one that signed in) can remove other devices. If you don't recognise one, remove it from the primary device. If the primary device signs out, the oldest remaining device becomes the primary device."
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)

@@ -8,6 +8,7 @@ import android.os.PersistableBundle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,17 +17,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -49,6 +52,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -70,6 +74,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private const val OTP_RESEND_SECONDS = 60L
+private const val REGISTRATION_STEPS = 4
 
 @Composable
 fun RegisterScreen(
@@ -84,22 +89,18 @@ fun RegisterScreen(
     val focusManager = LocalFocusManager.current
 
     var phone by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var isPasswordVisible by remember { mutableStateOf(false) }
     var phoneCode by remember { mutableStateOf("") }
-    var emailCode by remember { mutableStateOf("") }
     var phoneChallenge by remember { mutableStateOf<String?>(null) }
-    var emailChallenge by remember { mutableStateOf<String?>(null) }
     var phoneSentAt by remember { mutableLongStateOf(0L) }
-    var emailSentAt by remember { mutableLongStateOf(0L) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var recoveryKey by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
 
-    // One ticker drives both resend countdowns.
+    // One ticker drives the resend countdown.
     LaunchedEffect(Unit) {
         while (true) {
             delay(1000)
@@ -109,17 +110,29 @@ fun RegisterScreen(
     fun cooldown(sentAt: Long): Long = (OTP_RESEND_SECONDS - (now - sentAt) / 1000).coerceAtLeast(0)
 
     val normalizedPhone = AuthInputNormalizer.phone(phone)
-    val normalizedEmail = AuthInputNormalizer.email(email)
-    val emailRequested = email.isNotBlank()
     val phoneCooldown = cooldown(phoneSentAt)
-    val emailCooldown = cooldown(emailSentAt)
+    val passwordValid = password.isNotEmpty() &&
+            PasswordPolicy.validate(password, isPersian) == null &&
+            password == confirmPassword
 
-    fun requestOtp(destination: String, channel: String, onSuccess: (String) -> Unit) {
+    // Progress counts the four things the user has to get right, in order.
+    val completedSteps = listOf(
+        normalizedPhone != null,
+        phoneChallenge != null,
+        phoneCode.length == 6,
+        passwordValid
+    ).count { it }
+
+    fun requestSmsCode(destination: String) {
         loading = true
         error = null
         scope.launch {
-            authRepository.requestOtp(destination, channel, if (channel == "email") "EMAIL_VERIFICATION" else "REGISTER")
-                .onSuccess { onSuccess(it.challengeId) }
+            authRepository.requestOtp(destination, "sms", "REGISTER")
+                .onSuccess {
+                    phoneChallenge = it.challengeId
+                    phoneSentAt = System.currentTimeMillis()
+                    now = phoneSentAt
+                }
                 .onFailure { error = authErrorMessage(it, isPersian, AuthContext.OTP_REQUEST) }
             loading = false
         }
@@ -133,9 +146,6 @@ fun RegisterScreen(
             validPhone == null -> error = if (isPersian) "شماره موبایل معتبر نیست" else "Enter a valid phone number"
             challenge == null || phoneCode.length != 6 ->
                 error = if (isPersian) "کد پیامکی ۶ رقمی را وارد کنید" else "Enter the 6-digit SMS code"
-            emailRequested && normalizedEmail == null -> error = if (isPersian) "ایمیل معتبر نیست" else "Enter a valid email"
-            emailRequested && (emailChallenge == null || emailCode.length != 6) ->
-                error = if (isPersian) "کد ۶ رقمی ایمیل را وارد کنید" else "Enter the 6-digit email code"
             else -> {
                 val passwordProblem = PasswordPolicy.validate(password, isPersian)
                 if (passwordProblem != null) {
@@ -153,12 +163,10 @@ fun RegisterScreen(
                     authRepository.register(
                         AuthRepository.RegistrationInput(
                             phoneNumber = validPhone,
-                            email = normalizedEmail,
+                            email = null,
                             password = password,
                             otpChallengeId = challenge,
-                            otpCode = phoneCode,
-                            emailOtpChallengeId = emailChallenge,
-                            emailOtpCode = emailCode.takeIf { it.isNotBlank() }
+                            otpCode = phoneCode
                         )
                     )
                         .onSuccess { result -> recoveryKey = result.recoveryKey }
@@ -173,12 +181,16 @@ fun RegisterScreen(
         AuthHeader(
             icon = Icons.Default.PersonAdd,
             title = if (isPersian) "ساخت حساب کاربری" else "Create account",
-            subtitle = if (isPersian) "اطلاعات خود را وارد و شماره موبایل را تأیید کنید" else "Enter your details and verify your phone number"
+            subtitle = if (isPersian) "شماره موبایل خود را تأیید کنید و گذرواژه تعیین کنید"
+            else "Verify your phone number and choose a password"
         )
 
-        // ---- Phone
+        RegistrationProgress(completed = completedSteps, total = REGISTRATION_STEPS, isPersian = isPersian)
+        Spacer(Modifier.height(16.dp))
+
+        // ---- Step 1: phone verification
         AuthCard {
-            AuthSectionTitle(if (isPersian) "۱. شماره موبایل" else "1. Phone number")
+            AuthSectionTitle(if (isPersian) "۱. تأیید شماره موبایل" else "1. Verify your phone")
             OutlinedTextField(
                 value = phone,
                 onValueChange = {
@@ -190,7 +202,13 @@ fun RegisterScreen(
                 },
                 enabled = !loading,
                 label = { Text(if (isPersian) "شماره موبایل" else "Phone number") },
-                placeholder = { Text(if (isPersian) "مثلا: 09123456789" else "For example: 09123456789", style = credentialTextStyle(), color = Color.Gray) },
+                placeholder = {
+                    Text(
+                        if (isPersian) "مثلا: 09123456789" else "For example: 09123456789",
+                        style = credentialTextStyle(),
+                        color = Color.Gray
+                    )
+                },
                 leadingIcon = { Icon(Icons.Default.Phone, null) },
                 singleLine = true,
                 shape = RoundedCornerShape(16.dp),
@@ -201,15 +219,13 @@ fun RegisterScreen(
                 modifier = Modifier.fillMaxWidth()
             )
             OutlinedButton(
-                onClick = {
-                    normalizedPhone?.let { number ->
-                        requestOtp(number, "sms") { phoneChallenge = it; phoneSentAt = System.currentTimeMillis(); now = phoneSentAt }
-                    }
-                },
+                onClick = { normalizedPhone?.let(::requestSmsCode) },
                 enabled = !loading && normalizedPhone != null && phoneCooldown == 0L,
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth().height(52.dp)
             ) {
+                Icon(Icons.Default.Sms, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
                 Text(
                     text = when {
                         phoneCooldown > 0 -> if (isPersian) "ارسال مجدد تا $phoneCooldown ثانیه دیگر" else "Resend in ${phoneCooldown}s"
@@ -228,8 +244,8 @@ fun RegisterScreen(
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
                     textStyle = credentialTextStyle(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(onNext = { focusManager.clearFocus() }),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -237,70 +253,9 @@ fun RegisterScreen(
 
         Spacer(Modifier.height(16.dp))
 
-        // ---- Email (optional)
+        // ---- Step 2: password
         AuthCard {
-            AuthSectionTitle(if (isPersian) "۲. ایمیل (اختیاری)" else "2. Email (optional)")
-            OutlinedTextField(
-                value = email,
-                onValueChange = {
-                    email = it
-                    emailChallenge = null
-                    emailCode = ""
-                    error = null
-                },
-                enabled = !loading,
-                label = { Text(if (isPersian) "ایمیل" else "Email") },
-                leadingIcon = { Icon(Icons.Default.Email, null) },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                textStyle = credentialTextStyle(),
-                isError = emailRequested && normalizedEmail == null,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
-                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                modifier = Modifier.fillMaxWidth()
-            )
-            if (emailRequested) {
-                OutlinedButton(
-                    onClick = {
-                        normalizedEmail?.let { address ->
-                            requestOtp(address, "email") { emailChallenge = it; emailSentAt = System.currentTimeMillis(); now = emailSentAt }
-                        }
-                    },
-                    enabled = !loading && normalizedEmail != null && emailCooldown == 0L,
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth().height(52.dp)
-                ) {
-                    Text(
-                        text = when {
-                            emailCooldown > 0 -> if (isPersian) "ارسال مجدد تا $emailCooldown ثانیه دیگر" else "Resend in ${emailCooldown}s"
-                            emailChallenge != null -> if (isPersian) "ارسال مجدد کد ایمیل" else "Resend email code"
-                            else -> if (isPersian) "ارسال کد ایمیل" else "Send email code"
-                        },
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                if (emailChallenge != null) {
-                    OutlinedTextField(
-                        value = emailCode,
-                        onValueChange = { emailCode = AuthInputNormalizer.otpCode(it); error = null },
-                        enabled = !loading,
-                        label = { Text(if (isPersian) "کد ایمیل" else "Email code") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
-                        textStyle = credentialTextStyle(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // ---- Password
-        AuthCard {
-            AuthSectionTitle(if (isPersian) "۳. گذرواژه" else "3. Password")
+            AuthSectionTitle(if (isPersian) "۲. تعیین گذرواژه" else "2. Choose a password")
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it.take(PasswordPolicy.MAX_LENGTH + 1); error = null },
@@ -369,6 +324,46 @@ fun RegisterScreen(
 
     recoveryKey?.let { key ->
         RecoveryKeyDialog(recoveryKey = key, isPersian = isPersian, onConfirmed = onRegistered)
+    }
+}
+
+/** Thin progress bar with a count, so the user always sees how close the account is to being created. */
+@Composable
+private fun RegistrationProgress(completed: Int, total: Int, isPersian: Boolean) {
+    val done = completed == total
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = if (isPersian) "پیشرفت ثبت‌نام" else "Registration progress",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.weight(1f)
+            )
+            if (done) {
+                Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+            }
+            Text(
+                text = if (isPersian) "$completed از $total" else "$completed of $total",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(completed.toFloat() / total)
+                    .height(6.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+            )
+        }
     }
 }
 
