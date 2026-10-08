@@ -384,6 +384,18 @@ func (s *ServiceImpl) Logout(ctx context.Context, raw string) error {
 	if _, err := s.users.IncrementSessionVersion(ctx, token.UserID); err != nil {
 		return err
 	}
+	// Signing out gives up this device's place on the account. Its row is removed so the remaining
+	// devices can take over: the earliest-registered device left becomes the primary device.
+	if s.devices != nil && token.DeviceID != "" {
+		if err := s.refresh.RevokeByUserAndDevice(ctx, token.UserID, token.DeviceID); err != nil {
+			return err
+		}
+		if err := s.devices.Revoke(ctx, token.UserID, token.DeviceID); err != nil {
+			if code, ok := apperror.CodeOf(err); !ok || code != apperror.CodeNotFound {
+				return err
+			}
+		}
+	}
 	return nil
 }
 func (s *ServiceImpl) PrepareRecovery(ctx context.Context, in PrepareRecoveryInput) (PrepareRecoveryOutput, error) {
@@ -708,15 +720,16 @@ func (s *ServiceImpl) registerDevice(ctx context.Context, userID, deviceID strin
 	if s.devices == nil {
 		return nil
 	}
+	record := newDeviceRecord(deviceID, userID, now, info)
 	known := true
 	if s.deviceEvents != nil {
 		exists, err := s.devices.Exists(ctx, userID, deviceID)
 		if err != nil {
 			return err
 		}
-		known = exists
+		// A reinstalled app that comes back under a new device id is the same device, not a new one.
+		known = exists || s.sameInstallationStored(ctx, userID, deviceID, record.Fingerprint)
 	}
-	record := newDeviceRecord(deviceID, userID, now, info)
 	if err := s.devices.Register(ctx, record); err != nil {
 		return err
 	}
@@ -739,11 +752,30 @@ func (s *ServiceImpl) registerDevice(ctx context.Context, userID, deviceID strin
 	return nil
 }
 
+// sameInstallationStored reports whether the account already holds a row for the same installation
+// under a different device id, which happens after a reinstall or a cleared-data reset.
+func (s *ServiceImpl) sameInstallationStored(ctx context.Context, userID, deviceID, fingerprint string) bool {
+	if fingerprint == "" {
+		return false
+	}
+	list, err := s.devices.List(ctx, userID)
+	if err != nil {
+		return false
+	}
+	for _, d := range list {
+		if d != nil && d.ID != deviceID && d.Fingerprint == fingerprint {
+			return true
+		}
+	}
+	return false
+}
+
 // newDeviceRecord builds the device row for a successful authentication. Descriptive
 // values come from the client and are sanitised by ApplyMetadata.
 func newDeviceRecord(deviceID, userID string, now time.Time, info DeviceInfo) *entity.Device {
 	d := &entity.Device{ID: deviceID, UserID: userID, CreatedAt: now, LastSeenAt: now}
 	d.ApplyMetadata(info.Name, info.Model, info.Platform, info.OSVersion, info.AppVersion, info.IP)
+	d.SetFingerprint(info.Fingerprint)
 	return d
 }
 

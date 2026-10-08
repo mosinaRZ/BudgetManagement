@@ -23,7 +23,28 @@ func NewDeviceRepository(db *mongo.Database) *deviceRepo {
 	return &deviceRepo{c: db.Collection(devicesCollectionName)}
 }
 func (r *deviceRepo) Register(ctx context.Context, d *entity.Device) error {
+	createdAt := d.CreatedAt
+	if d.Fingerprint != "" {
+		// The same installation can come back under a new device id (reinstall, cleared data). Its stale
+		// row is replaced instead of being counted twice, and the new row inherits the earlier
+		// registration time so the device keeps its place, including primary status.
+		stale := bson.M{"userId": d.UserID, "fingerprint": d.Fingerprint, "deviceId": bson.M{"$ne": d.ID}}
+		var old deviceModel
+		err := r.c.FindOne(ctx, stale, options.FindOne().SetSort(bson.D{{Key: "createdAt", Value: 1}})).Decode(&old)
+		switch {
+		case err == nil:
+			createdAt = old.CreatedAt
+			if _, delErr := r.c.DeleteMany(ctx, stale); delErr != nil {
+				return apperror.ErrInternal("failed to replace stale device", delErr)
+			}
+		case err != mongo.ErrNoDocuments:
+			return apperror.ErrInternal("failed to look up device", err)
+		}
+	}
 	set := bson.M{"lastSeenAt": d.LastSeenAt}
+	if d.Fingerprint != "" {
+		set["fingerprint"] = d.Fingerprint
+	}
 	// Descriptive metadata is only overwritten when the client actually supplied it,
 	// so a sign-in from an older client can never erase details that are already known.
 	for key, value := range map[string]string{
@@ -38,7 +59,7 @@ func (r *deviceRepo) Register(ctx context.Context, d *entity.Device) error {
 			set[key] = value
 		}
 	}
-	_, err := r.c.UpdateOne(ctx, bson.M{"userId": d.UserID, "deviceId": d.ID}, bson.M{"$set": set, "$setOnInsert": bson.M{"userId": d.UserID, "deviceId": d.ID, "createdAt": d.CreatedAt}}, options.Update().SetUpsert(true))
+	_, err := r.c.UpdateOne(ctx, bson.M{"userId": d.UserID, "deviceId": d.ID}, bson.M{"$set": set, "$setOnInsert": bson.M{"userId": d.UserID, "deviceId": d.ID, "createdAt": createdAt}}, options.Update().SetUpsert(true))
 	if err != nil {
 		return apperror.ErrInternal("failed to register device", err)
 	}
@@ -90,24 +111,25 @@ func (r *deviceRepo) Primary(ctx context.Context, userID string) (*entity.Device
 }
 
 type deviceModel struct {
-	ID         primitive.ObjectID `bson:"_id"`
-	UserID     string             `bson:"userId"`
-	DeviceID   string             `bson:"deviceId"`
-	Name       string             `bson:"name"`
-	Model      string             `bson:"model"`
-	Platform   string             `bson:"platform"`
-	OSVersion  string             `bson:"osVersion"`
-	AppVersion string             `bson:"appVersion"`
-	LastIP     string             `bson:"lastIp"`
-	LastSeenAt time.Time          `bson:"lastSeenAt"`
-	CreatedAt  time.Time          `bson:"createdAt"`
+	ID          primitive.ObjectID `bson:"_id"`
+	UserID      string             `bson:"userId"`
+	DeviceID    string             `bson:"deviceId"`
+	Name        string             `bson:"name"`
+	Model       string             `bson:"model"`
+	Platform    string             `bson:"platform"`
+	OSVersion   string             `bson:"osVersion"`
+	AppVersion  string             `bson:"appVersion"`
+	LastIP      string             `bson:"lastIp"`
+	Fingerprint string             `bson:"fingerprint,omitempty"`
+	LastSeenAt  time.Time          `bson:"lastSeenAt"`
+	CreatedAt   time.Time          `bson:"createdAt"`
 }
 
 func (m deviceModel) toEntity() *entity.Device {
 	return &entity.Device{
 		ID: m.DeviceID, UserID: m.UserID,
 		Name: m.Name, Model: m.Model, Platform: m.Platform, OSVersion: m.OSVersion, AppVersion: m.AppVersion, LastIP: m.LastIP,
-		LastSeenAt: m.LastSeenAt, CreatedAt: m.CreatedAt,
+		LastSeenAt: m.LastSeenAt, CreatedAt: m.CreatedAt, Fingerprint: m.Fingerprint,
 	}
 }
 

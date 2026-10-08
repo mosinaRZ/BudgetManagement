@@ -336,7 +336,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 func deviceInfoFrom(r *http.Request, in *dto.DeviceInfoRequest) auth.DeviceInfo {
 	info := auth.DeviceInfo{}
 	if in != nil {
-		info = auth.DeviceInfo{Name: in.Name, Model: in.Model, Platform: in.Platform, OSVersion: in.OSVersion, AppVersion: in.AppVersion}
+		info = auth.DeviceInfo{Name: in.Name, Model: in.Model, Platform: in.Platform, OSVersion: in.OSVersion, AppVersion: in.AppVersion, Fingerprint: in.Fingerprint}
 	}
 	if ip, ok := contextkeys.ClientIP(r.Context()); ok {
 		info.IP = ip
