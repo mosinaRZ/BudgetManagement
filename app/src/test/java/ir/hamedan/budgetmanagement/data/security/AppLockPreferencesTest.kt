@@ -32,4 +32,23 @@ class AppLockPreferencesTest {
 
         assertThat(preferences.shouldLockNow(999_999L)).isFalse()
     }
+    @Test fun timeSpentInForegroundDoesNotAccumulateTowardLockTimeout() {
+        preferences.markBackgrounded(1_000L)
+        assertThat(preferences.shouldLockNow(30_000L)).isFalse()
+
+        // The app resumes before the timeout; its previous background interval is discarded.
+        preferences.markForegrounded()
+        assertThat(preferences.shouldLockNow(500_000L)).isFalse()
+    }
+
+    @Test fun expiredBackgroundIntervalStillRequiresLockAfterResume() {
+        preferences.markBackgrounded(1_000L)
+        if (preferences.shouldLockNow(121_000L)) {
+            preferences.markLockRequired()
+        }
+        preferences.markForegrounded()
+
+        assertThat(preferences.shouldLockNow(500_000L)).isTrue()
+    }
+
 }

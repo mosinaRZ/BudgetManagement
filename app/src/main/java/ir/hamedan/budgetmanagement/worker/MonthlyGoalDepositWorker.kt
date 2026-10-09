@@ -10,16 +10,12 @@ import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import kotlinx.coroutines.flow.first
-import java.util.concurrent.TimeUnit
+import java.util.Calendar
 
 class MonthlyGoalDepositWorker(
     context: Context,
     params: WorkerParameters
 ) : CoroutineWorker(context, params) {
-
-    companion object {
-        private const val DAYS_THRESHOLD = 30L
-    }
 
     override suspend fun doWork(): Result {
         val app = applicationContext as BudgetApp
@@ -49,61 +45,80 @@ class MonthlyGoalDepositWorker(
         var currentBalance = transactionRepository.getCurrentBalance()
         val now = System.currentTimeMillis()
 
+        val today = Calendar.getInstance().apply { timeInMillis = now }
+        val year = today.get(Calendar.YEAR)
+        val month = today.get(Calendar.MONTH)
+        val dayOfMonth = today.get(Calendar.DAY_OF_MONTH)
+
         for (goal in goals) {
-            if (goal.monthlyAmount <= 0) continue
+            if (goal.monthlyAmount <= 0L) continue
 
-            val daysSinceLastDeposit = if (goal.lastAutoDepositTimestamp == 0L) {
-                DAYS_THRESHOLD // اولین بار اجازه بده
-            } else {
-                TimeUnit.MILLISECONDS.toDays(now - goal.lastAutoDepositTimestamp)
-            }
+            // The monthly due date is the day of month on which the goal was created.
+            // Clamp dates such as the 31st to the final day of shorter months.
+            val created = Calendar.getInstance().apply { timeInMillis = goal.createdAt }
+            val preferredDay = created.get(Calendar.DAY_OF_MONTH)
+            val dueDay = preferredDay.coerceAtMost(today.getActualMaximum(Calendar.DAY_OF_MONTH))
+            if (dayOfMonth < dueDay) continue
 
-            if (daysSinceLastDeposit < DAYS_THRESHOLD) continue
+            val alreadyProcessedThisMonth = goal.lastAutoDepositTimestamp > 0L &&
+                    Calendar.getInstance().apply { timeInMillis = goal.lastAutoDepositTimestamp }.let {
+                        it.get(Calendar.YEAR) == year && it.get(Calendar.MONTH) == month
+                    }
+            if (alreadyProcessedThisMonth) continue
 
+            val monthTag = "%04d-%02d".format(year, month + 1)
             if (currentBalance < goal.monthlyAmount) {
                 NotificationHelper.send(
                     context = applicationContext,
                     notificationType = NotificationType.GOAL_AUTO_DEPOSIT,
                     type = "WARNING",
-                    titleFa = "موجودی ناکافی برای قلک",
-                    titleEn = "Insufficient Balance for Goal",
-                    descFa = "موجودی کافی برای واریز ماهانه به «${goal.title}» وجود ندارد.",
-                    descEn = "Not enough balance to deposit monthly amount to \"${goal.title}\".",
-                    tag = "GOAL_AUTO_FAIL_${goal.id}"
+                    titleFa = "واریز ماهانه قلک انجام نشد",
+                    titleEn = "Monthly Goal Deposit Skipped",
+                    descFa = "برای واریز ${goal.monthlyAmount} به قلک «${goal.title}» در روز $dueDay ماه، موجودی کافی نیست. پس از تأمین موجودی، واریز در اجرای بعدی دوباره بررسی می‌شود.",
+                    descEn = "The balance is too low to deposit ${goal.monthlyAmount} to \"${goal.title}\" on day $dueDay. The deposit will be retried automatically when the worker runs again.",
+                    tag = "GOAL_AUTO_FAIL_${goal.id}_$monthTag"
                 )
                 continue
             }
 
-            // واریز مبلغ به قلک
-            goalRepository.depositToGoal(goal.id, goal.monthlyAmount)
-
-            currentBalance -= goal.monthlyAmount
-
-            // ثبت تراکنش با همان دسته‌بندی سیستمی SAVING_GOAL.
-            transactionRepository.insertTransaction(
-                TransactionEntity(
-                    title = if (isPersian) "واریز خودکار ماهانه به قلک: ${goal.title}"
-                    else "Auto Monthly Deposit to: ${goal.title}",
-                    amount = goal.monthlyAmount,
-                    categoryId = savingGoalCategory.id,
-                    type = "EXPENSE",
-                    note = if (isPersian) "واریز خودکار ماهانه" else "Automatic monthly deposit"
+            try {
+                goalRepository.depositToGoal(goal.id, goal.monthlyAmount)
+                transactionRepository.insertTransaction(
+                    TransactionEntity(
+                        title = if (isPersian) "واریز خودکار ماهانه به قلک: ${goal.title}"
+                        else "Auto Monthly Deposit to: ${goal.title}",
+                        amount = goal.monthlyAmount,
+                        categoryId = savingGoalCategory.id,
+                        type = "EXPENSE",
+                        note = if (isPersian) "واریز خودکار ماهانه" else "Automatic monthly deposit"
+                    )
                 )
-            )
+                goalRepository.updateLastAutoDepositTimestamp(goal.id, now)
+                currentBalance -= goal.monthlyAmount
 
-            // فقط بعد از ثبت موفق تراکنش، زمان آخرین واریز را ثبت کن.
-            goalRepository.updateLastAutoDepositTimestamp(goal.id, now)
-
-            NotificationHelper.send(
-                context = applicationContext,
-                notificationType = NotificationType.GOAL_AUTO_DEPOSIT,
-                type = "SUCCESS",
-                titleFa = "واریز خودکار ماهانه",
-                titleEn = "Auto Monthly Deposit",
-                descFa = "مبلغ ${goal.monthlyAmount.toLong()} به قلک «${goal.title}» واریز شد.",
-                descEn = "Amount ${goal.monthlyAmount.toLong()} deposited to \"${goal.title}\".",
-                tag = "GOAL_AUTO_SUCCESS_${goal.id}"
-            )
+                NotificationHelper.send(
+                    context = applicationContext,
+                    notificationType = NotificationType.GOAL_AUTO_DEPOSIT,
+                    type = "SUCCESS",
+                    titleFa = "واریز خودکار ماهانه انجام شد",
+                    titleEn = "Monthly Goal Deposit Completed",
+                    descFa = "مبلغ ${goal.monthlyAmount} در روز $dueDay ماه به قلک «${goal.title}» واریز شد.",
+                    descEn = "${goal.monthlyAmount} was deposited to \"${goal.title}\" on day $dueDay of the month.",
+                    tag = "GOAL_AUTO_SUCCESS_${goal.id}_$monthTag"
+                )
+            } catch (error: Exception) {
+                NotificationHelper.send(
+                    context = applicationContext,
+                    notificationType = NotificationType.GOAL_AUTO_DEPOSIT,
+                    type = "WARNING",
+                    titleFa = "خطا در واریز ماهانه قلک",
+                    titleEn = "Monthly Goal Deposit Error",
+                    descFa = "واریز ماهانه قلک «${goal.title}» کامل نشد. لطفاً تراکنش‌ها و موجودی را بررسی کنید؛ برنامه دوباره تلاش خواهد کرد.",
+                    descEn = "The monthly deposit to \"${goal.title}\" did not complete. Please review the balance and transactions; the app will retry.",
+                    tag = "GOAL_AUTO_ERROR_${goal.id}_$monthTag"
+                )
+                return Result.retry()
+            }
         }
 
         return Result.success()

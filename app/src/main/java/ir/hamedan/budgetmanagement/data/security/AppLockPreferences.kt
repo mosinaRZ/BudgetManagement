@@ -17,6 +17,11 @@ class AppLockPreferences(context: Context) {
         prefs.edit().putLong(KEY_BACKGROUND_AT, timestamp).apply()
     }
 
+    /** Clears only the background timestamp when returning before the timeout. */
+    fun markForegrounded() {
+        prefs.edit().remove(KEY_BACKGROUND_AT).apply()
+    }
+
     fun shouldLockNow(now: Long = System.currentTimeMillis()): Boolean {
         if (prefs.getBoolean(KEY_LOCK_REQUIRED, false)) return true
 
