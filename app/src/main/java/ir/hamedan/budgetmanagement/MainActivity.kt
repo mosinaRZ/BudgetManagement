@@ -394,7 +394,18 @@ class MainActivity : FragmentActivity() {
                             appLockPreferences.markBackgrounded(System.currentTimeMillis())
                         }
                     }
-                    Lifecycle.Event.ON_START -> lifecycleResumeTrigger++
+                    Lifecycle.Event.ON_START -> {
+                        if (sessionAuthenticated) {
+                            if (appLockPreferences.shouldLockNow()) {
+                                appLockPreferences.markLockRequired()
+                            } else {
+                                // Prevent an old, short background interval from accumulating
+                                // while the user is actively using the app.
+                                appLockPreferences.markForegrounded()
+                            }
+                        }
+                        lifecycleResumeTrigger++
+                    }
                     else -> Unit
                 }
             }

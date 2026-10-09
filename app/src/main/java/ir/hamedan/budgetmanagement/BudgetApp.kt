@@ -11,7 +11,6 @@ import androidx.work.WorkManager
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.preferences.AppUsagePreferences
 import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
-import ir.hamedan.budgetmanagement.data.preferences.CategorySeedPreferences
 import ir.hamedan.budgetmanagement.di.AppContainer
 import ir.hamedan.budgetmanagement.data.notification.AppNotificationManager
 import ir.hamedan.budgetmanagement.worker.InactivityReminderWorker
@@ -84,35 +83,45 @@ class BudgetApp : Application() {
         }
     }
 
-    // ساخت دسته‌بندی‌های پیش‌فرض، فقط یک‌بار در طول عمر نصب اپ.
-    // منتقل‌شده از AddViewModel تا دیگر وابسته به این نباشد که
-    // کاربر وارد کدام صفحه شده، و اگر کاربر بعداً یکی از این
-    // دسته‌بندی‌ها را حذف کند، دوباره ساخته نشود.
-    suspend fun seedDefaultCategoriesIfNeeded() {
-        if (CategorySeedPreferences.isSeeded(this)) return
+    /**
+     * Seed built-in categories by stable identity, not by an installation-wide flag.
+     * Pull existing account data first so a second device reuses the account's
+     * canonical categories instead of creating another set with random UUIDs.
+     */
+    suspend fun seedDefaultCategoriesIfNeeded() = withContext(Dispatchers.IO) {
+        if (container.authRepository.isAuthenticated()) {
+            runCatching { container.syncEngine.sync() }
+        }
 
-        withContext(Dispatchers.IO) {
-            val defaultCategories = listOf(
-                CategoryEntity(title = "FOOD", iconEmoji = "🍕", isExpense = true),
-                CategoryEntity(title = "TRANSPORT", iconEmoji = "🚗", isExpense = true),
-                CategoryEntity(title = "SHOPPING", iconEmoji = "🛍️", isExpense = true),
-                CategoryEntity(title = "BILL", iconEmoji = "📄", isExpense = true),
-                CategoryEntity(title = "DEBT_CREDIT_PAYABLE", iconEmoji = "💸", isExpense = true, isSystem = true), // بدهی
-                CategoryEntity(title = "SALARY", iconEmoji = "💰", isExpense = false),
-                CategoryEntity(title = "INVESTMENT", iconEmoji = "📈", isExpense = false),
-                CategoryEntity(title = "DEBT_CREDIT_RECEIVABLE", iconEmoji = "📥", isExpense = false, isSystem = true), // طلب
-                CategoryEntity(title = "SAVING_GOAL", iconEmoji = "🐷", isExpense = true, isSystem = true) // قلک/پس‌انداز ← جدید
-            )
-
-            val currentCategories = container.categoryRepository.getAllCategories().first()
-
-            defaultCategories.forEach { category ->
-                if (currentCategories.none { it.title == category.title }) {
-                    container.categoryRepository.insertCategory(category)
-                }
+        val definitions = listOf(
+            Triple("FOOD", "🍕", true),
+            Triple("TRANSPORT", "🚗", true),
+            Triple("SHOPPING", "🛍️", true),
+            Triple("BILL", "📄", true),
+            Triple("DEBT_CREDIT_PAYABLE", "💸", true),
+            Triple("SALARY", "💰", false),
+            Triple("INVESTMENT", "📈", false),
+            Triple("DEBT_CREDIT_RECEIVABLE", "📥", false),
+            Triple("SAVING_GOAL", "🐷", true)
+        )
+        val systemTitles = setOf("DEBT_CREDIT_PAYABLE", "DEBT_CREDIT_RECEIVABLE", "SAVING_GOAL")
+        val currentCategories = container.categoryRepository.getAllCategories().first()
+        definitions.forEach { (title, emoji, isExpense) ->
+            if (currentCategories.none { it.title == title }) {
+                // Stable IDs make simultaneous first sign-ins on different devices converge.
+                val stableId = java.util.UUID.nameUUIDFromBytes(
+                    "budget-management:default-category:$title".toByteArray(Charsets.UTF_8)
+                ).toString()
+                container.categoryRepository.insertCategory(
+                    CategoryEntity(
+                        id = stableId,
+                        title = title,
+                        iconEmoji = emoji,
+                        isExpense = isExpense,
+                        isSystem = title in systemTitles
+                    )
+                )
             }
-
-            CategorySeedPreferences.setSeeded(this@BudgetApp)
         }
     }
 

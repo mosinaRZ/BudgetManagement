@@ -951,6 +951,18 @@ fun SavingGoalItemCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                val scheduledDay = remember(goal.createdAt) {
+                    java.util.Calendar.getInstance().apply { timeInMillis = goal.createdAt }
+                        .get(java.util.Calendar.DAY_OF_MONTH)
+                }
+                Text(
+                    text = if (isPersian)
+                        "روز واریز ماهانه: ${numberFormatter.format(scheduledDay)} هر ماه (در ماه‌های کوتاه، روز آخر ماه)"
+                    else
+                        "Monthly deposit day: ${scheduledDay} of each month (last day in shorter months)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
             }
 
             Row(
