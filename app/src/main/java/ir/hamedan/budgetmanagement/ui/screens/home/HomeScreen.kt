@@ -698,7 +698,7 @@ fun HomeScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(text = "🎯", fontSize = MaterialTheme.typography.titleLarge.fontSize)
+                                    Icon(painterResource(R.drawable.ic_goal), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
                                     Spacer(Modifier.width(8.dp))
                                     Column {
                                         Text(text = if (isPersian) "قلک‌های پس‌انداز" else "Savings Goals", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
@@ -780,7 +780,7 @@ fun HomeScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(text = "⚠️", fontSize = MaterialTheme.typography.titleLarge.fontSize)
+                                    Icon(painterResource(R.drawable.ic_limit), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
                                     Spacer(Modifier.width(8.dp))
                                     Column {
                                         Text(text = if (isPersian) "محدودیت‌های خرج‌کرد" else "Expense Limits", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
@@ -895,7 +895,7 @@ fun HomeScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(text = "📅", fontSize = MaterialTheme.typography.titleLarge.fontSize)
+                                    Icon(painterResource(R.drawable.ic_debtcredit), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
                                     Spacer(Modifier.width(8.dp))
                                     Column {
                                         Text(text = if (isPersian) "بدهی و طلب‌ها" else "Debts & Credits", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
@@ -1328,7 +1328,7 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    Icon(imageVector = Icons.Default.Widgets, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
+                    Icon(painterResource(R.drawable.ic_widget), contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(text = if (isPersian) "ویجت موجودی را اضافه کنید" else "Add Balance Widget", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
                 }

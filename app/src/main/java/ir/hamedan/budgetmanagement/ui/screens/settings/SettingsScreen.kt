@@ -31,6 +31,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.annotation.DrawableRes
+import ir.hamedan.budgetmanagement.R
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -43,6 +46,7 @@ import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
@@ -330,7 +334,7 @@ fun SettingsScreen(
                     SettingsAccordionItem(
                         title = if (isPersian) "واحد پولی" else "Currency",
                         subtitle = if (isPersian) "نمایش مبالغ بر اساس تومان یا ریال" else "Display amounts in Toman or Rial",
-                        icon = Icons.Default.CurrencyExchange,
+                        iconRes = R.drawable.ic_currency,
                         isExpanded = activeMenu == SettingsMenu.CURRENCY,
                         onClick = { activeMenu = if (activeMenu == SettingsMenu.CURRENCY) SettingsMenu.NONE else SettingsMenu.CURRENCY }
                     ) {
@@ -478,7 +482,7 @@ fun SettingsScreen(
                     SettingsSimpleItem(
                         title = if (isPersian) "مدیریت دسته‌بندی‌ها" else "Manage Categories",
                         subtitle = if (isPersian) "ویرایش، حذف یا ایجاد دسته‌های خرید و فروش" else "Edit, delete, or create transaction categories",
-                        icon = Icons.Default.Category,
+                        iconRes = R.drawable.ic_category,
                         onClick = { onAddScreenClick() }
                     )
                 }
@@ -648,8 +652,8 @@ fun SettingsScreen(
                         ) {
                             SocialLinkRow(
                                 title = if (isPersian) "پشتیبانی جیمیل" else "Gmail Support",
-                                icon = Icons.Default.Email,
-                                color = Color(0xFFD44638)
+                                iconRes = R.drawable.ic_gmail,
+                                color = Color(0xFFEA4335)
                             ) {
                                 val email = "cidna.app@gmail.com"
                                 val intent = Intent(Intent.ACTION_SENDTO).apply {
@@ -668,19 +672,19 @@ fun SettingsScreen(
                             }
                             SocialLinkRow(
                                 title = if (isPersian) "واتس‌اپ توسعه‌دهنده" else "WhatsApp Contact",
-                                icon = Icons.Default.Phone,
+                                iconRes = R.drawable.ic_whatsapp,
                                 color = Color(0xFF25D366)
                             ) { openUrl(context, "https://wa.me/989180500841") }
                             SocialLinkRow(
-                                title = if (isPersian) "توییتر (ایکس)" else "Twitter (X)",
-                                icon = Icons.Default.AlternateEmail,
-                                color = Color(0xFF1DA1F2)
+                                title = if (isPersian) "ایکس (توییتر)" else "X (Twitter)",
+                                iconRes = R.drawable.ic_x,
+                                color = Color(0xFF000000)
                             ) { openUrl(context, "https://twitter.com/CidnaApp") }
                             SocialLinkRow(
                                 title = if (isPersian) "اینستاگرام" else "Instagram",
-                                icon = Icons.Default.CameraAlt,
-                                color = Color(0xFFE1306C)
-                            ) { openUrl(context, INSTAGRAM_URL) }
+                                iconRes = R.drawable.ic_instagram,
+                                color = Color(0xFFFF0069)
+                            ) { openUrl(context, "https://www.instagram.com/cidnaapp") }
                         }
                     }
                 }
@@ -1071,7 +1075,8 @@ private fun CurrencyOrLanguageOptionButton(
 private fun SettingsAccordionItem(
     title: String,
     subtitle: String,
-    icon: ImageVector,
+    icon: ImageVector? = null,
+    @DrawableRes iconRes: Int? = null,
     isExpanded: Boolean,
     onClick: () -> Unit,
     content: @Composable () -> Unit
@@ -1097,11 +1102,11 @@ private fun SettingsAccordionItem(
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
+                SettingsItemIcon(
+                    icon = icon,
+                    iconRes = iconRes,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
+                    size = 20.dp
                 )
             }
 
@@ -1141,11 +1146,37 @@ private fun SettingsAccordionItem(
     }
 }
 
+/** Renders a settings icon from either a Material vector or a drawable resource. */
+@Composable
+private fun SettingsItemIcon(
+    icon: ImageVector?,
+    @DrawableRes iconRes: Int?,
+    tint: Color,
+    size: Dp
+) {
+    if (iconRes != null) {
+        Icon(
+            painter = painterResource(id = iconRes),
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(size)
+        )
+    } else if (icon != null) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(size)
+        )
+    }
+}
+
 @Composable
 private fun SettingsSimpleItem(
     title: String,
     subtitle: String,
-    icon: ImageVector,
+    icon: ImageVector? = null,
+    @DrawableRes iconRes: Int? = null,
     onClick: () -> Unit
 ) {
     val cardShape = RoundedCornerShape(20.dp)
@@ -1165,11 +1196,11 @@ private fun SettingsSimpleItem(
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
+            SettingsItemIcon(
+                icon = icon,
+                iconRes = iconRes,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
+                size = 20.dp
             )
         }
 
@@ -1642,7 +1673,7 @@ private fun ExportButton(
 @Composable
 private fun SocialLinkRow(
     title: String,
-    icon: ImageVector,
+    @DrawableRes iconRes: Int,
     color: Color,
     onClick: () -> Unit
 ) {
@@ -1660,7 +1691,12 @@ private fun SocialLinkRow(
                 .background(color.copy(alpha = 0.12f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Icon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(16.dp)
+            )
         }
         Spacer(modifier = Modifier.width(12.dp))
         Text(text = title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
@@ -1786,9 +1822,6 @@ private fun SettingsTopBar(
         }
     }
 }
-
-/** Official Instagram page of the app. */
-private const val INSTAGRAM_URL = "https://www.instagram.com/cidnaapp"
 
 private fun openUrl(context: Context, url: String) {
     try {

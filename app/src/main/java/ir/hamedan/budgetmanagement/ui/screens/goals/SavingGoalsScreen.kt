@@ -267,7 +267,7 @@ fun SavingGoalsScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
                             ) {
-                                Text(text = "🪙", fontSize = 56.sp)
+                                Icon(painterResource(R.drawable.ic_goal), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(52.dp))
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Text(
                                     text = if (isPersian) "هنوز هیچ قلکی نساختی!" else "No Savings Goals Yet!",

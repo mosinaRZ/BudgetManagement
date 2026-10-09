@@ -1,5 +1,6 @@
 package ir.hamedan.budgetmanagement.ui.screens.add
 
+import androidx.annotation.DrawableRes
 import ir.hamedan.budgetmanagement.di.appViewModel
 
 import androidx.compose.animation.core.*
@@ -24,8 +25,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -57,7 +59,7 @@ data class AddOptionItem(
     val id: String,
     val titleFa: String,
     val titleEn: String,
-    val icon: ImageVector,
+    @DrawableRes val iconRes: Int,
     val descriptionFa: String,
     val descriptionEn: String,
     val route: String
@@ -177,23 +179,23 @@ fun AddScreen(
         listOf(
             AddOptionItem(
                 "transaction", "ثبت تراکنش", "Add Transaction",
-                Icons.Default.SwapHoriz, "ثبت خرید یا درآمد جدید", "Add expense or income", "add_transaction"
+                R.drawable.ic_transaction, "ثبت خرید یا درآمد جدید", "Add expense or income", "add_transaction"
             ),
             AddOptionItem(
                 "piggy", "مدیریت قلک‌ها", "Manage Goals",
-                Icons.Default.StarBorder, "ایجاد یا ویرایش اهداف", "Create or edit savings targets", "add_goal"
+                R.drawable.ic_goal, "ایجاد یا ویرایش اهداف", "Create or edit savings targets", "add_goal"
             ),
             AddOptionItem(
                 "category", "مدیریت دسته‌بندی‌ها", "Manage Categories",
-                Icons.Default.Category, "مدیریت دسته‌ها", "Manage categories", "add_category"
+                R.drawable.ic_category, "مدیریت دسته‌ها", "Manage categories", "add_category"
             ),
             AddOptionItem(
                 "limit", "مدیریت محدودیت‌های مالی", "Manage Budget Limits",
-                Icons.Default.Warning, "تعیین یا ویرایش سقف بودجه", "Set or edit budget ceilings", "add_limit"
+                R.drawable.ic_limit, "تعیین یا ویرایش سقف بودجه", "Set or edit budget ceilings", "add_limit"
             ),
             AddOptionItem(
                 "debtcredit", "بدهی و طلب", "Debts & Credits",
-                Icons.Default.AccountBalance, "مدیریت بدهی‌ها و طلب‌ها", "Manage debts and credits", "add_debtcredit"
+                R.drawable.ic_debtcredit, "مدیریت بدهی‌ها و طلب‌ها", "Manage debts and credits", "add_debtcredit"
             )
         )
     }
@@ -269,7 +271,7 @@ fun AddScreen(
                             verticalArrangement = Arrangement.Center,
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            Icon(option.icon, null, modifier = Modifier.size(36.dp), tint = if (isTargetHighlight) MaterialTheme.colorScheme.primary else contentColor)
+                            AddOptionIcon(option = option, tint = if (isTargetHighlight) MaterialTheme.colorScheme.primary else contentColor)
                             Spacer(Modifier.height(10.dp))
                             Text(
                                 text = if (isPersian) option.titleFa else option.titleEn,
@@ -285,7 +287,7 @@ fun AddScreen(
                             verticalArrangement = Arrangement.Center,
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            Icon(option.icon, null, modifier = Modifier.size(36.dp), tint = if (isTargetHighlight) MaterialTheme.colorScheme.primary else contentColor)
+                            AddOptionIcon(option = option, tint = if (isTargetHighlight) MaterialTheme.colorScheme.primary else contentColor)
                             Spacer(Modifier.height(10.dp))
                             Text(
                                 text = if (isPersian) option.titleFa else option.titleEn,
@@ -771,4 +773,14 @@ fun AddScreen(
             }
         }
     }
+}
+
+@Composable
+private fun AddOptionIcon(option: AddOptionItem, tint: Color) {
+    Icon(
+        painter = painterResource(id = option.iconRes),
+        contentDescription = null,
+        modifier = Modifier.size(36.dp),
+        tint = tint
+    )
 }
