@@ -11,7 +11,6 @@ import (
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/apperror"
 	"github.com/mosinaRZ/finance-sync-backend/internal/interface/http/contextkeys"
 	"github.com/mosinaRZ/finance-sync-backend/internal/pkg/response"
-	"github.com/redis/go-redis/v9"
 	"golang.org/x/time/rate"
 )
 
@@ -19,9 +18,21 @@ type RateLimitStore interface {
 	Allow(ctx context.Context, key string, limit rate.Limit, burst int) (bool, error)
 }
 
+const (
+	// limiterIdleTTL is how long an idle key is kept before it becomes eligible for eviction.
+	limiterIdleTTL = 3 * time.Minute
+	// limiterSweepInterval bounds how often the map is scanned for idle keys, so the
+	// per-request cost stays O(1) instead of O(number of tracked clients).
+	limiterSweepInterval = time.Minute
+)
+
+// memoryRateLimitStore is an in-process token-bucket store. It is correct for a
+// single API instance (the supported deployment topology): state is lost on
+// restart and is not shared between processes.
 type memoryRateLimitStore struct {
-	mu      sync.Mutex
-	clients map[string]*clientLimiter
+	mu        sync.Mutex
+	clients   map[string]*clientLimiter
+	lastSweep time.Time
 }
 type clientLimiter struct {
 	limiter  *rate.Limiter
@@ -29,16 +40,19 @@ type clientLimiter struct {
 }
 
 func NewMemoryRateLimitStore() RateLimitStore {
-	return &memoryRateLimitStore{clients: make(map[string]*clientLimiter)}
+	return &memoryRateLimitStore{clients: make(map[string]*clientLimiter), lastSweep: time.Now()}
 }
 func (s *memoryRateLimitStore) Allow(_ context.Context, key string, r rate.Limit, burst int) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now()
-	for k, c := range s.clients {
-		if now.Sub(c.lastSeen) > 3*time.Minute {
-			delete(s.clients, k)
+	if now.Sub(s.lastSweep) >= limiterSweepInterval {
+		for k, c := range s.clients {
+			if now.Sub(c.lastSeen) > limiterIdleTTL {
+				delete(s.clients, k)
+			}
 		}
+		s.lastSweep = now
 	}
 	c := s.clients[key]
 	if c == nil {
@@ -47,49 +61,6 @@ func (s *memoryRateLimitStore) Allow(_ context.Context, key string, r rate.Limit
 	}
 	c.lastSeen = now
 	return c.limiter.Allow(), nil
-}
-
-type RedisRateLimitStore struct{ client *redis.Client }
-
-func NewRedisRateLimitStore(client *redis.Client) *RedisRateLimitStore {
-	return &RedisRateLimitStore{client: client}
-}
-
-const tokenBucketLua = `
-local key = KEYS[1]
-local limit = tonumber(ARGV[1])
-local burst = tonumber(ARGV[2])
-local now = tonumber(ARGV[3])
-local refill = tonumber(ARGV[4])
-local ttl = tonumber(ARGV[5])
-local values = redis.call('HMGET', key, 'tokens', 'timestamp')
-local tokens = tonumber(values[1])
-local timestamp = tonumber(values[2])
-if tokens == nil then tokens = burst end
-if timestamp == nil then timestamp = now end
-tokens = math.min(burst, tokens + math.max(0, now - timestamp) * refill)
-local allowed = 0
-if tokens >= 1 then tokens = tokens - 1; allowed = 1 end
-redis.call('HSET', key, 'tokens', tokens, 'timestamp', now)
-redis.call('EXPIRE', key, ttl)
-return allowed
-`
-
-func (s *RedisRateLimitStore) Allow(ctx context.Context, key string, limit rate.Limit, burst int) (bool, error) {
-	if s == nil || s.client == nil {
-		return false, context.Canceled
-	}
-	sec, err := s.client.Time(ctx).Result()
-	if err != nil {
-		return false, err
-	}
-	now := float64(sec.UnixNano()) / 1e9
-	ttl := int64((time.Duration(float64(time.Second)*float64(burst)/float64(limit)) + 3*time.Minute).Seconds())
-	if ttl < 60 {
-		ttl = 60
-	}
-	result, err := s.client.Eval(ctx, tokenBucketLua, []string{"cidna:rl:" + key}, float64(limit), burst, now, float64(limit), ttl).Int()
-	return result == 1, err
 }
 
 type RateLimiter struct {

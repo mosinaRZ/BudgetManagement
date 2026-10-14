@@ -9,7 +9,8 @@ RUN go mod download
 # Copy source and build
 COPY . .
 # CGO_ENABLED=0 required for scratch/alpine execution
-RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/server ./cmd/api/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /app/bin/server ./cmd/api && \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /app/bin/seed-admin ./cmd/seed-admin
 
 # Stage 2: Final minimal image
 FROM alpine:3.19
@@ -21,6 +22,8 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 
 COPY --from=builder /app/bin/server /app/server
+# Admin bootstrap CLI: docker compose exec api /app/seed-admin --identifier ...
+COPY --from=builder /app/bin/seed-admin /app/seed-admin
 
 EXPOSE 8080
 

@@ -2,9 +2,13 @@
 .env
 .env.*
 !.env.example
+!.env.*.example
 
-# MongoDB replica-set keyfile
+# MongoDB replica-set keyfile (legacy manual file; now generated inside a Docker volume)
 deployments/mongo-keyfile
+
+# Local MongoDB dumps
+deployments/backups/
 
 # Go
 bin/

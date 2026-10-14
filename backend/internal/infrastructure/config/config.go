@@ -15,8 +15,15 @@ type Config struct {
 	JWTAccessTTL, JWTRefreshTTL, OTPExpiry                                             time.Duration
 	SMSWebhookURL, SMSAuthToken, SMTPHost, SMTPPort, SMTPUser, SMTPPassword, EmailFrom string
 	DevLogOTP                                                                          bool
-	RedisURL, TrustedProxyCIDRs, CORSAllowedOrigins                                    string
+	TrustedProxyCIDRs, CORSAllowedOrigins                                              string
 	TLSCertFile, TLSKeyFile                                                            string
+	// TLSTerminatedByProxy means a reverse proxy on the same host (e.g. Caddy)
+	// terminates HTTPS and the API itself listens on plain HTTP.
+	// ServeTLS is derived: true only when the API must terminate TLS itself.
+	TLSTerminatedByProxy, ServeTLS bool
+	// MongoAllowPlaintext allows a non-TLS MONGO_URI in production. Intended only
+	// for MongoDB reachable exclusively over a private/loopback network (single VPS).
+	MongoAllowPlaintext bool
 }
 
 func Load() (*Config, error) {
@@ -31,7 +38,7 @@ func Load() (*Config, error) {
 	if env != "dev" && env != "test" && env != "prod" {
 		return nil, fmt.Errorf("ENV must be one of: dev, test, prod")
 	}
-	c := &Config{Env: env, HTTPPort: os.Getenv("HTTP_PORT"), MongoURI: secretValue("MONGO_URI"), MongoDBName: os.Getenv("MONGO_DB_NAME"), JWTSecret: secretValue("JWT_SECRET"), SMSWebhookURL: os.Getenv("SMS_WEBHOOK_URL"), SMSAuthToken: secretValue("SMS_AUTH_TOKEN"), SMTPHost: os.Getenv("SMTP_HOST"), SMTPPort: get("SMTP_PORT", "587"), SMTPUser: os.Getenv("SMTP_USER"), SMTPPassword: secretValue("SMTP_PASSWORD"), EmailFrom: os.Getenv("EMAIL_FROM"), RedisURL: secretValue("REDIS_URL"), TrustedProxyCIDRs: os.Getenv("TRUSTED_PROXY_CIDRS"), CORSAllowedOrigins: os.Getenv("CORS_ALLOWED_ORIGINS"), TLSCertFile: os.Getenv("TLS_CERT_FILE"), TLSKeyFile: os.Getenv("TLS_KEY_FILE"), DevLogOTP: strings.EqualFold(get("DEV_LOG_OTP", "false"), "true")}
+	c := &Config{Env: env, HTTPPort: os.Getenv("HTTP_PORT"), MongoURI: secretValue("MONGO_URI"), MongoDBName: os.Getenv("MONGO_DB_NAME"), JWTSecret: secretValue("JWT_SECRET"), SMSWebhookURL: os.Getenv("SMS_WEBHOOK_URL"), SMSAuthToken: secretValue("SMS_AUTH_TOKEN"), SMTPHost: os.Getenv("SMTP_HOST"), SMTPPort: get("SMTP_PORT", "587"), SMTPUser: os.Getenv("SMTP_USER"), SMTPPassword: secretValue("SMTP_PASSWORD"), EmailFrom: os.Getenv("EMAIL_FROM"), TrustedProxyCIDRs: os.Getenv("TRUSTED_PROXY_CIDRS"), CORSAllowedOrigins: os.Getenv("CORS_ALLOWED_ORIGINS"), TLSCertFile: os.Getenv("TLS_CERT_FILE"), TLSKeyFile: os.Getenv("TLS_KEY_FILE"), DevLogOTP: strings.EqualFold(get("DEV_LOG_OTP", "false"), "true"), TLSTerminatedByProxy: envBool("TLS_TERMINATED_BY_PROXY"), MongoAllowPlaintext: envBool("MONGO_ALLOW_PLAINTEXT")}
 	for _, k := range []string{"HTTP_PORT", "MONGO_DB_NAME", "JWT_ACCESS_TTL_MINUTES", "JWT_REFRESH_TTL_DAYS"} {
 		if strings.TrimSpace(os.Getenv(k)) == "" {
 			return nil, fmt.Errorf("configuration incomplete: missing %s", k)
@@ -81,21 +88,28 @@ func Load() (*Config, error) {
 		if len(c.JWTSecret) < 64 {
 			return nil, fmt.Errorf("JWT_SECRET must be at least 64 characters in production")
 		}
-		if strings.TrimSpace(c.TLSCertFile) == "" || strings.TrimSpace(c.TLSKeyFile) == "" {
-			return nil, fmt.Errorf("TLS_CERT_FILE and TLS_KEY_FILE are required in production")
-		}
-		if _, err := os.Stat(c.TLSCertFile); err != nil {
-			return nil, fmt.Errorf("TLS certificate file is not readable: %w", err)
-		}
-		if _, err := os.Stat(c.TLSKeyFile); err != nil {
-			return nil, fmt.Errorf("TLS key file is not readable: %w", err)
+		if c.TLSTerminatedByProxy {
+			// HTTPS is terminated by a reverse proxy on the same host. Without a trusted
+			// proxy CIDR every client would appear as the proxy's IP and share one
+			// rate-limit bucket (and forwarded headers would never be honoured).
+			if strings.TrimSpace(c.TrustedProxyCIDRs) == "" {
+				return nil, fmt.Errorf("TRUSTED_PROXY_CIDRS is required in production when TLS_TERMINATED_BY_PROXY=true")
+			}
+		} else {
+			if strings.TrimSpace(c.TLSCertFile) == "" || strings.TrimSpace(c.TLSKeyFile) == "" {
+				return nil, fmt.Errorf("TLS_CERT_FILE and TLS_KEY_FILE are required in production (or set TLS_TERMINATED_BY_PROXY=true when a reverse proxy terminates HTTPS)")
+			}
+			if _, err := os.Stat(c.TLSCertFile); err != nil {
+				return nil, fmt.Errorf("TLS certificate file is not readable: %w", err)
+			}
+			if _, err := os.Stat(c.TLSKeyFile); err != nil {
+				return nil, fmt.Errorf("TLS key file is not readable: %w", err)
+			}
+			c.ServeTLS = true
 		}
 		mongoURI := strings.ToLower(strings.TrimSpace(c.MongoURI))
-		if !strings.HasPrefix(mongoURI, "mongodb+srv://") && !strings.Contains(mongoURI, "tls=true") {
-			return nil, fmt.Errorf("MONGO_URI must use TLS in production")
-		}
-		if strings.TrimSpace(c.RedisURL) == "" {
-			return nil, fmt.Errorf("REDIS_URL is required in production for distributed rate limiting")
+		if !strings.HasPrefix(mongoURI, "mongodb+srv://") && !strings.Contains(mongoURI, "tls=true") && !c.MongoAllowPlaintext {
+			return nil, fmt.Errorf("MONGO_URI must use TLS in production (set MONGO_ALLOW_PLAINTEXT=true only when MongoDB is reachable solely over a private network, e.g. the same-host Docker network)")
 		}
 		if strings.TrimSpace(c.SMSWebhookURL) == "" {
 			return nil, fmt.Errorf("SMS_WEBHOOK_URL is required in production")
@@ -104,7 +118,7 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("SMTP_HOST and EMAIL_FROM are required in production because email OTP is enabled")
 		}
 	}
-	return &Config{Env: c.Env, HTTPPort: c.HTTPPort, MongoURI: c.MongoURI, MongoDBName: c.MongoDBName, JWTSecret: c.JWTSecret, RedisURL: c.RedisURL, TrustedProxyCIDRs: c.TrustedProxyCIDRs, CORSAllowedOrigins: c.CORSAllowedOrigins, TLSCertFile: c.TLSCertFile, TLSKeyFile: c.TLSKeyFile, JWTAccessTTL: time.Duration(a) * time.Minute, JWTRefreshTTL: time.Duration(d) * 24 * time.Hour, OTPExpiry: time.Duration(o) * time.Minute, SMSWebhookURL: c.SMSWebhookURL, SMSAuthToken: c.SMSAuthToken, SMTPHost: c.SMTPHost, SMTPPort: c.SMTPPort, SMTPUser: c.SMTPUser, SMTPPassword: c.SMTPPassword, EmailFrom: c.EmailFrom, DevLogOTP: c.DevLogOTP}, nil
+	return &Config{Env: c.Env, HTTPPort: c.HTTPPort, MongoURI: c.MongoURI, MongoDBName: c.MongoDBName, JWTSecret: c.JWTSecret, TrustedProxyCIDRs: c.TrustedProxyCIDRs, CORSAllowedOrigins: c.CORSAllowedOrigins, TLSCertFile: c.TLSCertFile, TLSKeyFile: c.TLSKeyFile, TLSTerminatedByProxy: c.TLSTerminatedByProxy, ServeTLS: c.ServeTLS, MongoAllowPlaintext: c.MongoAllowPlaintext, JWTAccessTTL: time.Duration(a) * time.Minute, JWTRefreshTTL: time.Duration(d) * 24 * time.Hour, OTPExpiry: time.Duration(o) * time.Minute, SMSWebhookURL: c.SMSWebhookURL, SMSAuthToken: c.SMSAuthToken, SMTPHost: c.SMTPHost, SMTPPort: c.SMTPPort, SMTPUser: c.SMTPUser, SMTPPassword: c.SMTPPassword, EmailFrom: c.EmailFrom, DevLogOTP: c.DevLogOTP}, nil
 }
 func secretValue(name string) string {
 	if v := strings.TrimSpace(os.Getenv(name)); v != "" {
@@ -119,6 +133,10 @@ func secretValue(name string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(b))
+}
+
+func envBool(k string) bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv(k)), "true")
 }
 
 func get(k, d string) string {

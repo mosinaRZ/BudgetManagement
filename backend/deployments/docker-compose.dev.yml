@@ -1,0 +1,85 @@
+# Local development stack (no HTTPS, API published on localhost:8080, no Redis, no backups).
+# For the single-VPS production stack use docker-compose.yml instead.
+#
+#   cd backend/deployments
+#   cp ../.env.example .env
+#   docker compose -f docker-compose.dev.yml up --build -d
+
+name: cidna-dev
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      ENV: dev
+      HTTP_PORT: 8080
+      MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/?replicaSet=rs0&authSource=admin
+      MONGO_DB_NAME: cidna_sync_db
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      JWT_ACCESS_TTL_MINUTES: ${JWT_ACCESS_TTL_MINUTES:?JWT_ACCESS_TTL_MINUTES must be set}
+      JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS:?JWT_REFRESH_TTL_DAYS must be set}
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      OTP_EXPIRY_MINUTES: ${OTP_EXPIRY_MINUTES:-5}
+      DEV_LOG_OTP: ${DEV_LOG_OTP:-false}
+      SMS_WEBHOOK_URL: ${SMS_WEBHOOK_URL:-}
+      SMS_AUTH_TOKEN: ${SMS_AUTH_TOKEN:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  mongo:
+    build:
+      context: .
+      dockerfile: Mongo.Dockerfile
+    image: cidna-mongo:dev
+    command:
+      - mongod
+      - --replSet
+      - rs0
+      - --bind_ip_all
+      - --keyFile
+      - /keyfile/mongo-keyfile
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:?MONGO_INITDB_ROOT_USERNAME must be set}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:?MONGO_INITDB_ROOT_PASSWORD must be set}
+    volumes:
+      - mongo_data:/data/db
+      - mongo_keyfile:/keyfile
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet
+          --username "$$MONGO_INITDB_ROOT_USERNAME"
+          --password "$$MONGO_INITDB_ROOT_PASSWORD"
+          --authenticationDatabase admin
+          --eval
+          "let ok = false;
+          try { ok = rs.status().myState === 1 }
+          catch (e) {
+            try { rs.initiate({_id:'rs0', members:[{_id:0, host:'mongo:27017'}]}) } catch (e2) {}
+          }
+          quit(ok ? 0 : 1)"
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 20s
+
+volumes:
+  mongo_data:
+  mongo_keyfile:
