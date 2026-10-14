@@ -94,7 +94,7 @@ This repository contains the Android client and the Go service, along with Docke
 | Authentication / networking | Kotlin HTTP client wrappers and JSON serialization |
 | Backend | Go |
 | Backend data store | MongoDB |
-| Distributed rate-limit dependency | Redis configuration is included in the deployment setup |
+| Rate limiting | In-process token bucket (single API instance, no external cache) |
 | Deployment | Docker Compose |
 | Export | PDF and XLSX |
 | Localization / dates | Persian and English resources/utilities; Jalali date helpers |
@@ -151,27 +151,29 @@ BudgetManagement/
 1. Open a terminal in `backend/`.
 2. Create a local environment file from the template. Compose reads the environment file from the directory where the Compose project is invoked, so follow the file location and variable requirements of the selected Compose command.
 3. Replace all example credentials and secrets with local development values. Never commit real secrets.
-4. For Compose, ensure the MongoDB connection points to the Compose service name (`mongo`) and Redis, when enabled, points to the Compose service name (`redis`) rather than `localhost` from inside the API container.
+4. For Compose, ensure the MongoDB connection points to the Compose service name (`mongo`) rather than `localhost` from inside the API container.
 5. Start the services from the deployment directory:
 
 ```bash
 cd backend/deployments
 # Create deployments/.env from ../.env.example and configure it first.
-docker compose up --build -d
+docker compose -f docker-compose.dev.yml up --build -d
 
-docker compose ps
-docker compose logs -f api
+docker compose -f docker-compose.dev.yml ps
+docker compose -f docker-compose.dev.yml logs -f api
 ```
+
+The whole backend (HTTPS via Caddy, API, MongoDB, daily backups) runs on a single VPS with `deployments/docker-compose.yml`; see `backend/deployments/README.md` (Persian). No Redis is required.
 
 The API container includes a health check for `GET /health`. To check it from the host, use `http://localhost:8080/health` in a local development environment. A response from the health endpoint confirms basic process health, not that every authentication, email/SMS, or synchronization flow is configured correctly.
 
 To stop the stack:
 
 ```bash
-docker compose down
+docker compose -f docker-compose.dev.yml down
 ```
 
-To remove the database volume as well, use `docker compose down -v` **only if you intentionally want to delete local MongoDB data**.
+To remove the database volume as well, use `docker compose -f docker-compose.dev.yml down -v` **only if you intentionally want to delete local MongoDB data**.
 
 ### Configure Android
 
@@ -206,7 +208,7 @@ go test ./...
 go run ./cmd/api
 ```
 
-A local MongoDB replica-set configuration and any required Redis service must be running and configured before starting the API. Consult `backend/.env.example` and the deployment files for required variables.
+A local MongoDB replica set (a single node is enough) must be running and configured before starting the API. Consult `backend/.env.example` and the deployment files for required variables.
 
 ## 6. Configuration and operational security
 
@@ -222,7 +224,8 @@ Important environment variables include:
 | `JWT_ACCESS_TTL_MINUTES` | Access-token lifetime |
 | `JWT_REFRESH_TTL_DAYS` | Refresh-token lifetime |
 | `OTP_EXPIRY_MINUTES` | OTP validity period |
-| `REDIS_URL` | Redis endpoint for distributed rate limiting |
+| `TLS_TERMINATED_BY_PROXY` | `true` when a reverse proxy on the same host (Caddy in the VPS stack) terminates HTTPS; requires `TRUSTED_PROXY_CIDRS` in production |
+| `MONGO_ALLOW_PLAINTEXT` | Allows a non-TLS `MONGO_URI` in production; only for MongoDB reachable solely over a private/same-host network |
 | `SMS_WEBHOOK_URL`, `SMS_AUTH_TOKEN` | SMS provider integration settings |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | Email delivery settings |
 | `CORS_ALLOWED_ORIGINS` | Explicit browser-origin allow-list, where applicable |
@@ -234,7 +237,7 @@ Important environment variables include:
 - Use TLS end-to-end or a correctly configured trusted TLS-terminating proxy.
 - Disable development OTP logging and configure real SMS/email providers as required by the enabled flows.
 - Generate strong unique secrets and use a secret manager or mounted secret files where supported.
-- Restrict database/network access; do not expose MongoDB or Redis publicly.
+- Restrict database/network access; do not expose MongoDB publicly.
 - Verify rate limiting, CORS, proxy trust, authentication, recovery, refresh-token rotation and logout behavior.
 - Configure database backups, restore drills, monitoring and alerting.
 - Review SMS permissions, notification content, exported files, logs and personal-data retention.
@@ -316,7 +319,7 @@ A successful compile alone does not prove data integrity, security, or productio
 
 - The debug API URL is a development setting. Update it for your network and never use it as a production endpoint.
 - Release configuration intentionally requires a non-placeholder HTTPS backend URL.
-- SMS, email, TLS, Redis, and production secrets require environment-specific configuration.
+- SMS, email, TLS, and production secrets require environment-specific configuration.
 - WorkManager timing is subject to Android scheduling constraints and is not a precise real-time scheduler.
 - Exported reports, notifications, SMS access and recovery material can expose sensitive data; evaluate the threat model for your deployment.
 - Feature behavior can vary by Android version, device manufacturer, granted permissions and backend configuration.
@@ -419,7 +422,7 @@ The AGPL includes specific obligations when modified versions are conveyed and w
 | شبکه و احراز هویت | کلاینت‌های HTTP و JSON serialization |
 | بک‌اند | Go |
 | پایگاه داده بک‌اند | MongoDB |
-| محدودسازی توزیع‌شده درخواست‌ها | تنظیمات Redis در استقرار موجود است |
+| محدودسازی نرخ درخواست‌ها | token bucket درون‌حافظه‌ای (یک نمونه API، بدون کش خارجی) |
 | استقرار | Docker Compose |
 | خروجی | PDF و XLSX |
 | زبان و تاریخ | ابزارهای فارسی/انگلیسی و تاریخ جلالی |
@@ -476,27 +479,29 @@ BudgetManagement/
 ۱. وارد پوشه `backend/` شوید.
 ۲. فایل محیطی محلی را از روی نمونه بسازید. دقت کنید Compose فایل محیطی را بر اساس محل اجرای پروژه Compose می‌خواند؛ محل فایل و متغیرهای اجباری را با فرمان انتخابی تطبیق دهید.
 ۳. مقادیر نمونه را با اطلاعات توسعه محلی جایگزین کنید. هیچ secret واقعی را در Git ثبت نکنید.
-۴. در Docker Compose، آدرس MongoDB باید به سرویس `mongo` اشاره کند و آدرس Redis در صورت استفاده باید `redis` باشد، نه `localhost` داخل کانتینر API.
+۴. در Docker Compose، آدرس MongoDB باید به سرویس `mongo` اشاره کند، نه `localhost` داخل کانتینر API.
 ۵. سرویس‌ها را از پوشه استقرار اجرا کنید:
 
 ```bash
 cd backend/deployments
 # ابتدا deployments/.env را از ../.env.example بسازید و تنظیم کنید.
-docker compose up --build -d
+docker compose -f docker-compose.dev.yml up --build -d
 
-docker compose ps
-docker compose logs -f api
+docker compose -f docker-compose.dev.yml ps
+docker compose -f docker-compose.dev.yml logs -f api
 ```
+
+کل بک‌اند (HTTPS با Caddy، API، MongoDB و بکاپ روزانه) با `deployments/docker-compose.yml` روی یک VPS اجرا می‌شود؛ راهنما در `backend/deployments/README.md` است. Redis لازم نیست.
 
 برای بررسی سلامت پایه API از میزبان محلی می‌توانید `http://localhost:8080/health` را باز کنید. پاسخ موفق این endpoint فقط سلامت پایه فرایند را نشان می‌دهد و اثبات نمی‌کند که OTP، ایمیل/پیامک یا همه جریان‌های همگام‌سازی به‌درستی تنظیم شده‌اند.
 
 توقف سرویس‌ها:
 
 ```bash
-docker compose down
+docker compose -f docker-compose.dev.yml down
 ```
 
-برای حذف volume پایگاه داده نیز می‌توان از `docker compose down -v` استفاده کرد؛ **این فرمان را فقط زمانی اجرا کنید که عمداً قصد حذف داده‌های محلی MongoDB را دارید.**
+برای حذف volume پایگاه داده نیز می‌توان از `docker compose -f docker-compose.dev.yml down -v` استفاده کرد؛ **این فرمان را فقط زمانی اجرا کنید که عمداً قصد حذف داده‌های محلی MongoDB را دارید.**
 
 ### راه‌اندازی اندروید
 
@@ -531,7 +536,7 @@ go test ./...
 go run ./cmd/api
 ```
 
-پیش از اجرای API باید MongoDB با پیکربندی replica set و هر سرویس Redis موردنیاز در حال اجرا و تنظیم شده باشند. فایل `backend/.env.example` و فایل‌های پوشه استقرار را بررسی کنید.
+پیش از اجرای API باید MongoDB با پیکربندی replica set (یک نود کافی است) در حال اجرا و تنظیم شده باشد. فایل `backend/.env.example` و فایل‌های پوشه استقرار را بررسی کنید.
 
 ## ۶. تنظیمات و امنیت عملیاتی
 
@@ -547,7 +552,8 @@ go run ./cmd/api
 | `JWT_ACCESS_TTL_MINUTES` | طول عمر access token |
 | `JWT_REFRESH_TTL_DAYS` | طول عمر refresh token |
 | `OTP_EXPIRY_MINUTES` | اعتبار زمانی OTP |
-| `REDIS_URL` | آدرس Redis برای محدودسازی توزیع‌شده درخواست‌ها |
+| `TLS_TERMINATED_BY_PROXY` | مقدار `true` وقتی یک reverse proxy روی همان سرور (Caddy در استقرار VPS) HTTPS را پایان می‌دهد؛ در production به `TRUSTED_PROXY_CIDRS` نیاز دارد |
+| `MONGO_ALLOW_PLAINTEXT` | اجازه `MONGO_URI` بدون TLS در production؛ فقط برای MongoDB که صرفاً روی شبکه خصوصی/همان سرور در دسترس است |
 | `SMS_WEBHOOK_URL`, `SMS_AUTH_TOKEN` | تنظیمات اتصال سرویس پیامک |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | تنظیمات ارسال ایمیل |
 | `CORS_ALLOWED_ORIGINS` | فهرست مجاز originهای مرورگر در صورت نیاز |
@@ -559,7 +565,7 @@ go run ./cmd/api
 - TLS را در سرویس یا پراکسی مورد اعتماد به‌درستی پیکربندی کنید.
 - ثبت OTP در لاگ را غیرفعال و سرویس واقعی پیامک/ایمیل موردنیاز را تنظیم کنید.
 - secretهای یکتا و قوی تولید کنید و در صورت امکان از secret manager یا فایل‌های secret استفاده کنید.
-- دسترسی شبکه و پایگاه داده را محدود کنید؛ MongoDB و Redis را مستقیماً در اینترنت منتشر نکنید.
+- دسترسی شبکه و پایگاه داده را محدود کنید؛ MongoDB را مستقیماً در اینترنت منتشر نکنید.
 - محدودسازی نرخ، CORS، اعتماد به پراکسی، احراز هویت، بازیابی حساب، چرخش refresh token و خروج را آزمایش کنید.
 - از پایگاه داده نسخه پشتیبان تهیه کنید و فرایند بازیابی را عملاً آزمایش کنید.
 - مجوزهای SMS، محتوای اعلان‌ها، فایل‌های خروجی، لاگ‌ها و نگهداری اطلاعات شخصی را بازبینی کنید.
@@ -639,7 +645,7 @@ go vet ./...
 
 - آدرس API نسخه debug صرفاً برای توسعه است؛ برای شبکه خود تنظیمش کنید و از آن در production استفاده نکنید.
 - پیکربندی release عمداً به آدرس HTTPS واقعی و غیرنمونه نیاز دارد.
-- SMS، ایمیل، TLS، Redis و secretهای عملیاتی نیاز به تنظیمات اختصاصی محیط دارند.
+- SMS، ایمیل، TLS و secretهای عملیاتی نیاز به تنظیمات اختصاصی محیط دارند.
 - زمان‌بندی WorkManager تحت محدودیت‌های زمان‌بندی اندروید است و تضمین اجرای دقیق در لحظه مشخص را نمی‌دهد.
 - خروجی‌ها، اعلان‌ها، دسترسی SMS و اطلاعات بازیابی ممکن است داده حساس افشا کنند؛ مدل تهدید محیط خود را بررسی کنید.
 - رفتار قابلیت‌ها می‌تواند با نسخه اندروید، سازنده دستگاه، مجوزهای اعطاشده و تنظیمات بک‌اند متفاوت باشد.
