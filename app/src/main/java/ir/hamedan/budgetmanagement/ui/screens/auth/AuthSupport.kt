@@ -46,7 +46,7 @@ object AuthInputNormalizer {
         // "+98 0912..." (trunk zero kept after the country code)
         if (value.startsWith("+980") && value.length == 14) value = "+98" + value.drop(4)
 
-        return value.takeIf { it.length in 8..15 && it.drop(1).all { ch -> ch in '0'..'9' } }
+        return value.takeIf { it.length in 8..16 && it.drop(1).all { ch -> ch in '0'..'9' } }
     }
 
     fun email(input: String): String? {
@@ -112,7 +112,7 @@ object PasswordPolicy {
     }
 }
 
-enum class AuthContext { LOGIN, REGISTER, OTP_REQUEST, RESET_PASSWORD, CHANGE_PASSWORD }
+enum class AuthContext { LOGIN, REGISTER, OTP_REQUEST, RESET_PASSWORD, CHANGE_PASSWORD, DELETE_ACCOUNT }
 
 /**
  * Turns any failure into a message that makes sense on the screen where it happened.
@@ -125,10 +125,12 @@ fun authErrorMessage(error: Throwable, isPersian: Boolean, context: AuthContext)
         val code = api.code.orEmpty()
         return when {
             api.statusCode == 0 || code == "NETWORK_ERROR" -> api.userMessage(isPersian)
+            code == "INVALID_PASSWORD" && context == AuthContext.DELETE_ACCOUNT ->
+                if (isPersian) "گذرواژه نادرست است." else "The password is incorrect."
             code == "INVALID_PASSWORD" ->
                 if (isPersian) "گذرواژه فعلی نادرست است." else "The current password is incorrect."
             code == "RATE_LIMITED" -> when (context) {
-                AuthContext.LOGIN, AuthContext.CHANGE_PASSWORD ->
+                AuthContext.LOGIN, AuthContext.CHANGE_PASSWORD, AuthContext.DELETE_ACCOUNT ->
                     if (isPersian) "تلاش‌های ناموفق زیاد بود. چند دقیقه بعد دوباره تلاش کنید." else "Too many failed attempts. Try again in a few minutes."
                 else -> api.userMessage(isPersian)
             }
@@ -136,11 +138,13 @@ fun authErrorMessage(error: Throwable, isPersian: Boolean, context: AuthContext)
                 if (isPersian) "شماره موبایل/ایمیل یا گذرواژه نادرست است." else "Incorrect phone/email or password."
             context == AuthContext.REGISTER && (api.statusCode == 401 || code == "UNAUTHORIZED") ->
                 if (isPersian) "کد تأیید نادرست یا منقضی شده است." else "The verification code is wrong or has expired."
+            context == AuthContext.REGISTER && code == "CONFLICT" && api.message.contains("deleted account", ignoreCase = true) ->
+                if (isPersian) "این شماره متعلق به حسابی است که حذف شده؛ برای بازیابی، از صفحه ورود وارد شوید." else "This number belongs to a deleted account. Sign in to restore it."
             context == AuthContext.REGISTER && code == "CONFLICT" ->
                 if (isPersian) "با این شماره یا ایمیل قبلاً حساب ساخته شده است." else "An account already exists for this phone number or email."
             context == AuthContext.RESET_PASSWORD && (api.statusCode == 401 || code == "UNAUTHORIZED") ->
                 if (isPersian) "کد تأیید یا کلید بازیابی نادرست است." else "The verification code or recovery key is wrong."
-            context == AuthContext.CHANGE_PASSWORD && api.statusCode == 401 ->
+            (context == AuthContext.CHANGE_PASSWORD || context == AuthContext.DELETE_ACCOUNT) && api.statusCode == 401 ->
                 if (isPersian) "نشست شما منقضی شده است. دوباره وارد شوید." else "Your session has expired. Please sign in again."
             code == "VALIDATION_ERROR" || code == "BAD_REQUEST" ->
                 if (isPersian) "اطلاعات واردشده معتبر نیست؛ ورودی‌ها را بررسی کنید." else api.userMessage(false)

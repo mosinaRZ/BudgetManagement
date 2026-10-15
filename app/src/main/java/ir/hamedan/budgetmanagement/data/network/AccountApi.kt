@@ -50,6 +50,26 @@ class AccountApi(private val client: AuthenticatedApiClient) {
         }
     }
 
+    /**
+     * Soft-deletes the signed-in account (server flag isDeleted=true). The password is re-verified
+     * by the server. The account stays restorable for a grace period by signing in again.
+     *
+     * The server revokes every refresh token the moment this succeeds, so [onDeleted] runs while
+     * holding the same monitor as [AuthenticatedApiClient.request]: no concurrent request can
+     * try to refresh with a dead token (which would be reported as an unexpected session end)
+     * before the local session has been dropped.
+     */
+    fun deleteAccount(password: String, onDeleted: () -> Unit) {
+        val body = JSONObject().put("password", password)
+        synchronized(client) {
+            val response = client.request("POST", "/api/v1/account/delete", body)
+            if (response.statusCode !in 200..299) {
+                throw ApiException(response.statusCode, response.errorCode(), response.errorMessage("حذف حساب ناموفق بود."))
+            }
+            onDeleted()
+        }
+    }
+
     data class ChangePasswordInput(
         val currentPassword: String,
         val newPassword: String,

@@ -86,3 +86,8 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Release signing secrets
+keystore.properties
+*.jks
+*.keystore

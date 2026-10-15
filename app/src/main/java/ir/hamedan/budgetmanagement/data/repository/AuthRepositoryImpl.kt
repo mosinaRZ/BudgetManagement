@@ -34,11 +34,43 @@ class AuthRepositoryImpl(
     override suspend fun requestOtp(destination: String, channel: String, purpose: String): Result<AuthApi.OtpResponse> =
         withContext(Dispatchers.IO) { runCatching { authApi.requestOtp(destination.trim(), channel, purpose) } }
 
-    override suspend fun login(identifier: String, password: String): Result<Unit> {
+    override suspend fun login(identifier: String, password: String, restoreAccount: Boolean): Result<Unit> {
         if (identifier.isBlank()) return Result.failure(IllegalArgumentException("Identifier must not be blank."))
         if (password.isBlank()) return Result.failure(IllegalArgumentException("Password must not be blank."))
         return withContext(Dispatchers.IO) {
-            runCatching { persistSession(authApi.login(identifier.trim(), password, deviceIdentityStore.getOrCreate(), deviceInfoProvider.toJson()), password, identifier = identifier.trim()) }
+            runCatching {
+                persistSession(
+                    authApi.login(
+                        identifier = identifier.trim(),
+                        password = password,
+                        deviceId = deviceIdentityStore.getOrCreate(),
+                        deviceInfo = deviceInfoProvider.toJson(),
+                        restoreAccount = restoreAccount
+                    ),
+                    password,
+                    identifier = identifier.trim()
+                )
+            }
+        }
+    }
+
+    override suspend fun deleteAccount(password: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            require(password.isNotEmpty()) { "Password must not be empty." }
+            require(sessionStore.isAuthenticated()) { "Not signed in." }
+            // Signing out of this device happens inside the API client's lock, right after the
+            // server confirmed the deletion (see AccountApi.deleteAccount).
+            accountApi.deleteAccount(password) { sessionStore.clear() }
+            // From here on the account is deleted server-side; local cleanup must not turn that
+            // into a reported failure, so each step is attempted independently.
+            runCatching { syncLocalDataSource.clearAccountData() }
+            runCatching { syncKeyManager.clear() }
+            runCatching { rememberedLoginStore.clearLocalReauthentication() }
+            runCatching {
+                // Unbind the local database from the deleted account so a later sign-in (to this or
+                // another account) starts from a clean state instead of treating data as unsynced.
+                syncStateRepository.save(syncStateRepository.get().copy(accountUserId = null, syncRequired = false))
+            }
         }
     }
 

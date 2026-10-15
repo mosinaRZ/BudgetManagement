@@ -109,7 +109,9 @@ fun SettingsScreen(
     onNotificationCalibrationClick: () -> Unit = {},
     onDevicesClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
-    onForgotPassword: () -> Unit = {}
+    onForgotPassword: () -> Unit = {},
+    /** Called after the account was deleted and this device was signed out of it. */
+    onAccountDeleted: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val isPersian = isPersianLocale()
@@ -129,6 +131,7 @@ fun SettingsScreen(
     var showThemeBottomSheet by remember { mutableStateOf(false) }
     var themeMode by remember(context) { mutableStateOf(ThemePreferences.getThemeMode(context)) }
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var showDeleteAccountDialog by remember { mutableStateOf(false) }
 
     // به‌روزرسانی مقدار تم در بدو باز شدن باتم‌شیت
     LaunchedEffect(showThemeBottomSheet) {
@@ -596,6 +599,15 @@ fun SettingsScreen(
                             ) {
                                 showLogoutDialog = true
                             }
+
+                            SecurityActionRow(
+                                title = if (isPersian) "حذف حساب کاربری" else "Delete Account",
+                                icon = Icons.Default.DeleteForever,
+                                iconTint = MaterialTheme.colorScheme.error,
+                                titleColor = MaterialTheme.colorScheme.error
+                            ) {
+                                showDeleteAccountDialog = true
+                            }
                         }
                     }
                 }
@@ -707,6 +719,22 @@ fun SettingsScreen(
                 isPersian = isPersian,
                 onDismiss = { showLogoutDialog = false },
                 onConfirm = { onLoginClick() }
+            )
+        }
+
+        if (showDeleteAccountDialog) {
+            val authRepository = remember(context) { (context.applicationContext as BudgetApp).container.authRepository }
+            DeleteAccountDialog(
+                isPersian = isPersian,
+                onDismiss = { showDeleteAccountDialog = false },
+                onSubmit = { password -> authRepository.deleteAccount(password) },
+                onSuccess = {
+                    showDeleteAccountDialog = false
+                    // The fingerprint credential belonged to the deleted account and was wiped.
+                    isBiometricEnabled = false
+                    SharedPreferences.setBiometricEnabled(context, false)
+                    onAccountDeleted()
+                }
             )
         }
 
@@ -1634,6 +1662,136 @@ fun ChangePasswordDialog(
                     )
                 } else {
                     Text(if (isPersian) "تغییر گذرواژه" else "Change password")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isSubmitting) {
+                Text(if (isPersian) "انصراف" else "Cancel")
+            }
+        }
+    )
+}
+
+/**
+ * Confirms and performs account deletion. The password is required so a stolen unlocked phone
+ * cannot delete the account; the server re-verifies it. Deletion is a soft delete: the account can
+ * be restored by signing in again during the grace period.
+ */
+@Composable
+fun DeleteAccountDialog(
+    isPersian: Boolean,
+    onDismiss: () -> Unit,
+    onSubmit: suspend (password: String) -> Result<Unit>,
+    onSuccess: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var password by remember { mutableStateOf("") }
+    var isPasswordVisible by remember { mutableStateOf(false) }
+    var isSubmitting by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    fun submit() {
+        if (isSubmitting) return
+        if (password.isEmpty()) {
+            errorMessage = if (isPersian) "گذرواژه را وارد کنید" else "Enter your password"
+            return
+        }
+        isSubmitting = true
+        errorMessage = null
+        scope.launch {
+            onSubmit(password)
+                .onSuccess { onSuccess() }
+                .onFailure { errorMessage = authErrorMessage(it, isPersian, AuthContext.DELETE_ACCOUNT) }
+            isSubmitting = false
+        }
+    }
+
+    AlertDialog(
+        // The request cannot be cancelled half-way, so the dialog stays until it finishes.
+        onDismissRequest = { if (!isSubmitting) onDismiss() },
+        shape = RoundedCornerShape(28.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.DeleteForever,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(36.dp)
+            )
+        },
+        title = {
+            Text(
+                text = if (isPersian) "حذف حساب کاربری" else "Delete account",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = if (isPersian)
+                        "با حذف حساب، از همه‌ی دستگاه‌ها خارج می‌شوید و اطلاعات این دستگاه پاک می‌شود. اطلاعات همگام‌شده‌ی شما تا ۳۰ روز روی سرور نگه داشته می‌شود؛ اگر در این مدت دوباره وارد شوید می‌توانید حساب را بازیابی کنید، وگرنه برای همیشه پاک می‌شود."
+                    else
+                        "Deleting your account signs you out of every device and erases the data on this device. Your synced data is kept on the server for 30 days: sign in again within that time to restore the account, otherwise it is erased permanently.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    textAlign = if (isPersian) TextAlign.Right else TextAlign.Left,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it.take(256); errorMessage = null },
+                    enabled = !isSubmitting,
+                    label = { Text(if (isPersian) "گذرواژه حساب" else "Account password") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    textStyle = credentialTextStyle(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        hintLocales = LocaleList(Locale("en")),
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { submit() }),
+                    visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                            Icon(
+                                imageVector = if (isPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (isPersian) "نمایش یا پنهان کردن گذرواژه" else "Toggle password visibility"
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                AnimatedVisibility(visible = errorMessage != null) {
+                    errorMessage?.let { AuthErrorBanner(message = it) }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { submit() },
+                enabled = !isSubmitting,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onError
+                    )
+                } else {
+                    Text(if (isPersian) "حذف حساب" else "Delete account")
                 }
             }
         },
