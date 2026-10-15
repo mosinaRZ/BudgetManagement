@@ -10,7 +10,8 @@ RUN go mod download
 COPY . .
 # CGO_ENABLED=0 required for scratch/alpine execution
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /app/bin/server ./cmd/api && \
-    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /app/bin/seed-admin ./cmd/seed-admin
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /app/bin/seed-admin ./cmd/seed-admin && \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /app/bin/purge-deleted ./cmd/purge-deleted
 
 # Stage 2: Final minimal image
 FROM alpine:3.19
@@ -24,6 +25,9 @@ USER appuser
 COPY --from=builder /app/bin/server /app/server
 # Admin bootstrap CLI: docker compose exec api /app/seed-admin --identifier ...
 COPY --from=builder /app/bin/seed-admin /app/seed-admin
+# Permanently erases accounts soft-deleted more than 30 days ago (run daily, see README):
+#   docker compose exec api /app/purge-deleted --older-than-days 30
+COPY --from=builder /app/bin/purge-deleted /app/purge-deleted
 
 EXPOSE 8080
 

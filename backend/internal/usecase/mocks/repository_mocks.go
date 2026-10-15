@@ -24,6 +24,7 @@ type MockUserRepository struct {
 	ResetFailedLoginFunc        func(ctx context.Context, userID string) error
 	GetSessionVersionFunc       func(ctx context.Context, userID string) (uint64, error)
 	IncrementSessionVersionFunc func(ctx context.Context, userID string) (uint64, error)
+	SetDeletedFunc              func(ctx context.Context, userID string, deleted bool, at time.Time) (uint64, error)
 }
 
 // Compile-time contract check: keep this mock synchronized with UserRepository.
@@ -114,6 +115,13 @@ func (m *MockUserRepository) GetSessionVersion(ctx context.Context, userID strin
 func (m *MockUserRepository) IncrementSessionVersion(ctx context.Context, userID string) (uint64, error) {
 	if m.IncrementSessionVersionFunc != nil {
 		return m.IncrementSessionVersionFunc(ctx, userID)
+	}
+	return 0, nil
+}
+
+func (m *MockUserRepository) SetDeleted(ctx context.Context, userID string, deleted bool, at time.Time) (uint64, error) {
+	if m.SetDeletedFunc != nil {
+		return m.SetDeletedFunc(ctx, userID, deleted, at)
 	}
 	return 0, nil
 }

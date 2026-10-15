@@ -96,7 +96,7 @@ func run() error {
 	corsOrigins := splitCSV(cfg.CORSAllowedOrigins)
 	router := httpiface.NewRouter(httpiface.RouterDependencies{
 		AuthHandler: authHandler, SyncHandler: syncHandler, AdminHandler: handler.NewAdminHandler(roleUC, validate),
-		DeviceHandler: handler.NewDeviceHandler(deviceUC), JWTSecret: cfg.JWTSecret, UserRepository: userRepo, DeviceRepository: deviceRepo, Env: cfg.Env,
+		DeviceHandler: handler.NewDeviceHandler(deviceUC), LegalHandler: handler.NewLegalHandler(supportEmail(cfg)), JWTSecret: cfg.JWTSecret, UserRepository: userRepo, DeviceRepository: deviceRepo, Env: cfg.Env,
 		TrustedProxyCIDRs: trustedProxies, CORSAllowedOrigins: corsOrigins, RateLimitStore: rateStore,
 	})
 
@@ -168,4 +168,12 @@ func splitCSV(raw string) []string {
 		}
 	}
 	return out
+}
+
+// supportEmail is the public contact shown on the legal pages: SUPPORT_EMAIL, else the OTP sender.
+func supportEmail(cfg *config.Config) string {
+	if v := strings.TrimSpace(os.Getenv("SUPPORT_EMAIL")); v != "" {
+		return v
+	}
+	return cfg.EmailFrom
 }

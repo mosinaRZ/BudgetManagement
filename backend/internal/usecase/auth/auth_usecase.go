@@ -20,6 +20,11 @@ import (
 const (
 	loginLockThreshold = 5
 	loginLockDuration  = 15 * time.Minute
+
+	// DefaultAccountRestoreWindow is how long a soft-deleted account can be restored by its owner.
+	// After it the account is treated as gone and becomes eligible for permanent removal
+	// (see cmd/purge-deleted).
+	DefaultAccountRestoreWindow = 30 * 24 * time.Hour
 )
 
 var (
@@ -36,6 +41,7 @@ type ServiceImpl struct {
 	otp                   OTPService
 	secret                string
 	accessTTL, refreshTTL time.Duration
+	restoreWindow         time.Duration
 }
 
 func NewService(
@@ -58,7 +64,22 @@ func NewService(
 		secret:     secret,
 		accessTTL:  accessTTL,
 		refreshTTL: refreshTTL,
+
+		restoreWindow: DefaultAccountRestoreWindow,
 	}
+}
+
+// SetAccountRestoreWindow overrides how long a soft-deleted account stays restorable.
+func (s *ServiceImpl) SetAccountRestoreWindow(d time.Duration) {
+	if d > 0 {
+		s.restoreWindow = d
+	}
+}
+
+// restorable reports whether a soft-deleted account is still inside its grace period.
+func (s *ServiceImpl) restorable(u *entity.User, now time.Time) bool {
+	until, ok := u.RestorableUntil(s.restoreWindow)
+	return ok && now.Before(until)
 }
 func (s *ServiceImpl) SetDeviceRepository(d repository.DeviceRepository) { s.devices = d }
 
@@ -179,6 +200,9 @@ func (s *ServiceImpl) verifyRegistrationOTP(ctx context.Context, in RegisterInpu
 func (s *ServiceImpl) ensurePhoneAvailable(ctx context.Context, phoneHash string) error {
 	existing, err := s.users.FindByPhoneHash(ctx, phoneHash)
 	if err == nil && existing != nil {
+		if existing.IsDeleted && s.restorable(existing, time.Now().UTC()) {
+			return apperror.ErrConflict("this phone number belongs to a deleted account; sign in to restore it")
+		}
 		return apperror.ErrConflict("user already exists")
 	}
 	if err != nil {
@@ -281,6 +305,21 @@ func (s *ServiceImpl) Login(ctx context.Context, in LoginInput) (LoginOutput, er
 	if err := s.users.ResetFailedLogin(ctx, u.ID); err != nil {
 		return LoginOutput{}, err
 	}
+	if u.IsDeleted {
+		// The password is correct, so revealing the deleted state leaks nothing to a stranger.
+		now := time.Now().UTC()
+		if !s.restorable(u, now) {
+			return LoginOutput{}, apperror.ErrUnauthorized("invalid credentials")
+		}
+		if !in.RestoreAccount {
+			return LoginOutput{}, apperror.ErrAccountDeleted("this account was deleted; sign in again with restore to recover it")
+		}
+		version, err := s.users.SetDeleted(ctx, u.ID, false, now)
+		if err != nil {
+			return LoginOutput{}, err
+		}
+		u.IsDeleted, u.DeletedAt, u.SessionVersion = false, nil, version
+	}
 	if err := validDevice(in.DeviceID); err != nil {
 		return LoginOutput{}, err
 	}
@@ -335,7 +374,7 @@ func (s *ServiceImpl) Refresh(ctx context.Context, in RefreshInput) (RefreshOutp
 	}
 
 	u, err := s.users.FindByID(ctx, old.UserID)
-	if err != nil {
+	if err != nil || u == nil || u.IsDeleted {
 		return RefreshOutput{}, apperror.ErrUnauthorized(
 			"invalid refresh token",
 		)
@@ -407,7 +446,7 @@ func (s *ServiceImpl) PrepareRecovery(ctx context.Context, in PrepareRecoveryInp
 		return PrepareRecoveryOutput{}, err
 	}
 	u, err := s.findByDestinationHash(ctx, dest)
-	if err != nil {
+	if err != nil || u == nil || u.IsDeleted {
 		return PrepareRecoveryOutput{}, apperror.ErrUnauthorized("invalid recovery request")
 	}
 	if !verifyRecoveryKeyHash(u.RecoveryKeyHash, in.RecoveryKey) {
@@ -452,7 +491,7 @@ func (s *ServiceImpl) ResetPassword(ctx context.Context, in ResetPasswordInput) 
 		return ResetPasswordOutput{}, err
 	}
 	u, err := s.users.FindByID(ctx, recoverySession.UserID)
-	if err != nil {
+	if err != nil || u == nil || u.IsDeleted {
 		return ResetPasswordOutput{}, apperror.ErrUnauthorized("invalid recovery request")
 	}
 	storedKdfSalt, err := decodeAndValidateKdfSalt(u.KdfSalt)
@@ -539,7 +578,7 @@ func (s *ServiceImpl) ChangePassword(ctx context.Context, in ChangePasswordInput
 		}
 		return ChangePasswordOutput{}, err
 	}
-	if u == nil {
+	if u == nil || u.IsDeleted {
 		return ChangePasswordOutput{}, apperror.ErrUnauthorized("invalid session")
 	}
 
@@ -614,6 +653,57 @@ func (s *ServiceImpl) ChangePassword(ctx context.Context, in ChangePasswordInput
 	return ChangePasswordOutput{AccessToken: sess.AccessToken, RefreshToken: sess.RefreshToken, Role: u.Role, KdfSalt: u.KdfSalt, UserID: u.ID, PasswordKeyEnvelope: u.PasswordKeyEnvelope, PasswordKeyNonce: u.PasswordKeyNonce, RecoveryKeyEnvelope: u.RecoveryKeyEnvelope, RecoveryKeyNonce: u.RecoveryKeyNonce}, nil
 }
 
+// DeleteAccount soft-deletes the caller's account (isDeleted=true).
+//
+// The password is always re-verified and wrong attempts count towards the sign-in lockout. On
+// success every access token is invalidated (session version bump) and every refresh token is
+// revoked. The data stays on the server, untouched, until the grace period ends so the owner can
+// restore the account by signing in with the restore flag; afterwards cmd/purge-deleted removes it.
+func (s *ServiceImpl) DeleteAccount(ctx context.Context, in DeleteAccountInput) (DeleteAccountOutput, error) {
+	if strings.TrimSpace(in.UserID) == "" {
+		return DeleteAccountOutput{}, apperror.ErrUnauthorized("invalid session")
+	}
+	if in.Password == "" {
+		return DeleteAccountOutput{}, apperror.ErrValidation("password is required")
+	}
+	u, err := s.users.FindByID(ctx, in.UserID)
+	if err != nil {
+		if code, ok := apperror.CodeOf(err); ok && code == apperror.CodeNotFound {
+			return DeleteAccountOutput{}, apperror.ErrUnauthorized("invalid session")
+		}
+		return DeleteAccountOutput{}, err
+	}
+	if u == nil || u.IsDeleted {
+		return DeleteAccountOutput{}, apperror.ErrUnauthorized("invalid session")
+	}
+	now := time.Now().UTC()
+	if u.LockedUntil != nil && u.LockedUntil.After(now) {
+		return DeleteAccountOutput{}, apperror.ErrRateLimited("too many failed attempts; try again later")
+	}
+	if len(in.Password) > 256 {
+		return DeleteAccountOutput{}, apperror.ErrInvalidPassword("password is incorrect")
+	}
+	ok, _ := infraauth.VerifyPassword(in.Password, u.AuthSalt, u.PasswordHash)
+	if !ok {
+		if err := s.users.RecordFailedLogin(ctx, u.ID, now, loginLockThreshold, loginLockDuration); err != nil {
+			return DeleteAccountOutput{}, err
+		}
+		return DeleteAccountOutput{}, apperror.ErrInvalidPassword("password is incorrect")
+	}
+	if err := s.users.ResetFailedLogin(ctx, u.ID); err != nil {
+		return DeleteAccountOutput{}, err
+	}
+	if _, err := s.users.SetDeleted(ctx, u.ID, true, now); err != nil {
+		return DeleteAccountOutput{}, err
+	}
+	// The account is already unusable (session version bumped, Refresh rejects deleted users), so
+	// a failure here must not turn a successful deletion into an error the client would retry.
+	if err := s.refresh.RevokeAllForUser(ctx, u.ID); err != nil {
+		slog.Warn("failed to revoke refresh tokens of deleted account", "user_id", u.ID, "error", err)
+	}
+	return DeleteAccountOutput{DeletedAt: now, RestorableUntil: now.Add(s.restoreWindow)}, nil
+}
+
 func (s *ServiceImpl) GetProfile(ctx context.Context, userID string) (Profile, error) {
 	if strings.TrimSpace(userID) == "" {
 		return Profile{}, apperror.ErrUnauthorized("authentication required")
@@ -621,6 +711,9 @@ func (s *ServiceImpl) GetProfile(ctx context.Context, userID string) (Profile, e
 	u, err := s.users.FindByID(ctx, userID)
 	if err != nil {
 		return Profile{}, err
+	}
+	if u == nil || u.IsDeleted {
+		return Profile{}, apperror.ErrUnauthorized("invalid session")
 	}
 	return profileFromUser(u), nil
 }
@@ -802,6 +895,11 @@ func (s *ServiceImpl) issueSession(ctx context.Context, u *entity.User, d string
 type sessionOutput struct{ AccessToken, RefreshToken string }
 
 func (s *ServiceImpl) issueRefreshAndAccess(ctx context.Context, u *entity.User, d string) (sessionOutput, error) {
+	// Accounts created before roles existed have no role stored. They are regular users; refusing
+	// to issue a token for them would lock legacy users out of their own account.
+	if !u.Role.Valid() {
+		u.Role = entity.RoleUser
+	}
 	a, e := infraauth.GenerateAccessTokenForDevice(u.ID, u.Role, u.SessionVersion, d, s.accessTTL, s.secret)
 	if e != nil {
 		return sessionOutput{}, apperror.ErrInternal("failed to create access token")
@@ -890,7 +988,7 @@ func validDevice(v string) error {
 }
 func normalizePhone(v string) (string, error) {
 	v = strings.TrimSpace(v)
-	if len(v) < 8 || len(v) > 15 || !strings.HasPrefix(v, "+") {
+	if len(v) < 8 || len(v) > 16 || !strings.HasPrefix(v, "+") {
 		return "", errors.New("invalid phone")
 	}
 	for _, r := range v[1:] {

@@ -41,6 +41,11 @@ const CodeDeviceRemovalForbidden Code = "DEVICE_REMOVAL_FORBIDDEN"
 // "session expired" message. The HTTP status is still 401.
 const CodeDeviceRemoved Code = "DEVICE_REMOVED"
 
+// CodeAccountDeleted means the credentials are correct but the account was soft-deleted. It is
+// only ever returned after the password was verified, so it cannot be used to probe which phone
+// numbers are registered. Clients offer to restore the account while the grace period lasts.
+const CodeAccountDeleted Code = "ACCOUNT_DELETED"
+
 type AppError struct {
 	Code    Code
 	Message string
@@ -100,6 +105,9 @@ func ErrDeviceRemovalForbidden(message string, wrapped ...error) *AppError {
 }
 func ErrDeviceRemoved(message string, wrapped ...error) *AppError {
 	return newAppError(CodeDeviceRemoved, message, firstOrNil(wrapped))
+}
+func ErrAccountDeleted(message string, wrapped ...error) *AppError {
+	return newAppError(CodeAccountDeleted, message, firstOrNil(wrapped))
 }
 func ErrInternal(message string, wrapped ...error) *AppError {
 	return newAppError(CodeInternal, message, firstOrNil(wrapped))

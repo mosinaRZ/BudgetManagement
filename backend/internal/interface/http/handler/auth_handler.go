@@ -116,7 +116,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, err)
 		return
 	}
-	out, err := h.usecase.Login(r.Context(), auth.LoginInput{Identifier: q.Identifier, Password: q.Password, DeviceID: q.DeviceID, Device: deviceInfoFrom(r, q.DeviceInfo)})
+	out, err := h.usecase.Login(r.Context(), auth.LoginInput{Identifier: q.Identifier, Password: q.Password, DeviceID: q.DeviceID, RestoreAccount: q.RestoreAccount, Device: deviceInfoFrom(r, q.DeviceInfo)})
 	if err != nil {
 		response.Error(w, err)
 		return
@@ -329,6 +329,35 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, http.StatusOK, dto.ChangePasswordResponse{AccessToken: out.AccessToken, RefreshToken: out.RefreshToken, KdfSalt: out.KdfSalt, UserID: out.UserID, Role: out.Role, PasswordKeyEnvelope: enc(out.PasswordKeyEnvelope), PasswordKeyNonce: enc(out.PasswordKeyNonce), RecoveryKeyEnvelope: enc(out.RecoveryKeyEnvelope), RecoveryKeyNonce: enc(out.RecoveryKeyNonce)})
+}
+
+// DeleteAccount soft-deletes the authenticated user's account (route is behind Auth).
+func (h *AuthHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
+	userID, ok := contextkeys.UserID(r.Context())
+	if !ok || userID == "" {
+		response.Error(w, apperror.ErrUnauthorized("authentication required"))
+		return
+	}
+	var q dto.DeleteAccountRequest
+	if err := decodeJSON(w, r, &q); err != nil {
+		response.Error(w, err)
+		return
+	}
+	if err := validateRequest(h.validate, q); err != nil {
+		response.Error(w, err)
+		return
+	}
+	deleter, ok := h.usecase.(auth.AccountDeleter)
+	if !ok {
+		response.Error(w, apperror.ErrInternal("account deletion service is not configured"))
+		return
+	}
+	out, err := deleter.DeleteAccount(r.Context(), auth.DeleteAccountInput{UserID: userID, Password: q.Password})
+	if err != nil {
+		response.Error(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, dto.DeleteAccountResponse{DeletedAtMs: out.DeletedAt.UnixMilli(), RestorableUntilMs: out.RestorableUntil.UnixMilli()})
 }
 
 // deviceInfoFrom merges the optional client-supplied description with the client IP

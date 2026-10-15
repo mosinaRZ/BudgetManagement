@@ -277,3 +277,32 @@ func (r *userRepo) IncrementSessionVersion(ctx context.Context, userID string) (
 	}
 	return m.SessionVersion, nil
 }
+
+// SetDeleted flips the soft-delete flag atomically and invalidates all access tokens by bumping
+// sessionVersion. Restoring also clears the failed-login counter so the owner is not locked out.
+func (r *userRepo) SetDeleted(ctx context.Context, userID string, deleted bool, at time.Time) (uint64, error) {
+	oid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return 0, apperror.ErrNotFound("user not found")
+	}
+	at = at.UTC()
+	set := bson.M{"isDeleted": deleted, "updatedAt": at}
+	update := bson.M{"$inc": bson.M{"sessionVersion": 1}}
+	if deleted {
+		set["deletedAt"] = at
+	} else {
+		set["failedLoginAttempts"] = 0
+		update["$unset"] = bson.M{"deletedAt": "", "lockedUntil": ""}
+	}
+	update["$set"] = set
+	var m models.UserModel
+	err = r.c.FindOneAndUpdate(ctx, bson.M{"_id": oid}, update,
+		options.FindOneAndUpdate().SetReturnDocument(options.After).SetProjection(bson.M{"sessionVersion": 1})).Decode(&m)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return 0, apperror.ErrNotFound("user not found")
+	}
+	if err != nil {
+		return 0, apperror.ErrInternal("failed to update account deletion state", err)
+	}
+	return m.SessionVersion, nil
+}

@@ -31,6 +31,8 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	if _, err := db.Collection(usersCollectionName).Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{{Key: "phoneHash", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true).SetName("uniq_user_phone_hash")},
 		{Keys: bson.D{{Key: "emailHash", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true).SetName("uniq_user_email_hash")},
+		// Lets the purge job find expired soft-deleted accounts without scanning the collection.
+		{Keys: bson.D{{Key: "isDeleted", Value: 1}, {Key: "deletedAt", Value: 1}}, Options: options.Index().SetPartialFilterExpression(bson.M{"isDeleted": true}).SetName("idx_user_deleted")},
 	}); err != nil {
 		return fmt.Errorf("users indexes: %w", err)
 	}

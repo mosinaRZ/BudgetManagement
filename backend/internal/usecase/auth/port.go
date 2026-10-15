@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"time"
 
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
 )
@@ -30,7 +31,10 @@ type RegisterOutput struct {
 }
 type LoginInput struct {
 	Identifier, Password, DeviceID string
-	Device                         DeviceInfo
+	// RestoreAccount asks the server to un-delete a soft-deleted account (within the grace
+	// period) as part of this sign-in. Without it a deleted account gets ACCOUNT_DELETED.
+	RestoreAccount bool
+	Device         DeviceInfo
 }
 type LoginOutput struct {
 	AccessToken, RefreshToken, KdfSalt, UserID                                   string
@@ -87,6 +91,23 @@ type ChangePasswordInput struct {
 
 // ChangePasswordOutput is a fresh session for the calling device.
 type ChangePasswordOutput = ResetPasswordOutput
+
+// DeleteAccountInput soft-deletes the authenticated user's account. The password is
+// re-verified: a stolen access token alone must not be able to delete an account.
+type DeleteAccountInput struct {
+	UserID, Password string
+}
+
+// DeleteAccountOutput tells the client until when the account can still be restored.
+type DeleteAccountOutput struct {
+	DeletedAt, RestorableUntil time.Time
+}
+
+// AccountDeleter is implemented by services that support soft-deleting an account. It is a
+// separate interface so existing Service fakes keep compiling.
+type AccountDeleter interface {
+	DeleteAccount(context.Context, DeleteAccountInput) (DeleteAccountOutput, error)
+}
 
 type OTPService interface {
 	Request(context.Context, RequestOTPInput) (RequestOTPOutput, error)

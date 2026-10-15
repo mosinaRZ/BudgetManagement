@@ -23,6 +23,7 @@ type RouterDependencies struct {
 	SyncHandler        *handler.SyncHandler
 	AdminHandler       *handler.AdminHandler
 	DeviceHandler      *handler.DeviceHandler
+	LegalHandler       *handler.LegalHandler
 	JWTSecret          string
 	UserRepository     repository.UserRepository
 	DeviceRepository   repository.DeviceRepository
@@ -57,6 +58,11 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 			response.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 		})
 
+		if deps.LegalHandler != nil {
+			r.Get("/privacy-policy", deps.LegalHandler.PrivacyPolicy)
+			r.Get("/account-deletion", deps.LegalHandler.AccountDeletion)
+		}
+
 		if deps.AuthHandler != nil {
 			r.With(otpRateLimiter.LimitByIP).Post("/auth/otp/request", deps.AuthHandler.RequestOTP)
 			r.Post("/auth/register", deps.AuthHandler.Register)
@@ -77,6 +83,9 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 			r.Get("/api/v1/account/profile", deps.AuthHandler.GetProfile)
 			r.Put("/api/v1/account/profile", deps.AuthHandler.UpdateProfile)
 			r.Put("/api/v1/account/email", deps.AuthHandler.UpdateEmail)
+			// POST (not DELETE) because the password must travel in the body and some HTTP
+			// clients, including Android's HttpURLConnection, do not send bodies with DELETE.
+			r.Post("/api/v1/account/delete", deps.AuthHandler.DeleteAccount)
 		}
 		if deps.SyncHandler != nil {
 			r.Post("/api/v1/sync", deps.SyncHandler.HandleSync)

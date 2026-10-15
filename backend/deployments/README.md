@@ -65,3 +65,25 @@ git pull && docker compose up -d --build
 cp ../.env.example .env
 docker compose -f docker-compose.dev.yml up --build -d   # API روی http://localhost:8080
 ```
+
+## حذف حساب و پاکسازی نهایی
+
+حذف حساب «نرم» است: کاربر از برنامه (`تنظیمات ← امنیت ← حذف حساب کاربری`) حساب را حذف می‌کند و `isDeleted=true` می‌شود؛ همه نشست‌ها فوراً باطل می‌شوند. تا ۳۰ روز با ورود و انتخاب «بازیابی حساب» برمی‌گردد. بعد از آن باید داده‌ها برای همیشه پاک شوند (الزام گوگل‌پلی). یک cron روزانه بگذارید:
+
+```bash
+# crontab -e   (هر شب ساعت ۳)
+0 3 * * * cd /path/to/BudgetManagement/backend/deployments && docker compose exec -T api /app/purge-deleted --older-than-days 30
+# پیش‌نمایش بدون حذف:
+docker compose exec api /app/purge-deleted --older-than-days 30 --dry-run
+```
+
+تا قبل از پاکسازی، ثبت‌نام دوباره با همان شماره خطای Conflict می‌دهد (کاربر باید حساب را بازیابی کند).
+
+## صفحه‌های لازم برای گوگل‌پلی
+
+بک‌اند این دو آدرس عمومی را سرو می‌کند (متغیر `SUPPORT_EMAIL` را در `.env` پر کنید):
+
+- `https://api.example.com/privacy-policy` ← فیلد Privacy policy در Play Console
+- `https://api.example.com/account-deletion` ← فیلد Delete account URL در بخش Data safety
+
+متن‌ها پیش‌نویس‌اند؛ قبل از انتشار با شرایط حقوقی خودتان تطبیق دهید.
