@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Google Play flavor: READ_SMS / RECEIVE_SMS are restricted permissions that Play only grants to
+  default SMS handlers and a few approved use cases (not expense trackers), so they are removed.
+  The SMS receiver itself is switched off through the smsReceiverEnabled manifest placeholder
+  (see build.gradle.kts); without the permission it could not receive anything anyway.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.READ_SMS" tools:node="remove" />
+    <uses-permission android:name="android.permission.RECEIVE_SMS" tools:node="remove" />
+</manifest>

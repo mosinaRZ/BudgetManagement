@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import ir.hamedan.budgetmanagement.data.network.ApiException
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Visibility
@@ -74,6 +75,7 @@ fun LoginScreen(
     var isPasswordVisible by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoggingIn by remember { mutableStateOf(false) }
+    var showRestoreDialog by remember { mutableStateOf(false) }
     var biometricPromptShown by remember(localUnlockOnly) { mutableStateOf(false) }
     var biometricCanceled by remember(localUnlockOnly) { mutableStateOf(false) }
 
@@ -215,23 +217,15 @@ fun LoginScreen(
         }
     }
 
-    fun submitServerLogin() {
-        if (isLoggingIn) return
-        val validationError = LoginInputValidator.validate(username, password, isPersian)
-        if (validationError != null) {
-            errorMessage = validationError
-            return
-        }
-        // "09123456789" / "0912 345 6789" / Persian digits -> "+989123456789" (what the API expects).
-        val identifier = AuthInputNormalizer.identifier(username)
-        if (identifier == null) {
-            errorMessage = if (isPersian) "شماره موبایل یا ایمیل معتبر نیست" else "Enter a valid phone number or email"
-            return
-        }
+    /**
+     * Signs in against the server. [restoreAccount] is only ever true after the server said the
+     * account was deleted and the user explicitly agreed to recover it in the dialog below.
+     */
+    fun runServerLogin(identifier: String, restoreAccount: Boolean) {
         isLoggingIn = true
         errorMessage = null
         scope.launch {
-            authRepository.login(identifier, password)
+            authRepository.login(identifier, password, restoreAccount)
                 .onSuccess {
                     runCatching {
                         app.seedDefaultCategoriesIfNeeded()
@@ -282,9 +276,70 @@ fun LoginScreen(
                 }
                 .onFailure { error ->
                     isLoggingIn = false
-                    errorMessage = authErrorMessage(error, isPersian, AuthContext.LOGIN)
+                    if ((error as? ApiException)?.code == "ACCOUNT_DELETED") {
+                        // Correct credentials, but the account was deleted: offer to restore it.
+                        showRestoreDialog = true
+                    } else {
+                        errorMessage = authErrorMessage(error, isPersian, AuthContext.LOGIN)
+                    }
                 }
         }
+    }
+
+    fun submitServerLogin() {
+        if (isLoggingIn) return
+        val validationError = LoginInputValidator.validate(username, password, isPersian)
+        if (validationError != null) {
+            errorMessage = validationError
+            return
+        }
+        // "09123456789" / "0912 345 6789" / Persian digits -> "+989123456789" (what the API expects).
+        val identifier = AuthInputNormalizer.identifier(username)
+        if (identifier == null) {
+            errorMessage = if (isPersian) "شماره موبایل یا ایمیل معتبر نیست" else "Enter a valid phone number or email"
+            return
+        }
+        runServerLogin(identifier, restoreAccount = false)
+    }
+
+    if (showRestoreDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestoreDialog = false },
+            shape = RoundedCornerShape(28.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = {
+                Text(
+                    text = if (isPersian) "این حساب حذف شده است" else "This account was deleted",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = if (isPersian)
+                        "این حساب را قبلاً حذف کرده‌اید، اما هنوز در مهلت بازیابی هستید. با بازیابی، حساب و اطلاعات همگام‌شده‌ی شما دوباره فعال می‌شود."
+                    else
+                        "You deleted this account earlier, but it can still be restored. Restoring brings back your account and synced data.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRestoreDialog = false
+                        val identifier = AuthInputNormalizer.identifier(username)
+                        if (identifier != null) runServerLogin(identifier, restoreAccount = true)
+                    },
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text(if (isPersian) "بازیابی حساب" else "Restore account") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestoreDialog = false }) {
+                    Text(if (isPersian) "انصراف" else "Cancel")
+                }
+            }
+        )
     }
 
     LaunchedEffect(unlockMode, biometricReady) {

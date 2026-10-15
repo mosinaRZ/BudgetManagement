@@ -42,12 +42,23 @@ class AuthApi(private val client: ApiHttpClient) {
         return parseRegisterResponse(response.json())
     }
 
-    fun login(identifier: String, password: String, deviceId: String, deviceInfo: JSONObject? = null): LoginResponse {
+    /**
+     * @param restoreAccount set only after the user confirmed they want to recover an account that
+     * the server reported as deleted (ACCOUNT_DELETED). The server honours it within the grace period.
+     */
+    fun login(
+        identifier: String,
+        password: String,
+        deviceId: String,
+        deviceInfo: JSONObject? = null,
+        restoreAccount: Boolean = false
+    ): LoginResponse {
         val body = JSONObject()
             .put("identifier", identifier)
             .put("password", password)
             .put("device_id", deviceId)
         deviceInfo?.let { body.put("device_info", it) }
+        if (restoreAccount) body.put("restore_account", true)
 
         val response = client.request("POST", "/auth/login", body)
         ensureSuccess(response, "ورود ناموفق بود.")

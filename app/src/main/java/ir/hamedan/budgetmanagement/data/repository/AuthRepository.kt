@@ -4,7 +4,11 @@ import ir.hamedan.budgetmanagement.data.network.AuthApi
 
 interface AuthRepository {
     suspend fun requestOtp(destination: String, channel: String, purpose: String): Result<AuthApi.OtpResponse>
-    suspend fun login(identifier: String, password: String): Result<Unit>
+    /**
+     * @param restoreAccount pass `true` only after the server answered ACCOUNT_DELETED and the user
+     * agreed to recover the account (possible during the server's grace period).
+     */
+    suspend fun login(identifier: String, password: String, restoreAccount: Boolean = false): Result<Unit>
     suspend fun register(input: RegistrationInput): Result<RegistrationResult>
     suspend fun prepareRecovery(challengeId: String, otpCode: String, recoveryKey: String): Result<AuthApi.RecoveryPreparation>
     suspend fun resetPassword(
@@ -19,6 +23,13 @@ interface AuthRepository {
     /** Changes the password of the signed-in account; other sessions are revoked server-side. */
     suspend fun changePassword(currentPassword: String, newPassword: String): Result<Unit>
     suspend fun logout(): Result<Unit>
+
+    /**
+     * Soft-deletes the signed-in account on the server (isDeleted=true, restorable for a grace
+     * period) after re-verifying [password], then removes everything this device holds for it:
+     * session, encrypted local data, data key and local-unlock credentials.
+     */
+    suspend fun deleteAccount(password: String): Result<Unit>
 
     /**
      * Prepares signing in to a DIFFERENT account on this device.

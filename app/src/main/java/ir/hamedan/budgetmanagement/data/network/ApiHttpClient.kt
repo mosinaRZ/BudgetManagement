@@ -104,6 +104,8 @@ class ApiException(
         "NETWORK_ERROR" -> if (isPersian) "اتصال به سرور برقرار نشد. اینترنت و اتصال سرور را بررسی کنید." else "Could not connect to the server. Check your internet connection."
         "UNAUTHORIZED" -> if (isPersian) "نشست شما منقضی شده است. دوباره وارد شوید." else "Your session has expired. Please sign in again."
         "FORBIDDEN" -> if (isPersian) "شما اجازه انجام این عملیات را ندارید." else "You are not allowed to perform this operation."
+        "ACCOUNT_DELETED" -> if (isPersian) "این حساب حذف شده است." else "This account has been deleted."
+        "INVALID_PASSWORD" -> if (isPersian) "گذرواژه نادرست است." else "The password is incorrect."
         "PRIMARY_DEVICE_PROTECTED" -> if (isPersian) "دستگاه اصلی فقط از خود همان دستگاه قابل حذف است." else "The primary device can only be removed from the primary device itself."
         "DEVICE_REMOVED" -> if (isPersian) "این دستگاه از حساب شما حذف شده است. دوباره وارد شوید." else "This device was removed from your account. Please sign in again."
         "DEVICE_REMOVAL_FORBIDDEN" -> if (isPersian) "فقط دستگاه اصلی می‌تواند دستگاه‌های دیگر را حذف کند." else "Only the primary device can remove other devices."

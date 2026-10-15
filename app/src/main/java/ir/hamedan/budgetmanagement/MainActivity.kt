@@ -732,6 +732,12 @@ class MainActivity : FragmentActivity() {
                                             popUpTo(AppRoute.MainStructure) { inclusive = true }
                                         }
                                     }
+                                },
+                                onAccountDeleted = {
+                                    // Session and local data were already wiped by deleteAccount().
+                                    navController.navigate(AppRoute.Login()) {
+                                        popUpTo(AppRoute.MainStructure) { inclusive = true }
+                                    }
                                 }
                             )
                         }

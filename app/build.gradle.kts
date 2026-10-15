@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -9,6 +11,23 @@ val configuredBackendBaseUrl = providers.gradleProperty("backendBaseUrl")
     .orElse(providers.environmentVariable("BACKEND_BASE_URL"))
     .orElse("https://api.example.com/")
     .get()
+
+// Debug backend: emulator host by default; override with -PdebugBackendBaseUrl=http://<LAN-IP>:8080/
+// or DEBUG_BACKEND_BASE_URL (debug builds only, never shipped).
+val debugBackendBaseUrl = providers.gradleProperty("debugBackendBaseUrl")
+    .orElse(providers.environmentVariable("DEBUG_BACKEND_BASE_URL"))
+    .orElse("http://10.0.2.2:8080/")
+    .get()
+    .trim().trimEnd('/') + "/"
+
+// Release signing: keystore.properties (git-ignored) or environment variables (CI).
+// Keys: storeFile, storePassword, keyAlias, keyPassword.
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+fun signingValue(key: String, env: String): String? =
+    keystoreProps.getProperty(key) ?: System.getenv(env)
 
 fun requireProductionBackendUrl(url: String): String {
     val normalized = url.trim().trimEnd('/') + "/"
@@ -33,8 +52,9 @@ android {
         applicationId = "ir.hamedan.budgetmanagement"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.1.0"
+        // Play rejects an upload whose versionCode was already used: bump with -PversionCode=N.
+        versionCode = providers.gradleProperty("versionCode").map { it.toInt() }.getOrElse(1)
+        versionName = providers.gradleProperty("versionName").getOrElse("1.1.0")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -42,10 +62,38 @@ android {
         buildConfigField("String", "BASE_URL", "\"https://api.example.com/\"")
     }
 
+    flavorDimensions += "store"
+    productFlavors {
+        // Google Play: no SMS permissions (restricted by Play policy).
+        create("play") {
+            dimension = "store"
+            buildConfigField("Boolean", "SMS_IMPORT_ENABLED", "false")
+            manifestPlaceholders["smsReceiverEnabled"] = "false"
+        }
+        // Bazaar / Myket / direct APK: SMS-based transaction detection enabled.
+        create("direct") {
+            dimension = "store"
+            buildConfigField("Boolean", "SMS_IMPORT_ENABLED", "true")
+            manifestPlaceholders["smsReceiverEnabled"] = "true"
+        }
+    }
+
+    signingConfigs {
+        val storePath = signingValue("storeFile", "RELEASE_STORE_FILE")
+        if (storePath != null) {
+            create("release") {
+                storeFile = rootProject.file(storePath)
+                storePassword = signingValue("storePassword", "RELEASE_STORE_PASSWORD")
+                keyAlias = signingValue("keyAlias", "RELEASE_KEY_ALIAS")
+                keyPassword = signingValue("keyPassword", "RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
-            buildConfigField("String", "BASE_URL", "\"http://192.168.94.17:8080/\"")
+            buildConfigField("String", "BASE_URL", "\"$debugBackendBaseUrl\"")
             buildConfigField("Boolean", "ENABLE_LOGS", "true")
         }
 
@@ -63,6 +111,7 @@ android {
                 "\"${configuredBackendBaseUrl.trim().trimEnd('/') + "/"}\""
             )
             buildConfigField("Boolean", "ENABLE_LOGS", "false")
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
     compileOptions {
@@ -101,6 +150,10 @@ gradle.taskGraph.whenReady {
 
     if (releaseRequested) {
         requireProductionBackendUrl(configuredBackendBaseUrl)
+        val publishing = allTasks.any { it.name.startsWith("bundle") && it.name.contains("Release") }
+        require(!publishing || signingValue("storeFile", "RELEASE_STORE_FILE") != null) {
+            "Release bundles must be signed: create keystore.properties (storeFile, storePassword, keyAlias, keyPassword) or set RELEASE_* environment variables."
+        }
     }
 }
 

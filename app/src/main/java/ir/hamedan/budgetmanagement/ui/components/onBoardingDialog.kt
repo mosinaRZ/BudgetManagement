@@ -175,17 +175,20 @@ data class OnboardingPermission(
 )
 
 fun onboardingPermissions(sdkInt: Int): List<OnboardingPermission> = buildList {
-    add(
-        OnboardingPermission(
-            key = "sms",
-            permissions = listOf(Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS),
-            emoji = "💬",
-            titleFa = "پیامک بانکی",
-            titleEn = "Bank SMS",
-            reasonFa = "برای تشخیص خودکار تراکنش‌های بانکی از پیامک و ثبت سریع‌تر بدون تایپ دستی.",
-            reasonEn = "To automatically detect bank transactions from SMS and log them faster."
+    // The Google Play flavor ships without SMS permissions (restricted by Play policy).
+    if (ir.hamedan.budgetmanagement.BuildConfig.SMS_IMPORT_ENABLED) {
+        add(
+            OnboardingPermission(
+                key = "sms",
+                permissions = listOf(Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS),
+                emoji = "💬",
+                titleFa = "پیامک بانکی",
+                titleEn = "Bank SMS",
+                reasonFa = "برای تشخیص خودکار تراکنش‌های بانکی از پیامک و ثبت سریع‌تر بدون تایپ دستی.",
+                reasonEn = "To automatically detect bank transactions from SMS and log them faster."
+            )
         )
-    )
+    }
     if (sdkInt >= Build.VERSION_CODES.TIRAMISU) {
         add(
             OnboardingPermission(
