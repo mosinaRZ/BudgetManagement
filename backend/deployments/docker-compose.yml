@@ -29,6 +29,8 @@ services:
     build:
       context: ..
       dockerfile: deployments/Dockerfile
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     restart: unless-stopped
     expose:
       - "8080"
