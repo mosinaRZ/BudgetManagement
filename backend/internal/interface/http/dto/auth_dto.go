@@ -57,6 +57,8 @@ type LoginRequest struct {
 	Password   string             `json:"password" validate:"required,max=256"`
 	DeviceID   string             `json:"device_id" validate:"required,max=128"`
 	DeviceInfo *DeviceInfoRequest `json:"device_info,omitempty"`
+	// RestoreAccount un-deletes a soft-deleted account during this sign-in (grace period only).
+	RestoreAccount bool `json:"restore_account,omitempty"`
 }
 type LoginResponse struct {
 	AccessToken         string      `json:"access_token"`
@@ -137,6 +139,18 @@ type ChangePasswordResponse struct {
 	PasswordKeyNonce    string      `json:"password_key_nonce"`
 	RecoveryKeyEnvelope string      `json:"recovery_key_envelope"`
 	RecoveryKeyNonce    string      `json:"recovery_key_nonce"`
+}
+
+// DeleteAccountRequest soft-deletes the authenticated account. The password is re-verified.
+type DeleteAccountRequest struct {
+	Password string `json:"password" validate:"required,max=256"`
+}
+
+// DeleteAccountResponse reports when the account was deleted and until when it can be restored.
+// Both values are Unix milliseconds.
+type DeleteAccountResponse struct {
+	DeletedAtMs       int64 `json:"deleted_at_ms"`
+	RestorableUntilMs int64 `json:"restorable_until_ms"`
 }
 
 type LogoutRequest struct {

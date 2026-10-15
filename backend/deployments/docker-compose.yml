@@ -1,20 +1,50 @@
+# Single-VPS stack: Caddy (HTTPS) -> API -> MongoDB (single-node replica set) + daily backups.
+# No Redis. Only Caddy publishes ports (80/443); MongoDB and the API stay on the internal network.
+#
+#   cd backend/deployments
+#   cp .env.production.example .env   # then edit every value
+#   docker compose up -d --build
+
+name: cidna
+
 services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?API_DOMAIN must be set (e.g. api.example.com)}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+
   api:
     build:
       context: ..
       dockerfile: deployments/Dockerfile
-    ports:
-      - "8080:8080"
+    restart: unless-stopped
+    expose:
+      - "8080"
     environment:
-      ENV: dev
+      ENV: ${ENV:-prod}
       HTTP_PORT: 8080
       MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/?replicaSet=rs0&authSource=admin
-      REDIS_URL: ${REDIS_URL:-}
-      MONGO_DB_NAME: cidna_sync_db
+      MONGO_DB_NAME: ${MONGO_DB_NAME:-cidna_sync_db}
+      # MongoDB is only reachable on the private Docker network of this host.
+      MONGO_ALLOW_PLAINTEXT: "true"
+      # HTTPS is terminated by Caddy; the API speaks plain HTTP on the internal network.
+      TLS_TERMINATED_BY_PROXY: "true"
+      TRUSTED_PROXY_CIDRS: ${INTERNAL_SUBNET:-172.29.0.0/24}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
       JWT_ACCESS_TTL_MINUTES: ${JWT_ACCESS_TTL_MINUTES:?JWT_ACCESS_TTL_MINUTES must be set}
       JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS:?JWT_REFRESH_TTL_DAYS must be set}
-      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       OTP_EXPIRY_MINUTES: ${OTP_EXPIRY_MINUTES:-5}
       DEV_LOG_OTP: ${DEV_LOG_OTP:-false}
@@ -25,6 +55,7 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAIL_FROM: ${EMAIL_FROM:-}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
     depends_on:
       mongo:
         condition: service_healthy
@@ -33,25 +64,34 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+      start_period: 10s
 
   mongo:
     build:
       context: .
       dockerfile: Mongo.Dockerfile
-    image: cidna-mongo:dev
+    image: cidna-mongo:local
+    restart: unless-stopped
+    # Single-node replica set (required for transactions) with authentication.
+    # The cache is capped so MongoDB and the API can share a small VPS.
     command:
       - mongod
       - --replSet
       - rs0
       - --bind_ip_all
       - --keyFile
-      - /etc/mongo-keyfile
+      - /keyfile/mongo-keyfile
+      - --wiredTigerCacheSizeGB
+      - "${MONGO_CACHE_GB:-0.5}"
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:?MONGO_INITDB_ROOT_USERNAME must be set}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:?MONGO_INITDB_ROOT_PASSWORD must be set}
     volumes:
       - mongo_data:/data/db
+      - mongo_keyfile:/keyfile
     healthcheck:
+      # Healthy only once this node is PRIMARY. On first start the replica set does not
+      # exist yet: initiate it and report unhealthy until the election finishes.
       test:
         - CMD-SHELL
         - >-
@@ -60,23 +100,41 @@ services:
           --password "$$MONGO_INITDB_ROOT_PASSWORD"
           --authenticationDatabase admin
           --eval
-          "try {
-            rs.status().ok
-          } catch (e) {
-            rs.initiate({
-              _id:'rs0',
-              members:[{_id:0, host:'mongo:27017'}]
-            }).ok
-          }"
-      interval: 10s
+          "let ok = false;
+          try { ok = rs.status().myState === 1 }
+          catch (e) {
+            try { rs.initiate({_id:'rs0', members:[{_id:0, host:'mongo:27017'}]}) } catch (e2) {}
+          }
+          quit(ok ? 0 : 1)"
+      interval: 5s
       timeout: 10s
-      retries: 10
+      retries: 30
+      start_period: 20s
 
-  redis:
-    image: redis:7-alpine
+  backup:
+    image: mongo:7
     restart: unless-stopped
-    networks:
-      default: null
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    environment:
+      MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/?replicaSet=rs0&authSource=admin
+      MONGO_DB_NAME: ${MONGO_DB_NAME:-cidna_sync_db}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      - ./backups:/backups
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${INTERNAL_SUBNET:-172.29.0.0/24}
 
 volumes:
   mongo_data:
+  mongo_keyfile:
+  caddy_data:
+  caddy_config:

@@ -12,8 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/redis/go-redis/v9"
-
 	"github.com/go-playground/validator/v10"
 
 	"github.com/mosinaRZ/finance-sync-backend/internal/infrastructure/config"
@@ -93,28 +91,12 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("invalid TRUSTED_PROXY_CIDRS: %w", err)
 	}
-	var rateStore middleware.RateLimitStore = middleware.NewMemoryRateLimitStore()
-	if strings.TrimSpace(cfg.RedisURL) != "" {
-		var redisOptions *redis.Options
-		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(cfg.RedisURL)), "redis://") || strings.HasPrefix(strings.ToLower(strings.TrimSpace(cfg.RedisURL)), "rediss://") {
-			redisOptions, err = redis.ParseURL(cfg.RedisURL)
-			if err != nil {
-				return fmt.Errorf("invalid REDIS_URL: %w", err)
-			}
-		} else {
-			redisOptions = &redis.Options{Addr: cfg.RedisURL}
-		}
-		rdb := redis.NewClient(redisOptions)
-		if err := rdb.Ping(startupCtx).Err(); err != nil {
-			return fmt.Errorf("redis configured but unavailable: %w", err)
-		}
-		defer rdb.Close()
-		rateStore = middleware.NewRedisRateLimitStore(rdb)
-	}
+	// Single-node deployment: rate-limit state lives in process memory.
+	rateStore := middleware.NewMemoryRateLimitStore()
 	corsOrigins := splitCSV(cfg.CORSAllowedOrigins)
 	router := httpiface.NewRouter(httpiface.RouterDependencies{
 		AuthHandler: authHandler, SyncHandler: syncHandler, AdminHandler: handler.NewAdminHandler(roleUC, validate),
-		DeviceHandler: handler.NewDeviceHandler(deviceUC), JWTSecret: cfg.JWTSecret, UserRepository: userRepo, DeviceRepository: deviceRepo, Env: cfg.Env,
+		DeviceHandler: handler.NewDeviceHandler(deviceUC), LegalHandler: handler.NewLegalHandler(supportEmail(cfg)), JWTSecret: cfg.JWTSecret, UserRepository: userRepo, DeviceRepository: deviceRepo, Env: cfg.Env,
 		TrustedProxyCIDRs: trustedProxies, CORSAllowedOrigins: corsOrigins, RateLimitStore: rateStore,
 	})
 
@@ -129,8 +111,8 @@ func run() error {
 
 	serverErrors := make(chan error, 1)
 	go func() {
-		log.Info("HTTP server is listening", "address", srv.Addr, "tls", cfg.Env == "prod")
-		if cfg.Env == "prod" {
+		log.Info("HTTP server is listening", "address", srv.Addr, "tls", cfg.ServeTLS, "tlsTerminatedByProxy", cfg.TLSTerminatedByProxy)
+		if cfg.ServeTLS {
 			serverErrors <- srv.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile)
 			return
 		}
@@ -186,4 +168,12 @@ func splitCSV(raw string) []string {
 		}
 	}
 	return out
+}
+
+// supportEmail is the public contact shown on the legal pages: SUPPORT_EMAIL, else the OTP sender.
+func supportEmail(cfg *config.Config) string {
+	if v := strings.TrimSpace(os.Getenv("SUPPORT_EMAIL")); v != "" {
+		return v
+	}
+	return cfg.EmailFrom
 }

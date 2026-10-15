@@ -22,4 +22,8 @@ type UserRepository interface {
 	ResetFailedLogin(context.Context, string) error
 	GetSessionVersion(context.Context, string) (uint64, error)
 	IncrementSessionVersion(context.Context, string) (uint64, error)
+	// SetDeleted soft-deletes (deleted=true) or restores (deleted=false) an account. In both
+	// directions it bumps the session version so every previously issued access token stops
+	// working, and it returns the new version.
+	SetDeleted(ctx context.Context, userID string, deleted bool, at time.Time) (uint64, error)
 }

@@ -1,0 +1,12 @@
+# Automatic HTTPS (Let's Encrypt) for the API. API_DOMAIN must be a DNS name
+# whose A/AAAA record points at this VPS, and ports 80/443 must be reachable.
+{$API_DOMAIN} {
+	encode zstd gzip
+
+	reverse_proxy api:8080 {
+		# Caddy sets X-Forwarded-For/-Proto itself; the API trusts them only
+		# from the internal Docker subnet (TRUSTED_PROXY_CIDRS).
+		health_uri /health
+		health_interval 15s
+	}
+}
