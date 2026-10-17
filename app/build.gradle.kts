@@ -16,7 +16,7 @@ val configuredBackendBaseUrl = providers.gradleProperty("backendBaseUrl")
 // or DEBUG_BACKEND_BASE_URL (debug builds only, never shipped).
 val debugBackendBaseUrl = providers.gradleProperty("debugBackendBaseUrl")
     .orElse(providers.environmentVariable("DEBUG_BACKEND_BASE_URL"))
-    .orElse("http://10.0.2.2:8080/")
+    .orElse("http://192.168.21.17:8080/")
     .get()
     .trim().trimEnd('/') + "/"
 
@@ -54,7 +54,7 @@ android {
         targetSdk = 36
         // Play rejects an upload whose versionCode was already used: bump with -PversionCode=N.
         versionCode = providers.gradleProperty("versionCode").map { it.toInt() }.getOrElse(1)
-        versionName = providers.gradleProperty("versionName").getOrElse("1.1.0")
+        versionName = providers.gradleProperty("versionName").getOrElse("1.1.1")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

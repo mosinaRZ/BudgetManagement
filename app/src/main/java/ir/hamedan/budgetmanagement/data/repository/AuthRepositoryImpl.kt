@@ -71,6 +71,9 @@ class AuthRepositoryImpl(
                 // another account) starts from a clean state instead of treating data as unsynced.
                 syncStateRepository.save(syncStateRepository.get().copy(accountUserId = null, syncRequired = false))
             }
+            // The cleanup steps above return their own Result values; end the block with Unit so the
+            // outer runCatching yields Result<Unit> instead of Result<Result<Unit>>.
+            Unit
         }
     }
 
