@@ -68,6 +68,7 @@ import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.DebtCreditEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
+import ir.hamedan.budgetmanagement.data.preferences.AmountPrivacyPreferences
 import ir.hamedan.budgetmanagement.data.preferences.DueReminderPreferences
 import ir.hamedan.budgetmanagement.ui.components.SwipeToConfirmButton
 import ir.hamedan.budgetmanagement.di.appViewModel
@@ -85,6 +86,7 @@ import ir.hamedan.budgetmanagement.utils.rememberAppHaptics
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.ui.screens.debtCredit.DebtCreditViewModel
 import ir.hamedan.budgetmanagement.utils.StringMapper
+import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.*
 import kotlin.math.abs
@@ -97,9 +99,6 @@ data class HomeDueItem(
     val type: String
 )
 
-// ===== حریم خصوصی مبالغ (نمایش/عدم‌نمایش تراز، درآمد و هزینه) =====
-private const val PRIVACY_PREFS_NAME = "home_privacy_prefs"
-private const val KEY_AMOUNTS_HIDDEN = "key_amounts_hidden"
 
 /**
  * جایگزینی مبلغ نمایشی با الگوی ستاره‌ای هنگام فعال بودن حالت حریم خصوصی.
@@ -107,7 +106,7 @@ private const val KEY_AMOUNTS_HIDDEN = "key_amounts_hidden"
  */
 private fun maskedStars(realLength: Int): String {
     val starCount = realLength.coerceIn(4, 9)
-    return "*".repeat(starCount)
+    return "●".repeat(starCount)
 }
 
 /**
@@ -196,21 +195,16 @@ fun HomeScreen(
     val isPersian = LocaleHelper.getLanguage(context) == "fa"
     val haptic = rememberAppHaptics()
 
-    // ===== وضعیت مخفی/نمایان بودن مبالغ (تراز کلی، درآمد و هزینه) با SharedPreferences =====
-    val privacyPrefs = remember {
-        context.getSharedPreferences(PRIVACY_PREFS_NAME, android.content.Context.MODE_PRIVATE)
-    }
-    var isAmountsHidden by remember {
-        mutableStateOf(privacyPrefs.getBoolean(KEY_AMOUNTS_HIDDEN, false))
-    }
-    // یک انیمیشن کوچک «چشمک» روی آیکون به هنگام هر تغییر وضعیت
+    // ===== وضعیت مخفی/نمایان بودن مبالغ (تراز کلی، درآمد و هزینه) — منبع واحد مشترک با ویجت =====
+    AmountPrivacyPreferences.init(context)
+    val isAmountsHidden by AmountPrivacyPreferences.hiddenFlow.collectAsState()
+// یک انیمیشن کوچک «چشمک» روی آیکون به هنگام هر تغییر وضعیت
     var eyeToggleTrigger by remember { mutableIntStateOf(0) }
     val eyeBlinkScale = remember { Animatable(1f) }
 
     fun toggleAmountsVisibility() {
         haptic.perform(AppHapticType.LongPress)
-        isAmountsHidden = !isAmountsHidden
-        privacyPrefs.edit().putBoolean(KEY_AMOUNTS_HIDDEN, isAmountsHidden).apply()
+        AmountPrivacyPreferences.toggle(context)   // ذخیره + آپدیت ویجت
         eyeToggleTrigger++
     }
 
