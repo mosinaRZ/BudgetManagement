@@ -5,6 +5,8 @@ import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
+import ir.hamedan.budgetmanagement.utils.CategoryRules
+import kotlinx.coroutines.flow.first
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
@@ -209,6 +211,15 @@ class TransactionViewModel(
 
     fun updateTransaction(transaction: TransactionEntity) {
         viewModelScope.launch {
+            // انتقال تراکنش به دسته‌ی «قلک» ممنوع است؛ فقط تراکنش‌های خودِ قلک می‌توانند در آن بمانند.
+            val target = categoryRepository.getAllCategories().first()
+                .firstOrNull { it.id == transaction.categoryId }
+            if (target != null && !CategoryRules.isUserSelectable(target)) {
+                val existing = transactionRepository.getAllTransactions().first()
+                    .firstOrNull { it.id == transaction.id }
+                if (existing?.categoryId != transaction.categoryId) return@launch
+            }
+
             transactionRepository.insertTransaction(transaction)
             BalanceWidget().updateAll(context)
 

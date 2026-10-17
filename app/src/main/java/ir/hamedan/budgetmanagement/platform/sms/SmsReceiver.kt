@@ -1,5 +1,6 @@
 package ir.hamedan.budgetmanagement.platform.sms
 
+import ir.hamedan.budgetmanagement.utils.CategoryRules
 import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -55,6 +56,11 @@ class SmsReceiver : BroadcastReceiver() {
         val smsTimestamp = messages[0].timestampMillis
 
         if (fullBody.isBlank() || !SmsParser.isLikelyBankSms(fullBody, sender)) {
+            if (BuildConfig.DEBUG) {
+                // فقط فرستنده و دلیل رد؛ متن پیامک عمداً لاگ نمی‌شود (حریم خصوصی).
+                val reason = SmsParser.parse(fullBody, smsTimestamp, sender).rejectReason
+                Log.d(TAG, "SMS ignored: sender=$sender reason=$reason length=${fullBody.length}")
+            }
             return
         }
 
@@ -90,7 +96,7 @@ class SmsReceiver : BroadcastReceiver() {
                 val suggestedCategory =
                     SmsParser.suggestCategory(
                         fullBody,
-                        categories
+                        CategoryRules.userSelectable(categories)
                     )
 
                 /*

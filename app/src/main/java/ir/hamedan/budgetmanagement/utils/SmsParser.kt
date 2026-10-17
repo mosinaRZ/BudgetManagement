@@ -124,6 +124,18 @@ object SmsParser {
         RegexOption.IGNORE_CASE
     )
 
+    /**
+     * Neo-banks (Blu) personalise the text: "<first name> عزیز، 100,000,000ریال به حساب شما نشست".
+     * The customer's own name must never be analysed: "هدیه" is a promo word, "سودابه" contains
+     * the income word "سود", "شارژ"/"فرصت" are vocabulary too. Only the name directly before
+     * the greeting word is removed (one or two words when it starts a line, one word otherwise),
+     * so header words such as "واریز پول" are untouched.
+     */
+    private val greetingNameRegex = Regex(
+        """(?m)^(?:\p{L}+[ ]+)?\p{L}+(?=[ ]+(?:عزیز|گرامی)[ ]*,)""" +
+                """|(?<!\p{L})\p{L}+(?=[ ]+(?:عزیز|گرامی)[ ]*,)"""
+    )
+
     /** "از حساب شما ..." / "به حساب شما ..." – typical statement phrasing of neo-banks. */
     private val accountPhraseRegex = Regex("""(?:از|به) حساب (?:شما|ت|تون)""")
 
@@ -241,7 +253,7 @@ object SmsParser {
     }
 
     fun suggestCategory(body: String, categories: List<CategoryEntity>): String {
-        val normalizedBody = normalizeText(body)
+        val normalizedBody = stripGreetingName(normalizeText(body))
         return categories
             .asSequence()
             .filter { it.title.isNotBlank() }
@@ -278,7 +290,7 @@ object SmsParser {
     )
 
     private fun analyze(body: String, sender: String?): Analysis {
-        val text = normalizeText(body)
+        val text = stripGreetingName(normalizeText(body))
         fun reject(reason: String) = Analysis(false, reason, null, 0, text)
 
         if (text.isBlank()) return reject("blank")
@@ -471,6 +483,10 @@ object SmsParser {
         }
         return s
     }
+
+    /** Removes the customer's first name from a "<name> عزیز،" greeting (input must be normalized). */
+    private fun stripGreetingName(text: String): String =
+        greetingNameRegex.replace(text, "").replace(Regex(""" {2,}"""), " ").trim()
 
     /**
      * Persian/Arabic digits -> Latin, Arabic letter variants -> Persian, strips bidi marks,

@@ -77,6 +77,7 @@ import ir.hamedan.budgetmanagement.ui.components.appSkeletonShimmer
 import ir.hamedan.budgetmanagement.ui.components.BalanceWidgetReceiver
 import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitViewModel
 import ir.hamedan.budgetmanagement.ui.screens.categories.CategoriesViewModel
+import ir.hamedan.budgetmanagement.utils.CategoryRules
 import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsViewModel
 import ir.hamedan.budgetmanagement.ui.screens.notification.NotificationViewModel
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
@@ -254,7 +255,8 @@ fun HomeScreen(
     val expensePendingCategories by pendingViewModel.expenseCategories.collectAsState()
     val incomePendingCategories by pendingViewModel.incomeCategories.collectAsState()
     val allPendingCategories = remember(expensePendingCategories, incomePendingCategories) {
-        expensePendingCategories + incomePendingCategories
+        // دسته‌ی «قلک» برای تراکنش پیامکی هم قابل انتخاب نیست.
+        CategoryRules.userSelectable(expensePendingCategories + incomePendingCategories)
     }
 
     // بررسی وضعیت بارگذاری کلی (اگر یکی از لیست‌های اصلی null باشد، در حالت Loading قرار می‌گیرد)

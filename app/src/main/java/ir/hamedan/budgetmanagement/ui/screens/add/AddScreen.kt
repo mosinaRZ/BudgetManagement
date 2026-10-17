@@ -49,6 +49,7 @@ import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.SwipeToConfirmButton
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
+import ir.hamedan.budgetmanagement.utils.CategoryRules
 import ir.hamedan.budgetmanagement.utils.CategorySuggestionHelper
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
@@ -163,7 +164,7 @@ fun AddScreen(
     // کمک‌کننده برای پیشنهاد دسته‌بندی (از لیست واقعی دیتابیس)
     fun trySuggestCategory(title: String) {
         if (userManuallySelectedCategory) return
-        val availableCategories = categoriesList.filter { it.isExpense == isExpense }
+        val availableCategories = categoriesList.filter { it.isExpense == isExpense && CategoryRules.isUserSelectable(it) }
         val suggested = CategorySuggestionHelper.suggestCategory(
             title = title,
             availableCategories = availableCategories,
@@ -572,7 +573,7 @@ fun AddScreen(
                                 .heightIn(max = 280.dp)
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                         ) {
-                            val filteredCategories = categoriesList.filter { it.isExpense == isExpense }
+                            val filteredCategories = categoriesList.filter { it.isExpense == isExpense && CategoryRules.isUserSelectable(it) }
 
                             if (filteredCategories.isEmpty()) {
                                 DropdownMenuItem(

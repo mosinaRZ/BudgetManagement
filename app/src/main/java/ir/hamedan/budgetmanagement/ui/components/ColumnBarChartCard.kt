@@ -11,6 +11,7 @@ import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import kotlin.math.abs
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,11 +27,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
+/**
+ * [value] عمداً Long است (نه Float): مبلغ باید دقیق بماند و فقط هنگام رسم
+ * ستون به نسبت (Float) تبدیل شود. Float فقط ~۷ رقم معنی‌دار دارد و مثلاً
+ * 100000000000 را به 99999997952 تبدیل می‌کند.
+ */
 data class BarChartEntry(
     val label: String,
-    val value: Float,
+    val value: Long,
     val isCurrent: Boolean = false
 )
+
+/** حافظه‌ی غیر-observable برای تصمیم‌گیری درباره‌ی نیاز به اسکرول بعد از تغییر داده. */
+private class ChartScrollMemory {
+    var entryCount: Int = -1
+}
+
+/** عرض هر ستون + فاصله‌ی بین ستون‌ها (dp) */
+private const val BAR_ITEM_EXTENT_DP = 76
 
 @Composable
 fun ColumnBarChartCard(
@@ -46,9 +60,13 @@ fun ColumnBarChartCard(
     scrollToIndex: Int? = null,
     selectedIndex: Int? = null,
     onEntryClick: ((Int) -> Unit)? = null,
-    valueFormatter: (Float) -> String = { it.toLong().toString() }
+    valueFormatter: (Long) -> String = { it.toString() }
 ) {
     val cardShape = RoundedCornerShape(24.dp)
+
+    // state در سطح کارت نگه داشته می‌شود تا با رفتن به حالت «بدون داده» و برگشت، موقعیت اسکرول گم نشود.
+    val listState = rememberLazyListState()
+    val scrollMemory = remember { ChartScrollMemory() }
 
     Box(
         modifier = modifier
@@ -104,27 +122,40 @@ fun ColumnBarChartCard(
                     )
                 }
             } else {
-                val maxValue = entries.maxOfOrNull { it.value }?.takeIf { it > 0f } ?: 1f
-                val listState = rememberLazyListState()
+                val maxValue = entries.maxOfOrNull { it.value }?.takeIf { it > 0L } ?: 1L
                 val density = LocalDensity.current
 
                 LaunchedEffect(scrollToIndex, entries.size) {
-                    scrollToIndex?.let { index ->
-                        if (index in entries.indices) {
-                            // ابتدا از ابتدای نمودار شروع می‌کنیم و سپس با easing
-                            // slow → fast → slow به نقطه‌ی هدف می‌رسیم.
+                    val target = scrollToIndex?.takeIf { it in entries.indices }
+                        ?: return@LaunchedEffect
+
+                    // اگر ساختار داده عوض شده (اولین نمایش یا تغییر بازه‌ی زمانی و تعداد ستون‌ها)
+                    // مثل قبل از ابتدا شروع می‌کنیم. اما در سوییچ هزینه/درآمد تعداد ستون‌ها
+                    // ثابت است و نباید اسکرول ریست شود.
+                    val structureChanged = scrollMemory.entryCount != entries.size
+                    scrollMemory.entryCount = entries.size
+
+                    if (structureChanged) {
+                        if (listState.firstVisibleItemIndex != 0 || listState.firstVisibleItemScrollOffset != 0) {
                             listState.scrollToItem(0)
-                            delay(120)
-                            val itemExtentPx = with(density) { 76.dp.toPx() }
-                            val currentScrollPx =
-                                listState.firstVisibleItemIndex * itemExtentPx + listState.firstVisibleItemScrollOffset
-                            val targetScrollPx =
-                                (index * itemExtentPx - itemExtentPx * 2f).coerceAtLeast(0f)
-                            listState.animateScrollBy(
-                                value = targetScrollPx - currentScrollPx,
-                                animationSpec = tween(durationMillis = 1100, easing = FastOutSlowInEasing)
-                            )
                         }
+                        delay(120)
+                    }
+
+                    val itemExtentPx = with(density) { BAR_ITEM_EXTENT_DP.dp.toPx() }
+                    val currentScrollPx =
+                        listState.firstVisibleItemIndex * itemExtentPx + listState.firstVisibleItemScrollOffset
+                    val targetScrollPx = (target * itemExtentPx - itemExtentPx * 2f).coerceAtLeast(0f)
+                    val delta = targetScrollPx - currentScrollPx
+
+                    // فقط اگر بین موقعیت فعلی و مقصد اختلاف واقعی هست، از همان موقعیت فعلی
+                    // تا مقصد اسکرول کن؛ مدت انیمیشن متناسب با فاصله است.
+                    if (abs(delta) >= 1f) {
+                        val durationMs = (350 + abs(delta) / itemExtentPx * 90f).toInt().coerceIn(450, 1100)
+                        listState.animateScrollBy(
+                            value = delta,
+                            animationSpec = tween(durationMillis = durationMs, easing = FastOutSlowInEasing)
+                        )
                     }
                 }
 
@@ -141,7 +172,7 @@ fun ColumnBarChartCard(
                         verticalAlignment = Alignment.Bottom
                     ) {
                         itemsIndexed(entries) { index, entry ->
-                            val targetHeight = (entry.value / maxValue) * 120f
+                            val targetHeight = (entry.value.toDouble() / maxValue.toDouble() * 120.0).toFloat()
                             val animatedHeight by animateFloatAsState(
                                 targetValue = targetHeight,
                                 animationSpec = tween(durationMillis = 800),

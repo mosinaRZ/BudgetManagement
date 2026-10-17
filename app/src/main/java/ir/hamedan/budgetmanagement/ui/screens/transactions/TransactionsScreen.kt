@@ -56,6 +56,7 @@ import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.ui.screens.add.ThousandsSeparatorTransformation
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
 import ir.hamedan.budgetmanagement.utils.DateUtils
+import ir.hamedan.budgetmanagement.utils.CategoryRules
 import ir.hamedan.budgetmanagement.utils.CategorySuggestionHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
 import kotlinx.coroutines.delay
@@ -1145,18 +1146,31 @@ private fun EditTransactionBottomSheet(
     val expenseCategories by viewModel.expenseCategories.collectAsState()
     val incomeCategories by viewModel.incomeCategories.collectAsState()
 
+    // تراکنش‌هایی که خودِ سیستم با دسته‌ی «قلک» ساخته (واریز/برداشت قلک) باید همان دسته را نگه دارند.
+    // دسته‌ی قلک هرگز در لیست انتخاب کاربر نمی‌آید، پس برای این تراکنش‌ها دسته قفل می‌شود.
+    val allCategories by viewModel.categories.collectAsState()
+    val isSavingGoalTransaction = remember(transaction.categoryId, allCategories) {
+        allCategories.any { it.id == transaction.categoryId && !CategoryRules.isUserSelectable(it) }
+    }
+
     val currentCategories = remember(type, expenseCategories, incomeCategories) {
         val rawList = if (type == "EXPENSE") expenseCategories else incomeCategories
         rawList.filter { cat ->
-            cat.title != "دسته‌بندی نشده" &&
+            CategoryRules.isUserSelectable(cat) &&
+                    cat.title != "دسته‌بندی نشده" &&
                     cat.title != "دسته بندی نشده" &&
                     !cat.title.equals("Uncategorized", ignoreCase = true)
         }
     }
 
-    val selectedCategoryObj = currentCategories.find { it.id == category }
+    val selectedCategoryObj = if (isSavingGoalTransaction) {
+        allCategories.find { it.id == transaction.categoryId }
+    } else {
+        currentCategories.find { it.id == category }
+    }
 
     fun trySuggestCategory(inputTitle: String): Boolean {
+        if (isSavingGoalTransaction) return false
         if (userManuallySelectedCategory) return false
         val suggestedTitle = CategorySuggestionHelper.suggestCategory(inputTitle, currentCategories, isPersian) ?: return false
         val suggested = currentCategories.firstOrNull { it.title == suggestedTitle } ?: return false
@@ -1169,7 +1183,7 @@ private fun EditTransactionBottomSheet(
         val wasSuggested = if (suggestionRequestedAfterTypeChange) {
             trySuggestCategory(title).also { suggestionRequestedAfterTypeChange = false }
         } else false
-        if (!wasSuggested && currentCategories.isNotEmpty() && currentCategories.none { it.id == category }) {
+        if (!isSavingGoalTransaction && !wasSuggested && currentCategories.isNotEmpty() && currentCategories.none { it.id == category }) {
             category = currentCategories.first().id
         }
     }
@@ -1341,13 +1355,14 @@ private fun EditTransactionBottomSheet(
 
             // دراپ‌داون دسته‌بندی
             ExposedDropdownMenuBox(
-                expanded = isCategoryDropdownExpanded,
-                onExpandedChange = { isCategoryDropdownExpanded = !isCategoryDropdownExpanded }
+                expanded = isCategoryDropdownExpanded && !isSavingGoalTransaction,
+                onExpandedChange = { if (!isSavingGoalTransaction) isCategoryDropdownExpanded = !isCategoryDropdownExpanded }
             ) {
                 OutlinedTextField(
                     value = StringMapper.getCategoryName(selectedCategoryObj?.title.orEmpty(), isPersian),
                     onValueChange = {},
                     readOnly = true,
+                    enabled = !isSavingGoalTransaction,
                     label = { Text(if (isPersian) "انتخاب دسته‌بندی" else "Select Category") },
                     leadingIcon = {
                         if (selectedCategoryObj != null) {
@@ -1375,7 +1390,7 @@ private fun EditTransactionBottomSheet(
                 )
 
                 ExposedDropdownMenu(
-                    expanded = isCategoryDropdownExpanded,
+                    expanded = isCategoryDropdownExpanded && !isSavingGoalTransaction,
                     onDismissRequest = { isCategoryDropdownExpanded = false },
                     modifier = Modifier
                         .heightIn(max = 280.dp)

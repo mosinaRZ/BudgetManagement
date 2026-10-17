@@ -13,6 +13,7 @@ import ir.hamedan.budgetmanagement.ui.components.BalanceWidget
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import kotlinx.coroutines.flow.SharingStarted
+import ir.hamedan.budgetmanagement.utils.CategoryRules
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -33,8 +34,11 @@ class AddViewModel(
 
     fun addTransaction(title: String, amount: Double, categoryKey: String, isExpense: Boolean, note: String = "") {
         viewModelScope.launch {
-            val categoryId = categoryRepository.getAllCategories().first().firstOrNull { it.id == categoryKey || it.title == categoryKey }?.id
+            val category = categoryRepository.getAllCategories().first().firstOrNull { it.id == categoryKey || it.title == categoryKey }
                 ?: return@launch
+            // دسته‌ی قلک فقط توسط سیستم استفاده می‌شود؛ حتی اگر UI دور زده شود ثبت نمی‌کنیم.
+            if (!CategoryRules.isUserSelectable(category)) return@launch
+            val categoryId = category.id
             val newTransaction = TransactionEntity(
                 title = title,
                 amount = MoneyContract.fromInput(amount),

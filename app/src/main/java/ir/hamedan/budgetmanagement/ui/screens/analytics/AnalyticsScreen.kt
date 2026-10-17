@@ -59,10 +59,12 @@ import ir.hamedan.budgetmanagement.ui.screens.transactions.TimeFilter
 import ir.hamedan.budgetmanagement.utils.DateUtils
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
+import java.math.BigDecimal
 import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
+import kotlin.math.roundToLong
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -315,7 +317,7 @@ fun ExpenseTimeBarChartCard(
     val entries = timeExpenses.mapIndexed { index, model ->
         BarChartEntry(
             label = if (isPersian) model.labelFa else model.labelEn,
-            value = model.totalAmount.toFloat(),
+            value = model.totalAmount.roundToLong(),
             isCurrent = model.isCurrent || index == currentIndex
         )
     }
@@ -351,11 +353,11 @@ fun ExpenseTimeBarChartCard(
         selectedIndex = selectedIndex,
         onEntryClick = onEntryClick,
         valueFormatter = { value ->
-            val displayValue = if (currencyUnit == "IRR") (value * 10).toLong() else value.toLong()
-            val raw = numberFormatter.format(displayValue)
-            // برای ارقام بزرگ، فونت/عرض خود کارت امکان نمایش کامل مقدار را فراهم می‌کند؛
-            // در اینجا مقدار هر ستون همچنان کامل و بدون خلاصه‌سازی نگه داشته می‌شود.
-            raw
+            // BigDecimal: هم دقت کامل می‌ماند و هم ضرب در ۱۰ (تومان → ریال) هرگز overflow نمی‌کند.
+            val displayValue = BigDecimal.valueOf(value).let {
+                if (currencyUnit == "IRR") it.multiply(BigDecimal.TEN) else it
+            }
+            numberFormatter.format(displayValue)
         },
         actionContent = {
             ChartTypeSwitch(

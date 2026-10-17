@@ -41,6 +41,7 @@ import ir.hamedan.budgetmanagement.data.local.models.PendingTransactionEntity
 import ir.hamedan.budgetmanagement.ui.components.SwipeToConfirmButton
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.utils.StringMapper
+import ir.hamedan.budgetmanagement.utils.CategoryRules
 import ir.hamedan.budgetmanagement.utils.CategorySuggestionHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -327,14 +328,18 @@ fun PendingConfirmBottomSheet(
         mutableStateOf(pending.suggestedTitle.ifEmpty { if (isPersian) "تراکنش پیامکی" else "SMS Transaction" })
     }
     var transactionAmount by remember(pending.id) { mutableStateOf(initialAmount) }
-    var selectedCategoryKey by remember(pending.id) { mutableStateOf(pending.suggestedCategory) }
+    // اگر پیشنهاد اولیه‌ی پیامک «قلک» بود، خالی شروع می‌کنیم تا کاربر/پیشنهاد هوشمند یک دسته‌ی مجاز بگذارد.
+    var selectedCategoryKey by remember(pending.id) {
+        mutableStateOf(pending.suggestedCategory.takeIf { CategoryRules.isUserSelectable(it) }.orEmpty())
+    }
     var isExpense by remember(pending.id) { mutableStateOf(pending.type == "EXPENSE") }
     var transactionNote by remember(pending.id) { mutableStateOf("") }
     var userManuallySelectedCategory by remember(pending.id) { mutableStateOf(false) }
 
     val maxDigitsLength = 12 // حداکثر ۱۲ رقم برای مبلغ
 
-    val availableCategories = remember(categories, isExpense) { categories.filter { it.isExpense == isExpense } }
+    val selectableCategories = remember(categories) { CategoryRules.userSelectable(categories) }
+    val availableCategories = remember(selectableCategories, isExpense) { selectableCategories.filter { it.isExpense == isExpense } }
 
     // وضعیت خطای اعتبارسنجی فیلدها
     var titleError by remember(pending.id) { mutableStateOf(false) }
@@ -356,7 +361,7 @@ fun PendingConfirmBottomSheet(
     }
 
     // یافتن دسته‌بندی انتخاب‌شده برای استخراج ایموجی
-    val selectedCategoryObj = categories.find { it.title.equals(selectedCategoryKey, ignoreCase = true) }
+    val selectedCategoryObj = selectableCategories.find { it.title.equals(selectedCategoryKey, ignoreCase = true) }
 
     // وضعیت کنترل منوی کشویی دسته‌بندی
     var isCategoryDropdownExpanded by remember { mutableStateOf(false) }
@@ -617,7 +622,7 @@ fun PendingConfirmBottomSheet(
                         .heightIn(max = 280.dp)
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                 ) {
-                    val filteredCategories = categories.filter { it.isExpense == isExpense }
+                    val filteredCategories = selectableCategories.filter { it.isExpense == isExpense }
 
                     if (filteredCategories.isEmpty()) {
                         DropdownMenuItem(

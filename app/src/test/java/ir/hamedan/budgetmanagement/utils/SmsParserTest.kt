@@ -102,6 +102,48 @@ class SmsParserTest {
         "علی عزیز، 60,000,000ریال به حساب شما نشست.", 6000000.0, "INCOME", sender = "BluBank"
     )
 
+    // Real Blu messages (1405/07). Amounts are Rial -> Toman.
+    @Test fun bluRealDeposit() = accepts(
+        "بلو\nواریز پول\nمحمدسینا عزیز، 100,000,000ریال به حساب شما نشست.\nموجودی: 242,751,047 ریال\n۱۳:۳۰\n۱۴۰۵.۰۷.۲۵",
+        10000000.0, "INCOME", sender = "Blu"
+    )
+
+    @Test fun bluRealWithdraw() = accepts(
+        "بلو\nبرداشت پول\nمحمدسینا عزیز، 2,923,800ریال از حساب شما پرید.\nموجودی: 142,751,047 ریال\n۲۱:۰۳\n۱۴۰۵.۰۷.۲۳",
+        292380.0, "EXPENSE", sender = "Blu"
+    )
+
+    @Test fun bluRealMessagesWithoutSenderOrHeader() {
+        accepts("واریز پول\nمحمدسینا عزیز، 100,000,000ریال به حساب شما نشست.\nموجودی: 242,751,047 ریال\n۱۳:۳۰\n۱۴۰۵.۰۷.۲۵", 10000000.0, "INCOME")
+        accepts("برداشت پول\r\nمحمدسینا عزیز، 2,923,800ریال از حساب شما پرید.\r\nموجودی: 142,751,047 ریال", 292380.0, "EXPENSE")
+    }
+
+    /** The dynamic-password SMS only announces a purchase; the real debit arrives as a separate SMS. */
+    @Test fun bluDynamicPasswordIsNotATransaction() = rejects(
+        "بلو\nبفرمایید رمز پویا\nخرید\nايرانسل\nمبلغ: 2,923,800 ریال\nرمز: 444155 \n21:03", sender = "Blu"
+    )
+
+    // Blu writes the customer's first name into the text; names must never influence detection.
+    @Test fun bluNameThatIsAPromoWord() = accepts(
+        "بلو\nواریز پول\nهدیه عزیز، 100,000,000ریال به حساب شما نشست.\nموجودی: 242,751,047 ریال\n۱۳:۳۰\n۱۴۰۵.۰۷.۲۵",
+        10000000.0, "INCOME", sender = "Blu"
+    )
+
+    @Test fun bluNameContainingIncomeWordDoesNotFlipWithdrawToIncome() = accepts(
+        "بلو\nبرداشت پول\nسودابه عزیز، 2,923,800ریال از حساب شما پرید.\nموجودی: 142,751,047 ریال\n۲۱:۰۳\n۱۴۰۵.۰۷.۲۳",
+        292380.0, "EXPENSE", sender = "Blu"
+    )
+
+    @Test fun bluNameThatIsAnExpenseWordDoesNotFlipDepositToExpense() = accepts(
+        "بلو\nواریز پول\nشارژ عزیز، 100,000,000ریال به حساب شما نشست.\nموجودی: 242,751,047 ریال\n۱۳:۳۰\n۱۴۰۵.۰۷.۲۵",
+        10000000.0, "INCOME", sender = "Blu"
+    )
+
+    @Test fun bluNameOnSingleLineMessage() = accepts(
+        "بلو برداشت پول فرصت عزیز، 2,923,800ریال از حساب شما پرید. موجودی: 142,751,047 ریال",
+        292380.0, "EXPENSE", sender = "Blu"
+    )
+
     // ------------------------------ must be ignored ------------------------------
 
     @Test fun lotteryPromo() = rejects(

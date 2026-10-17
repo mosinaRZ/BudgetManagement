@@ -10,6 +10,7 @@ import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.PendingTransactionRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
+import ir.hamedan.budgetmanagement.utils.CategoryRules
 import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
@@ -49,14 +50,16 @@ class PendingTransactionViewModel(
         note: String = ""
     ) {
         viewModelScope.launch {
-            val categoryId =
+            val resolvedCategory =
                 categoryRepository.getAllCategories()
                     .first()
                     .firstOrNull {
                         it.id == category || it.title == category
                     }
-                    ?.id
                     ?: throw IllegalArgumentException("Category not found: $category")
+            // دسته‌ی «قلک» فقط توسط سیستم استفاده می‌شود؛ حتی اگر UI دور زده شود ثبت نمی‌کنیم.
+            if (!CategoryRules.isUserSelectable(resolvedCategory)) return@launch
+            val categoryId = resolvedCategory.id
 
             transactionRepository.insertTransaction(
                 TransactionEntity(
