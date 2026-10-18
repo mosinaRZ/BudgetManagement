@@ -83,7 +83,11 @@ docker compose exec api /app/purge-deleted --older-than-days 30 --dry-run
 
 بک‌اند این دو آدرس عمومی را سرو می‌کند (متغیر `SUPPORT_EMAIL` را در `.env` پر کنید):
 
-- `https://api.example.com/privacy-policy` ← فیلد Privacy policy در Play Console
-- `https://api.example.com/account-deletion` ← فیلد Delete account URL در بخش Data safety
+- `https://api.example.com/privacy-policy` ← حریم خصوصی (فیلد Privacy policy در Play Console)
+- `https://api.example.com/account-deletion` ← حذف حساب (فیلد Delete account URL در بخش Data safety)
+- `https://api.example.com/terms` ← قوانین و مقررات (در اپ هم از فرم ثبت‌نام و تنظیمات لینک شده است)
+- `https://api.example.com/licenses` ← مجوزهای متن‌باز
+
+اگر `SUPPORT_EMAIL` خالی بماند، آدرس `cidna.app@gmail.com` نمایش داده می‌شود. با هر تغییر در متن‌ها، ثابت‌های `legalVersion` و تاریخ‌ها را در `legal_handler.go` به‌روز کنید.
 
 متن‌ها پیش‌نویس‌اند؛ قبل از انتشار با شرایط حقوقی خودتان تطبیق دهید.

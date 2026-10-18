@@ -170,10 +170,8 @@ func splitCSV(raw string) []string {
 	return out
 }
 
-// supportEmail is the public contact shown on the legal pages: SUPPORT_EMAIL, else the OTP sender.
-func supportEmail(cfg *config.Config) string {
-	if v := strings.TrimSpace(os.Getenv("SUPPORT_EMAIL")); v != "" {
-		return v
-	}
-	return cfg.EmailFrom
+// supportEmail is the public contact shown on the legal pages: SUPPORT_EMAIL, else empty so the
+// legal handler falls back to Cidna's own support address (never the no-reply OTP sender).
+func supportEmail(_ *config.Config) string {
+	return strings.TrimSpace(os.Getenv("SUPPORT_EMAIL"))
 }

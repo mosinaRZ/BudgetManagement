@@ -60,6 +60,8 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 
 		if deps.LegalHandler != nil {
 			r.Get("/privacy-policy", deps.LegalHandler.PrivacyPolicy)
+			r.Get("/terms", deps.LegalHandler.Terms)
+			r.Get("/licenses", deps.LegalHandler.Licenses)
 			r.Get("/account-deletion", deps.LegalHandler.AccountDeletion)
 		}
 
