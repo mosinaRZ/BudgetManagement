@@ -16,5 +16,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Budget Management"
+rootProject.name = "Cidna"
 include(":app")

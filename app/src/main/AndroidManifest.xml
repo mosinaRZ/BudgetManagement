@@ -21,11 +21,11 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/icon_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.BudgetManagement"
+        android:theme="@style/Theme.Cidna"
         android:localeConfig="@xml/locales_config"
         android:networkSecurityConfig="@xml/network_security_config"
         android:usesCleartextTraffic="false">
-        <activity android:name=".MainActivity" android:launchMode="singleTop" android:exported="true" android:label="@string/app_name" android:theme="@style/Theme.BudgetManagement">
+        <activity android:name=".MainActivity" android:launchMode="singleTop" android:exported="true" android:label="@string/app_name" android:theme="@style/Theme.Cidna">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
