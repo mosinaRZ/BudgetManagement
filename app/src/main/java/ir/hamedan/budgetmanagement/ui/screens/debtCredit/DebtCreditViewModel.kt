@@ -1,6 +1,9 @@
 package ir.hamedan.budgetmanagement.ui.screens.debtCredit
 
 import android.content.Context
+import ir.hamedan.budgetmanagement.utils.viewModelErrorHandler
+import ir.hamedan.budgetmanagement.utils.ErrorMessages
+import ir.hamedan.budgetmanagement.utils.rethrowIfCancelled
 import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -51,6 +54,10 @@ class DebtCreditViewModel(
     private val _errorMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val errorMessage: SharedFlow<String> = _errorMessage
 
+    /** Last line of defence: an unexpected failure becomes a localized message, never a crash. */
+    private val errorHandler = viewModelErrorHandler(context, "DebtCreditVM") { _errorMessage.tryEmit(it) }
+
+
     fun findNameMatches(personName: String): List<DebtCreditEntity> {
         val normalizedName = personName.trim()
         if (normalizedName.isBlank()) return emptyList()
@@ -64,7 +71,7 @@ class DebtCreditViewModel(
         isMonthly: Boolean, monthlyAmount: Double, dueDay: Int, oneTimeDueDateMillis: Long,
         note: String?, addToBalance: Boolean = true, forceDuplicateName: Boolean = false
     ) {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(ioDispatcher + errorHandler) {
             val isEdit = id != null
             val normalizedName = personName.trim()
             val normalizedNote = note?.trim().orEmpty()
@@ -127,12 +134,12 @@ class DebtCreditViewModel(
                     )
                     if (!isEdit && addToBalance) BalanceWidget().updateAll(context)
                 }
-                .onFailure { _errorMessage.emit((it as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(LocaleHelper.getLanguage(context) == "fa") ?: it.message.orEmpty()) }
+                .onFailure { it.rethrowIfCancelled(); _errorMessage.emit(ErrorMessages.of(it, LocaleHelper.getLanguage(context) == "fa")) }
         }
     }
 
     fun deposit(id: String, amount: Long) {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(ioDispatcher + errorHandler) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
             val isPersian = LocaleHelper.getLanguage(context) == "fa"
             val remaining = (item.totalAmount - item.paidAmount).coerceAtLeast(0L)
@@ -154,12 +161,12 @@ class DebtCreditViewModel(
             }
             runCatching { useCase.deposit(item, amount) }
                 .onSuccess { BalanceWidget().updateAll(context) }
-                .onFailure { _errorMessage.emit((it as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(LocaleHelper.getLanguage(context) == "fa") ?: it.message.orEmpty()) }
+                .onFailure { it.rethrowIfCancelled(); _errorMessage.emit(ErrorMessages.of(it, LocaleHelper.getLanguage(context) == "fa")) }
         }
     }
 
     fun withdraw(id: String, amount: Long) {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(ioDispatcher + errorHandler) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
             val isPersian = LocaleHelper.getLanguage(context) == "fa"
             if (amount > item.paidAmount) {
@@ -183,24 +190,24 @@ class DebtCreditViewModel(
             }
             runCatching { useCase.withdraw(item, amount) }
                 .onSuccess { BalanceWidget().updateAll(context) }
-                .onFailure { _errorMessage.emit((it as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(LocaleHelper.getLanguage(context) == "fa") ?: it.message.orEmpty()) }
+                .onFailure { it.rethrowIfCancelled(); _errorMessage.emit(ErrorMessages.of(it, LocaleHelper.getLanguage(context) == "fa")) }
         }
     }
 
     fun softDelete(item: DebtCreditEntity) {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(ioDispatcher + errorHandler) {
             useCase.delete(item)
         }
     }
 
     fun restore(item: DebtCreditEntity) {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(ioDispatcher + errorHandler) {
             useCase.restore(item)
         }
     }
 
     fun commitDelete(id: String) {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(ioDispatcher + errorHandler) {
             NotificationHelper.send(
                 context = context,
                 notificationType = NotificationType.DEBT_DELETE,
@@ -215,7 +222,7 @@ class DebtCreditViewModel(
     }
 
     fun toggleSettled(id: String, currentStatus: Boolean) {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(ioDispatcher + errorHandler) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
             val newStatus = !currentStatus
             useCase.toggleSettled(item, newStatus)
@@ -241,7 +248,7 @@ class DebtCreditViewModel(
     }
 
     fun settleDueReminder(id: String) {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(ioDispatcher + errorHandler) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
             val remaining = (item.totalAmount - item.paidAmount).coerceAtLeast(0L)
             if (remaining <= 0L) {
@@ -302,7 +309,7 @@ class DebtCreditViewModel(
     }
 
     fun updateDueDate(id: String, newDueDateMillis: Long) {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(ioDispatcher + errorHandler) {
             val item = debtCreditList.value.find { it.id == id } ?: return@launch
             useCase.updateDueDate(item, newDueDateMillis)
 

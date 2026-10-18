@@ -1,6 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.goals
 
 import android.content.Context
+import ir.hamedan.budgetmanagement.utils.viewModelErrorHandler
 import androidx.lifecycle.ViewModel
 import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.viewModelScope
@@ -38,11 +39,15 @@ class SavingGoalsViewModel(
             initialValue = null
         )
 
-    private val _depositError = MutableSharedFlow<String>()
+    private val _depositError = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val depositError: SharedFlow<String> = _depositError
 
+    /** Last line of defence: an unexpected failure becomes a localized message, never a crash. */
+    private val errorHandler = viewModelErrorHandler(context, "SavingGoalsVM") { _depositError.tryEmit(it) }
+
+
     fun addGoal(title: String, targetAmount: Long, monthlyAmount: Long, icon: String) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + errorHandler) {
             val normalizedTitle = title.trim()
             val duplicate = savingGoals.value.orEmpty().any { existing ->
                 existing.title.trim().equals(normalizedTitle, ignoreCase = true)
@@ -65,7 +70,7 @@ class SavingGoalsViewModel(
     }
 
     fun updateGoal(goal: SavingGoalEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + errorHandler) {
             val normalized = goal.copy(title = goal.title.trim())
             val duplicate = savingGoals.value.orEmpty().any { existing ->
                 existing.id != normalized.id &&
@@ -89,7 +94,7 @@ class SavingGoalsViewModel(
     }
 
     fun deposit(goalId: String, amount: Long) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + errorHandler) {
             if (amount <= 0) {
                 val isPersian = LocaleHelper.getLanguage(context) == "fa"
                 val msg = if (isPersian) "مبلغ واریز باید بیشتر از صفر باشد" else "Deposit amount must be greater than zero"
@@ -172,7 +177,7 @@ class SavingGoalsViewModel(
     }
 
     fun withdraw(goalId: String, amount: Long) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + errorHandler) {
             if (amount <= 0) return@launch
             val currentGoal = savingGoals.value?.find { it.id == goalId }
             if (currentGoal == null) {
@@ -217,7 +222,7 @@ class SavingGoalsViewModel(
 
 
     fun deleteNonEmptyGoal(goal: SavingGoalEntity, addToBalance: Boolean) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + errorHandler) {
             runCatching {
                 if (addToBalance && goal.currentAmount > 0L) {
                     val savingGoalCategory = categoryRepository.getAllCategories().first()
@@ -244,20 +249,20 @@ class SavingGoalsViewModel(
         }
     }
     fun softDelete(goal: SavingGoalEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + errorHandler) {
             useCase.delete(goal)
             sendDeleteNotification(goal.title)
         }
     }
 
     fun restore(goal: SavingGoalEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + errorHandler) {
             useCase.restore(goal)
         }
     }
 
     fun commitDelete(goal: SavingGoalEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + errorHandler) {
             useCase.delete(goal)
             sendDeleteNotification(goal.title)
         }
@@ -276,7 +281,7 @@ class SavingGoalsViewModel(
     }
 
     fun updateLastAutoDepositTimestamp(goalId: String, timestamp: Long) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + errorHandler) {
             useCase.updateAutoDeposit(goalId, timestamp)
         }
     }

@@ -93,9 +93,13 @@ object ExportManager {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            context.startActivity(Intent.createChooser(sendIntent, null).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            })
+            try {
+                context.startActivity(Intent.createChooser(sendIntent, null).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                })
+            } catch (e2: ActivityNotFoundException) {
+                throw IllegalStateException("No app can open or share the exported file.", e2)
+            }
         }
     }
 }

@@ -1,6 +1,9 @@
 package ir.hamedan.budgetmanagement.ui.screens.home
 
 import android.app.Activity
+import ir.hamedan.budgetmanagement.ui.components.showError
+import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.os.Build
@@ -195,6 +198,18 @@ fun HomeScreen(
     val context = LocalContext.current
     val isPersian = LocaleHelper.getLanguage(context) == "fa"
     val haptic = rememberAppHaptics()
+
+    // One snackbar for every failure raised by actions started on the home screen.
+    val errorSnackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(Unit) {
+        pendingViewModel.errorMessage.collect { errorSnackbarHostState.showError(it) }
+    }
+    LaunchedEffect(Unit) {
+        transactionViewModel.errorMessage.collect { errorSnackbarHostState.showError(it) }
+    }
+    LaunchedEffect(Unit) {
+        debtCreditViewModel.errorMessage.collect { errorSnackbarHostState.showError(it) }
+    }
 
     // ===== وضعیت مخفی/نمایان بودن مبالغ (تراز کلی، درآمد و هزینه) — منبع واحد مشترک با ویجت =====
     AmountPrivacyPreferences.init(context)
@@ -1592,6 +1607,15 @@ fun HomeScreen(
                 )
             }
         }
+
+        AppSnackbarHost(
+            hostState = errorSnackbarHostState,
+            isPersian = isPersian,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 90.dp, start = 16.dp, end = 16.dp)
+        )
     }
 }
 

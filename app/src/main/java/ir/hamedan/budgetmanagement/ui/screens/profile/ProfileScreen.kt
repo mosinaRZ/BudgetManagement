@@ -1,6 +1,9 @@
 package ir.hamedan.budgetmanagement.ui.screens.profile
 
 import androidx.activity.compose.BackHandler
+import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
+import ir.hamedan.budgetmanagement.ui.components.showError
+import ir.hamedan.budgetmanagement.ui.components.showInfo
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -337,7 +340,7 @@ fun ProfileScreen(
         if (notice == null) return@LaunchedEffect
         if (notice == ProfileNotice.EMAIL_VERIFIED) showEmailDialog = false
         if (notice == ProfileNotice.PROFILE_SAVED) form.markSaved()
-        snackbarHost.showSnackbar(
+        snackbarHost.showInfo(
             when (notice) {
                 ProfileNotice.PROFILE_SAVED -> if (isPersian) "تغییرات ذخیره شد" else "Changes saved"
                 ProfileNotice.EMAIL_VERIFIED -> if (isPersian) "ایمیل شما تأیید شد" else "Email verified"
@@ -351,7 +354,7 @@ fun ProfileScreen(
     val error = state.error
     LaunchedEffect(error, showEmailDialog) {
         if (error != null && !showEmailDialog) {
-            snackbarHost.showSnackbar(error)
+            snackbarHost.showError(error)
             viewModel.clearError()
         }
     }
@@ -445,7 +448,7 @@ fun ProfileScreen(
                 modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                SnackbarHost(hostState = snackbarHost, modifier = Modifier.padding(horizontal = 16.dp))
+                AppSnackbarHost(hostState = snackbarHost, isPersian = isPersian, modifier = Modifier.padding(horizontal = 16.dp))
                 AnimatedVisibility(
                     visible = form.isDirty,
                     enter = slideInVertically(tween(260, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(200)),

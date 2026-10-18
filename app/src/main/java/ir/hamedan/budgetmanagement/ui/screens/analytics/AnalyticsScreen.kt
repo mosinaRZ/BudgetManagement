@@ -1,6 +1,9 @@
 package ir.hamedan.budgetmanagement.ui.screens.analytics
 
 import androidx.compose.animation.AnimatedVisibility
+import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
+import ir.hamedan.budgetmanagement.ui.components.showError
+import ir.hamedan.budgetmanagement.ui.components.showInfo
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -93,7 +96,7 @@ fun AnalyticsScreen(
             isFirstFilterEmission = false
         } else {
             val filterTitle = if (isPersian) selectedFilter.titleFa else selectedFilter.titleEn
-            snackbarHostState.showSnackbar(
+            snackbarHostState.showInfo(
                 message = if (isPersian) "فیلتر زمانی به «$filterTitle» تغییر کرد" else "Filter changed to $filterTitle"
             )
         }
@@ -232,12 +235,13 @@ fun AnalyticsScreen(
         }
 
         // نمایش اسنک‌بارها روی Box
-        SnackbarHost(
+        AppSnackbarHost(
             hostState = snackbarHostState,
+            isPersian = isPersian,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 72.dp)
+                .padding(bottom = 72.dp, start = 16.dp, end = 16.dp)
         )
     }
 }

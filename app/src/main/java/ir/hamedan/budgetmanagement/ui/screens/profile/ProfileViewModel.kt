@@ -1,6 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.profile
 
 import android.content.Context
+import ir.hamedan.budgetmanagement.utils.ErrorMessages
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.BudgetApp
@@ -132,7 +133,6 @@ class ProfileViewModel(
 
     private fun isPersian(): Boolean = LocaleHelper.getLanguage(context) == "fa"
 
-    private fun Throwable.userMessage(): String =
-        message?.takeIf { it.isNotBlank() }
-            ?: if (isPersian()) "عملیات انجام نشد. دوباره تلاش کنید." else "Something went wrong. Please try again."
+    /** Never show the raw exception text: it is technical and often in the wrong language. */
+    private fun Throwable.userMessage(): String = ErrorMessages.of(this, isPersian())
 }

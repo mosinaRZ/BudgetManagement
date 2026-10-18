@@ -1,6 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.categories
 
 import android.content.Context
+import ir.hamedan.budgetmanagement.utils.viewModelErrorHandler
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
@@ -32,6 +33,10 @@ class CategoriesViewModel(
     private val _errorMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val errorMessage = _errorMessage
 
+    /** Last line of defence: an unexpected failure becomes a localized message, never a crash. */
+    private val errorHandler = viewModelErrorHandler(context, "CategoriesVM") { _errorMessage.tryEmit(it) }
+
+
     private val _transactionCountsMap = MutableStateFlow<Map<String, Int>>(emptyMap())
     val transactionCountsMap: StateFlow<Map<String, Int>> = _transactionCountsMap.asStateFlow()
 
@@ -47,7 +52,7 @@ class CategoriesViewModel(
     }
 
     private fun observeCategoryTransactionCounts() {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + errorHandler) {
             categories.collectLatest { categoryList ->
                 if (categoryList != null) {
                     val countsMap = mutableMapOf<String, Int>()
@@ -65,7 +70,7 @@ class CategoriesViewModel(
     }
 
     fun addCategory(title: String, iconEmoji: String, isExpense: Boolean) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + errorHandler) {
             val normalizedTitle = title.trim()
             if (categories.value.orEmpty().any { it.title.trim().equals(normalizedTitle, ignoreCase = true) }) {
                 _errorMessage.emit(if (LocaleHelper.getLanguage(context) == "fa") "این نام دسته‌بندی قبلاً استفاده شده است. نام دیگری انتخاب کنید." else "This category name is already in use. Choose another name.")
@@ -96,7 +101,7 @@ class CategoriesViewModel(
     }
 
     fun updateCategory(category: CategoryEntity, newTitle: String, newEmoji: String) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + errorHandler) {
             val normalizedTitle = newTitle.trim()
             if (categories.value.orEmpty().any { it.id != category.id && it.title.trim().equals(normalizedTitle, ignoreCase = true) }) {
                 _errorMessage.emit(if (LocaleHelper.getLanguage(context) == "fa") "این نام دسته‌بندی قبلاً استفاده شده است. نام دیگری انتخاب کنید." else "This category name is already in use. Choose another name.")
@@ -135,7 +140,7 @@ class CategoriesViewModel(
 
     fun commitDeleteCategory(category: CategoryEntity) {
         _hiddenCategories.value = _hiddenCategories.value - category.id
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + errorHandler) {
             categoryRepository.deleteCategoryWithReassignment(category)
 
             NotificationHelper.send(

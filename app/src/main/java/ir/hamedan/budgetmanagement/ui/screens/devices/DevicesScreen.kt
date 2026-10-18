@@ -1,6 +1,9 @@
 package ir.hamedan.budgetmanagement.ui.screens.devices
 
 import androidx.compose.foundation.BorderStroke
+import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
+import ir.hamedan.budgetmanagement.ui.components.showError
+import ir.hamedan.budgetmanagement.ui.components.showInfo
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -96,7 +99,7 @@ fun DevicesScreen(onBack: () -> Unit) {
 
     LaunchedEffect(notice) {
         notice?.let {
-            snackbarHostState.showSnackbar(it)
+            snackbarHostState.showInfo(it)
             vm.consumeNotice()
         }
     }
@@ -237,8 +240,9 @@ fun DevicesScreen(onBack: () -> Unit) {
             }
         }
 
-        SnackbarHost(
+        AppSnackbarHost(
             hostState = snackbarHostState,
+            isPersian = isPersian,
             modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp)
         )
     }

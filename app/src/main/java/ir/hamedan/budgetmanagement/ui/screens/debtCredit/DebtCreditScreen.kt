@@ -1,6 +1,9 @@
 package ir.hamedan.budgetmanagement.ui.screens.debtCredit
 
 import android.widget.Toast
+import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
+import ir.hamedan.budgetmanagement.ui.components.showError
+import ir.hamedan.budgetmanagement.ui.components.showInfo
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -82,7 +85,7 @@ fun DebtCreditScreen(
 
     LaunchedEffect(Unit) {
         viewModel.errorMessage.collect { msg ->
-            snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
+            snackbarHostState.showError(msg)
         }
     }
 
@@ -265,19 +268,14 @@ fun DebtCreditScreen(
             }
         }
 
-        SnackbarHost(
+        AppSnackbarHost(
             hostState = snackbarHostState,
+            isPersian = isPersian,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp, start = 16.dp, end = 16.dp)
-        ) { snackbarData ->
-            CircularCountdownSnackbar(
-                snackbarData = snackbarData,
-                isPersian = isPersian,
-                totalSeconds = 5
-            )
-        }
+        )
 
         itemForDeposit?.let { item ->
             AmountActionDialog(
@@ -872,91 +870,6 @@ fun DebtCreditScreen(
                             }
                         }
                     }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CircularCountdownSnackbar(
-    snackbarData: SnackbarData,
-    isPersian: Boolean,
-    totalSeconds: Int = 5
-) {
-    val animatedProgress = remember { Animatable(1f) }
-
-    LaunchedEffect(snackbarData) {
-        animatedProgress.snapTo(1f)
-        animatedProgress.animateTo(
-            targetValue = 0f,
-            animationSpec = tween(
-                durationMillis = totalSeconds * 1000,
-                easing = LinearEasing
-            )
-        )
-        snackbarData.dismiss()
-    }
-
-    val secondsLeft = ceil(animatedProgress.value * totalSeconds).toInt()
-
-    val numberFormatter = remember(isPersian) {
-        NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
-    }
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        tonalElevation = 6.dp,
-        shadowElevation = 8.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = snackbarData.visuals.message,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f)
-            )
-
-            snackbarData.visuals.actionLabel?.let { actionLabel ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.clickable { snackbarData.performAction() }
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        CircularProgressIndicator(
-                            progress = { animatedProgress.value },
-                            modifier = Modifier.fillMaxSize(),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                            strokeWidth = 3.dp
-                        )
-                        Text(
-                            text = numberFormatter.format(secondsLeft),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    Text(
-                        text = actionLabel,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
                 }
             }
         }

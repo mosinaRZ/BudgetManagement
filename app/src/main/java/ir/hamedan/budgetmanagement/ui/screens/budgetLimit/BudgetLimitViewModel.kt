@@ -1,6 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.budget
 
 import android.content.Context
+import ir.hamedan.budgetmanagement.utils.viewModelErrorHandler
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.models.BudgetLimitEntity
@@ -44,6 +45,10 @@ class BudgetLimitViewModel(
     private val _errorMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val errorMessage: SharedFlow<String> = _errorMessage
 
+    /** Last line of defence: an unexpected failure becomes a localized message, never a crash. */
+    private val errorHandler = viewModelErrorHandler(context, "BudgetLimitVM") { _errorMessage.tryEmit(it) }
+
+
     val currencyUnit: StateFlow<String> = CurrencySharedPreferences.currencyFlow
 
     val expenseCategories: StateFlow<List<CategoryEntity>> = categoryRepository
@@ -76,7 +81,7 @@ class BudgetLimitViewModel(
             listOf(50.0, 80.0, 100.0).forEach { threshold ->
                 if (percentUsed >= threshold) {
                     val tag = "BUDGET_${threshold.toInt()}_${limit.id}"
-                    viewModelScope.launch {
+                    viewModelScope.launch(errorHandler) {
                         NotificationHelper.send(
                             context = context,
                             notificationType = NotificationType.BUDGET_THRESHOLD,
@@ -110,7 +115,7 @@ class BudgetLimitViewModel(
         endDate: Long,
         limitId: String? = null
     ) {
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler) {
             // برای ویرایش، رکورد قبلی باید با شناسه (id) پیدا شود، نه با نام دسته‌بندی؛
             // چون در حالت ویرایش ممکن است دسته‌بندی تغییر کرده باشد و جستجو بر اساس نام
             // باعث می‌شد رکورد قدیمی پیدا نشود و یک رکورد جدید و تکراری ساخته شود.
@@ -160,7 +165,7 @@ class BudgetLimitViewModel(
     }
 
     fun renewLimit(id: String, durationDays: Int = 30) {
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler) {
             val current = budgetLimitsWithSpent.value.find { it.entity.id == id }?.entity ?: return@launch
             val start = System.currentTimeMillis()
             val end = start + durationDays.coerceAtLeast(1) * 24L * 60L * 60L * 1000L - 1L
@@ -180,7 +185,7 @@ class BudgetLimitViewModel(
     }
 
     fun updateLimitStatus(id: String, isActive: Boolean) {
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler) {
             val currentItem = budgetLimitsWithSpent.value.find { it.entity.id == id }?.entity
             currentItem?.let {
                 val updatedLimit = it.copy(isActive = isActive)
@@ -205,21 +210,21 @@ class BudgetLimitViewModel(
 
     // حذف اولیه از پایگاه داده (بدون ارسال نوتیفیکیشن)
     fun deleteBudgetLimit(id: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler) {
             budgetLimitRepository.deleteLimit(id)
         }
     }
 
     // بازگردانی آیتم حذف شده در صورت زدن Undo
     fun restoreLimit(entity: BudgetLimitEntity) {
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler) {
             budgetLimitRepository.saveLimit(entity)
         }
     }
 
     // ارسال نوتیفیکیشن حذف قطعی (تنها در صورتی که کاربر Undo نکرده باشد)
     fun commitDeleteLimit(entity: BudgetLimitEntity) {
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler) {
             val mappedCategory = expenseCategories.value.firstOrNull { c -> c.id == entity.categoryId }?.title.orEmpty()
             NotificationHelper.send(
                 context = context,

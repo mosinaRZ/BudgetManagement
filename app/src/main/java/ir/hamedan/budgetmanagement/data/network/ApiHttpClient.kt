@@ -21,30 +21,32 @@ class ApiHttpClient(
         body: JSONObject? = null,
         bearerToken: String? = null
     ): ApiResponse {
-        val url = URL(baseUrl.trimEnd('/') + "/" + path.trimStart('/'))
-        val connection = (url.openConnection() as HttpURLConnection).apply {
-            requestMethod = method
-            connectTimeout = BackendConfig.CONNECT_TIMEOUT_MS
-            readTimeout = BackendConfig.READ_TIMEOUT_MS
-            doInput = true
-            setRequestProperty("Accept", "application/json")
-            setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("X-Request-ID", UUID.randomUUID().toString())
-            if (!bearerToken.isNullOrBlank()) {
-                setRequestProperty("Authorization", "Bearer $bearerToken")
-            }
-            if (body != null) doOutput = true
-        }
-
+        var connection: HttpURLConnection? = null
         return try {
+            val url = URL(baseUrl.trimEnd('/') + "/" + path.trimStart('/'))
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = method
+                connectTimeout = BackendConfig.CONNECT_TIMEOUT_MS
+                readTimeout = BackendConfig.READ_TIMEOUT_MS
+                doInput = true
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("X-Request-ID", UUID.randomUUID().toString())
+                if (!bearerToken.isNullOrBlank()) {
+                    setRequestProperty("Authorization", "Bearer $bearerToken")
+                }
+                if (body != null) doOutput = true
+            }
+            connection = conn
+
             if (body != null) {
-                connection.outputStream.use { output ->
+                conn.outputStream.use { output ->
                     output.write(body.toString().toByteArray(Charsets.UTF_8))
                 }
             }
 
-            val status = connection.responseCode
-            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            val status = conn.responseCode
+            val stream = if (status in 200..299) conn.inputStream else conn.errorStream
             val responseText = stream?.use { input ->
                 BufferedReader(InputStreamReader(input, Charsets.UTF_8)).readText()
             }.orEmpty()
@@ -60,13 +62,22 @@ class ApiHttpClient(
             throw ApiException(0, "NETWORK_ERROR", "Secure connection failed.", e)
         } catch (e: IOException) {
             throw ApiException(0, "NETWORK_ERROR", "Network request failed.", e)
+        } catch (e: ClassCastException) {
+            throw ApiException(0, "NETWORK_ERROR", "Unsupported server address.", e)
+        } catch (e: IllegalArgumentException) {
+            throw ApiException(0, "NETWORK_ERROR", "Invalid server address.", e)
         } finally {
-            connection.disconnect()
+            connection?.disconnect()
         }
     }
 
     data class ApiResponse(val statusCode: Int, val body: String) {
-        fun json(): JSONObject = if (body.isBlank()) JSONObject() else JSONObject(body)
+        fun json(): JSONObject = try {
+            if (body.isBlank()) JSONObject() else JSONObject(body)
+        } catch (e: org.json.JSONException) {
+            // A proxy or gateway error page (HTML) must not surface as a raw parser exception.
+            throw ApiException(statusCode, "BAD_RESPONSE", "Unreadable server response.", e)
+        }
 
         fun errorCode(): String? = try {
             json().optJSONObject("error")?.optString("code")?.takeIf { it.isNotBlank() }
@@ -88,8 +99,12 @@ private fun Int.toErrorCode(): String = when (this) {
     401 -> "UNAUTHORIZED"
     403 -> "FORBIDDEN"
     404 -> "NOT_FOUND"
+    408 -> "REQUEST_TIMEOUT"
     409 -> "CONFLICT"
+    413 -> "PAYLOAD_TOO_LARGE"
+    422 -> "VALIDATION_ERROR"
     429 -> "RATE_LIMITED"
+    502, 503, 504 -> "SERVICE_UNAVAILABLE"
     in 500..599 -> "INTERNAL_ERROR"
     else -> "UNKNOWN_ERROR"
 }
@@ -112,8 +127,12 @@ class ApiException(
         "NOT_FOUND" -> if (isPersian) "اطلاعات موردنظر پیدا نشد." else "The requested information was not found."
         "CONFLICT" -> if (isPersian) "این عملیات با وضعیت فعلی اطلاعات سازگار نیست." else "The operation conflicts with the current data."
         "RATE_LIMITED" -> if (isPersian) "درخواست‌های زیادی ارسال شده است. کمی بعد دوباره تلاش کنید." else "Too many requests. Please try again later."
-        "VALIDATION_ERROR", "BAD_REQUEST" -> message
+        "REQUEST_TIMEOUT" -> if (isPersian) "پاسخ سرور خیلی طول کشید. دوباره تلاش کنید." else "The server took too long to respond. Please try again."
+        "PAYLOAD_TOO_LARGE" -> if (isPersian) "حجم اطلاعات ارسالی بیش از حد مجاز است." else "The data you sent is too large."
+        "SERVICE_UNAVAILABLE" -> if (isPersian) "سرور موقتاً در دسترس نیست. کمی بعد دوباره تلاش کنید." else "The server is temporarily unavailable. Please try again shortly."
+        "BAD_RESPONSE" -> if (isPersian) "پاسخ سرور قابل‌خواندن نبود. کمی بعد دوباره تلاش کنید." else "The server sent an unreadable response. Please try again shortly."
+        "VALIDATION_ERROR", "BAD_REQUEST" -> if (isPersian) "اطلاعات واردشده معتبر نیست؛ ورودی‌ها را بررسی کنید." else "The information you entered is not valid. Please check your input."
         "INTERNAL_ERROR" -> if (isPersian) "خطای داخلی سرور رخ داد. لطفاً بعداً دوباره تلاش کنید." else "A server error occurred. Please try again later."
-        else -> if (message.isNotBlank()) message else if (isPersian) "عملیات ناموفق بود." else "The operation failed."
+        else -> if (isPersian) "عملیات ناموفق بود. دوباره تلاش کنید." else "The operation failed. Please try again."
     }
 }

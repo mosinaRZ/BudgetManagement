@@ -1,6 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.auth
 
 import ir.hamedan.budgetmanagement.data.network.ApiException
+import ir.hamedan.budgetmanagement.utils.ErrorMessages
 
 /**
  * Pure helpers shared by the sign-in, registration, recovery and change-password flows.
@@ -151,9 +152,6 @@ fun authErrorMessage(error: Throwable, isPersian: Boolean, context: AuthContext)
             else -> api.userMessage(isPersian)
         }
     }
-    return if (isPersian) {
-        "عملیات ناموفق بود. دوباره تلاش کنید."
-    } else {
-        error.message?.takeIf { it.isNotBlank() } ?: "The operation failed. Please try again."
-    }
+    // Never show raw exception text; ErrorMessages maps storage/crypto/IO/parsing failures too.
+    return ErrorMessages.of(error, isPersian)
 }

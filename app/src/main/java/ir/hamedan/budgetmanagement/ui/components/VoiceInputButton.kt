@@ -162,7 +162,17 @@ private fun startListening(
         return
     }
 
-    val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+    val recognizer = try {
+        SpeechRecognizer.createSpeechRecognizer(context)
+    } catch (e: Exception) {
+        onListeningChange(false)
+        Toast.makeText(
+            context,
+            if (language.startsWith("fa")) "تشخیص گفتار در این دستگاه پشتیبانی نمی‌شود" else "Speech recognition not available",
+            Toast.LENGTH_SHORT
+        ).show()
+        return
+    }
     onRecognizerCreated(recognizer)
 
     recognizer.setRecognitionListener(object : RecognitionListener {
@@ -179,7 +189,23 @@ private fun startListening(
 
         override fun onError(error: Int) {
             onListeningChange(false)
-            // خطاهای رایج را نادیده می‌گیریم تا UX خراب نشود
+            val isFa = language.startsWith("fa")
+            // "No speech" / "no match" / client-cancel are normal outcomes: stay quiet so the UX is not noisy.
+            val message = when (error) {
+                SpeechRecognizer.ERROR_NO_MATCH,
+                SpeechRecognizer.ERROR_SPEECH_TIMEOUT,
+                SpeechRecognizer.ERROR_CLIENT -> null
+                SpeechRecognizer.ERROR_NETWORK,
+                SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
+                    if (isFa) "برای تشخیص گفتار اینترنت لازم است؛ اتصال را بررسی کنید" else "Speech recognition needs an internet connection"
+                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
+                    if (isFa) "دسترسی به میکروفون لازم است" else "Microphone permission required"
+                SpeechRecognizer.ERROR_RECOGNIZER_BUSY ->
+                    if (isFa) "تشخیص گفتار مشغول است؛ کمی بعد دوباره تلاش کنید" else "Speech recognition is busy; try again shortly"
+                else ->
+                    if (isFa) "تشخیص گفتار ناموفق بود. دوباره تلاش کنید" else "Speech recognition failed. Please try again"
+            }
+            if (message != null) Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
 
         override fun onResults(results: Bundle?) {
@@ -208,6 +234,10 @@ private fun startListening(
         recognizer.startListening(intent)
     } catch (e: Exception) {
         onListeningChange(false)
-        Toast.makeText(context, "خطا در شروع تشخیص گفتار", Toast.LENGTH_SHORT).show()
+        Toast.makeText(
+            context,
+            if (language.startsWith("fa")) "شروع تشخیص گفتار ناموفق بود" else "Could not start speech recognition",
+            Toast.LENGTH_SHORT
+        ).show()
     }
 }

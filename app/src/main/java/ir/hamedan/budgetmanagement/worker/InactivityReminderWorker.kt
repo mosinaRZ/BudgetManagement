@@ -15,7 +15,17 @@ class InactivityReminderWorker(
 
     private val thresholds = listOf(3, 7, 15, 30)
 
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): Result = try {
+        checkInactivity()
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        // A reminder is optional: log it and let the next daily run try again.
+        android.util.Log.e("InactivityReminderWorker", "Reminder check failed", e)
+        Result.success()
+    }
+
+    private fun checkInactivity(): Result {
         val lastOpen = AppUsagePreferences.getLastOpen(applicationContext)
         if (lastOpen == 0L) return Result.success()
 

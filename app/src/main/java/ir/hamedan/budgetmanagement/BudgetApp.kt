@@ -41,6 +41,10 @@ class BudgetApp : Application() {
                 runCatching {
                     seedDefaultCategoriesIfNeeded()
                     container.syncEngine.sync()
+                }.onFailure { e ->
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    // Offline or a transient server problem is normal at startup; the periodic sync retries.
+                    android.util.Log.w("BudgetApp", "Startup seed/sync failed", e)
                 }
             }
         }

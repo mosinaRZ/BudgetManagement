@@ -32,6 +32,8 @@ class SyncWorker(
                     else Result.success()
                 }
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: ApiException) {
             when {
                 e.statusCode == 429 -> Result.retry()

@@ -1,6 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.devices
 
 import android.content.Context
+import ir.hamedan.budgetmanagement.utils.ErrorMessages
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.network.ApiException
@@ -131,7 +132,5 @@ class DevicesViewModel(
                 .thenByDescending { it.lastSeenAt }
         )
 
-    private fun message(error: Throwable): String =
-        (error as? ApiException)?.userMessage(isPersian)
-            ?: if (isPersian) "عملیات ناموفق بود. دوباره تلاش کنید." else "The operation failed. Please try again."
+    private fun message(error: Throwable): String = ErrorMessages.of(error, isPersian)
 }

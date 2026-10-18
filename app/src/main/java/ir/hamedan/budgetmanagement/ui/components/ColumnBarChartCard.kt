@@ -20,7 +20,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -193,21 +197,14 @@ fun ColumnBarChartCard(
                                     )
                                     .padding(horizontal = 4.dp)
                             ) {
-                                val formattedValue = valueFormatter(entry.value)
-                                val amountFontSize = when {
-                                    formattedValue.length <= 8 -> 11.sp
-                                    formattedValue.length <= 11 -> 9.sp
-                                    formattedValue.length <= 14 -> 8.sp
-                                    else -> 7.sp
-                                }
-                                Text(
-                                    text = formattedValue,
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = amountFontSize),
+                                FitSingleLineText(
+                                    text = valueFormatter(entry.value),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxFontSize = 11.sp,
+                                    minFontSize = 6.sp,
                                     color = if (selectedIndex == index || entry.isCurrent) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontWeight = if (selectedIndex == index || entry.isCurrent) FontWeight.Bold else FontWeight.Normal,
-                                    maxLines = 2,
-                                    textAlign = TextAlign.Center,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .heightIn(min = 18.dp, max = 30.dp)
@@ -227,14 +224,14 @@ fun ColumnBarChartCard(
                                         )
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Text(
+                                FitSingleLineText(
                                     text = entry.label,
                                     style = MaterialTheme.typography.labelSmall,
+                                    maxFontSize = MaterialTheme.typography.labelSmall.fontSize.takeIf { it.isSpecified } ?: 11.sp,
+                                    minFontSize = 7.sp,
                                     color = if (entry.isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontWeight = if (entry.isCurrent) FontWeight.Bold else FontWeight.Normal,
-                                    maxLines = 1,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.width(56.dp)
+                                    modifier = Modifier.fillMaxWidth()
                                 )
                             }
                         }
@@ -242,5 +239,50 @@ fun ColumnBarChartCard(
                 }
             }
         }
+    }
+}
+
+/**
+ * Text that always stays on ONE line: it starts at [maxFontSize] and shrinks in 0.5sp steps until it
+ * fits the width it is given (down to [minFontSize]). Needed because a number like 100,000,000,000 or
+ * a label like "Days 22–28" would otherwise wrap at the comma/space and show only its first part
+ * (English only: Persian digits/labels are shorter and have no such break points).
+ */
+@Composable
+private fun FitSingleLineText(
+    text: String,
+    style: TextStyle,
+    maxFontSize: TextUnit,
+    minFontSize: TextUnit,
+    color: Color,
+    fontWeight: FontWeight,
+    modifier: Modifier = Modifier
+) {
+    val measurer = rememberTextMeasurer()
+    BoxWithConstraints(modifier = modifier, contentAlignment = Alignment.Center) {
+        val availablePx = constraints.maxWidth
+        val fontSize = remember(text, availablePx, style, fontWeight, maxFontSize, minFontSize) {
+            var size = maxFontSize.value
+            while (size > minFontSize.value) {
+                val width = measurer.measure(
+                    text = text,
+                    style = style.copy(fontSize = size.sp, fontWeight = fontWeight),
+                    softWrap = false,
+                    maxLines = 1
+                ).size.width
+                if (width <= availablePx) break
+                size -= 0.5f
+            }
+            size.sp
+        }
+        Text(
+            text = text,
+            style = style.copy(fontSize = fontSize),
+            color = color,
+            fontWeight = fontWeight,
+            maxLines = 1,
+            softWrap = false,
+            textAlign = TextAlign.Center
+        )
     }
 }

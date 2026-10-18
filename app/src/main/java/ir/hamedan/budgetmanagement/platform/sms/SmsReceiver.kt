@@ -46,7 +46,8 @@ class SmsReceiver : BroadcastReceiver() {
             return
         }
 
-        val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
+        // A malformed broadcast must never crash the receiver (and with it the whole app process).
+        val messages = runCatching { Telephony.Sms.Intents.getMessagesFromIntent(intent) }.getOrNull()
         if (messages.isNullOrEmpty()) return
 
         val sender = messages[0].originatingAddress.orEmpty()

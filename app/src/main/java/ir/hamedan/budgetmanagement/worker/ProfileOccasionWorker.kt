@@ -21,13 +21,21 @@ class ProfileOccasionWorker(
         val app = applicationContext as BudgetApp
         if (!app.container.authRepository.isAuthenticated()) return Result.success()
 
-        val user = app.container.database.userDao().getLoggedInUser() ?: return Result.success()
-        val today = LocalDate.now(ZoneId.systemDefault())
-        val dateKey = today.format(DateTimeFormatter.ISO_DATE)
+        // Occasion greetings are optional: a failure is logged and the next daily run simply tries again.
+        return try {
+            val user = app.container.database.userDao().getLoggedInUser() ?: return Result.success()
+            val today = LocalDate.now(ZoneId.systemDefault())
+            val dateKey = today.format(DateTimeFormatter.ISO_DATE)
 
-        checkBirthday(user, today, dateKey)
-        checkGenderOccasions(user, today, dateKey)
-        return Result.success()
+            checkBirthday(user, today, dateKey)
+            checkGenderOccasions(user, today, dateKey)
+            Result.success()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.e("ProfileOccasionWorker", "Occasion check failed", e)
+            Result.success()
+        }
     }
 
     private fun checkBirthday(user: UserEntity, today: LocalDate, dateKey: String) {

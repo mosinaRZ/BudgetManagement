@@ -1,6 +1,9 @@
 package ir.hamedan.budgetmanagement.ui.screens.add
 
 import androidx.annotation.DrawableRes
+import ir.hamedan.budgetmanagement.ui.components.showError
+import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import ir.hamedan.budgetmanagement.di.appViewModel
 
 import androidx.compose.animation.core.*
@@ -157,6 +160,11 @@ fun AddScreen(
 
     // وضعیت انیمیشن موفقیت
     var showSuccessAnimation by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        viewModel.errorMessage.collect { message -> snackbarHostState.showError(message) }
+    }
 
     // وضعیت کنترل منوی کشویی دسته‌بندی
     var isCategoryDropdownExpanded by remember { mutableStateOf(false) }
@@ -681,6 +689,12 @@ fun AddScreen(
                         }
                     )
 
+                    AppSnackbarHost(
+                        hostState = snackbarHostState,
+                        isPersian = isPersian,
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+                    )
+
                     Spacer(modifier = Modifier.height(24.dp))
 
                     // دکمه ذخیره به‌صورت کشیدنی
@@ -704,23 +718,28 @@ fun AddScreen(
                                     amount = amount,
                                     categoryKey = selectedCategoryKey,
                                     isExpense = isExpense,
-                                    note = transactionNote.trim()
+                                    note = transactionNote.trim(),
+                                    onResult = { saved ->
+                                        // A failed save keeps the form (and the user's input) open and
+                                        // shows the error snackbar; the success animation is only for real saves.
+                                        if (saved) {
+                                            showSuccessAnimation = true
+                                            scope.launch {
+                                                delay(4000)
+                                                showSuccessAnimation = false
+                                                sheetState.hide()
+                                                showTransactionBottomSheet = false
+
+                                                transactionTitle = ""
+                                                transactionAmount = ""
+                                                selectedCategoryKey = ""
+                                                transactionNote = ""
+                                                isExpense = true
+                                                userManuallySelectedCategory = false
+                                            }
+                                        }
+                                    }
                                 )
-
-                                showSuccessAnimation = true
-                                scope.launch {
-                                    delay(4000)
-                                    showSuccessAnimation = false
-                                    sheetState.hide()
-                                    showTransactionBottomSheet = false
-
-                                    transactionTitle = ""
-                                    transactionAmount = ""
-                                    selectedCategoryKey = ""
-                                    transactionNote = ""
-                                    isExpense = true
-                                    userManuallySelectedCategory = false
-                                }
                             }
                         },
                         modifier = Modifier.fillMaxWidth()

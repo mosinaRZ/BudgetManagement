@@ -1,6 +1,13 @@
 package ir.hamedan.budgetmanagement.ui.screens.transactions
 
 import android.content.Context
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import ir.hamedan.budgetmanagement.utils.viewModelErrorHandler
+import ir.hamedan.budgetmanagement.utils.ErrorMessages
+import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -64,6 +71,14 @@ class TransactionViewModel(
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading
 
+    private val _errorMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val errorMessage: SharedFlow<String> = _errorMessage.asSharedFlow()
+
+    private val isPersian: Boolean get() = LocaleHelper.getLanguage(context) == "fa"
+
+    /** Last line of defence: an unexpected failure becomes a localized message, never a crash. */
+    private val errorHandler = viewModelErrorHandler(context, "TransactionVM") { _errorMessage.tryEmit(it) }
+
     val currencyUnit: StateFlow<String> = CurrencySharedPreferences.currencyFlow
 
     val categories: StateFlow<List<CategoryEntity>> =
@@ -94,7 +109,13 @@ class TransactionViewModel(
     val filterState = MutableStateFlow(FilterState())
 
     val filteredTransactions: StateFlow<List<TransactionEntity>> = combine(
-        transactionRepository.getAllTransactions().onEach { _isLoading.value = false },
+        transactionRepository.getAllTransactions()
+            // A failing database stream must end the loading state and report once, not crash the screen.
+            .catch { e ->
+                _errorMessage.tryEmit(ErrorMessages.of(e, isPersian))
+                emit(emptyList())
+            }
+            .onEach { _isLoading.value = false },
         searchQuery,
         filterState
     ) { transactions, query, filter ->
@@ -173,21 +194,21 @@ class TransactionViewModel(
     }
 
     fun deleteTransaction(transaction: TransactionEntity) {
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler) {
             transactionRepository.deleteTransactionById(transaction.id.toString())
             BalanceWidget().updateAll(context)
         }
     }
 
     fun deleteTransaction(transactionId: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler) {
             transactionRepository.deleteTransactionById(transactionId)
             BalanceWidget().updateAll(context)
         }
     }
 
     fun commitDeleteTransaction(transaction: TransactionEntity) {
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler) {
             val txTitle = transaction.title.ifEmpty { "تراکنش" }
             NotificationHelper.send(
                 context = context,
@@ -203,14 +224,14 @@ class TransactionViewModel(
     }
 
     fun restoreTransaction(transaction: TransactionEntity) {
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler) {
             transactionRepository.insertTransaction(transaction)
             BalanceWidget().updateAll(context)
         }
     }
 
     fun updateTransaction(transaction: TransactionEntity) {
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler) {
             // انتقال تراکنش به دسته‌ی «قلک» ممنوع است؛ فقط تراکنش‌های خودِ قلک می‌توانند در آن بمانند.
             val target = categoryRepository.getAllCategories().first()
                 .firstOrNull { it.id == transaction.categoryId }

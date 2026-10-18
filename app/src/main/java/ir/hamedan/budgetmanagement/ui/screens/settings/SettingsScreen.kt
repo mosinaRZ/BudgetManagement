@@ -1,6 +1,9 @@
 package ir.hamedan.budgetmanagement.ui.screens.settings
 
 import android.app.Activity
+import ir.hamedan.budgetmanagement.ui.components.showError
+import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -148,6 +151,7 @@ fun SettingsScreen(
     var showExportSheet by remember { mutableStateOf(false) }
     var exportFormat by remember { mutableStateOf<ExportFormat?>(null) } // PDF یا XLSX
     val exportScope = rememberCoroutineScope()
+    val settingsSnackbarHostState = remember { SnackbarHostState() }
 
     fun matchesSearch(titleFa: String, titleEn: String, subtitleFa: String, subtitleEn: String): Boolean {
         if (searchQuery.isBlank()) return true
@@ -679,7 +683,16 @@ fun SettingsScreen(
                                     val fallbackIntent = Intent(Intent.ACTION_SENDTO).apply {
                                         data = Uri.parse("mailto:$email")
                                     }
-                                    context.startActivity(Intent.createChooser(fallbackIntent, if (isPersian) "ارسال ایمیل" else "Send Email"))
+                                    try {
+                                        context.startActivity(Intent.createChooser(fallbackIntent, if (isPersian) "ارسال ایمیل" else "Send Email"))
+                                    } catch (e2: Exception) {
+                                        exportScope.launch {
+                                            settingsSnackbarHostState.showError(
+                                                if (isPersian) "برنامه‌ای برای ارسال ایمیل پیدا نشد."
+                                                else "No app found to send an email."
+                                            )
+                                        }
+                                    }
                                 }
                             }
                             SocialLinkRow(
@@ -862,13 +875,25 @@ fun SettingsScreen(
                                 .clip(RoundedCornerShape(14.dp))
                                 .clickable {
                                     showExportSheet = false
+                                    val selectedFormat = exportFormat
                                     exportScope.launch {
-                                        ExportManager.export(
-                                            context = context,
-                                            format = exportFormat!!,
-                                            period = period,
-                                            isPersian = isPersian
-                                        )
+                                        if (selectedFormat == null) return@launch
+                                        try {
+                                            ExportManager.export(
+                                                context = context,
+                                                format = selectedFormat,
+                                                period = period,
+                                                isPersian = isPersian
+                                            )
+                                        } catch (e: kotlinx.coroutines.CancellationException) {
+                                            throw e
+                                        } catch (e: Exception) {
+                                            android.util.Log.e("SettingsScreen", "Export failed", e)
+                                            settingsSnackbarHostState.showError(
+                                                if (isPersian) "ساخت گزارش ناموفق بود. دوباره تلاش کنید."
+                                                else "Creating the report failed. Please try again."
+                                            )
+                                        }
                                     }
                                 }
                                 .padding(vertical = 14.dp, horizontal = 8.dp),
@@ -1062,6 +1087,15 @@ fun SettingsScreen(
                 }
             }
         }
+
+        AppSnackbarHost(
+            hostState = settingsSnackbarHostState,
+            isPersian = isPersian,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp, start = 16.dp, end = 16.dp)
+        )
     }
 }
 
@@ -1986,7 +2020,13 @@ private fun openUrl(context: Context, url: String) {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
         context.startActivity(intent)
     } catch (e: Exception) {
-        e.printStackTrace()
+        android.util.Log.w("SettingsScreen", "Could not open $url", e)
+        val isFa = ir.hamedan.budgetmanagement.platform.locale.LocaleHelper.getLanguage(context) == "fa"
+        android.widget.Toast.makeText(
+            context,
+            if (isFa) "برنامه‌ای برای باز کردن این لینک پیدا نشد" else "No app found to open this link",
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
     }
 }
 
