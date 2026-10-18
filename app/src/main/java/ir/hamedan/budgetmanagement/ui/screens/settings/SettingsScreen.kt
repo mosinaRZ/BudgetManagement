@@ -667,6 +667,21 @@ fun SettingsScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             SocialLinkRow(
+                                title = if (isPersian) "قوانین و مقررات" else "Terms of Service",
+                                iconRes = R.drawable.ic_legal,
+                                color = Color(0xFF607D8B)
+                            ) { openUrl(context, ir.hamedan.budgetmanagement.BuildConfig.BASE_URL + "terms") }
+                            SocialLinkRow(
+                                title = if (isPersian) "حریم خصوصی" else "Privacy Policy",
+                                iconRes = R.drawable.ic_legal,
+                                color = Color(0xFF607D8B)
+                            ) { openUrl(context, ir.hamedan.budgetmanagement.BuildConfig.BASE_URL + "privacy-policy") }
+                            SocialLinkRow(
+                                title = if (isPersian) "مجوزهای متن‌باز" else "Open-source licenses",
+                                iconRes = R.drawable.ic_legal,
+                                color = Color(0xFF607D8B)
+                            ) { openUrl(context, ir.hamedan.budgetmanagement.BuildConfig.BASE_URL + "licenses") }
+                            SocialLinkRow(
                                 title = if (isPersian) "پشتیبانی جیمیل" else "Gmail Support",
                                 iconRes = R.drawable.ic_gmail,
                                 color = Color(0xFFEA4335)

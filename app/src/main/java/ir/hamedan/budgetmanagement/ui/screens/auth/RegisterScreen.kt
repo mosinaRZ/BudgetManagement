@@ -57,6 +57,8 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -87,6 +89,7 @@ fun RegisterScreen(
     val scope = rememberCoroutineScope()
     val isPersian = isPersianLocale()
     val focusManager = LocalFocusManager.current
+    val uriHandler = LocalUriHandler.current
 
     var phone by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -99,6 +102,7 @@ fun RegisterScreen(
     var recoveryKey by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
+    var acceptedTerms by remember { mutableStateOf(false) }
 
     // One ticker drives the resend countdown.
     LaunchedEffect(Unit) {
@@ -147,6 +151,11 @@ fun RegisterScreen(
             challenge == null || phoneCode.length != 6 ->
                 error = if (isPersian) "کد پیامکی ۶ رقمی را وارد کنید" else "Enter the 6-digit SMS code"
             else -> {
+                if (!acceptedTerms) {
+                    error = if (isPersian) "برای ساخت حساب باید قوانین و مقررات و حریم خصوصی را بپذیرید"
+                    else "To create an account you must accept the Terms of Service and Privacy Policy"
+                    return
+                }
                 val passwordProblem = PasswordPolicy.validate(password, isPersian)
                 if (passwordProblem != null) {
                     error = passwordProblem
@@ -301,6 +310,29 @@ fun RegisterScreen(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
             )
 
+            Row(verticalAlignment = Alignment.Top) {
+                Checkbox(
+                    checked = acceptedTerms,
+                    onCheckedChange = { acceptedTerms = it },
+                    enabled = !loading
+                )
+                Column(modifier = Modifier.padding(top = 12.dp)) {
+                    Text(
+                        text = if (isPersian) "قوانین و مقررات و سیاست حریم خصوصی سیدنا را خوانده‌ام و می‌پذیرم."
+                        else "I have read and accept Cidna's Terms of Service and Privacy Policy.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Row {
+                        TextButton(onClick = { openLegalPage(uriHandler, "terms") }) {
+                            Text(if (isPersian) "قوانین و مقررات" else "Terms of Service")
+                        }
+                        TextButton(onClick = { openLegalPage(uriHandler, "privacy-policy") }) {
+                            Text(if (isPersian) "حریم خصوصی" else "Privacy Policy")
+                        }
+                    }
+                }
+            }
+
             error?.let { AuthErrorBanner(message = it) }
 
             LoadingButton(
@@ -324,6 +356,15 @@ fun RegisterScreen(
 
     recoveryKey?.let { key ->
         RecoveryKeyDialog(recoveryKey = key, isPersian = isPersian, onConfirmed = onRegistered)
+    }
+}
+
+/** Opens a public legal page served by the backend (path without a leading slash, e.g. "terms"). */
+private fun openLegalPage(uriHandler: UriHandler, path: String) {
+    try {
+        uriHandler.openUri(ir.hamedan.budgetmanagement.BuildConfig.BASE_URL + path)
+    } catch (e: Exception) {
+        // No browser available: nothing to open, the checkbox text still states what is being accepted.
     }
 }
 
