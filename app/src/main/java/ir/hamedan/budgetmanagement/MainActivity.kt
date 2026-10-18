@@ -84,7 +84,7 @@ import ir.hamedan.budgetmanagement.ui.screens.splash.SplashScreen
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionsScreen
 import ir.hamedan.budgetmanagement.ui.screens.settings.NotificationCalibrationScreen
 import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsScreen
-import ir.hamedan.budgetmanagement.ui.theme.BudgetManagementTheme
+import ir.hamedan.budgetmanagement.ui.theme.CidnaTheme
 import ir.hamedan.budgetmanagement.data.notification.AppNotificationManager
 import ir.hamedan.budgetmanagement.data.notification.DeviceSecurityNotifier
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
@@ -256,7 +256,7 @@ class MainActivity : FragmentActivity() {
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
 
-            BudgetManagementTheme(themeMode = themeMode) {
+            CidnaTheme(themeMode = themeMode) {
                 Box(modifier = Modifier.fillMaxSize()) {
 
                     TheApp(

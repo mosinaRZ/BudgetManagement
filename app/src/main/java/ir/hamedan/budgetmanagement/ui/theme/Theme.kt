@@ -11,7 +11,7 @@ import androidx.core.view.WindowCompat
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
 
 @Composable
-fun BudgetManagementTheme(
+fun CidnaTheme(
     themeMode: Int = ThemePreferences.MODE_SYSTEM,
     content: @Composable () -> Unit
 ) {

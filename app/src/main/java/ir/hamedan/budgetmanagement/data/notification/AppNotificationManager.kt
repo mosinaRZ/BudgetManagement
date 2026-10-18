@@ -23,7 +23,7 @@ object AppNotificationManager {
     // غیرقابل‌تغییره؛ کاربرانی که نسخه‌ی قبلی رو نصب داشتن با importance
     // قدیمی (DEFAULT) گیر می‌کردن و صرفاً عوض‌کردن این مقدار در کد براشون اثر نمی‌کرد.
     private const val CHANNEL_ID = "budget_channel_v2"
-    private const val CHANNEL_NAME = "Budget Notifications"
+    private const val CHANNEL_NAME = "Cidna Notifications"
 
     // Account-security alerts (new device, device removed) get their own channel so the user can
     // tune them separately in system settings, and so they always interrupt.
@@ -39,7 +39,7 @@ object AppNotificationManager {
                 CHANNEL_ID,
                 CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_HIGH // برای نمایش پاپ‌آپ (heads-up) لازم است
-            ).apply { description = "Budget management alerts" }
+            ).apply { description = "Cidna alerts" }
 
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)

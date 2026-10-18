@@ -58,7 +58,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "APP_NAME", "\"Budget Management\"")
+        buildConfigField("String", "APP_NAME", "\"Cidna\"")
         buildConfigField("String", "BASE_URL", "\"https://api.example.com/\"")
     }
 

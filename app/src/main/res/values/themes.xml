@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.BudgetManagement" parent="android:Theme.Material.Light.NoActionBar">
-                <!-- برای اینکه نوار وضعیت گوشی با پس‌زمینه برنامه هماهنگ و شیک بشه -->
-                <item name="android:statusBarColor">@android:color/transparent</item>
-                <item name="android:navigationBarColor">@android:color/transparent</item>
+    <style name="Theme.Cidna" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- برای اینکه نوار وضعیت گوشی با پس‌زمینه برنامه هماهنگ و شیک بشه -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 </resources>

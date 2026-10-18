@@ -42,8 +42,8 @@ object NotificationHelper {
             type = "SYSTEM",
             titleFa = "خوش آمدید!",
             titleEn = "Welcome!",
-            descFa = "به برنامه مدیریت بودجه سیدنا خوش آمدید. امیدواریم تجربه خوبی داشته باشید.",
-            descEn = "Welcome to Cidna Budget Management. We hope you have a great experience.",
+            descFa = "به سیدنا خوش آمدید. امیدواریم تجربه خوبی داشته باشید.",
+            descEn = "Welcome to Cidna. We hope you have a great experience.",
             tag = tag
         )
 
