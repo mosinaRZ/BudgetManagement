@@ -2,14 +2,16 @@
 
 # Cidna · سیدنا
 
-### Personal Finance, Budgeting & Savings — Android + Go
+### Personal finance, budgeting & savings — Android + Go
 ### مدیریت مالی شخصی، بودجه‌بندی و پس‌انداز — اندروید و بک‌اند Go
 
-**A local-first personal finance application designed to help people understand, organize, and plan their money.**
+**A local-first, privacy-minded personal finance app built for Persian and English speakers.**
 
-**اپلیکیشنی محلی‌محور برای ثبت، دسته‌بندی، تحلیل و برنامه‌ریزی امور مالی شخصی.**
+**اپلیکیشنی محلی‌محور و حریم‌خصوصی‌محور برای ثبت، دسته‌بندی، تحلیل و برنامه‌ریزی امور مالی شخصی؛ با پشتیبانی کامل فارسی و انگلیسی.**
 
-[English](#english) · [فارسی](#فارسی) · [Architecture](#architecture) · [Setup](#getting-started) · [API](#api-overview) · [License](#license)
+[English](#english) · [فارسی](#فارسی) · [Legal](#9-legal-information) · [حقوقی](#۹-اطلاعات-حقوقی)
+
+`AGPL-3.0-or-later` · Kotlin · Jetpack Compose · Go · MongoDB
 
 </div>
 
@@ -18,660 +20,562 @@
 <a id="english"></a>
 ## English
 
-## 1. Project overview
+## 1. About Cidna
 
-**Cidna** (also referred to in the Android project as **Budget Management**) is an Android personal-finance project built with Kotlin and Jetpack Compose, accompanied by a Go backend for account authentication, profile operations, and synchronization across devices.
+**Cidna** (Persian: **سیدنا**) is a personal-finance application for Android with an optional Go backend for account sign-in and multi-device synchronization.
 
-The Android app is designed around a **local-first** workflow: day-to-day financial records are managed in a local database, while account and synchronization capabilities connect the app to the backend. This separation is intended to keep routine record-keeping responsive and to support users who may not always have a reliable connection. Exact behavior depends on the configured backend and the state of the synchronization queue.
+It is built around three ideas:
 
-This repository contains the Android client and the Go service, along with Docker deployment configuration. It is a development project; review the production-readiness checklist before deploying it with real user data.
+- **Local-first.** Your records live in an encrypted on-device database. Day-to-day use stays fast and works without a connection; the backend is only needed for accounts and sync.
+- **Private by design.** Financial records are encrypted on the device *before* they are uploaded, so the sync server stores ciphertext rather than readable data (see [Security model](#4-security-model) for the exact scope and limits of this claim).
+- **Made for Persian and English users.** Full RTL/LTR support, Jalali (Persian) calendar, Toman/Rial display, and Persian bank-SMS recognition.
 
-## 2. Product capabilities
+> **Naming.** The product name is **Cidna** in English and **سیدنا** in Persian. "Budget Management" is only a descriptive phrase for what the app does, and the Kotlin package (`ir.hamedan.budgetmanagement`) is a historical identifier that is kept unchanged because it is the Android application ID.
 
-### Transactions and day-to-day money management
-- Record income and expenses.
-- Organize transactions with categories and review transaction history.
-- Use pending-transaction flows where applicable in the app.
-- Review financial activity through summaries and analytics screens.
-- Use supported transaction-entry helpers, including speech input and bank-SMS parsing, where the device, permissions, and app configuration allow them.
+## 2. Features
 
-### Categories
-- Organize records by category.
-- Use the app's predefined category set and category suggestion helpers.
-- Keep category-related data available to the transaction and analytics features.
-
-### Budgets and spending limits
-- Configure spending limits associated with categories.
-- Track activity against configured limits and review the relevant screens.
-- Treat alerts and limit calculations as decision-support features; users should verify important financial decisions against their own records.
-
-### Savings goals and piggy banks
-- Create and track savings goals (piggy banks).
-- Record goal operations and review progress.
-- The project includes background-work infrastructure for scheduled goal operations. Confirm the configured schedule, available-balance behavior, and notification delivery in your target build before relying on automated deposits in production.
-
-### Debts and receivables
-- Track money owed to others and money expected from others.
-- Organize debt/credit records and associated payment information.
-- Review payment and due-date information where available in the UI.
-
-### Analytics and date presentation
-- Review financial summaries and charts.
-- The UI includes Persian/English localization paths and Jalali date utilities for Persian-oriented date presentation.
-- The exact chart set and date filters are defined by the current Android implementation.
-
-### Export and sharing
-- Export supported financial information to **PDF** and **Excel-compatible XLSX** files.
-- Use transaction-sharing helpers to format/share supported transaction details.
-- Exported files may contain sensitive financial information. Store and share them carefully.
-
-### Convenience and accessibility
-- Light/dark theme support.
-- Notifications and reminders supported by the app's notification components.
-- A home-screen balance widget.
-- Optional biometric authentication using Android's biometric APIs.
-- Optional haptic feedback and speech-related entry helpers.
-- SMS-related functionality is permission-dependent and should be enabled only when the user understands and wants that behavior.
-
-### Accounts, profile, and synchronization
-- Account flows for OTP requests, registration, login, token refresh, recovery preparation, password reset, and logout are represented in the client/backend API.
-- Profile API support is present in the Android networking layer.
-- The backend exposes device-management and synchronization endpoints.
-- The synchronization model includes transactions, categories, budget limits, debt/credit records, savings goals, savings-goal operations, and debt payments.
-- Synchronization correctness depends on server configuration, valid credentials, device identity, encryption/key setup, and successful network requests. Do not assume that a feature is production-ready solely because an endpoint or model exists.
-
-## 3. Technology stack
-
-| Area | Technology / implementation |
+| Area | What you get |
 |---|---|
-| Android language | Kotlin |
-| UI | Jetpack Compose, Material 3 |
-| Android architecture | UI screens, repositories, local/network data sources, use cases, ViewModels and a manual `AppContainer` |
-| Local persistence | Room |
-| Database protection | SQLCipher integration; inspect the active key-management path in the current source before deployment |
-| Background jobs | AndroidX WorkManager |
-| Secure preferences | AndroidX Security Crypto and Android Keystore-related components where used |
-| Authentication / networking | Kotlin HTTP client wrappers and JSON serialization |
-| Backend | Go |
-| Backend data store | MongoDB |
-| Rate limiting | In-process token bucket (single API instance, no external cache) |
-| Deployment | Docker Compose |
-| Export | PDF and XLSX |
-| Localization / dates | Persian and English resources/utilities; Jalali date helpers |
+| **Transactions** | Record income and expenses, browse history, pending-transaction review, quick-add shortcut, voice entry |
+| **Categories** | Predefined categories, custom categories, category suggestions |
+| **Budgets** | Per-category spending limits with progress tracking and alerts |
+| **Savings goals** | Piggy banks, deposits and withdrawals, scheduled monthly deposits |
+| **Debts & receivables** | Money owed and money expected, partial payments, due dates and reminders |
+| **Analytics** | Summaries and charts, Jalali/Gregorian date presentation |
+| **Export & sharing** | PDF and XLSX export; shareable transaction cards (image) that follow the app's language, direction and currency |
+| **Security** | App lock, optional biometric sign-in, encrypted local database, device list with remote sign-out, new-device alerts |
+| **Accounts** | Phone-based registration with OTP, optional email, password recovery with a recovery key, soft account deletion with a 30-day restore window |
+| **Convenience** | Light/dark theme, home-screen balance widget, amount-hiding mode, notifications and reminders |
+| **Bank-SMS import** | Detects bank SMS messages and offers them as pending transactions. **Only in the `direct` distribution**; the Google Play build contains no SMS permissions |
 
-The Android project currently uses a **manual `AppContainer`** for dependency wiring; it does not use Hilt. Versions and build configuration are defined in `gradle/libs.versions.toml`, the root Gradle files, and `app/build.gradle.kts`.
+Amounts are stored as integers (Toman) and converted at the UI boundary, so floating-point rounding never reaches the database or the API.
 
-## 4. Repository layout
+## 3. Architecture
 
 ```text
-BudgetManagement/
+┌──────────────────────────── Android app ────────────────────────────┐
+│ Jetpack Compose UI → ViewModels → Use cases → Repositories          │
+│                                         │                           │
+│          Room + SQLCipher (local DB) ◄──┤                           │
+│          WorkManager (sync, reminders)  │                           │
+│          Sync engine ── AES-256-GCM encrypt/decrypt ──┐             │
+└────────────────────────────────────────────────────── │ ───────────┘
+                                                         │ HTTPS
+                       Internet ──► Caddy (automatic HTTPS)
+                                         │
+                                  Go API (chi, JWT)
+                                         │
+                       MongoDB (single-node replica set) + daily dumps
+```
+
+The whole backend (HTTPS, API, MongoDB, backups) runs on one VPS with Docker Compose. No Redis or other external cache is required.
+
+## 4. Security model
+
+What the project does:
+
+- **On device:** Room database encrypted with SQLCipher; the passphrase is random and kept in `EncryptedSharedPreferences` (Android Keystore-backed). Tokens and keys are stored in encrypted preferences. Optional biometric credential uses a Keystore key that requires strong biometrics.
+- **Before upload:** every synced record is encrypted with a random 256-bit data key using AES-256-GCM. The data key is stored on the server only in *wrapped* form: once under a key derived from the user's password and once under a key derived from the recovery key (PBKDF2-HMAC-SHA256).
+- **Authentication:** passwords are hashed with Argon2id; short-lived JWT access tokens (HS256, issuer-checked, session-versioned); rotating refresh tokens with reuse detection; account lockout after repeated failures; OTP with attempt limits; per-IP and per-user rate limiting.
+- **Transport and deployment:** HTTPS only (cleartext is permitted solely in debug builds); MongoDB and the API are reachable only on the internal Docker network; production start-up refuses weak or missing secrets.
+
+Scope and limits (please read):
+
+- The sync server cannot read your data **from a database dump or backup alone**. Because the same password is used both to sign in (it is sent to the server over HTTPS and verified there) and to derive the key that wraps the data key, this design does **not** protect against a malicious or fully compromised *running* server. Do not describe the project as "end-to-end encrypted" or "zero-knowledge" without this qualification.
+- If a user loses **both** the password and the recovery key, synced data cannot be recovered.
+- Security libraries are not a substitute for an independent audit. Review the implementation and your deployment before making compliance claims.
+
+To report a vulnerability, email **cidna.app@gmail.com** with the subject "Security". Please do not open a public issue for security problems.
+
+## 5. Technology stack
+
+| Area | Technology |
+|---|---|
+| Android | Kotlin 2.2, Jetpack Compose (Material 3), Navigation, Glance (widget), WorkManager, Room, SQLCipher, AndroidX Security Crypto, Biometric, Lottie, fastexcel |
+| Android SDK | `minSdk 26`, `targetSdk 36`, two product flavors: `play` and `direct` |
+| Dependency wiring | Manual `AppContainer` (no Hilt) |
+| Backend | Go 1.26, chi, golang-jwt, validator, MongoDB driver, `x/crypto` (Argon2) |
+| Data store | MongoDB 7 (single-node replica set) |
+| Rate limiting | In-process token bucket (single API instance) |
+| Deployment | Docker Compose, Caddy, scheduled `mongodump` backups |
+| Localization | Persian and English resources, Jalali date utilities |
+
+## 6. Repository layout
+
+```text
+cidna/
 ├── app/
-│   ├── src/main/java/ir/hamedan/budgetmanagement/
-│   │   ├── data/
-│   │   │   ├── export/        # PDF/XLSX export
-│   │   │   ├── local/         # Room database, entities, DAOs
-│   │   │   ├── network/       # Auth, profile, sync and device APIs
-│   │   │   ├── preferences/   # App preferences
-│   │   │   ├── repository/    # Data access/repository implementations
-│   │   │   ├── security/      # Session, device identity and key helpers
-│   │   │   ├── sync/          # Synchronization engine and entity types
-│   │   │   └── time/          # Time utilities
-│   │   ├── di/                # AppContainer and ViewModel factory
-│   │   ├── domain/usecase/    # Domain use cases
-│   │   ├── platform/          # Android platform integrations
-│   │   ├── ui/                # Compose screens, components and theme
-│   │   ├── utils/             # Reusable utilities and parsers
-│   │   └── worker/            # Background workers
-│   ├── src/test/              # Local unit tests
-│   └── build.gradle.kts
+│   ├── src/main/        # Android client (Kotlin, Compose)
+│   ├── src/play/        # Google Play flavor manifest (no SMS permissions)
+│   ├── src/debug/       # Debug-only network configuration
+│   ├── src/test/        # Local unit tests
+│   ├── src/androidTest/ # Instrumentation tests
+│   └── schemas/         # Exported Room schemas
 ├── backend/
-│   ├── cmd/                   # API and admin-seeding entry points
-│   ├── internal/              # Domain, use cases, infrastructure and HTTP
-│   ├── deployments/           # Dockerfiles and Compose configurations
-│   ├── .env.example           # Configuration template (no production secrets)
-│   ├── go.mod
-│   └── go.sum
+│   ├── cmd/
+│   │   ├── api/             # HTTP API entry point
+│   │   └── purge-deleted/   # Permanent purge of expired soft-deleted accounts
+│   ├── internal/            # domain · usecase · infrastructure · interface (HTTP)
+│   └── deployments/         # Dockerfile, Compose files, Caddyfile, backup script
 ├── gradle/
 ├── LICENSE
 └── README.md
 ```
 
-## 5. Getting started
+## 7. Getting started
 
 ### Prerequisites
 
-- Android Studio compatible with the Gradle/Android Gradle Plugin versions in this repository.
-- A compatible JDK as required by the Gradle wrapper and project configuration.
-- Go version compatible with `backend/go.mod` if running the service outside Docker.
-- Docker Engine and Docker Compose v2 for containerized backend development.
-- An Android emulator or physical device for client testing.
+- Android Studio compatible with the AGP/Gradle versions in `gradle/libs.versions.toml`, and a matching JDK
+- Docker Engine with Compose v2 (backend), or Go matching `backend/go.mod`
+- An emulator or a physical Android device
 
-### Configure the backend
-
-1. Open a terminal in `backend/`.
-2. Create a local environment file from the template. Compose reads the environment file from the directory where the Compose project is invoked, so follow the file location and variable requirements of the selected Compose command.
-3. Replace all example credentials and secrets with local development values. Never commit real secrets.
-4. For Compose, ensure the MongoDB connection points to the Compose service name (`mongo`) rather than `localhost` from inside the API container.
-5. Start the services from the deployment directory:
+### Run the backend (development)
 
 ```bash
 cd backend/deployments
-# Create deployments/.env from ../.env.example and configure it first.
+cp ../.env.example .env          # then replace every example value
 docker compose -f docker-compose.dev.yml up --build -d
-
-docker compose -f docker-compose.dev.yml ps
-docker compose -f docker-compose.dev.yml logs -f api
+curl http://localhost:8080/health
 ```
 
-The whole backend (HTTPS via Caddy, API, MongoDB, daily backups) runs on a single VPS with `deployments/docker-compose.yml`; see `backend/deployments/README.md` (Persian). No Redis is required.
+Stop it with `docker compose -f docker-compose.dev.yml down`. Add `-v` only if you intentionally want to delete the local MongoDB data.
 
-The API container includes a health check for `GET /health`. To check it from the host, use `http://localhost:8080/health` in a local development environment. A response from the health endpoint confirms basic process health, not that every authentication, email/SMS, or synchronization flow is configured correctly.
+### Deploy the backend (production, single VPS)
 
-To stop the stack:
+Follow `backend/deployments/README.md` (Persian). In short: point a DNS name at the server, copy `.env.production.example` to `.env`, fill **every** value, then run `docker compose up -d --build`. Production mode requires real SMS and email delivery settings and a JWT secret of at least 64 characters.
+
+### Build the Android app
 
 ```bash
-docker compose -f docker-compose.dev.yml down
+# Debug (backend URL: -PdebugBackendBaseUrl=http://<LAN-IP>:8080/)
+./gradlew assemblePlayDebug
+
+# Unit tests
+./gradlew testPlayDebugUnitTest
+
+# Release (HTTPS backend URL is mandatory; bump versionCode for every upload)
+./gradlew bundlePlayRelease -PbackendBaseUrl=https://api.example.com/ -PversionCode=2
+./gradlew assembleDirectRelease -PbackendBaseUrl=https://api.example.com/
 ```
 
-To remove the database volume as well, use `docker compose -f docker-compose.dev.yml down -v` **only if you intentionally want to delete local MongoDB data**.
+Release signing is read from `keystore.properties` (git-ignored) or `RELEASE_*` environment variables. A phone cannot reach `localhost` on your computer: use the computer's LAN address for debug builds on a physical device.
 
-### Configure Android
+## 8. Configuration and API
 
-The debug build currently defines a development backend URL in `app/build.gradle.kts`. If testing on a physical phone, the URL must be reachable from that phone; `localhost` on the phone refers to the phone itself, not the development computer. Use the computer's reachable LAN/hotspot address and ensure the firewall and network isolation settings permit the connection. Do not ship a private LAN URL in a release build.
-
-Build and test from the repository root:
-
-```bash
-# Windows PowerShell
-.\gradlew.bat assembleDebug
-.\gradlew.bat test
-
-# macOS / Linux
-./gradlew assembleDebug
-./gradlew test
-```
-
-Release builds require a real HTTPS backend URL. Configure it with a Gradle property or environment variable, for example:
-
-```bash
-./gradlew assembleRelease -PbackendBaseUrl=https://your-api.example.com/
-```
-
-or set `BACKEND_BASE_URL` in the build environment. Configure release signing separately; never store signing passwords, JWT secrets, database credentials, SMTP credentials, or SMS-provider tokens in source control.
-
-### Backend development without Docker
-
-```bash
-cd backend
-go mod download
-go test ./...
-go run ./cmd/api
-```
-
-A local MongoDB replica set (a single node is enough) must be running and configured before starting the API. Consult `backend/.env.example` and the deployment files for required variables.
-
-## 6. Configuration and operational security
-
-Important environment variables include:
+### Key environment variables
 
 | Variable | Purpose |
 |---|---|
-| `ENV` | Runtime environment; production mode has stricter requirements |
-| `HTTP_PORT` | HTTP listener port |
-| `MONGO_URI` | MongoDB connection string |
-| `MONGO_DB_NAME` | Database name |
-| `JWT_SECRET` | Signing secret; use a strong, randomly generated value |
-| `JWT_ACCESS_TTL_MINUTES` | Access-token lifetime |
-| `JWT_REFRESH_TTL_DAYS` | Refresh-token lifetime |
-| `OTP_EXPIRY_MINUTES` | OTP validity period |
-| `TLS_TERMINATED_BY_PROXY` | `true` when a reverse proxy on the same host (Caddy in the VPS stack) terminates HTTPS; requires `TRUSTED_PROXY_CIDRS` in production |
-| `MONGO_ALLOW_PLAINTEXT` | Allows a non-TLS `MONGO_URI` in production; only for MongoDB reachable solely over a private/same-host network |
-| `SMS_WEBHOOK_URL`, `SMS_AUTH_TOKEN` | SMS provider integration settings |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | Email delivery settings |
-| `CORS_ALLOWED_ORIGINS` | Explicit browser-origin allow-list, where applicable |
-| `TRUSTED_PROXY_CIDRS` | Proxy networks trusted for forwarded client information |
-| `TLS_CERT_FILE`, `TLS_KEY_FILE` | TLS certificate/key paths for deployments configured to terminate TLS in the service |
-| `DEV_LOG_OTP` | Development-only OTP logging; must be disabled in production |
+| `ENV` | `dev`, `test` or `prod` (production enforces stricter checks) |
+| `JWT_SECRET` | Token signing secret (≥ 32 chars; ≥ 64 in production) |
+| `MONGO_URI`, `MONGO_DB_NAME` | Database connection |
+| `TLS_TERMINATED_BY_PROXY`, `TRUSTED_PROXY_CIDRS` | Reverse-proxy HTTPS and trusted client-IP headers |
+| `SMS_WEBHOOK_URL`, `SMS_AUTH_TOKEN` | SMS OTP delivery (required in production) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | Email OTP delivery (required in production) |
+| `SUPPORT_EMAIL` | Contact address shown on the public legal pages |
+| `DEV_LOG_OTP` | Prints OTPs to the log; refused outside `dev`/`test` |
+| `API_DOMAIN`, `BACKUP_RETENTION_DAYS` | Used by the single-VPS Compose stack |
 
-**Before exposing the service to the internet:**
-- Use TLS end-to-end or a correctly configured trusted TLS-terminating proxy.
-- Disable development OTP logging and configure real SMS/email providers as required by the enabled flows.
-- Generate strong unique secrets and use a secret manager or mounted secret files where supported.
-- Restrict database/network access; do not expose MongoDB publicly.
-- Verify rate limiting, CORS, proxy trust, authentication, recovery, refresh-token rotation and logout behavior.
-- Configure database backups, restore drills, monitoring and alerting.
-- Review SMS permissions, notification content, exported files, logs and personal-data retention.
-- Run dependency, static-analysis and security tests before each release.
+Never commit secrets, keystores or `.env` files.
 
-Security-related libraries and code paths are not a substitute for an independent security audit. Review the actual implementation and deployment topology before making claims about end-to-end encryption, recovery guarantees, or regulatory compliance.
-
-## 7. API overview
-
-The backend routes include the following API groups (availability and authorization are determined by server configuration):
-
-### Health and authentication
+### HTTP API
 
 ```http
 GET  /health
-POST /auth/otp/request
-POST /auth/register
-POST /auth/login
-POST /auth/refresh
-POST /auth/recovery/prepare
-POST /auth/password/reset
-POST /auth/logout
-```
 
-### Authenticated device and synchronization operations
+POST /auth/otp/request       POST /auth/register       POST /auth/login
+POST /auth/refresh           POST /auth/logout
+POST /auth/recovery/prepare  POST /auth/password/reset
 
-```http
+# Authenticated (Bearer token)
+POST   /api/v1/auth/password/change
+GET    /api/v1/account/profile      PUT /api/v1/account/profile
+PUT    /api/v1/account/email        POST /api/v1/account/delete   # soft delete
 POST   /api/v1/sync
-GET    /api/v1/devices
+GET    /api/v1/devices              GET /api/v1/devices/events
 DELETE /api/v1/devices/{deviceID}
+PUT    /api/v1/admin/users/{userID}/role                          # admin only
+
+# Public legal pages (also required by app stores)
+GET /privacy-policy   GET /terms   GET /licenses   GET /account-deletion
 ```
 
-### Administrative operation
+The server's handlers and DTOs are the source of truth for request and response contracts.
 
-```http
-PUT /api/v1/admin/users/{userID}/role
-```
+## 9. Legal information
 
-Use the server's request/response contracts and authorization middleware as the source of truth. Do not call administrative endpoints from an untrusted client or expose credentials in logs.
+> This section describes the project's licensing and legal posture to the best of the maintainer's knowledge. It is **not legal advice**; consult a qualified lawyer before relying on it, especially for commercial or cross-border use.
 
-## 8. Data and synchronization model
+### 9.1 Software license
 
-The sync contract defines entity families including:
+Copyright © 2026 Mohammad Sina Ramezani Ohdieh.
 
-- `TRANSACTION`
-- `CATEGORY`
-- `BUDGET_LIMIT`
-- `DEBT_CREDIT`
-- `SAVING_GOAL`
-- `SAVING_GOAL_OPERATION`
-- `DEBT_PAYMENT`
+Cidna is free software released under the **GNU Affero General Public License, version 3 or (at your option) any later version** (`AGPL-3.0-or-later`). The full text is in [`LICENSE`](LICENSE).
 
-The codebase includes sync state/metadata, entity identifiers, revision/cursor concepts, and background synchronization infrastructure. Multi-device behavior should be validated with realistic scenarios: offline edits, account switching, repeated requests, concurrent updates, deleted records, stale devices, and interrupted syncs.
+In practical terms:
 
-Financial amounts should use the project's established integer monetary representation and unit contract. Avoid introducing floating-point arithmetic for exact currency amounts. Before changing sync models, update the Android entities/DAOs, serialization contract, backend validation and persistence, and corresponding tests together.
+- **Using the app** for personal or commercial purposes is allowed.
+- **Redistributing** the app or a modified version (APK, AAB, or source) requires keeping the license, the copyright notices, and offering the corresponding source code under the same license.
+- **Running a modified backend as a network service** triggers AGPL section 13: you must offer the complete corresponding source of your modified version to the users who interact with it over the network.
+- The license grants **no rights to the name or logo** "Cidna / سیدنا" (see 9.4).
 
-## 9. Testing and quality checks
+### 9.2 Contributions
 
-Android unit tests are under `app/src/test`; instrumentation tests, if present, are under `app/src/androidTest`. The Go service has package-level tests where provided.
+Contributions are accepted under the project license (AGPL-3.0-or-later). By submitting a contribution you confirm that you have the right to do so and that it may be distributed under that license. Do not submit code, fonts, images or animations you do not have the right to license.
 
-Suggested local checks:
+### 9.3 Third-party components
 
-```bash
-# Android
-./gradlew test
-./gradlew assembleDebug
+Each component keeps its own license; those terms continue to apply.
 
-# Backend
-cd backend
-go test ./...
-go vet ./...
-```
+| Component | License |
+|---|---|
+| AndroidX libraries (Compose, Material 3, Navigation, Lifecycle, Room, WorkManager, Glance, Biometric, Security Crypto, …) | Apache-2.0 |
+| Kotlin, kotlinx.serialization, kotlinx.coroutines | Apache-2.0 |
+| Lottie for Android (Airbnb) | Apache-2.0 |
+| fastexcel (Dhatim) | MIT |
+| SQLCipher for Android (Zetetic), Community Edition | BSD-style |
+| Vazirmatn font (The Vazirmatn Project Authors) | SIL Open Font License 1.1 |
+| Inter font (The Inter Project Authors) | SIL Open Font License 1.1 |
+| Go modules: chi, validator, golang-jwt, godotenv, mongo-go-driver, `golang.org/x/*` | MIT / BSD-3-Clause / Apache-2.0 (see each module) |
 
-For a release candidate, additionally test registration and login end-to-end, OTP delivery, recovery, refresh and logout; Android-to-Go connectivity on a real device; sync across two devices; account switching; database migration; permission denial; SMS parsing with representative messages; export correctness; scheduled work after reboot; and failure/retry behavior when services are unavailable.
+The running backend also lists these notices at `/licenses`. Distributing the app means passing on the required copyright and license notices of these components (for example the SQLCipher and OFL font notices).
 
-A successful compile alone does not prove data integrity, security, or production readiness.
+### 9.4 Name, logos and third-party marks
 
-## 10. Known deployment considerations
+"Cidna" and "سیدنا" identify this project and its provider. Forks must use a different name and icon. WhatsApp, Instagram, X and Gmail are trademarks of their respective owners; their icons appear only to identify share destinations and imply no endorsement.
 
-- The debug API URL is a development setting. Update it for your network and never use it as a production endpoint.
-- Release configuration intentionally requires a non-placeholder HTTPS backend URL.
-- SMS, email, TLS, and production secrets require environment-specific configuration.
-- WorkManager timing is subject to Android scheduling constraints and is not a precise real-time scheduler.
-- Exported reports, notifications, SMS access and recovery material can expose sensitive data; evaluate the threat model for your deployment.
-- Feature behavior can vary by Android version, device manufacturer, granted permissions and backend configuration.
+### 9.5 User-facing legal documents
 
-## 11. Contributing
+The backend serves the Privacy Policy, Terms of Service, open-source notices and account-deletion instructions in Persian and English. Their addresses are what you enter in Google Play Console (Privacy policy URL and the account-deletion URL in the Data safety form). Bump `legalVersion` and the dates in `backend/internal/interface/http/handler/legal_handler.go` whenever the texts or the app's data handling change. The texts are a starting point and should be reviewed by a lawyer.
 
-Contributions are welcome under the terms of the project license. Please:
+### 9.6 Personal data and retention
 
-1. Describe the problem and expected behavior in an issue or pull request.
-2. Keep changes focused and preserve existing UI/architecture conventions.
-3. Add or update tests for bug fixes and behavior changes.
-4. Avoid committing secrets, personal data, generated exports, local environment files or build artifacts.
-5. Document configuration changes and API contract changes in the same change set.
-6. Clearly identify behavior that is incomplete or requires deployment-specific setup.
+| Data | Purpose | Retention |
+|---|---|---|
+| Phone number (email, name, gender and birth date optional) | Account, sign-in, OTP | While the account exists |
+| Password | Authentication | Stored only as an Argon2id hash |
+| Encrypted financial records and wrapped keys | Multi-device sync | While the account exists |
+| Device name/model, OS and app version, IP (shown masked), installation hash | Device list and new-device alerts | Device activity ≤ 30 days |
+| Temporary sync operations | Sync reliability | ≤ 7 days |
 
-## 12. License
+Account deletion is a **soft delete**: sessions are revoked immediately, the account can be restored by signing in within **30 days**, and after that the `purge-deleted` job erases it permanently (run it daily from cron). The app does not include advertising, analytics or third-party trackers. SMS text is processed on the device only, and only in the `direct` distribution.
 
-This project is licensed under the **GNU Affero General Public License v3.0 or (at your option) any later version** (`AGPL-3.0-or-later`). See [`LICENSE`](LICENSE) for the complete license text.
+### 9.7 Disclaimers
 
-The AGPL includes specific obligations when modified versions are conveyed and when users interact with a modified version over a network. Read the license carefully before distributing binaries or operating a modified public service. Third-party dependencies, fonts, icons, and other bundled assets may have separate license terms; those terms remain applicable to their respective components.
+- Cidna is a record-keeping tool. It is **not** financial, accounting, legal or tax advice, and it is not connected to any bank account or payment system.
+- Automatic SMS detection, voice input and calculations may be wrong. Verify important figures against your bank records.
+- The software is provided **"as is", without warranty** of any kind, as stated in the AGPL (sections 15 and 16).
+- The Terms of Service are governed by the laws of the Islamic Republic of Iran.
+
+### 9.8 Before publishing a release
+
+- [ ] Confirm that you hold, or may redistribute, every non-code asset: Lottie animations, share-card backgrounds, banners, icons and fonts.
+- [ ] Keep the privacy policy, the Play Data safety form and the actual behavior of the app consistent with each other.
+- [ ] Use a real `SUPPORT_EMAIL` and review the legal texts with a lawyer.
+- [ ] Keep `LICENSE` and the copyright notice in every distributed copy, and publish the corresponding source.
+
+## 10. Contact
+
+Project and legal contact: **cidna.app@gmail.com**
 
 ---
 
 <a id="فارسی"></a>
+<div dir="rtl">
+
 ## فارسی
 
-## ۱. معرفی پروژه
+## ۱. معرفی سیدنا
 
-**سیدنا (Cidna)** ــ که در بخشی از ساختار اندروید با نام **Budget Management** نیز شناخته می‌شود ــ پروژه‌ای برای مدیریت امور مالی شخصی است. کلاینت اندروید با Kotlin و Jetpack Compose توسعه داده شده و یک سرویس بک‌اند Go برای احراز هویت حساب، عملیات مرتبط با پروفایل و همگام‌سازی چنددستگاهی در کنار آن قرار دارد.
+**سیدنا (Cidna)** یک اپلیکیشن اندروید برای مدیریت مالی شخصی است که یک بک‌اند اختیاری مبتنی بر Go برای ورود به حساب و همگام‌سازی چنددستگاهی در کنار آن قرار دارد.
 
-معماری برنامه **محلی‌محور (Local-first)** است؛ یعنی اطلاعات روزمره مالی در پایگاه داده محلی برنامه مدیریت می‌شوند و قابلیت‌های حساب کاربری و همگام‌سازی از طریق بک‌اند در دسترس قرار می‌گیرند. هدف این رویکرد، پاسخ‌گویی مناسب در کارهای روزمره و کاهش وابستگی ثبت اطلاعات به اتصال دائمی اینترنت است. رفتار دقیق هر قابلیت به تنظیمات بک‌اند و وضعیت صف همگام‌سازی وابسته است.
+سه ایده اصلی پروژه:
 
-این مخزن شامل کلاینت اندروید، سرویس Go و فایل‌های استقرار Docker است. پیش از استفاده در محیط عملیاتی و با اطلاعات مالی واقعی، چک‌لیست انتشار و امنیت را کامل بررسی کنید.
+- **محلی‌محور (Local-first).** اطلاعات شما در یک پایگاه داده رمزنگاری‌شده روی خود گوشی نگه داشته می‌شود. استفاده روزمره سریع است و بدون اینترنت هم کار می‌کند؛ بک‌اند فقط برای حساب کاربری و همگام‌سازی لازم است.
+- **حریم خصوصی از ابتدا.** اطلاعات مالی پیش از ارسال روی دستگاه رمزنگاری می‌شوند و سرور داده رمزشده را نگه می‌دارد، نه داده خوانا (دامنه دقیق و محدودیت‌های این ادعا در بخش [مدل امنیتی](#۴-مدل-امنیتی) آمده است).
+- **ساخته‌شده برای کاربر فارسی‌زبان و انگلیسی‌زبان.** پشتیبانی کامل از راست‌به‌چپ و چپ‌به‌راست، تقویم جلالی، نمایش تومان/ریال و تشخیص پیامک‌های بانکی ایران.
 
-## ۲. قابلیت‌های محصول
+> **درباره نام.** نام محصول در فارسی **سیدنا** و در انگلیسی **Cidna** است. عبارت «مدیریت بودجه» صرفاً توصیف کارکرد برنامه است و نام پکیج کاتلین (`ir.hamedan.budgetmanagement`) یک شناسه تاریخی است که چون همان Application ID اندروید است، عمداً تغییر نکرده است.
 
-### ثبت و مدیریت تراکنش‌ها
-- ثبت درآمد و هزینه.
-- دسته‌بندی تراکنش‌ها و مرور سوابق مالی.
-- پشتیبانی از جریان‌های مرتبط با تراکنش‌های در انتظار، در بخش‌هایی که در برنامه پیاده‌سازی شده‌اند.
-- مشاهده خلاصه‌ها و تحلیل‌های مالی از طریق صفحه‌های مربوطه.
-- وجود ابزارهای کمکی برای ورود اطلاعات، از جمله ورودی صوتی و پردازش پیامک بانکی؛ استفاده از این قابلیت‌ها به نسخه برنامه، مجوزهای دستگاه و تنظیمات وابسته است.
+## ۲. قابلیت‌ها
 
-### دسته‌بندی‌ها
-- سازمان‌دهی اطلاعات مالی بر اساس دسته‌بندی.
-- پشتیبانی از مجموعه دسته‌بندی‌های آماده و ابزارهای پیشنهاد دسته‌بندی.
-- استفاده از دسته‌بندی‌ها در ثبت تراکنش و بخش‌های تحلیلی.
-
-### بودجه‌بندی و محدودیت‌های مالی
-- تعریف سقف هزینه برای دسته‌بندی‌های موردنظر.
-- بررسی وضعیت هزینه‌ها نسبت به محدودیت‌های ثبت‌شده.
-- تحلیل‌ها و هشدارها ابزار کمکی تصمیم‌گیری هستند؛ برای تصمیم‌های مهم مالی، اطلاعات ثبت‌شده را نیز بررسی کنید.
-
-### اهداف پس‌انداز و قلک‌ها
-- ایجاد و پیگیری اهداف پس‌انداز یا قلک‌ها.
-- ثبت عملیات مرتبط با هدف و مشاهده روند پیشرفت.
-- وجود زیرساخت کارهای پس‌زمینه برای عملیات زمان‌بندی‌شده قلک‌ها. پیش از اتکا به واریز خودکار در محیط عملیاتی، زمان‌بندی، رفتار هنگام کمبود موجودی و ارسال اعلان را در نسخه نهایی آزمایش کنید.
-
-### بدهی‌ها و طلب‌ها
-- ثبت مبالغی که باید پرداخت شوند یا از دیگران دریافت شوند.
-- نگهداری اطلاعات بدهی/طلب و پرداخت‌های مرتبط.
-- بررسی تاریخ سررسید و اطلاعات پرداخت در بخش‌هایی که رابط کاربری ارائه می‌کند.
-
-### تحلیل مالی و تاریخ‌ها
-- مشاهده خلاصه‌ها و نمودارهای مالی.
-- پشتیبانی‌های زبانی فارسی و انگلیسی و ابزارهای تاریخ جلالی در بخش‌های مرتبط با نمایش تاریخ.
-- مجموعه نمودارها و فیلترهای نهایی مطابق پیاده‌سازی فعلی اندروید است.
-
-### خروجی و اشتراک‌گذاری
-- خروجی گرفتن از اطلاعات پشتیبانی‌شده در قالب **PDF** و **XLSX سازگار با Excel**.
-- وجود ابزارهای قالب‌بندی و اشتراک‌گذاری جزئیات تراکنش.
-- فایل‌های خروجی ممکن است اطلاعات مالی حساس داشته باشند؛ در نگهداری و ارسال آن‌ها دقت کنید.
-
-### امکانات تکمیلی
-- پشتیبانی از تم روشن و تیره.
-- اعلان‌ها و یادآورها از طریق اجزای اعلان برنامه.
-- ویجت موجودی در صفحه اصلی اندروید.
-- احراز هویت زیست‌سنجی اختیاری با APIهای اندروید.
-- بازخورد لمسی و ابزارهای کمکی ورود صوتی.
-- قابلیت‌های پیامکی به مجوزهای مربوط وابسته‌اند و باید با اطلاع و انتخاب کاربر فعال شوند.
-
-### حساب کاربری، پروفایل و همگام‌سازی
-- مسیرهای API مربوط به درخواست OTP، ثبت‌نام، ورود، تمدید توکن، آماده‌سازی بازیابی، بازنشانی گذرواژه و خروج در کلاینت/بک‌اند تعریف شده‌اند.
-- لایه شبکه اندروید دارای پشتیبانی API پروفایل است.
-- بک‌اند مسیرهای مدیریت دستگاه و همگام‌سازی را ارائه می‌کند.
-- مدل همگام‌سازی شامل تراکنش، دسته‌بندی، محدودیت مالی، بدهی/طلب، هدف پس‌انداز، عملیات هدف و پرداخت بدهی است.
-- صحت همگام‌سازی به تنظیمات سرور، اعتبارنامه‌ها، شناسه دستگاه، تنظیمات کلید/رمزنگاری و موفقیت درخواست‌های شبکه وابسته است. وجود یک مدل یا endpoint به‌تنهایی به معنای آماده‌بودن کامل قابلیت برای محیط عملیاتی نیست.
-
-## ۳. فناوری‌های استفاده‌شده
-
-| بخش | فناوری / پیاده‌سازی |
+| بخش | امکانات |
 |---|---|
-| زبان اندروید | Kotlin |
-| رابط کاربری | Jetpack Compose و Material 3 |
-| معماری اندروید | صفحه‌ها، Repositoryها، منابع داده محلی/شبکه، Use Caseها، ViewModelها و `AppContainer` دستی |
-| ذخیره‌سازی محلی | Room |
-| محافظت پایگاه داده | وابستگی SQLCipher؛ مسیر فعال مدیریت کلید باید در سورس نسخه مورد استفاده بررسی شود |
-| کارهای پس‌زمینه | AndroidX WorkManager |
-| تنظیمات امن | اجزای AndroidX Security Crypto و Android Keystore در بخش‌های مربوط |
-| شبکه و احراز هویت | کلاینت‌های HTTP و JSON serialization |
-| بک‌اند | Go |
-| پایگاه داده بک‌اند | MongoDB |
-| محدودسازی نرخ درخواست‌ها | token bucket درون‌حافظه‌ای (یک نمونه API، بدون کش خارجی) |
-| استقرار | Docker Compose |
-| خروجی | PDF و XLSX |
-| زبان و تاریخ | ابزارهای فارسی/انگلیسی و تاریخ جلالی |
+| **تراکنش‌ها** | ثبت درآمد و هزینه، مرور سوابق، بررسی تراکنش‌های در انتظار، میان‌بر ثبت سریع، ورود صوتی |
+| **دسته‌بندی‌ها** | دسته‌بندی‌های آماده، دسته‌بندی سفارشی، پیشنهاد دسته‌بندی |
+| **بودجه** | سقف هزینه برای هر دسته، پیگیری پیشرفت و هشدار |
+| **اهداف پس‌انداز** | قلک‌ها، واریز و برداشت، واریز ماهانه زمان‌بندی‌شده |
+| **بدهی و طلب** | مبالغ بدهکار و طلبکار، پرداخت‌های جزئی، سررسید و یادآوری |
+| **تحلیل مالی** | خلاصه‌ها و نمودارها، نمایش تاریخ جلالی/میلادی |
+| **خروجی و اشتراک‌گذاری** | خروجی PDF و XLSX؛ کارت تصویری تراکنش برای اشتراک‌گذاری، هماهنگ با زبان، جهت متن و واحد پول برنامه |
+| **امنیت** | قفل برنامه، ورود زیست‌سنجی اختیاری، پایگاه داده رمزنگاری‌شده، فهرست دستگاه‌ها با امکان خروج از راه دور، اعلان ورود از دستگاه جدید |
+| **حساب کاربری** | ثبت‌نام با شماره موبایل و OTP، ایمیل اختیاری، بازیابی گذرواژه با کلید بازیابی، حذف نرم حساب با مهلت ۳۰ روزه بازیابی |
+| **امکانات تکمیلی** | تم روشن و تیره، ویجت موجودی، حالت مخفی‌کردن مبالغ، اعلان‌ها و یادآورها |
+| **دریافت از پیامک بانکی** | تشخیص پیامک بانکی و پیشنهاد آن به‌صورت تراکنش در انتظار. **فقط در نسخه `direct`**؛ نسخه گوگل‌پلی هیچ مجوز پیامکی ندارد |
 
-در وضعیت فعلی، تزریق وابستگی‌ها با **`AppContainer` دستی** انجام می‌شود و Hilt در پروژه استفاده نشده است. نسخه‌ها در `gradle/libs.versions.toml` و فایل‌های Gradle تعریف شده‌اند.
+مبالغ به‌صورت عدد صحیح (تومان) ذخیره و فقط در مرز رابط کاربری تبدیل می‌شوند؛ بنابراین خطای ممیز شناور هرگز به پایگاه داده یا API نمی‌رسد.
 
-## ۴. ساختار مخزن
+## ۳. معماری
+
+<div dir="ltr">
 
 ```text
-BudgetManagement/
+┌──────────────────────────── Android app ────────────────────────────┐
+│ Jetpack Compose UI → ViewModels → Use cases → Repositories          │
+│                                         │                           │
+│          Room + SQLCipher (local DB) ◄──┤                           │
+│          WorkManager (sync, reminders)  │                           │
+│          Sync engine ── AES-256-GCM encrypt/decrypt ──┐             │
+└────────────────────────────────────────────────────── │ ───────────┘
+                                                         │ HTTPS
+                       Internet ──► Caddy (automatic HTTPS)
+                                         │
+                                  Go API (chi, JWT)
+                                         │
+                       MongoDB (single-node replica set) + daily dumps
+```
+
+</div>
+
+کل بک‌اند (HTTPS، API، MongoDB و بکاپ) با Docker Compose روی یک VPS اجرا می‌شود. Redis یا هیچ کش خارجی دیگری لازم نیست.
+
+## ۴. مدل امنیتی
+
+آنچه پروژه انجام می‌دهد:
+
+- **روی دستگاه:** پایگاه داده Room با SQLCipher رمزنگاری می‌شود؛ گذرواژه آن تصادفی است و در `EncryptedSharedPreferences` (متکی بر Android Keystore) نگهداری می‌شود. توکن‌ها و کلیدها در تنظیمات رمزنگاری‌شده ذخیره می‌شوند. اعتبارنامه زیست‌سنجی اختیاری از کلید Keystore استفاده می‌کند که زیست‌سنجی قوی را الزامی می‌کند.
+- **پیش از ارسال:** هر رکورد همگام‌سازی‌شده با یک کلید داده تصادفی ۲۵۶ بیتی و AES-256-GCM رمزنگاری می‌شود. کلید داده روی سرور فقط به‌صورت *بسته‌بندی‌شده* نگه داشته می‌شود: یک‌بار با کلیدی مشتق‌شده از گذرواژه و یک‌بار با کلیدی مشتق‌شده از کلید بازیابی (PBKDF2-HMAC-SHA256).
+- **احراز هویت:** گذرواژه‌ها با Argon2id هش می‌شوند؛ توکن دسترسی JWT کوتاه‌عمر (HS256، با بررسی issuer و نسخه نشست)؛ توکن نوسازی چرخشی با تشخیص استفاده مجدد؛ قفل حساب پس از تلاش‌های ناموفق مکرر؛ OTP با محدودیت تعداد تلاش؛ محدودسازی نرخ درخواست برای هر IP و هر کاربر.
+- **ارتباط و استقرار:** فقط HTTPS (ترافیک بدون رمز فقط در نسخه debug مجاز است)؛ MongoDB و API فقط روی شبکه داخلی Docker در دسترس‌اند؛ در حالت production اجرای سرویس با secretهای ضعیف یا نامعتبر متوقف می‌شود.
+
+دامنه و محدودیت‌ها (لطفاً بخوانید):
+
+- سرور **فقط از روی یک نسخه پشتیبان یا dump پایگاه داده** نمی‌تواند داده شما را بخواند. چون یک گذرواژه هم برای ورود (به سرور ارسال و همان‌جا بررسی می‌شود) و هم برای ساخت کلیدِ بسته‌بندی کلید داده استفاده می‌شود، این طراحی در برابر **سرور مخرب یا کاملاً نفوذشده‌ای که در حال اجراست** محافظت نمی‌کند. بدون این توضیح، پروژه را «رمزنگاری سرتاسری» یا «zero-knowledge» معرفی نکنید.
+- اگر کاربر **هم** گذرواژه **و هم** کلید بازیابی را گم کند، داده‌های همگام‌سازی‌شده قابل بازیابی نیست.
+- کتابخانه‌های امنیتی جایگزین ممیزی مستقل نیستند. پیش از ادعای انطباق با الزامات قانونی، پیاده‌سازی و استقرار را بازبینی کنید.
+
+برای گزارش آسیب‌پذیری، ایمیل **cidna.app@gmail.com** را با موضوع «Security» بنویسید و لطفاً مسائل امنیتی را در Issue عمومی مطرح نکنید.
+
+## ۵. فناوری‌ها
+
+| بخش | فناوری |
+|---|---|
+| اندروید | Kotlin 2.2، Jetpack Compose (Material 3)، Navigation، Glance (ویجت)، WorkManager، Room، SQLCipher، AndroidX Security Crypto، Biometric، Lottie، fastexcel |
+| SDK اندروید | `minSdk 26`، `targetSdk 36`، دو flavor: `play` و `direct` |
+| تزریق وابستگی | `AppContainer` دستی (بدون Hilt) |
+| بک‌اند | Go 1.26، chi، golang-jwt، validator، درایور MongoDB، `x/crypto` (Argon2) |
+| پایگاه داده | MongoDB 7 (replica set تک‌نودی) |
+| محدودسازی نرخ | token bucket درون‌حافظه‌ای (یک نمونه API) |
+| استقرار | Docker Compose، Caddy، بکاپ زمان‌بندی‌شده `mongodump` |
+| زبان و تاریخ | منابع فارسی و انگلیسی، ابزارهای تاریخ جلالی |
+
+## ۶. ساختار مخزن
+
+<div dir="ltr">
+
+```text
+cidna/
 ├── app/
-│   ├── src/main/java/ir/hamedan/budgetmanagement/
-│   │   ├── data/
-│   │   │   ├── export/        # خروجی PDF/XLSX
-│   │   │   ├── local/         # Room، Entityها و DAOها
-│   │   │   ├── network/       # APIهای حساب، پروفایل، Sync و دستگاه
-│   │   │   ├── preferences/   # تنظیمات برنامه
-│   │   │   ├── repository/    # پیاده‌سازی Repositoryها
-│   │   │   ├── security/      # نشست، شناسه دستگاه و ابزارهای کلید
-│   │   │   ├── sync/          # موتور و انواع همگام‌سازی
-│   │   │   └── time/          # ابزارهای زمان
-│   │   ├── di/                # AppContainer و ViewModel factory
-│   │   ├── domain/usecase/    # منطق‌های کاربردی دامنه
-│   │   ├── platform/          # اتصال به قابلیت‌های اندروید
-│   │   ├── ui/                # صفحه‌ها، اجزا و تم Compose
-│   │   ├── utils/             # ابزارها و parserها
-│   │   └── worker/            # کارهای پس‌زمینه
-│   ├── src/test/              # تست‌های واحد
-│   └── build.gradle.kts
+│   ├── src/main/        # Android client (Kotlin, Compose)
+│   ├── src/play/        # مانیفست flavor گوگل‌پلی (بدون مجوز پیامک)
+│   ├── src/debug/       # تنظیمات شبکه مخصوص debug
+│   ├── src/test/        # تست‌های واحد
+│   ├── src/androidTest/ # تست‌های instrumentation
+│   └── schemas/         # اسکیماهای صادرشده Room
 ├── backend/
-│   ├── cmd/                   # ورودی اجرای API و ابزار seed ادمین
-│   ├── internal/              # دامنه، use case، زیرساخت و HTTP
-│   ├── deployments/           # Dockerfile و Compose
-│   ├── .env.example           # نمونه تنظیمات، بدون secret واقعی
-│   ├── go.mod
-│   └── go.sum
+│   ├── cmd/
+│   │   ├── api/             # ورودی API
+│   │   └── purge-deleted/   # پاکسازی دائمی حساب‌های حذف‌شده منقضی
+│   ├── internal/            # domain · usecase · infrastructure · interface (HTTP)
+│   └── deployments/         # Dockerfile، فایل‌های Compose، Caddyfile، اسکریپت بکاپ
 ├── gradle/
 ├── LICENSE
 └── README.md
 ```
 
-## ۵. راه‌اندازی پروژه
+</div>
+
+## ۷. راه‌اندازی
 
 ### پیش‌نیازها
 
-- نسخه‌ای از Android Studio که با نسخه‌های Gradle و Android Gradle Plugin پروژه سازگار باشد.
-- JDK سازگار با Gradle Wrapper و پیکربندی پروژه.
-- نسخه Go مطابق `backend/go.mod` برای اجرای مستقیم بک‌اند.
-- Docker Engine و Docker Compose v2 برای اجرای بک‌اند در کانتینر.
-- شبیه‌ساز اندروید یا دستگاه واقعی برای تست کلاینت.
+- Android Studio سازگار با نسخه‌های AGP/Gradle در `gradle/libs.versions.toml` و JDK مناسب
+- Docker Engine همراه با Compose v2 (بک‌اند)، یا Go مطابق `backend/go.mod`
+- شبیه‌ساز یا دستگاه واقعی اندروید
 
-### راه‌اندازی بک‌اند با Docker
+### اجرای بک‌اند (توسعه)
 
-۱. وارد پوشه `backend/` شوید.
-۲. فایل محیطی محلی را از روی نمونه بسازید. دقت کنید Compose فایل محیطی را بر اساس محل اجرای پروژه Compose می‌خواند؛ محل فایل و متغیرهای اجباری را با فرمان انتخابی تطبیق دهید.
-۳. مقادیر نمونه را با اطلاعات توسعه محلی جایگزین کنید. هیچ secret واقعی را در Git ثبت نکنید.
-۴. در Docker Compose، آدرس MongoDB باید به سرویس `mongo` اشاره کند، نه `localhost` داخل کانتینر API.
-۵. سرویس‌ها را از پوشه استقرار اجرا کنید:
+<div dir="ltr">
 
 ```bash
 cd backend/deployments
-# ابتدا deployments/.env را از ../.env.example بسازید و تنظیم کنید.
+cp ../.env.example .env          # سپس همه مقادیر نمونه را عوض کنید
 docker compose -f docker-compose.dev.yml up --build -d
-
-docker compose -f docker-compose.dev.yml ps
-docker compose -f docker-compose.dev.yml logs -f api
+curl http://localhost:8080/health
 ```
 
-کل بک‌اند (HTTPS با Caddy، API، MongoDB و بکاپ روزانه) با `deployments/docker-compose.yml` روی یک VPS اجرا می‌شود؛ راهنما در `backend/deployments/README.md` است. Redis لازم نیست.
+</div>
 
-برای بررسی سلامت پایه API از میزبان محلی می‌توانید `http://localhost:8080/health` را باز کنید. پاسخ موفق این endpoint فقط سلامت پایه فرایند را نشان می‌دهد و اثبات نمی‌کند که OTP، ایمیل/پیامک یا همه جریان‌های همگام‌سازی به‌درستی تنظیم شده‌اند.
+توقف سرویس‌ها با `docker compose -f docker-compose.dev.yml down` انجام می‌شود. گزینه `-v` را فقط وقتی بزنید که عمداً می‌خواهید داده‌های محلی MongoDB پاک شود.
 
-توقف سرویس‌ها:
+### استقرار بک‌اند (production روی یک VPS)
+
+راهنمای `backend/deployments/README.md` را دنبال کنید. خلاصه: یک نام دامنه را روی IP سرور تنظیم کنید، `.env.production.example` را به `.env` کپی کنید، **همه** مقادیر را پر کنید و `docker compose up -d --build` را اجرا کنید. حالت production تنظیمات واقعی ارسال پیامک و ایمیل و JWT secret حداقل ۶۴ کاراکتری می‌خواهد.
+
+### ساخت برنامه اندروید
+
+<div dir="ltr">
 
 ```bash
-docker compose -f docker-compose.dev.yml down
+# Debug (آدرس بک‌اند: -PdebugBackendBaseUrl=http://<LAN-IP>:8080/)
+./gradlew assemblePlayDebug
+
+# تست‌های واحد
+./gradlew testPlayDebugUnitTest
+
+# Release (آدرس HTTPS اجباری است؛ برای هر آپلود versionCode را افزایش دهید)
+./gradlew bundlePlayRelease -PbackendBaseUrl=https://api.example.com/ -PversionCode=2
+./gradlew assembleDirectRelease -PbackendBaseUrl=https://api.example.com/
 ```
 
-برای حذف volume پایگاه داده نیز می‌توان از `docker compose -f docker-compose.dev.yml down -v` استفاده کرد؛ **این فرمان را فقط زمانی اجرا کنید که عمداً قصد حذف داده‌های محلی MongoDB را دارید.**
+</div>
 
-### راه‌اندازی اندروید
+امضای release از `keystore.properties` (خارج از Git) یا متغیرهای محیطی `RELEASE_*` خوانده می‌شود. گوشی به `localhost` رایانه شما دسترسی ندارد؛ برای تست روی گوشی واقعی از آدرس رایانه در شبکه محلی استفاده کنید.
 
-آدرس API در نسخه debug در `app/build.gradle.kts` تعریف شده است. برای تست روی گوشی واقعی، آدرس باید از همان گوشی قابل دسترسی باشد؛ `localhost` روی گوشی به خود گوشی اشاره می‌کند، نه رایانه توسعه. از آدرس قابل دسترس رایانه در شبکه یا هات‌اسپات استفاده کنید و فایروال و تنظیمات جداسازی شبکه را بررسی کنید. آدرس خصوصی شبکه را در نسخه release قرار ندهید.
+## ۸. تنظیمات و API
 
-از ریشه مخزن:
-
-```bash
-# Windows PowerShell
-.\gradlew.bat assembleDebug
-.\gradlew.bat test
-
-# macOS / Linux
-./gradlew assembleDebug
-./gradlew test
-```
-
-ساخت release به آدرس واقعی HTTPS نیاز دارد. برای نمونه:
-
-```bash
-./gradlew assembleRelease -PbackendBaseUrl=https://your-api.example.com/
-```
-
-یا متغیر محیطی `BACKEND_BASE_URL` را در محیط build تنظیم کنید. امضای release را جداگانه پیکربندی کنید و رمز امضا، JWT secret، اعتبارنامه پایگاه داده، SMTP یا توکن سرویس پیامک را در مخزن نگه ندارید.
-
-### اجرای بک‌اند بدون Docker
-
-```bash
-cd backend
-go mod download
-go test ./...
-go run ./cmd/api
-```
-
-پیش از اجرای API باید MongoDB با پیکربندی replica set (یک نود کافی است) در حال اجرا و تنظیم شده باشد. فایل `backend/.env.example` و فایل‌های پوشه استقرار را بررسی کنید.
-
-## ۶. تنظیمات و امنیت عملیاتی
-
-متغیرهای مهم محیطی:
+### متغیرهای محیطی مهم
 
 | متغیر | کاربرد |
 |---|---|
-| `ENV` | محیط اجرا؛ حالت production محدودیت‌های بیشتری دارد |
-| `HTTP_PORT` | پورت سرویس HTTP |
-| `MONGO_URI` | رشته اتصال MongoDB |
-| `MONGO_DB_NAME` | نام پایگاه داده |
-| `JWT_SECRET` | کلید امضای توکن؛ باید تصادفی و قوی باشد |
-| `JWT_ACCESS_TTL_MINUTES` | طول عمر access token |
-| `JWT_REFRESH_TTL_DAYS` | طول عمر refresh token |
-| `OTP_EXPIRY_MINUTES` | اعتبار زمانی OTP |
-| `TLS_TERMINATED_BY_PROXY` | مقدار `true` وقتی یک reverse proxy روی همان سرور (Caddy در استقرار VPS) HTTPS را پایان می‌دهد؛ در production به `TRUSTED_PROXY_CIDRS` نیاز دارد |
-| `MONGO_ALLOW_PLAINTEXT` | اجازه `MONGO_URI` بدون TLS در production؛ فقط برای MongoDB که صرفاً روی شبکه خصوصی/همان سرور در دسترس است |
-| `SMS_WEBHOOK_URL`, `SMS_AUTH_TOKEN` | تنظیمات اتصال سرویس پیامک |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | تنظیمات ارسال ایمیل |
-| `CORS_ALLOWED_ORIGINS` | فهرست مجاز originهای مرورگر در صورت نیاز |
-| `TRUSTED_PROXY_CIDRS` | شبکه‌های پراکسی مورد اعتماد |
-| `TLS_CERT_FILE`, `TLS_KEY_FILE` | مسیر گواهی و کلید TLS در استقرارهای مربوط |
-| `DEV_LOG_OTP` | ثبت OTP در لاگ توسعه؛ در production باید غیرفعال باشد |
+| `ENV` | `dev`، `test` یا `prod` (حالت production بررسی‌های سخت‌گیرانه‌تری دارد) |
+| `JWT_SECRET` | کلید امضای توکن (حداقل ۳۲ و در production حداقل ۶۴ کاراکتر) |
+| `MONGO_URI`، `MONGO_DB_NAME` | اتصال به پایگاه داده |
+| `TLS_TERMINATED_BY_PROXY`، `TRUSTED_PROXY_CIDRS` | HTTPS پشت reverse proxy و اعتماد به هدرهای IP کاربر |
+| `SMS_WEBHOOK_URL`، `SMS_AUTH_TOKEN` | ارسال OTP پیامکی (در production الزامی) |
+| `SMTP_HOST`، `SMTP_PORT`، `SMTP_USER`، `SMTP_PASSWORD`، `EMAIL_FROM` | ارسال OTP ایمیلی (در production الزامی) |
+| `SUPPORT_EMAIL` | نشانی تماس در صفحه‌های حقوقی عمومی |
+| `DEV_LOG_OTP` | چاپ OTP در لاگ؛ خارج از `dev`/`test` پذیرفته نمی‌شود |
+| `API_DOMAIN`، `BACKUP_RETENTION_DAYS` | تنظیمات استقرار تک‌VPS |
 
-**پیش از انتشار عمومی سرویس:**
-- TLS را در سرویس یا پراکسی مورد اعتماد به‌درستی پیکربندی کنید.
-- ثبت OTP در لاگ را غیرفعال و سرویس واقعی پیامک/ایمیل موردنیاز را تنظیم کنید.
-- secretهای یکتا و قوی تولید کنید و در صورت امکان از secret manager یا فایل‌های secret استفاده کنید.
-- دسترسی شبکه و پایگاه داده را محدود کنید؛ MongoDB را مستقیماً در اینترنت منتشر نکنید.
-- محدودسازی نرخ، CORS، اعتماد به پراکسی، احراز هویت، بازیابی حساب، چرخش refresh token و خروج را آزمایش کنید.
-- از پایگاه داده نسخه پشتیبان تهیه کنید و فرایند بازیابی را عملاً آزمایش کنید.
-- مجوزهای SMS، محتوای اعلان‌ها، فایل‌های خروجی، لاگ‌ها و نگهداری اطلاعات شخصی را بازبینی کنید.
-- پیش از هر انتشار، تحلیل وابستگی‌ها، بررسی ایستا و تست‌های امنیتی را اجرا کنید.
+هرگز secret، keystore یا فایل `.env` را commit نکنید.
 
-وجود کتابخانه‌ها یا کدهای امنیتی جایگزین ممیزی مستقل امنیت نیست. پیش از ادعا درباره رمزنگاری سرتاسری، تضمین بازیابی یا انطباق قانونی، پیاده‌سازی واقعی و معماری استقرار را بررسی کنید.
+### API
 
-## ۷. نمای کلی API
-
-مسیرهای بک‌اند شامل گروه‌های زیر است؛ دسترسی و نیاز به احراز هویت تابع پیکربندی سرور است.
-
-### سلامت و احراز هویت
+<div dir="ltr">
 
 ```http
 GET  /health
-POST /auth/otp/request
-POST /auth/register
-POST /auth/login
-POST /auth/refresh
-POST /auth/recovery/prepare
-POST /auth/password/reset
-POST /auth/logout
-```
 
-### عملیات احراز هویت‌شده دستگاه و همگام‌سازی
+POST /auth/otp/request       POST /auth/register       POST /auth/login
+POST /auth/refresh           POST /auth/logout
+POST /auth/recovery/prepare  POST /auth/password/reset
 
-```http
+# Authenticated (Bearer token)
+POST   /api/v1/auth/password/change
+GET    /api/v1/account/profile      PUT /api/v1/account/profile
+PUT    /api/v1/account/email        POST /api/v1/account/delete   # soft delete
 POST   /api/v1/sync
-GET    /api/v1/devices
+GET    /api/v1/devices              GET /api/v1/devices/events
 DELETE /api/v1/devices/{deviceID}
+PUT    /api/v1/admin/users/{userID}/role                          # admin only
+
+# Public legal pages (also required by app stores)
+GET /privacy-policy   GET /terms   GET /licenses   GET /account-deletion
 ```
 
-### عملیات مدیریتی
+</div>
 
-```http
-PUT /api/v1/admin/users/{userID}/role
-```
+مرجع نهایی قرارداد درخواست و پاسخ، handlerها و DTOهای سرور هستند.
 
-قرارداد request/response و middlewareهای سرور مرجع نهایی هستند. endpoint مدیریتی را از کلاینت غیرقابل‌اعتماد فراخوانی نکنید و اطلاعات ورود را در لاگ ثبت نکنید.
+## ۹. اطلاعات حقوقی
 
-## ۸. مدل داده و همگام‌سازی
+> این بخش وضعیت مجوز و ملاحظات حقوقی پروژه را بر اساس بهترین دانش نگهدارنده شرح می‌دهد و **مشاوره حقوقی نیست**. پیش از اتکا به آن، به‌ویژه برای استفاده تجاری یا فرامرزی، با یک وکیل یا مشاور حقوقی مشورت کنید.
 
-قرارداد Sync خانواده‌های زیر را تعریف می‌کند:
+### ۹.۱ مجوز نرم‌افزار
 
-- `TRANSACTION` — تراکنش
-- `CATEGORY` — دسته‌بندی
-- `BUDGET_LIMIT` — محدودیت مالی
-- `DEBT_CREDIT` — بدهی/طلب
-- `SAVING_GOAL` — هدف پس‌انداز
-- `SAVING_GOAL_OPERATION` — عملیات هدف پس‌انداز
-- `DEBT_PAYMENT` — پرداخت بدهی
+حق نشر © ۲۰۲۶ محمدسینا رمضانی عهدیه (Mohammad Sina Ramezani Ohdieh).
 
-در کد، اجزای وضعیت/متادیتای Sync، شناسه‌های موجودیت و مفاهیم revision/cursor و زیرساخت همگام‌سازی پس‌زمینه وجود دارند. رفتار چنددستگاهی را با سناریوهای واقعی آزمایش کنید: ویرایش آفلاین، تعویض حساب، درخواست تکراری، ویرایش هم‌زمان، حذف رکورد، دستگاه قدیمی و قطع ارتباط در میانه همگام‌سازی.
+سیدنا نرم‌افزار آزاد است و تحت **مجوز عمومی همگانی آفرو گنو (GNU AGPL) نسخه ۳ یا (به انتخاب شما) هر نسخه جدیدتر** (`AGPL-3.0-or-later`) منتشر می‌شود. متن کامل در فایل [`LICENSE`](LICENSE) قرار دارد.
 
-مبالغ مالی باید از نمایش عدد صحیح و قرارداد واحد پولی تعریف‌شده در پروژه پیروی کنند. برای مبالغ دقیق پولی، محاسبات ممیز شناور را وارد نکنید. هنگام تغییر مدل Sync، Entity/DAOهای اندروید، قرارداد serialization، اعتبارسنجی و ذخیره‌سازی بک‌اند و تست‌های مربوط را هماهنگ به‌روزرسانی کنید.
+در عمل:
 
-## ۹. تست و کنترل کیفیت
+- **استفاده از برنامه** برای مقاصد شخصی و تجاری آزاد است.
+- **بازتوزیع** برنامه یا نسخه تغییریافته (APK، AAB یا سورس) مستلزم حفظ مجوز و اعلان‌های حق نشر و ارائه سورس متناظر با همان مجوز است.
+- **اجرای نسخه تغییریافته بک‌اند به‌عنوان سرویس شبکه‌ای** بند ۱۳ AGPL را فعال می‌کند: باید سورس کامل متناظر نسخه تغییریافته را در اختیار کاربرانی که از طریق شبکه با آن کار می‌کنند قرار دهید.
+- این مجوز **هیچ حقی نسبت به نام و نشان** «سیدنا / Cidna» نمی‌دهد (بند ۹.۴).
 
-تست‌های واحد اندروید در `app/src/test` قرار دارند و تست‌های instrumentation در صورت وجود در `app/src/androidTest` هستند. بک‌اند Go نیز در پکیج‌هایی که تست دارند، تست‌های مرتبط را نگه می‌دارد.
+### ۹.۲ مشارکت در توسعه
 
-```bash
-# Android
-./gradlew test
-./gradlew assembleDebug
+مشارکت‌ها تحت مجوز پروژه (AGPL-3.0-or-later) پذیرفته می‌شوند. با ارسال مشارکت تأیید می‌کنید که حق ارائه آن را دارید و می‌تواند با همان مجوز توزیع شود. کد، فونت، تصویر یا انیمیشنی را که حق مجوزدهی آن را ندارید ارسال نکنید.
 
-# Backend
-cd backend
-go test ./...
-go vet ./...
-```
+### ۹.۳ اجزای شخص ثالث
 
-برای نسخه کاندید انتشار، ثبت‌نام و ورود، تحویل OTP، بازیابی، تمدید و خروج؛ اتصال اندروید به Go روی دستگاه واقعی؛ همگام‌سازی دو دستگاه؛ تعویض حساب؛ migration پایگاه داده؛ رد مجوزها؛ پردازش پیامک‌های نمونه؛ صحت خروجی‌ها؛ اجرای کارهای زمان‌بندی‌شده پس از reboot؛ و رفتار retry هنگام قطع سرویس را نیز آزمایش کنید.
+هر جزء مجوز مستقل خود را دارد و شرایط آن همچنان برقرار است.
 
-کامپایل موفق به‌تنهایی صحت داده، امنیت یا آمادگی برای production را اثبات نمی‌کند.
+<div dir="ltr">
 
-## ۱۰. نکات مهم استقرار
+| Component | License |
+|---|---|
+| AndroidX libraries (Compose, Material 3, Navigation, Lifecycle, Room, WorkManager, Glance, Biometric, Security Crypto, …) | Apache-2.0 |
+| Kotlin, kotlinx.serialization, kotlinx.coroutines | Apache-2.0 |
+| Lottie for Android (Airbnb) | Apache-2.0 |
+| fastexcel (Dhatim) | MIT |
+| SQLCipher for Android (Zetetic), Community Edition | BSD-style |
+| Vazirmatn font (The Vazirmatn Project Authors) | SIL Open Font License 1.1 |
+| Inter font (The Inter Project Authors) | SIL Open Font License 1.1 |
+| Go modules: chi, validator, golang-jwt, godotenv, mongo-go-driver, `golang.org/x/*` | MIT / BSD-3-Clause / Apache-2.0 |
 
-- آدرس API نسخه debug صرفاً برای توسعه است؛ برای شبکه خود تنظیمش کنید و از آن در production استفاده نکنید.
-- پیکربندی release عمداً به آدرس HTTPS واقعی و غیرنمونه نیاز دارد.
-- SMS، ایمیل، TLS و secretهای عملیاتی نیاز به تنظیمات اختصاصی محیط دارند.
-- زمان‌بندی WorkManager تحت محدودیت‌های زمان‌بندی اندروید است و تضمین اجرای دقیق در لحظه مشخص را نمی‌دهد.
-- خروجی‌ها، اعلان‌ها، دسترسی SMS و اطلاعات بازیابی ممکن است داده حساس افشا کنند؛ مدل تهدید محیط خود را بررسی کنید.
-- رفتار قابلیت‌ها می‌تواند با نسخه اندروید، سازنده دستگاه، مجوزهای اعطاشده و تنظیمات بک‌اند متفاوت باشد.
+</div>
 
-## ۱۱. مشارکت در توسعه
+بک‌اند در حال اجرا همین اعلان‌ها را در آدرس `/licenses` نیز نمایش می‌دهد. توزیع برنامه یعنی انتقال اعلان‌های حق نشر و مجوز لازم این اجزا (مثلاً اعلان SQLCipher و فونت‌های OFL).
 
-مشارکت‌ها مطابق شرایط مجوز پروژه پذیرفته می‌شوند. لطفاً:
+### ۹.۴ نام، نشان و علائم تجاری اشخاص ثالث
 
-۱. مشکل و رفتار مورد انتظار را در Issue یا Pull Request توضیح دهید.
-۲. تغییرات را محدود و با قراردادهای معماری و رابط کاربری فعلی هماهنگ نگه دارید.
-۳. برای رفع باگ یا تغییر رفتار، تست اضافه یا به‌روزرسانی کنید.
-۴. secretها، اطلاعات شخصی، خروجی‌های تولیدشده، فایل محیطی محلی و فایل‌های build را commit نکنید.
-۵. تغییرات تنظیمات و قرارداد API را در همان تغییر مستند کنید.
-۶. رفتار ناقص یا وابسته به تنظیمات محیط را صریح مشخص کنید.
+«سیدنا» و «Cidna» شناسه این پروژه و ارائه‌دهنده آن هستند؛ فورک‌ها باید نام و آیکون متفاوتی به کار ببرند. WhatsApp، Instagram، X و Gmail علائم تجاری صاحبان خود هستند و آیکون آن‌ها فقط برای نشان‌دادن مقصد اشتراک‌گذاری آمده و به معنای تأیید یا همکاری نیست.
 
-## ۱۲. مجوز
+### ۹.۵ متن‌های حقوقی رو به کاربر
 
-این پروژه تحت **مجوز عمومی همگانی آفرو گنو نسخه ۳ یا (به انتخاب شما) هر نسخه جدیدتر** (`AGPL-3.0-or-later`) منتشر می‌شود. متن کامل در فایل [`LICENSE`](LICENSE) قرار دارد.
+بک‌اند سیاست حریم خصوصی، قوانین و مقررات، اعلان‌های متن‌باز و راهنمای حذف حساب را به دو زبان فارسی و انگلیسی ارائه می‌دهد. همین آدرس‌ها را در Google Play Console (نشانی Privacy policy و نشانی حذف حساب در فرم Data safety) وارد می‌کنید. با هر تغییر در متن‌ها یا در نحوه برخورد برنامه با داده، `legalVersion` و تاریخ‌ها را در `backend/internal/interface/http/handler/legal_handler.go` به‌روز کنید. این متن‌ها نقطه شروع‌اند و باید توسط وکیل بازبینی شوند.
 
-مجوز AGPL برای توزیع نسخه‌های تغییریافته و نیز تعامل کاربران با نسخه تغییریافته از طریق شبکه، تعهدات مشخصی دارد. پیش از انتشار فایل اجرایی یا ارائه سرویس عمومی مبتنی بر نسخه تغییریافته، متن مجوز را کامل بخوانید. وابستگی‌های شخص ثالث، فونت‌ها، آیکون‌ها و دارایی‌های همراه ممکن است مجوزهای مستقل داشته باشند و شرایط همان اجزا همچنان برقرار است.
+### ۹.۶ داده‌های شخصی و مدت نگهداری
+
+| داده | هدف | مدت نگهداری |
+|---|---|---|
+| شماره موبایل (ایمیل، نام، جنسیت و تاریخ تولد اختیاری) | حساب کاربری، ورود، OTP | تا زمانی که حساب وجود دارد |
+| گذرواژه | احراز هویت | فقط به‌صورت هش Argon2id |
+| سوابق مالی رمزشده و کلیدهای بسته‌بندی‌شده | همگام‌سازی چنددستگاهی | تا زمانی که حساب وجود دارد |
+| نام/مدل دستگاه، نسخه سیستم‌عامل و برنامه، IP (ماسک‌شده نمایش داده می‌شود)، هش نصب | فهرست دستگاه‌ها و اعلان دستگاه جدید | فعالیت دستگاه‌ها حداکثر ۳۰ روز |
+| عملیات موقت همگام‌سازی | پایداری همگام‌سازی | حداکثر ۷ روز |
+
+حذف حساب **حذف نرم** است: نشست‌ها فوراً باطل می‌شوند، حساب تا **۳۰ روز** با ورود دوباره قابل بازیابی است و پس از آن ابزار `purge-deleted` آن را برای همیشه پاک می‌کند (آن را روزانه با cron اجرا کنید). برنامه ابزار تبلیغاتی، تحلیل رفتار یا ردیاب شخص ثالث ندارد. متن پیامک فقط روی خود دستگاه و فقط در نسخه `direct` پردازش می‌شود.
+
+### ۹.۷ سلب مسئولیت‌ها
+
+- سیدنا ابزار ثبت و نگهداری سوابق است و **مشاوره مالی، حسابداری، حقوقی یا مالیاتی نیست**؛ همچنین به هیچ حساب بانکی یا سامانه پرداختی متصل نیست.
+- تشخیص خودکار پیامک، ورود صوتی و محاسبات ممکن است نادرست باشند. ارقام مهم را با سوابق بانکی خود تطبیق دهید.
+- نرم‌افزار مطابق بندهای ۱۵ و ۱۶ مجوز AGPL **«همان‌گونه که هست» و بدون هیچ‌گونه ضمانتی** ارائه می‌شود.
+- قوانین و مقررات استفاده تابع قوانین جمهوری اسلامی ایران است.
+
+### ۹.۸ پیش از انتشار هر نسخه
+
+- [ ] مطمئن شوید که حق استفاده و بازتوزیع همه دارایی‌های غیرکد را دارید: انیمیشن‌های Lottie، پس‌زمینه کارت‌های اشتراک‌گذاری، بنرها، آیکون‌ها و فونت‌ها.
+- [ ] سیاست حریم خصوصی، فرم Data safety گوگل‌پلی و رفتار واقعی برنامه را با هم هم‌خوان نگه دارید.
+- [ ] از `SUPPORT_EMAIL` واقعی استفاده کنید و متن‌های حقوقی را با وکیل بازبینی کنید.
+- [ ] فایل `LICENSE` و اعلان حق نشر را در هر نسخه توزیع‌شده نگه دارید و سورس متناظر را منتشر کنید.
+
+## ۱۰. تماس
+
+تماس پروژه و امور حقوقی: **cidna.app@gmail.com**
+
+</div>
 
 ---
 
 <div align="center">
 
-**Cidna / سیدنا — Personal Finance Management**
+**Cidna · سیدنا — Personal Finance Management**
 
 Licensed under GNU AGPL v3.0 or later · `AGPL-3.0-or-later`
 
