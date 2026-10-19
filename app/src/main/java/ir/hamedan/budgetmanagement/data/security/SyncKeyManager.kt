@@ -63,9 +63,8 @@ class SyncKeyManager(private val context: Context) {
     fun initializeFromLogin(password: CharArray, kdfSaltB64: String, envelopeB64: String?, nonceB64: String?) {
         if (!envelopeB64.isNullOrBlank() && !nonceB64.isNullOrBlank()) {
             val salt = Base64.decode(kdfSaltB64, Base64.DEFAULT)
-            val wrappingKey = deriveWrappingKey(password, salt)
-            val dataKey = decrypt(
-                wrappingKey,
+            val dataKey = decryptPasswordEnvelope(
+                password, salt,
                 Base64.decode(envelopeB64, Base64.DEFAULT),
                 Base64.decode(nonceB64, Base64.DEFAULT)
             )
@@ -94,9 +93,8 @@ class SyncKeyManager(private val context: Context) {
     ): PasswordResetMaterial {
         val salt = Base64.decode(kdfSaltB64, Base64.DEFAULT)
         require(salt.size == 16) { "Invalid KDF salt." }
-        val recoveryWrappingKey = deriveWrappingKey(recoveryKey.toCharArray(), salt)
-        val dataKey = decrypt(
-            recoveryWrappingKey,
+        val dataKey = decryptPasswordEnvelope(
+            recoveryKey.toCharArray(), salt,
             Base64.decode(recoveryKeyEnvelopeB64, Base64.DEFAULT),
             Base64.decode(recoveryKeyNonceB64, Base64.DEFAULT)
         )
@@ -174,8 +172,18 @@ class SyncKeyManager(private val context: Context) {
         Base64.decode(it, Base64.NO_WRAP)
     }
 
-    private fun deriveWrappingKey(password: CharArray, salt: ByteArray): SecretKey {
-        val spec = PBEKeySpec(password, salt, PBKDF2_ITERATIONS, 256)
+    private fun decryptPasswordEnvelope(password: CharArray, salt: ByteArray, ciphertext: ByteArray, nonce: ByteArray): ByteArray {
+        // New envelopes use the stronger work factor. Retry the historical value only when
+        // authentication fails, so existing accounts remain readable and can be re-wrapped.
+        try {
+            return decrypt(deriveWrappingKey(password, salt, PBKDF2_ITERATIONS), ciphertext, nonce)
+        } catch (newKdfFailure: javax.crypto.AEADBadTagException) {
+            return decrypt(deriveWrappingKey(password, salt, LEGACY_PBKDF2_ITERATIONS), ciphertext, nonce)
+        }
+    }
+
+    private fun deriveWrappingKey(password: CharArray, salt: ByteArray, iterations: Int = PBKDF2_ITERATIONS): SecretKey {
+        val spec = PBEKeySpec(password, salt, iterations, 256)
         return try {
             SecretKeySpec(
                 SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
@@ -219,6 +227,7 @@ class SyncKeyManager(private val context: Context) {
         private const val CURRENT_KEY_VERSION = 1
         private const val PREFS_NAME = "budget_sync_crypto"
         private const val KEY_DATA_KEY = "data_key_b64"
-        private const val PBKDF2_ITERATIONS = 120_000
+        private const val PBKDF2_ITERATIONS = 600_000
+        private const val LEGACY_PBKDF2_ITERATIONS = 120_000
     }
 }
