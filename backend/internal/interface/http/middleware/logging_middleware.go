@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/mosinaRZ/finance-sync-backend/internal/interface/http/contextkeys"
 )
 
 // statusWriter برای رهگیری HTTP Status Code
@@ -37,7 +39,12 @@ func Logging(next http.Handler) http.Handler {
 			slog.String("path", r.URL.Path),
 			slog.Int("status", sw.status),
 			slog.Duration("latency", latency),
-			slog.String("ip", r.RemoteAddr),
+			slog.String("ip", func() string {
+				if ip, ok := contextkeys.ClientIP(r.Context()); ok {
+					return ip
+				}
+				return ClientIP(r, nil)
+			}()),
 		)
 	})
 }

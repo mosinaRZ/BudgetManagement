@@ -12,7 +12,7 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 )
 
-const ClientPBKDF2Iterations = 120_000
+const ClientPBKDF2Iterations = 600_000
 
 // ClientKeyMaterial matches the Android SyncKeyManager envelope format:
 // PBKDF2-HMAC-SHA256 -> AES-256-GCM, 16-byte KDF salt and 12-byte GCM nonces.

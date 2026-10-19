@@ -19,7 +19,7 @@
    ```
 3. پروژه را روی سرور بگذارید و تنظیمات را بسازید:
    ```bash
-   cd BudgetManagement/backend/deployments
+   cd cidna/backend/deployments
    cp .env.production.example .env
    nano .env        # همه مقادیر را عوض کنید (secretها: openssl rand -hex 32 / 48)
    ```
@@ -29,7 +29,7 @@
    docker compose ps
    curl https://api.example.com/health
    ```
-5. ساخت ادمین اولیه:
+5. ساخت ادمین اولیه (فقط وقتی هنوز هیچ ادمینی وجود ندارد؛ رمز را در تاریخچه shell ذخیره نکنید و پس از اجرا امن نگه دارید):
    ```bash
    docker compose exec api /app/seed-admin --identifier you@example.com --password 'یک-رمز-حداقل-۱۲-کاراکتری'
    ```
@@ -72,7 +72,7 @@ docker compose -f docker-compose.dev.yml up --build -d   # API روی http://loc
 
 ```bash
 # crontab -e   (هر شب ساعت ۳)
-0 3 * * * cd /path/to/BudgetManagement/backend/deployments && docker compose exec -T api /app/purge-deleted --older-than-days 30
+0 3 * * * cd /path/to/cidna/backend/deployments && docker compose exec -T api /app/purge-deleted --older-than-days 30
 # پیش‌نمایش بدون حذف:
 docker compose exec api /app/purge-deleted --older-than-days 30 --dry-run
 ```
