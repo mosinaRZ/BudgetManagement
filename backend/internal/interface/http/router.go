@@ -37,9 +37,9 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
+	r.Use(middleware.ClientIPContext(deps.TrustedProxyCIDRs))
 	r.Use(middleware.Logging)
 	r.Use(middleware.Recover)
-	r.Use(middleware.ClientIPContext(deps.TrustedProxyCIDRs))
 	r.Use(middleware.SecurityHeaders(deps.Env))
 	r.Use(middleware.CORS(deps.CORSAllowedOrigins))
 
