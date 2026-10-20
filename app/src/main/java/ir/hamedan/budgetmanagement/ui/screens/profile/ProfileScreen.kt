@@ -642,7 +642,9 @@ private fun ProfileHero(
     isPersian: Boolean,
     onStepClick: (ProfileStep) -> Unit
 ) {
-    val total = ProfileStep.entries.size
+    // Guest profiles have no email step, so the step list is shorter. Its entries keep the same
+    // order as ProfileStep, which is why indexing from the start is safe.
+    val total = steps.size
     val fullName = listOf(firstName, lastName).filter { it.isNotBlank() }.joinToString(" ").trim()
     val countText = if (isPersian) "${persianDigits(completion.toString())} از ${persianDigits(total.toString())}" else "$completion of $total"
     val statusText = if (isPersian) "پروفایل شما $countText بخش تکمیل شده" else "$countText profile sections completed"
@@ -690,7 +692,7 @@ private fun ProfileHero(
             modifier = Modifier.padding(horizontal = 12.dp)
         )
 
-        val missing = ProfileStep.entries.filterIndexed { index, _ -> !steps[index] }
+        val missing = ProfileStep.entries.take(steps.size).filterIndexed { index, _ -> !steps[index] }
         if (missing.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
             FlowRow(
@@ -720,7 +722,7 @@ private fun SegmentedAvatar(
 ) {
     val accent = MaterialTheme.colorScheme.primary
     val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-    val fills = remember { List(ProfileStep.entries.size) { Animatable(0f) } }
+    val fills = remember(steps.size) { List(steps.size) { Animatable(0f) } }
     steps.forEachIndexed { index, done ->
         LaunchedEffect(done) {
             fills[index].animateTo(

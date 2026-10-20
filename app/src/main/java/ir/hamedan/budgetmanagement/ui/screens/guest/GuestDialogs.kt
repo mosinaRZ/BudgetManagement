@@ -1,5 +1,21 @@
 package ir.hamedan.budgetmanagement.ui.screens.guest
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButton
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.VisualTransformation
+import ir.hamedan.budgetmanagement.ui.screens.auth.AuthErrorBanner
+import ir.hamedan.budgetmanagement.ui.screens.auth.PasswordStrengthMeter
+import ir.hamedan.budgetmanagement.ui.screens.auth.credentialTextStyle
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -34,8 +50,10 @@ import ir.hamedan.budgetmanagement.ui.screens.auth.PasswordPolicy
 import kotlinx.coroutines.launch
 
 /**
- * Set or change the guest passcode. Guests have no account password, so "change password" in
- * guest mode means this local passcode. The first time, there is no current passcode to ask for.
+ * Set or change the guest passcode. Same layout and behaviour as the account's change-password
+ * dialog (visibility toggles, strength meter, confirmation field, error banner, progress on save).
+ * Guests have no account password, so "change password" here means this local passcode. The first
+ * time, there is no current passcode to ask for.
  */
 @Composable
 fun GuestPasscodeDialog(
@@ -49,10 +67,15 @@ fun GuestPasscodeDialog(
     var current by remember { mutableStateOf("") }
     var new by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
+    var isCurrentVisible by remember { mutableStateOf(false) }
+    var isNewVisible by remember { mutableStateOf(false) }
     var isSubmitting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    val englishKeyboard = KeyboardOptions(keyboardType = KeyboardType.Password, hintLocales = LocaleList(Locale("en")))
+    val englishKeyboardOptions = KeyboardOptions(
+        keyboardType = KeyboardType.Password,
+        hintLocales = LocaleList(Locale("en"))
+    )
 
     fun submit() {
         if (isSubmitting) return
@@ -80,11 +103,17 @@ fun GuestPasscodeDialog(
     }
 
     AlertDialog(
+        // The save cannot be cancelled half-way, so the dialog stays until it finishes.
         onDismissRequest = { if (!isSubmitting) onDismiss() },
         shape = RoundedCornerShape(28.dp),
         containerColor = MaterialTheme.colorScheme.surface,
         icon = {
-            Icon(Icons.Default.LockReset, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Icon(
+                imageVector = Icons.Default.LockReset,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(36.dp)
+            )
         },
         title = {
             Text(
@@ -93,70 +122,112 @@ fun GuestPasscodeDialog(
                 } else {
                     if (isPersian) "تعیین گذرواژه مهمان" else "Set guest passcode"
                 },
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
         },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
                 Text(
                     text = if (isPersian)
-                        "این گذرواژه فقط روی همین دستگاه است و به هیچ حسابی وصل نیست."
+                        "این گذرواژه فقط روی همین دستگاه ذخیره می‌شود و به هیچ حسابی وصل نیست."
                     else
-                        "This passcode exists only on this device and is not linked to any account.",
+                        "This passcode is stored only on this device and is not linked to any account.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
-                Spacer(Modifier.height(12.dp))
+
                 if (hasPasscode) {
                     OutlinedTextField(
                         value = current,
-                        onValueChange = { current = it; errorMessage = null },
+                        onValueChange = { current = it.take(256); errorMessage = null },
+                        enabled = !isSubmitting,
                         label = { Text(if (isPersian) "گذرواژه فعلی" else "Current passcode") },
                         singleLine = true,
-                        enabled = !isSubmitting,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = englishKeyboard,
                         shape = RoundedCornerShape(16.dp),
+                        textStyle = credentialTextStyle(),
+                        keyboardOptions = englishKeyboardOptions,
+                        visualTransformation = if (isCurrentVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { isCurrentVisible = !isCurrentVisible }) {
+                                Icon(
+                                    imageVector = if (isCurrentVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = if (isPersian) "نمایش یا پنهان کردن گذرواژه" else "Toggle password visibility"
+                                )
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Spacer(Modifier.height(8.dp))
                 }
+
                 OutlinedTextField(
                     value = new,
-                    onValueChange = { new = it; errorMessage = null },
+                    onValueChange = { new = it.take(PasswordPolicy.MAX_LENGTH + 1); errorMessage = null },
+                    enabled = !isSubmitting,
                     label = { Text(if (isPersian) "گذرواژه جدید" else "New passcode") },
                     singleLine = true,
-                    enabled = !isSubmitting,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = englishKeyboard,
                     shape = RoundedCornerShape(16.dp),
+                    textStyle = credentialTextStyle(),
+                    keyboardOptions = englishKeyboardOptions,
+                    visualTransformation = if (isNewVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { isNewVisible = !isNewVisible }) {
+                            Icon(
+                                imageVector = if (isNewVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (isPersian) "نمایش یا پنهان کردن گذرواژه" else "Toggle password visibility"
+                            )
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(Modifier.height(8.dp))
+
+                PasswordStrengthMeter(password = new, isPersian = isPersian)
+
                 OutlinedTextField(
                     value = confirm,
-                    onValueChange = { confirm = it; errorMessage = null },
-                    label = { Text(if (isPersian) "تکرار گذرواژه جدید" else "Repeat new passcode") },
-                    singleLine = true,
+                    onValueChange = { confirm = it.take(PasswordPolicy.MAX_LENGTH + 1); errorMessage = null },
                     enabled = !isSubmitting,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = englishKeyboard,
+                    label = { Text(if (isPersian) "تکرار گذرواژه جدید" else "Confirm new passcode") },
+                    singleLine = true,
                     shape = RoundedCornerShape(16.dp),
+                    textStyle = credentialTextStyle(),
+                    isError = confirm.isNotEmpty() && confirm != new,
+                    keyboardOptions = englishKeyboardOptions.copy(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { submit() }),
+                    visualTransformation = if (isNewVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth()
                 )
-                errorMessage?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+
+                Text(
+                    text = if (isPersian) "حداقل ${PasswordPolicy.MIN_LENGTH} کاراکتر؛ فقط حروف انگلیسی، عدد و نماد (بدون فاصله)."
+                    else "At least ${PasswordPolicy.MIN_LENGTH} characters; English letters, digits and symbols only (no spaces).",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                )
+
+                AnimatedVisibility(visible = errorMessage != null) {
+                    errorMessage?.let { AuthErrorBanner(message = it) }
                 }
             }
         },
         confirmButton = {
             Button(
-                onClick = ::submit,
+                onClick = { submit() },
                 enabled = !isSubmitting,
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text(if (isPersian) "ذخیره" else "Save", fontWeight = FontWeight.Bold)
+                if (isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text(if (isPersian) "ذخیره گذرواژه" else "Save passcode")
+                }
             }
         },
         dismissButton = {

@@ -471,6 +471,7 @@ class MainActivity : FragmentActivity() {
                         // branches in a variable typed as AppRoute: typed Navigation infers
                         // the generic route from the static type, which would make it try
                         // to serialize the sealed parent instead of the concrete destination.
+                        val guestStore = app.container.guestModeStore
                         if (sessionAuthenticated) {
                             // The existing server session remains valid. Opening the app only
                             // requires local re-authentication; no token refresh/login is triggered.
@@ -478,7 +479,28 @@ class MainActivity : FragmentActivity() {
                                 popUpTo(AppRoute.Splash) { inclusive = true }
                                 launchSingleTop = true
                             }
+                        } else if (guestStore.hasWorkspace() && !guestStore.hasUnlockSecret()) {
+                            // A guest with no passcode and no fingerprint has nothing to verify,
+                            // so the app opens the guest workspace directly, without the login screen.
+                            authScope.launch {
+                                app.container.guestModeManager.startSession()
+                                    .onSuccess {
+                                        runCatching { app.seedDefaultCategoriesIfNeeded() }
+                                        navController.navigate(AppRoute.MainStructure) {
+                                            popUpTo(AppRoute.Splash) { inclusive = true }
+                                            launchSingleTop = true
+                                        }
+                                    }
+                                    .onFailure {
+                                        navController.navigate(AppRoute.Login()) {
+                                            popUpTo(AppRoute.Splash) { inclusive = true }
+                                            launchSingleTop = true
+                                        }
+                                    }
+                            }
                         } else {
+                            // A guest with a passcode or fingerprint is asked for it on the login
+                            // screen (guest prompt); everyone else signs in as usual.
                             navController.navigate(AppRoute.Login()) {
                                 popUpTo(AppRoute.Splash) { inclusive = true }
                                 launchSingleTop = true

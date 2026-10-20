@@ -24,8 +24,8 @@ import javax.crypto.spec.PBEKeySpec
  * Local-only state of the guest workspace: whether it exists on this device, the optional guest
  * passcode, and the optional fingerprint unlock. Nothing in this class talks to the network.
  *
- * The guest session flag is in memory only, so the app always starts at the sign-in screen and the
- * guest enters again through it (with the fingerprint or passcode, if configured).
+ * The guest session flag is in memory only. When the app starts again, a guest without any unlock
+ * secret goes straight into the workspace; a guest with one is asked for it before entering.
  */
 class GuestModeStore(context: Context) {
     private val appContext = context.applicationContext
@@ -55,8 +55,36 @@ class GuestModeStore(context: Context) {
     /** True when a guest workspace was created on this device and not deleted since. */
     fun hasWorkspace(): Boolean = prefs.getBoolean(KEY_WORKSPACE, false)
 
+    /** True when the guest set a passcode or a fingerprint, i.e. entering the workspace must be verified. */
+    fun hasUnlockSecret(): Boolean = hasPasscode() || isBiometricEnabled()
+
     fun setWorkspace(created: Boolean) {
         check(prefs.edit().putBoolean(KEY_WORKSPACE, created).commit()) { "Unable to save guest state." }
+    }
+
+    // ---- Choice made while creating an account ------------------------------------------------
+
+    /**
+     * Remembers what happens to the guest data once the account with [phone] is signed in: moved
+     * into it, or deleted. Applied at that sign-in, after the credentials were verified.
+     */
+    fun savePendingRegistrationChoice(phone: String, discardGuestData: Boolean) {
+        check(
+            prefs.edit()
+                .putString(KEY_PENDING_PHONE, phone)
+                .putBoolean(KEY_PENDING_DISCARD, discardGuestData)
+                .commit()
+        ) { "Unable to save guest state." }
+    }
+
+    /** The choice made for [identifier] while its account was created, or null when there is none. */
+    fun pendingRegistrationDiscard(identifier: String): Boolean? {
+        val phone = prefs.getString(KEY_PENDING_PHONE, null) ?: return null
+        return if (phone == identifier) prefs.getBoolean(KEY_PENDING_DISCARD, false) else null
+    }
+
+    fun clearPendingRegistrationChoice() {
+        prefs.edit().remove(KEY_PENDING_PHONE).remove(KEY_PENDING_DISCARD).commit()
     }
 
     // ---- Passcode (optional, used instead of a password) -------------------------------------
@@ -159,6 +187,7 @@ class GuestModeStore(context: Context) {
     fun clearAllSecrets() {
         clearPasscode()
         disableBiometric()
+        clearPendingRegistrationChoice()
         setWorkspace(false)
     }
 
@@ -209,6 +238,8 @@ class GuestModeStore(context: Context) {
 
         private const val PREFS_NAME = "budget_guest_mode"
         private const val KEY_WORKSPACE = "workspace_created"
+        private const val KEY_PENDING_PHONE = "pending_registration_phone"
+        private const val KEY_PENDING_DISCARD = "pending_registration_discard"
         private const val KEY_PASSCODE_VERIFIER = "passcode_verifier"
         private const val KEY_PASSCODE_SALT = "passcode_salt"
         private const val KEY_BIOMETRIC_ENABLED = "biometric_enabled"
