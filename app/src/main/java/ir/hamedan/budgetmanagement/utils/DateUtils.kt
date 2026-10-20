@@ -133,6 +133,24 @@ object DateUtils {
         return Triple(jalaliYear, jalaliMonth, jalaliDay)
     }
 
+    /**
+     * Inverse of [toJalali]: the Gregorian date of a Jalali date. It searches around an estimate and
+     * checks with [toJalali] itself, so the two conversions always agree with each other (including
+     * Esfand 30 in leap years). A day that does not exist in that month falls back to the previous day.
+     */
+    fun fromJalali(year: Int, month: Int, day: Int): LocalDate {
+        val m = month.coerceIn(1, 12)
+        val d = day.coerceIn(1, if (m <= 6) 31 else 30)
+        val dayOfYear = if (m <= 6) (m - 1) * 31 + d else 186 + (m - 7) * 30 + d
+        val estimate = LocalDate.of(year + 621, 3, 21).plusDays((dayOfYear - 1).toLong())
+        for (shift in intArrayOf(0, -1, 1, -2, 2, -3, 3)) {
+            val candidate = estimate.plusDays(shift.toLong())
+            if (toJalali(candidate) == Triple(year, m, d)) return candidate
+        }
+        // The month has no such day in this year's arithmetic (e.g. a leap-day mismatch): use the previous day.
+        return if (d > 1) fromJalali(year, m, d - 1) else estimate
+    }
+
     private fun toJalaliFull(date: LocalDate): Quadruple<Int, Int, Int, String> {
         val (year, month, day) = toJalali(date)
         val jDayNames = arrayOf("شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه")

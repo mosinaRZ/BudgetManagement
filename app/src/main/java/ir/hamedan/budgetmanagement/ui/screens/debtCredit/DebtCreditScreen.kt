@@ -61,6 +61,7 @@ import ir.hamedan.budgetmanagement.ui.screens.goals.AmountActionDialog
 import ir.hamedan.budgetmanagement.ui.screens.debtCredit.DebtCreditViewModel
 import ir.hamedan.budgetmanagement.utils.CategorySuggestionHelper
 import ir.hamedan.budgetmanagement.utils.DateUtils
+import ir.hamedan.budgetmanagement.utils.DueDay
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
 import kotlinx.coroutines.launch
@@ -1140,7 +1141,20 @@ fun AddOrEditDebtCreditDialog(
     }
     var monthlyAmountDigits by remember { mutableStateOf(initialMonthlyDigits) }
 
-    var selectedDay by remember { mutableIntStateOf(initialItem?.dueDay ?: 1) }
+    // The day wheel follows the app language: Jalali days for Persian, Gregorian days for English.
+    // A new record starts on today's day in that calendar. When an existing installment was saved in
+    // the other calendar, its next due date is shown as a day of this calendar instead.
+    val initialDueDay = remember(initialItem, isPersian) {
+        val today = java.time.LocalDate.now()
+        val stored = initialItem?.dueDay ?: 0
+        when {
+            initialItem == null || !initialItem.isMonthly || !DueDay.isValid(stored) ->
+                DueDay.dayOfMonth(today, isPersian)
+            DueDay.isJalali(stored) == isPersian -> DueDay.dayOf(stored)
+            else -> DueDay.dayOfMonth(DueDay.nextDueDate(stored, today), isPersian)
+        }
+    }
+    var selectedDay by remember { mutableIntStateOf(initialDueDay) }
     var oneTimeDueDateMillis by remember { mutableLongStateOf(initialItem?.dueDateMillis ?: System.currentTimeMillis()) }
     var showDatePickerDialog by remember { mutableStateOf(false) }
 
@@ -1460,7 +1474,7 @@ fun AddOrEditDebtCreditDialog(
                                 finalTotalInToman,
                                 isMonthly,
                                 if (isMonthly) finalMonthlyInToman else 0.0,
-                                selectedDay,
+                                DueDay.encode(selectedDay, isPersian),
                                 oneTimeDueDateMillis,
                                 note.ifBlank { null }
                             )
