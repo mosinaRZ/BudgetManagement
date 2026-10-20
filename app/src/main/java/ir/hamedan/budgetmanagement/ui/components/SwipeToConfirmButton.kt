@@ -95,7 +95,7 @@ private fun SwipeToConfirmButtonContent(
     val hapticStepPx = with(density) { 14.dp.toPx() }
 
     val scheme = MaterialTheme.colorScheme
-    val trackColor = scheme.surfaceContainerHigh
+    val trackColor = scheme.surface
     val progressColor = scheme.primary.copy(alpha = 0.28f)
     val handleColor = scheme.secondaryContainer
     val handleIconColor = scheme.onSecondaryContainer
