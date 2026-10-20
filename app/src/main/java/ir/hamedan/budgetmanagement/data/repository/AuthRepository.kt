@@ -7,8 +7,16 @@ interface AuthRepository {
     /**
      * @param restoreAccount pass `true` only after the server answered ACCOUNT_DELETED and the user
      * agreed to recover the account (possible during the server's grace period).
+     * @param discardGuestData pass `true` only when the user chose to delete the guest workspace
+     * on this device instead of moving it into the account. Applied after the credentials are
+     * verified, so a wrong password never deletes anything.
      */
-    suspend fun login(identifier: String, password: String, restoreAccount: Boolean = false): Result<Unit>
+    suspend fun login(
+        identifier: String,
+        password: String,
+        restoreAccount: Boolean = false,
+        discardGuestData: Boolean = false
+    ): Result<Unit>
     suspend fun register(input: RegistrationInput): Result<RegistrationResult>
     suspend fun prepareRecovery(challengeId: String, otpCode: String, recoveryKey: String): Result<AuthApi.RecoveryPreparation>
     suspend fun resetPassword(

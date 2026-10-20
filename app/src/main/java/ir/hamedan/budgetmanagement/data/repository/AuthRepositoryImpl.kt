@@ -1,5 +1,6 @@
 package ir.hamedan.budgetmanagement.data.repository
 
+import ir.hamedan.budgetmanagement.data.guest.GuestModeManager
 import ir.hamedan.budgetmanagement.data.local.SyncLocalDataSource
 import ir.hamedan.budgetmanagement.data.local.dao.UserDao
 import ir.hamedan.budgetmanagement.data.local.models.SyncStateEntity
@@ -28,28 +29,36 @@ class AuthRepositoryImpl(
     private val rememberedLoginStore: RememberedLoginStore,
     private val syncScheduler: SyncScheduler,
     private val accountApi: AccountApi,
-    private val deviceInfoProvider: DeviceInfoProvider
+    private val deviceInfoProvider: DeviceInfoProvider,
+    private val guestModeManager: GuestModeManager
 ) : AuthRepository {
 
     override suspend fun requestOtp(destination: String, channel: String, purpose: String): Result<AuthApi.OtpResponse> =
         withContext(Dispatchers.IO) { runCatching { authApi.requestOtp(destination.trim(), channel, purpose) } }
 
-    override suspend fun login(identifier: String, password: String, restoreAccount: Boolean): Result<Unit> {
+    override suspend fun login(
+        identifier: String,
+        password: String,
+        restoreAccount: Boolean,
+        discardGuestData: Boolean
+    ): Result<Unit> {
         if (identifier.isBlank()) return Result.failure(IllegalArgumentException("Identifier must not be blank."))
         if (password.isBlank()) return Result.failure(IllegalArgumentException("Password must not be blank."))
         return withContext(Dispatchers.IO) {
             runCatching {
-                persistSession(
-                    authApi.login(
-                        identifier = identifier.trim(),
-                        password = password,
-                        deviceId = deviceIdentityStore.getOrCreate(),
-                        deviceInfo = deviceInfoProvider.toJson(),
-                        restoreAccount = restoreAccount
-                    ),
-                    password,
-                    identifier = identifier.trim()
+                val response = authApi.login(
+                    identifier = identifier.trim(),
+                    password = password,
+                    deviceId = deviceIdentityStore.getOrCreate(),
+                    deviceInfo = deviceInfoProvider.toJson(),
+                    restoreAccount = restoreAccount
                 )
+                // Credentials are verified; only now may the guest workspace be discarded.
+                if (discardGuestData) guestModeManager.deleteWorkspace().getOrThrow()
+                persistSession(response, password, identifier = identifier.trim())
+                // Otherwise the guest workspace stays on the device and is merged into the account
+                // by the normal sync, which runs once the session exists.
+                guestModeManager.onAccountSignedIn().getOrThrow()
             }
         }
     }

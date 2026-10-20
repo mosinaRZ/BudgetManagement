@@ -143,6 +143,7 @@ import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.screens.auth.AuthInputNormalizer
 import ir.hamedan.budgetmanagement.ui.screens.auth.credentialTextStyle
 import ir.hamedan.budgetmanagement.ui.screens.settings.ChangePasswordDialog
+import ir.hamedan.budgetmanagement.ui.screens.guest.GuestPasscodeDialog
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
 import ir.hamedan.budgetmanagement.utils.AppHapticType
 import ir.hamedan.budgetmanagement.utils.DateUtils
@@ -317,7 +318,7 @@ fun ProfileScreen(
             user?.gender?.let { it == GenderOption.MALE.value || it == GenderOption.FEMALE.value } == true,
             !user?.birthDate.isNullOrBlank(),
             user?.emailVerified == true
-        )
+        ).let { all -> if (viewModel.isGuest) all.dropLast(1) else all }
     }
     val completion = steps.count { it }
 
@@ -417,7 +418,8 @@ fun ProfileScreen(
                         )
                     }
 
-                    item(key = ITEM_CONTACT) {
+                    // Guest workspaces have no email: the contact section only exists for accounts.
+                    if (!viewModel.isGuest) item(key = ITEM_CONTACT) {
                         ContactSheet(
                             phone = user?.phoneNumber.orEmpty(),
                             email = user?.email.orEmpty(),
@@ -434,8 +436,16 @@ fun ProfileScreen(
                         ) {
                             ProfileRow(
                                 icon = Icons.Default.LockReset,
-                                label = if (isPersian) "تغییر یا فراموشی رمز عبور" else "Change or forgot password",
-                                value = if (isPersian) "رمز فعلی را تغییر دهید یا وارد فرایند بازیابی شوید." else "Change your current password or start account recovery.",
+                                label = if (viewModel.isGuest) {
+                                    if (isPersian) "تغییر گذرواژه مهمان" else "Change guest passcode"
+                                } else {
+                                    if (isPersian) "تغییر یا فراموشی رمز عبور" else "Change or forgot password"
+                                },
+                                value = if (viewModel.isGuest) {
+                                    if (isPersian) "گذرواژه محلی این دستگاه را تعیین یا تغییر دهید." else "Set or change the passcode stored on this device."
+                                } else {
+                                    if (isPersian) "رمز فعلی را تغییر دهید یا وارد فرایند بازیابی شوید." else "Change your current password or start account recovery."
+                                },
                                 valueIsHint = true,
                                 onClick = { showChangePassword = true }
                             )
@@ -507,7 +517,23 @@ fun ProfileScreen(
         )
     }
 
-    if (showChangePassword) {
+    if (showChangePassword && viewModel.isGuest) {
+        GuestPasscodeDialog(
+            isPersian = isPersian,
+            hasPasscode = app.container.guestModeStore.hasPasscode(),
+            onDismiss = { showChangePassword = false },
+            onSubmit = { current, new ->
+                runCatching {
+                    val store = app.container.guestModeStore
+                    if (store.hasPasscode() && !store.verifyPasscode(current)) error("Incorrect guest passcode.")
+                    store.savePasscode(new)
+                }
+            },
+            onSuccess = { showChangePassword = false }
+        )
+    }
+
+    if (showChangePassword && !viewModel.isGuest) {
         ChangePasswordDialog(
             isPersian = isPersian,
             onDismiss = { showChangePassword = false },

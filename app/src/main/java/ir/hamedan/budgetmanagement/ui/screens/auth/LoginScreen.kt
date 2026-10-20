@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import ir.hamedan.budgetmanagement.ui.components.AppLogoIcon
+import ir.hamedan.budgetmanagement.data.guest.GuestModeManager
 import ir.hamedan.budgetmanagement.data.security.AuthSessionStore
 import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.preferences.SharedPreferences
@@ -69,6 +70,8 @@ fun LoginScreen(
     val app = context.applicationContext as BudgetApp
     val authRepository = remember { app.container.authRepository }
     val rememberedLoginStore = remember { app.container.rememberedLoginStore }
+    val guestStore = remember { app.container.guestModeStore }
+    val guestManager = remember { app.container.guestModeManager }
 
     var username by remember { mutableStateOf(rememberedLoginStore.identifier().orEmpty()) }
     var password by remember { mutableStateOf("") }
@@ -79,14 +82,25 @@ fun LoginScreen(
     var biometricPromptShown by remember(localUnlockOnly) { mutableStateOf(false) }
     var biometricCanceled by remember(localUnlockOnly) { mutableStateOf(false) }
 
+    // Guest state. The guest workspace never talks to the server, so none of these touch the network.
+    var guestPasscode by remember { mutableStateOf("") }
+    var guestPasscodeRequested by remember { mutableStateOf(false) }
+    var guestBiometricPromptShown by remember { mutableStateOf(false) }
+    var showGuestDataChoice by remember { mutableStateOf(false) }
+    var pendingAccountIdentifier by remember { mutableStateOf<String?>(null) }
+    var pendingDiscardGuestData by remember { mutableStateOf(false) }
+
     val passwordFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
+
+    // The workspace is open in memory and this screen is only locking it again (not signing in).
+    val guestLock = localUnlockOnly && guestStore.isSessionActive
 
     // The account whose session is still on this device (the one the local unlock belongs to).
     val rememberedIdentifier = remember { rememberedLoginStore.identifier().orEmpty() }
     // Set once the user chose to sign in to a different account: the form then acts as a full sign-in.
     var accountSwitchRequested by remember(localUnlockOnly) { mutableStateOf(false) }
-    val unlockMode = localUnlockOnly && !accountSwitchRequested
+    val unlockMode = localUnlockOnly && !accountSwitchRequested && !guestStore.isSessionActive
 
     // The server ended this session (expired, or this device was removed from the account):
     // tell the user why they are back here instead of showing an unexplained login form.
@@ -111,6 +125,8 @@ fun LoginScreen(
     val biometricLoginEnabled = remember(context) { SharedPreferences.getBiometricEnabled(context) }
     val biometricReady = biometricLoginEnabled && rememberedLoginStore.hasBiometricCredential() && rememberedLoginStore.canUseStrongBiometric()
     val passwordUnlockReady = rememberedLoginStore.hasPasswordVerifier()
+
+    // ---------------------------------------------------------------- account (server) helpers
 
     fun finishLocalUnlock() {
         isLoggingIn = false
@@ -220,12 +236,13 @@ fun LoginScreen(
     /**
      * Signs in against the server. [restoreAccount] is only ever true after the server said the
      * account was deleted and the user explicitly agreed to recover it in the dialog below.
+     * [discardGuestData] is applied by the repository only after the credentials were verified.
      */
-    fun runServerLogin(identifier: String, restoreAccount: Boolean) {
+    fun runServerLogin(identifier: String, restoreAccount: Boolean, discardGuestData: Boolean) {
         isLoggingIn = true
         errorMessage = null
         scope.launch {
-            authRepository.login(identifier, password, restoreAccount)
+            authRepository.login(identifier, password, restoreAccount, discardGuestData)
                 .onSuccess {
                     runCatching {
                         app.seedDefaultCategoriesIfNeeded()
@@ -278,6 +295,7 @@ fun LoginScreen(
                     isLoggingIn = false
                     if ((error as? ApiException)?.code == "ACCOUNT_DELETED") {
                         // Correct credentials, but the account was deleted: offer to restore it.
+                        pendingDiscardGuestData = discardGuestData
                         showRestoreDialog = true
                     } else {
                         errorMessage = authErrorMessage(error, isPersian, AuthContext.LOGIN)
@@ -299,7 +317,161 @@ fun LoginScreen(
             errorMessage = if (isPersian) "شماره موبایل یا ایمیل معتبر نیست" else "Enter a valid phone number or email"
             return
         }
-        runServerLogin(identifier, restoreAccount = false)
+        // A guest workspace on this device must be decided on before it can merge into an account.
+        if (guestStore.hasWorkspace()) {
+            pendingAccountIdentifier = identifier
+            showGuestDataChoice = true
+            return
+        }
+        runServerLogin(identifier, restoreAccount = false, discardGuestData = false)
+    }
+
+    // ---------------------------------------------------------------- guest helpers
+
+    /** Opens the guest workspace (no network). Called only after any required guest unlock succeeded. */
+    fun openGuestWorkspace() {
+        if (isLoggingIn) return
+        isLoggingIn = true
+        errorMessage = null
+        scope.launch {
+            guestManager.startSession()
+                .onSuccess {
+                    // Seeding happens after the session started, so it lands in the workspace that is open.
+                    runCatching { app.seedDefaultCategoriesIfNeeded() }
+                    guestPasscode = ""
+                    guestPasscodeRequested = false
+                    isLoggingIn = false
+                    onLoginSuccess()
+                }
+                .onFailure { error ->
+                    isLoggingIn = false
+                    errorMessage = if (error is GuestModeManager.UnsyncedAccountException) {
+                        if (isPersian) {
+                            "روی این دستگاه داده‌ای از یک حساب هست که هنوز همگام‌سازی نشده. ابتدا با همان حساب وارد شوید تا همگام شود."
+                        } else {
+                            "This device holds data of an account that has not synced yet. Sign in to that account first so it can sync."
+                        }
+                    } else {
+                        if (isPersian) "ورود مهمان انجام نشد. دوباره تلاش کنید." else "Guest sign-in failed. Please try again."
+                    }
+                }
+        }
+    }
+
+    /** Ends the lock of an already open guest workspace. */
+    fun completeGuestUnlock() {
+        isLoggingIn = false
+        guestPasscode = ""
+        onLoginSuccess()
+    }
+
+    /**
+     * Fingerprint for the guest. [onVerified] runs on the main thread after the Keystore cipher
+     * proved the fingerprint. If the key was invalidated, fingerprint unlock is switched off and the
+     * guest is sent to the passcode.
+     */
+    fun startGuestBiometric(onVerified: () -> Unit) {
+        if (isLoggingIn) return
+        val activity = context as? FragmentActivity
+        val cipher = guestStore.prepareUnlockCipher()
+        if (activity == null || cipher == null) {
+            errorMessage = if (isPersian) {
+                "اثر انگشت برای حالت مهمان در دسترس نیست. با گذرواژه مهمان ادامه دهید."
+            } else {
+                "Fingerprint is unavailable for guest mode. Continue with the guest passcode."
+            }
+            if (guestStore.hasPasscode()) guestPasscodeRequested = true
+            return
+        }
+
+        guestBiometricPromptShown = true
+        isLoggingIn = true
+        val prompt = BiometricPrompt(
+            activity,
+            ContextCompat.getMainExecutor(context),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    val verified = result.cryptoObject?.cipher?.let { guestStore.completeBiometricUnlock(it) } == true
+                    guestBiometricPromptShown = false
+                    isLoggingIn = false
+                    if (verified) {
+                        onVerified()
+                    } else {
+                        errorMessage = if (isPersian) "احراز هویت با اثر انگشت کامل نشد." else "Fingerprint verification did not complete."
+                    }
+                }
+
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    isLoggingIn = false
+                    guestBiometricPromptShown = false
+                    val userStopped = errorCode == BiometricPrompt.ERROR_USER_CANCELED ||
+                            errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
+                            errorCode == BiometricPrompt.ERROR_CANCELED
+                    if (!userStopped) errorMessage = errString.toString().takeIf { it.isNotBlank() }
+                }
+
+                override fun onAuthenticationFailed() {
+                    errorMessage = if (isPersian) "اثر انگشت شناسایی نشد؛ دوباره تلاش کنید." else "Biometric not recognized; try again."
+                }
+            }
+        )
+        prompt.authenticate(
+            BiometricPrompt.PromptInfo.Builder()
+                .setTitle(if (isPersian) "ورود به حالت مهمان" else "Guest sign-in")
+                .setSubtitle(if (isPersian) "برای ورود، اثر انگشت خود را تأیید کنید" else "Confirm your fingerprint to continue")
+                .setNegativeButtonText(if (isPersian) "انصراف" else "Cancel")
+                .build(),
+            BiometricPrompt.CryptoObject(cipher)
+        )
+    }
+
+    /** Guest button on the sign-in screen: the method depends on what the guest set up on this device. */
+    fun onGuestEntryClick() {
+        if (isLoggingIn) return
+        errorMessage = null
+        val hasWorkspace = guestStore.hasWorkspace()
+        when {
+            hasWorkspace && guestStore.isBiometricEnabled() -> startGuestBiometric(onVerified = ::openGuestWorkspace)
+            hasWorkspace && guestStore.hasPasscode() -> guestPasscodeRequested = true
+            else -> openGuestWorkspace()
+        }
+    }
+
+    fun submitGuestPasscode() {
+        if (isLoggingIn) return
+        if (guestPasscode.isEmpty()) {
+            errorMessage = if (isPersian) "گذرواژه مهمان را وارد کنید." else "Enter the guest passcode."
+            return
+        }
+        if (!guestStore.verifyPasscode(guestPasscode)) {
+            errorMessage = if (isPersian) "گذرواژه مهمان نادرست است." else "Incorrect guest passcode."
+            return
+        }
+        if (guestLock) completeGuestUnlock() else openGuestWorkspace()
+    }
+
+    // Lock of an open guest workspace: prompt for the fingerprint straight away, once.
+    LaunchedEffect(guestLock) {
+        if (guestLock && guestStore.isBiometricEnabled() && !guestBiometricPromptShown) {
+            startGuestBiometric(onVerified = ::completeGuestUnlock)
+        }
+    }
+
+    // ---------------------------------------------------------------- dialogs
+
+    if (showGuestDataChoice) {
+        GuestDataChoiceDialog(
+            isPersian = isPersian,
+            onMoveToAccount = {
+                showGuestDataChoice = false
+                pendingAccountIdentifier?.let { runServerLogin(it, restoreAccount = false, discardGuestData = false) }
+            },
+            onDeleteGuestData = {
+                showGuestDataChoice = false
+                pendingAccountIdentifier?.let { runServerLogin(it, restoreAccount = false, discardGuestData = true) }
+            },
+            onDismiss = { showGuestDataChoice = false }
+        )
     }
 
     if (showRestoreDialog) {
@@ -329,7 +501,7 @@ fun LoginScreen(
                     onClick = {
                         showRestoreDialog = false
                         val identifier = AuthInputNormalizer.identifier(username)
-                        if (identifier != null) runServerLogin(identifier, restoreAccount = true)
+                        if (identifier != null) runServerLogin(identifier, restoreAccount = true, discardGuestData = pendingDiscardGuestData)
                     },
                     shape = RoundedCornerShape(12.dp)
                 ) { Text(if (isPersian) "بازیابی حساب" else "Restore account") }
@@ -359,121 +531,317 @@ fun LoginScreen(
         }
     }
 
+    // ---------------------------------------------------------------- UI
+
+    val guestUsesFingerprint = guestStore.hasWorkspace() && guestStore.isBiometricEnabled()
+    val guestEntryLabel = when {
+        guestUsesFingerprint -> if (isPersian) "ورود مهمان با اثر انگشت" else "Guest sign-in with fingerprint"
+        guestStore.hasWorkspace() && guestStore.hasPasscode() -> if (isPersian) "ورود مهمان با گذرواژه" else "Guest sign-in with passcode"
+        else -> if (isPersian) "ورود به عنوان مهمان" else "Continue as guest"
+    }
+
     AuthScreenContainer {
         AuthHeader(
             icon = AppLogoIcon,
             title = if (isPersian) "خوش آمدید" else "Welcome back",
             subtitle = when {
+                guestLock -> if (isPersian) "برای ادامه در حالت مهمان، هویت خود را تأیید کنید" else "Verify your identity to continue as guest"
                 unlockMode -> if (isPersian) "برای ادامه، هویت خود را تأیید کنید" else "Verify your identity to continue"
+                guestPasscodeRequested -> if (isPersian) "برای ورود به حالت مهمان، گذرواژه مهمان را وارد کنید" else "Enter your guest passcode to continue as guest"
                 else -> if (isPersian) "برای ورود، مشخصات حساب خود را وارد کنید" else "Sign in with your account details"
             }
         )
 
-        AuthCard {
-            OutlinedTextField(
-                value = username,
-                onValueChange = { username = it; errorMessage = null },
-                enabled = !isLoggingIn,
-                label = { Text(if (isPersian) "شماره موبایل یا ایمیل" else "Phone or email") },
-                leadingIcon = { Icon(Icons.Default.Person, null) },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                textStyle = credentialTextStyle(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next, hintLocales = LocaleList(Locale("en"))),
-                keyboardActions = KeyboardActions(onNext = { passwordFocusRequester.requestFocus() }),
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it; errorMessage = null },
-                enabled = !isLoggingIn,
-                label = { Text(if (isPersian) "گذرواژه" else "Password") },
-                leadingIcon = { Icon(Icons.Default.Lock, null) },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                textStyle = credentialTextStyle(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
-                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus(); if (unlockMode) submitLocalPassword() else submitServerLogin() }),
-                visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
-                        Icon(
-                            imageVector = if (isPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = if (isPersian) "نمایش یا پنهان کردن گذرواژه" else "Toggle password visibility"
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().focusRequester(passwordFocusRequester)
-            )
-
-            AnimatedVisibility(errorMessage != null) {
-                errorMessage?.let { AuthErrorBanner(message = it) }
-            }
-
-            LoadingButton(
-                text = when {
-                    !unlockMode -> if (isPersian) "ورود به حساب" else "Sign In"
-                    password.isBlank() && biometricReady -> if (isPersian) "ورود با اثر انگشت" else "Sign in with fingerprint"
-                    else -> if (isPersian) "ورود با رمز عبور" else "Sign in with password"
-                },
+        if (guestLock) {
+            GuestLockCard(
+                isPersian = isPersian,
                 isLoading = isLoggingIn,
-                loadingText = if (unlockMode) (if (isPersian) "در حال بررسی..." else "Verifying...") else null,
-                onClick = when {
-                    !unlockMode -> ::submitServerLogin
-                    password.isBlank() && biometricReady -> ::startBiometricUnlock
-                    else -> ::submitLocalPassword
+                errorMessage = errorMessage,
+                fingerprintEnabled = guestStore.isBiometricEnabled(),
+                passcodeEnabled = guestStore.hasPasscode(),
+                showPasscode = guestPasscodeRequested || !guestStore.isBiometricEnabled(),
+                passcode = guestPasscode,
+                onPasscodeChange = { guestPasscode = it; errorMessage = null },
+                onFingerprintClick = { startGuestBiometric(onVerified = ::completeGuestUnlock) },
+                onUsePasscodeClick = { guestPasscodeRequested = true; errorMessage = null },
+                onPasscodeSubmit = ::submitGuestPasscode,
+                onContinueClick = ::completeGuestUnlock
+            )
+        } else if (guestPasscodeRequested) {
+            GuestPasscodeCard(
+                isPersian = isPersian,
+                isLoading = isLoggingIn,
+                errorMessage = errorMessage,
+                passcode = guestPasscode,
+                fingerprintEnabled = guestStore.isBiometricEnabled(),
+                onPasscodeChange = { guestPasscode = it; errorMessage = null },
+                onSubmit = ::submitGuestPasscode,
+                onFingerprintClick = { startGuestBiometric(onVerified = ::openGuestWorkspace) },
+                onBack = {
+                    guestPasscodeRequested = false
+                    guestPasscode = ""
+                    errorMessage = null
                 }
             )
+        } else {
+            AuthCard {
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it; errorMessage = null },
+                    enabled = !isLoggingIn,
+                    label = { Text(if (isPersian) "شماره موبایل یا ایمیل" else "Phone or email") },
+                    leadingIcon = { Icon(Icons.Default.Person, null) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    textStyle = credentialTextStyle(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next, hintLocales = LocaleList(Locale("en"))),
+                    keyboardActions = KeyboardActions(onNext = { passwordFocusRequester.requestFocus() }),
+                    modifier = Modifier.fillMaxWidth()
+                )
 
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it; errorMessage = null },
+                    enabled = !isLoggingIn,
+                    label = { Text(if (isPersian) "گذرواژه" else "Password") },
+                    leadingIcon = { Icon(Icons.Default.Lock, null) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    textStyle = credentialTextStyle(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
+                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus(); if (unlockMode) submitLocalPassword() else submitServerLogin() }),
+                    visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                            Icon(
+                                imageVector = if (isPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (isPersian) "نمایش یا پنهان کردن گذرواژه" else "Toggle password visibility"
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().focusRequester(passwordFocusRequester)
+                )
+
+                AnimatedVisibility(errorMessage != null) {
+                    errorMessage?.let { AuthErrorBanner(message = it) }
+                }
+
+                LoadingButton(
+                    text = when {
+                        !unlockMode -> if (isPersian) "ورود به حساب" else "Sign In"
+                        password.isBlank() && biometricReady -> if (isPersian) "ورود با اثر انگشت" else "Sign in with fingerprint"
+                        else -> if (isPersian) "ورود با رمز عبور" else "Sign in with password"
+                    },
+                    isLoading = isLoggingIn,
+                    loadingText = if (unlockMode) (if (isPersian) "در حال بررسی..." else "Verifying...") else null,
+                    onClick = when {
+                        !unlockMode -> ::submitServerLogin
+                        password.isBlank() && biometricReady -> ::startBiometricUnlock
+                        else -> ::submitLocalPassword
+                    }
+                )
+
+                TextButton(
+                    onClick = onForgotPassword,
+                    enabled = !isLoggingIn,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text(
+                        text = if (isPersian) "رمز عبور را فراموش کرده‌اید؟" else "Forgot your password?",
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            if (!unlockMode) {
+                Spacer(Modifier.height(16.dp))
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            if (isPersian) "حساب کاربری ندارید؟" else "Don't have an account?",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        TextButton(
+                            onClick = onRegister,
+                            enabled = !isLoggingIn,
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                        ) {
+                            Text(
+                                if (isPersian) "ساخت حساب" else "Create account",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                GuestEntryButton(
+                    label = guestEntryLabel,
+                    usesFingerprint = guestUsesFingerprint,
+                    enabled = !isLoggingIn,
+                    onClick = ::onGuestEntryClick
+                )
+            }
+        }
+    }
+}
+
+/** Guest passcode form, shown in place of the account form when the guest chose the passcode. */
+@Composable
+private fun GuestPasscodeCard(
+    isPersian: Boolean,
+    isLoading: Boolean,
+    errorMessage: String?,
+    passcode: String,
+    fingerprintEnabled: Boolean,
+    onPasscodeChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+    onFingerprintClick: () -> Unit,
+    onBack: () -> Unit
+) {
+    AuthCard {
+        OutlinedTextField(
+            value = passcode,
+            onValueChange = onPasscodeChange,
+            enabled = !isLoading,
+            label = { Text(if (isPersian) "گذرواژه مهمان" else "Guest passcode") },
+            leadingIcon = { Icon(Icons.Default.Lock, null) },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            textStyle = credentialTextStyle(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
+            keyboardActions = KeyboardActions(onDone = { onSubmit() }),
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        AnimatedVisibility(errorMessage != null) {
+            errorMessage?.let { AuthErrorBanner(message = it) }
+        }
+
+        LoadingButton(
+            text = if (isPersian) "ورود مهمان" else "Continue as guest",
+            isLoading = isLoading,
+            onClick = onSubmit
+        )
+
+        if (fingerprintEnabled) {
             TextButton(
-                onClick = onForgotPassword,
-                enabled = !isLoggingIn,
+                onClick = onFingerprintClick,
+                enabled = !isLoading,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             ) {
                 Text(
-                    text = if (isPersian) "رمز عبور را فراموش کرده‌اید؟" else "Forgot your password?",
+                    text = if (isPersian) "ورود با اثر انگشت" else "Use fingerprint instead",
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
         }
 
-        Spacer(Modifier.height(16.dp))
-
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+        TextButton(
+            onClick = onBack,
+            enabled = !isLoading,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
         ) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    if (isPersian) "حساب کاربری ندارید؟" else "Don't have an account?",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
-                Spacer(Modifier.width(6.dp))
-                TextButton(
-                    onClick = onRegister,
-                    enabled = !isLoggingIn,
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-                ) {
-                    Text(
-                        if (isPersian) "ساخت حساب" else "Create account",
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
+            Text(
+                text = if (isPersian) "بازگشت به ورود حساب کاربری" else "Back to account sign-in",
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
 
+/** Shown when the lock screen comes back for an open guest workspace; the form follows its security. */
+@Composable
+private fun GuestLockCard(
+    isPersian: Boolean,
+    isLoading: Boolean,
+    errorMessage: String?,
+    fingerprintEnabled: Boolean,
+    passcodeEnabled: Boolean,
+    showPasscode: Boolean,
+    passcode: String,
+    onPasscodeChange: (String) -> Unit,
+    onFingerprintClick: () -> Unit,
+    onUsePasscodeClick: () -> Unit,
+    onPasscodeSubmit: () -> Unit,
+    onContinueClick: () -> Unit
+) {
+    AuthCard {
+        when {
+            fingerprintEnabled && !showPasscode -> {
+                LoadingButton(
+                    text = if (isPersian) "ورود با اثر انگشت" else "Sign in with fingerprint",
+                    isLoading = isLoading,
+                    onClick = onFingerprintClick
+                )
+                if (passcodeEnabled) {
+                    TextButton(
+                        onClick = onUsePasscodeClick,
+                        enabled = !isLoading,
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    ) {
+                        Text(
+                            text = if (isPersian) "ورود با گذرواژه مهمان" else "Use guest passcode instead",
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+            passcodeEnabled -> {
+                OutlinedTextField(
+                    value = passcode,
+                    onValueChange = onPasscodeChange,
+                    enabled = !isLoading,
+                    label = { Text(if (isPersian) "گذرواژه مهمان" else "Guest passcode") },
+                    leadingIcon = { Icon(Icons.Default.Lock, null) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    textStyle = credentialTextStyle(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
+                    keyboardActions = KeyboardActions(onDone = { onPasscodeSubmit() }),
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                LoadingButton(
+                    text = if (isPersian) "ورود" else "Unlock",
+                    isLoading = isLoading,
+                    onClick = onPasscodeSubmit
+                )
+            }
+            else -> {
+                // No secret was set up for the guest workspace, so there is nothing to verify.
+                LoadingButton(
+                    text = if (isPersian) "ادامه" else "Continue",
+                    isLoading = isLoading,
+                    onClick = onContinueClick
+                )
+            }
+        }
+
+        AnimatedVisibility(errorMessage != null) {
+            errorMessage?.let { AuthErrorBanner(message = it) }
+        }
+    }
+}
 private object LocalLoginBackPress { var current: Long = 0L }
 
 @Composable

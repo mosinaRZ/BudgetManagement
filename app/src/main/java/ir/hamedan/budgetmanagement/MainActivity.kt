@@ -345,13 +345,16 @@ class MainActivity : FragmentActivity() {
         val app = LocalContext.current.applicationContext as BudgetApp
         val authScope = rememberCoroutineScope()
         val sessionAuthenticated by app.container.authSessionStore.authenticated.collectAsState()
+        // A guest workspace is an open session too, but it has no server session behind it.
+        val guestSession by app.container.guestModeStore.session.collectAsState()
+        val hasSession = sessionAuthenticated || guestSession
         val currentRouteEntry by navController.currentBackStackEntryAsState()
         val applicationContext = LocalContext.current.applicationContext
 
-        LaunchedEffect(openAddTransactionRequested, sessionAuthenticated, currentRouteEntry?.destination?.route) {
+        LaunchedEffect(openAddTransactionRequested, hasSession, currentRouteEntry?.destination?.route) {
             val route = currentRouteEntry?.destination?.route.orEmpty()
             if (openAddTransactionRequested &&
-                sessionAuthenticated &&
+                hasSession &&
                 route.isNotBlank() &&
                 !route.contains("Login") &&
                 !route.contains("Splash") &&
@@ -363,10 +366,10 @@ class MainActivity : FragmentActivity() {
         }
 
         // Tapped a "new device" / "device removed" alert: go straight to the device list.
-        LaunchedEffect(openDevicesRequested, sessionAuthenticated, currentRouteEntry?.destination?.route) {
+        LaunchedEffect(openDevicesRequested, hasSession, currentRouteEntry?.destination?.route) {
             val route = currentRouteEntry?.destination?.route.orEmpty()
             if (openDevicesRequested &&
-                sessionAuthenticated &&
+                hasSession &&
                 route.isNotBlank() &&
                 !route.contains("Login") &&
                 !route.contains("Register") &&
@@ -386,16 +389,16 @@ class MainActivity : FragmentActivity() {
         // After two minutes in the background, require local re-authentication.
         // This never clears or changes access/refresh tokens.
         val lifecycleOwner = LocalLifecycleOwner.current
-        DisposableEffect(lifecycleOwner, sessionAuthenticated) {
+        DisposableEffect(lifecycleOwner, hasSession) {
             val observer = LifecycleEventObserver { _, event ->
                 when (event) {
                     Lifecycle.Event.ON_STOP -> {
-                        if (sessionAuthenticated) {
+                        if (hasSession) {
                             appLockPreferences.markBackgrounded(System.currentTimeMillis())
                         }
                     }
                     Lifecycle.Event.ON_START -> {
-                        if (sessionAuthenticated) {
+                        if (hasSession) {
                             if (appLockPreferences.shouldLockNow()) {
                                 appLockPreferences.markLockRequired()
                             } else {
@@ -413,7 +416,7 @@ class MainActivity : FragmentActivity() {
             onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
         }
 
-        LaunchedEffect(sessionAuthenticated, currentRouteEntry?.destination?.route, lifecycleResumeTrigger) {
+        LaunchedEffect(hasSession, currentRouteEntry?.destination?.route, lifecycleResumeTrigger) {
             val route = currentRouteEntry?.destination?.route.orEmpty()
 
             // The lock must apply to EVERY signed-in screen (Profile, Devices, Categories, Add...),
@@ -424,7 +427,7 @@ class MainActivity : FragmentActivity() {
                     route.contains("PasswordReset") ||
                     route.contains("Splash")
 
-            if (sessionAuthenticated &&
+            if (hasSession &&
                 route.isNotBlank() &&
                 !isAuthOrSplashRoute &&
                 appLockPreferences.shouldLockNow()
@@ -439,7 +442,7 @@ class MainActivity : FragmentActivity() {
                 return@LaunchedEffect
             }
 
-            if (!sessionAuthenticated &&
+            if (!hasSession &&
                 route.isNotBlank() &&
                 !route.contains("Login") &&
                 !route.contains("Register") &&
@@ -492,8 +495,8 @@ class MainActivity : FragmentActivity() {
                 // The server session can end while the local-unlock screen is showing (for example
                 // this device was removed from the account while the app was in the background).
                 // Local unlock is meaningless then: switch to the full sign-in form.
-                LaunchedEffect(sessionAuthenticated, loginRoute.localUnlockOnly) {
-                    if (loginRoute.localUnlockOnly && !sessionAuthenticated) {
+                LaunchedEffect(hasSession, loginRoute.localUnlockOnly) {
+                    if (loginRoute.localUnlockOnly && !hasSession) {
                         navController.navigate(AppRoute.Login()) {
                             popUpTo(navController.graph.id) { inclusive = true }
                             launchSingleTop = true
@@ -727,7 +730,12 @@ class MainActivity : FragmentActivity() {
                                 },
                                 onLoginClick = {
                                     authScope.launch {
-                                        app.container.authRepository.logout()
+                                        if (app.container.guestModeStore.isSessionActive) {
+                                            // Guest data stays on the device; only the session ends.
+                                            app.container.guestModeManager.endSession()
+                                        } else {
+                                            app.container.authRepository.logout()
+                                        }
                                         navController.navigate(AppRoute.Login()) {
                                             popUpTo(AppRoute.MainStructure) { inclusive = true }
                                         }

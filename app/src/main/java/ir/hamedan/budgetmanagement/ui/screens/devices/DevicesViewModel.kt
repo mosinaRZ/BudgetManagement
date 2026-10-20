@@ -4,6 +4,9 @@ import android.content.Context
 import ir.hamedan.budgetmanagement.utils.ErrorMessages
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.os.Build
+import ir.hamedan.budgetmanagement.BuildConfig
+import ir.hamedan.budgetmanagement.data.guest.GuestModeStore
 import ir.hamedan.budgetmanagement.data.network.ApiException
 import ir.hamedan.budgetmanagement.data.network.DeviceApi
 import ir.hamedan.budgetmanagement.data.security.DeviceIdentityStore
@@ -25,6 +28,7 @@ internal fun canRemoveOtherDevices(devices: List<DeviceApi.Device>, currentDevic
 class DevicesViewModel(
     private val deviceApi: DeviceApi,
     private val deviceIdentityStore: DeviceIdentityStore,
+    private val guestModeStore: GuestModeStore,
     private val context: Context
 ) : ViewModel() {
     private val _devices = MutableStateFlow<List<DeviceApi.Device>>(emptyList())
@@ -51,6 +55,12 @@ class DevicesViewModel(
     init { refresh() }
 
     fun refresh() {
+        // Guest mode: the only device is this one. Nothing is requested from the server.
+        if (guestModeStore.isSessionActive) {
+            _devices.value = listOf(localDevice())
+            _error.value = null
+            return
+        }
         if (_isLoading.value) return
         viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
@@ -61,7 +71,26 @@ class DevicesViewModel(
         }
     }
 
+    /** This installation as the only device of the guest workspace. */
+    private fun localDevice(): DeviceApi.Device {
+        val now = System.currentTimeMillis()
+        return DeviceApi.Device(
+            id = currentDeviceId,
+            name = Build.MODEL.orEmpty(),
+            model = Build.MODEL.orEmpty(),
+            platform = "android",
+            osVersion = Build.VERSION.RELEASE.orEmpty(),
+            appVersion = BuildConfig.VERSION_NAME,
+            lastIp = "",
+            lastSeenAt = now,
+            createdAt = now,
+            isPrimary = true
+        )
+    }
+
     fun revoke(deviceId: String) {
+        // Guest mode has only this device, and it is removed from Settings instead.
+        if (guestModeStore.isSessionActive) return
         // Removing this very device would be a sign-out, which is handled in Settings.
         if (deviceId == currentDeviceId || _revokingId.value != null) return
         // Only the primary device may remove others. The server enforces this too; checking here
