@@ -5,6 +5,7 @@ import ir.hamedan.budgetmanagement.utils.ErrorMessages
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.BudgetApp
+import ir.hamedan.budgetmanagement.data.guest.GuestModeStore
 import ir.hamedan.budgetmanagement.data.local.models.UserEntity
 import ir.hamedan.budgetmanagement.data.repository.ProfileRepository
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
@@ -39,8 +40,14 @@ class ProfileViewModel(
 
     private var observedUserId: String? = null
 
+    /** True while the guest workspace is open (no email, no server profile). */
+    val isGuest: Boolean
+
     init {
-        val userId = (context.applicationContext as BudgetApp).container.authSessionStore.userId()
+        val container = (context.applicationContext as BudgetApp).container
+        // Guest mode has no account: its profile is the local guest row, and nothing is requested.
+        isGuest = container.guestModeStore.isSessionActive
+        val userId = if (isGuest) GuestModeStore.GUEST_USER_ID else container.authSessionStore.userId()
         if (!userId.isNullOrBlank()) {
             observedUserId = userId
             viewModelScope.launch {

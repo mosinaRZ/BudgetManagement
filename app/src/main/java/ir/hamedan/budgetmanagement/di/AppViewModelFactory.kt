@@ -98,6 +98,7 @@ class AppViewModelFactory(
                 DevicesViewModel(
                     deviceApi = container.deviceApi,
                     deviceIdentityStore = container.deviceIdentityStore,
+                    guestModeStore = container.guestModeStore,
                     context = appContext
                 ) as T
             }

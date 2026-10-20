@@ -62,6 +62,9 @@ import ir.hamedan.budgetmanagement.ui.screens.auth.PasswordStrengthMeter
 import ir.hamedan.budgetmanagement.ui.screens.auth.authErrorMessage
 import ir.hamedan.budgetmanagement.ui.screens.auth.credentialTextStyle
 import ir.hamedan.budgetmanagement.data.security.RememberedLoginStore
+import ir.hamedan.budgetmanagement.data.guest.GuestModeStore
+import ir.hamedan.budgetmanagement.ui.screens.guest.GuestDeleteWorkspaceDialog
+import ir.hamedan.budgetmanagement.ui.screens.guest.GuestPasscodeDialog
 import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.preferences.SharedPreferences
@@ -123,8 +126,15 @@ fun SettingsScreen(
     var isSearchExpanded by remember { mutableStateOf(false) }
     var activeMenu by remember { mutableStateOf(SettingsMenu.NONE) }
 
+    val app = context.applicationContext as BudgetApp
+    // Guest mode has its own passcode and fingerprint, separate from the account's.
+    val isGuest = remember(context) { app.container.guestModeStore.isSessionActive }
+    val guestStore = remember(context) { app.container.guestModeStore }
+
     var isBiometricEnabled by remember(context) {
-        mutableStateOf(SharedPreferences.getBiometricEnabled(context))
+        mutableStateOf(
+            if (isGuest) guestStore.isBiometricEnabled() else SharedPreferences.getBiometricEnabled(context)
+        )
     }
 
     var showChangePasswordDialog by remember { mutableStateOf(false) }
@@ -537,7 +547,28 @@ fun SettingsScreen(
                                     checked = isBiometricEnabled,
                                     onCheckedChange = { targetChecked ->
                                         val activity = context as? FragmentActivity
-                                        if (activity == null) {
+                                        if (isGuest) {
+                                            biometricSetupError = null
+                                            when {
+                                                activity == null -> biometricSetupError = if (isPersian) "امکان احراز هویت در این صفحه وجود ندارد." else "Biometric authentication is unavailable on this screen."
+                                                !targetChecked -> BiometricPromptManager.showBiometricPrompt(
+                                                    activity = activity,
+                                                    onSuccess = {
+                                                        guestStore.disableBiometric()
+                                                        isBiometricEnabled = false
+                                                    }
+                                                )
+                                                !guestStore.hasPasscode() -> {
+                                                    // Fingerprint needs a passcode to fall back on, so set that first.
+                                                    biometricSetupError = if (isPersian) "ابتدا گذرواژه مهمان را تعیین کنید؛ سپس اثر انگشت را فعال کنید." else "Set a guest passcode first, then enable fingerprint."
+                                                    showChangePasswordDialog = true
+                                                }
+                                                else -> enrollGuestBiometric(activity, guestStore, isPersian) { ok, error ->
+                                                    isBiometricEnabled = guestStore.isBiometricEnabled()
+                                                    biometricSetupError = error
+                                                }
+                                            }
+                                        } else if (activity == null) {
                                             biometricSetupError = if (isPersian) "امکان احراز هویت در این صفحه وجود ندارد." else "Biometric authentication is unavailable on this screen."
                                         } else if (!targetChecked) {
                                             // خاموش کردن فقط پس از احراز هویت انجام می‌شود تا تغییر تنظیم امنیتی بدون تأیید کاربر ممکن نباشد.
@@ -596,7 +627,11 @@ fun SettingsScreen(
                             }
 
                             SecurityActionRow(
-                                title = if (isPersian) "خروج از حساب کاربری" else "Log Out",
+                                title = if (isGuest) {
+                                    if (isPersian) "خروج از حالت مهمان" else "Leave guest mode"
+                                } else {
+                                    if (isPersian) "خروج از حساب کاربری" else "Log Out"
+                                },
                                 icon = Icons.Default.Logout,
                                 iconTint = MaterialTheme.colorScheme.error,
                                 titleColor = MaterialTheme.colorScheme.error
@@ -605,7 +640,11 @@ fun SettingsScreen(
                             }
 
                             SecurityActionRow(
-                                title = if (isPersian) "حذف حساب کاربری" else "Delete Account",
+                                title = if (isGuest) {
+                                    if (isPersian) "حذف داده‌های مهمان" else "Delete guest data"
+                                } else {
+                                    if (isPersian) "حذف حساب کاربری" else "Delete Account"
+                                },
                                 icon = Icons.Default.DeleteForever,
                                 iconTint = MaterialTheme.colorScheme.error,
                                 titleColor = MaterialTheme.colorScheme.error
@@ -750,7 +789,27 @@ fun SettingsScreen(
             )
         }
 
-        if (showDeleteAccountDialog) {
+        if (showDeleteAccountDialog && isGuest) {
+            GuestDeleteWorkspaceDialog(
+                isPersian = isPersian,
+                hasPasscode = guestStore.hasPasscode(),
+                onDismiss = { showDeleteAccountDialog = false },
+                onSubmit = { passcode ->
+                    if (guestStore.hasPasscode() && !guestStore.verifyPasscode(passcode)) {
+                        Result.failure<Unit>(IllegalArgumentException("Incorrect guest passcode."))
+                    } else {
+                        app.container.guestModeManager.deleteWorkspace()
+                    }
+                },
+                onSuccess = {
+                    showDeleteAccountDialog = false
+                    isBiometricEnabled = false
+                    onAccountDeleted()
+                }
+            )
+        }
+
+        if (showDeleteAccountDialog && !isGuest) {
             val authRepository = remember(context) { (context.applicationContext as BudgetApp).container.authRepository }
             DeleteAccountDialog(
                 isPersian = isPersian,
@@ -834,7 +893,27 @@ fun SettingsScreen(
             )
         }
 
-        if (showChangePasswordDialog) {
+        if (showChangePasswordDialog && isGuest) {
+            GuestPasscodeDialog(
+                isPersian = isPersian,
+                hasPasscode = guestStore.hasPasscode(),
+                onDismiss = { showChangePasswordDialog = false },
+                onSubmit = { current, new ->
+                    runCatching {
+                        if (guestStore.hasPasscode() && !guestStore.verifyPasscode(current)) {
+                            error("Incorrect guest passcode.")
+                        }
+                        guestStore.savePasscode(new)
+                    }
+                },
+                onSuccess = {
+                    showChangePasswordDialog = false
+                    biometricSetupError = null
+                }
+            )
+        }
+
+        if (showChangePasswordDialog && !isGuest) {
             val authRepository = remember(context) { (context.applicationContext as BudgetApp).container.authRepository }
             ChangePasswordDialog(
                 isPersian = isPersian,
@@ -2115,4 +2194,50 @@ private fun findSuggestion(query: String, isPersian: Boolean): String? {
         }
     }
     return bestLabel
+}
+
+/**
+ * Enrolls the fingerprint for guest mode: the Keystore key is created here and the guest marker is
+ * encrypted with it once the user verified the fingerprint.
+ */
+private fun enrollGuestBiometric(
+    activity: FragmentActivity,
+    store: GuestModeStore,
+    isPersian: Boolean,
+    onResult: (Boolean, String?) -> Unit
+) {
+    val cipher = store.prepareEnrollCipher()
+    if (cipher == null) {
+        onResult(false, if (isPersian) "بیومتریک دستگاه آماده استفاده نیست." else "Biometric authentication is not available on this device.")
+        return
+    }
+    val prompt = BiometricPrompt(
+        activity,
+        ContextCompat.getMainExecutor(activity),
+        object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                val enabled = result.cryptoObject?.cipher?.let { store.completeBiometricEnrollment(it) } == true
+                onResult(
+                    enabled,
+                    if (enabled) null
+                    else if (isPersian) "فعال‌سازی ورود با اثر انگشت انجام نشد." else "Biometric login could not be enabled."
+                )
+            }
+
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                val userStopped = errorCode == BiometricPrompt.ERROR_USER_CANCELED ||
+                        errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
+                        errorCode == BiometricPrompt.ERROR_CANCELED
+                onResult(false, if (userStopped) null else errString.toString().takeIf { it.isNotBlank() })
+            }
+        }
+    )
+    prompt.authenticate(
+        BiometricPrompt.PromptInfo.Builder()
+            .setTitle(if (isPersian) "فعال‌سازی ورود با اثر انگشت" else "Enable biometric login")
+            .setSubtitle(if (isPersian) "برای فعال‌سازی، اثر انگشت خود را تأیید کنید" else "Confirm your fingerprint to enable login")
+            .setNegativeButtonText(if (isPersian) "انصراف" else "Cancel")
+            .build(),
+        BiometricPrompt.CryptoObject(cipher)
+    )
 }

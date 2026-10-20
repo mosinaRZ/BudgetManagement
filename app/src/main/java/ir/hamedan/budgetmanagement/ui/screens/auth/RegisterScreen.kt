@@ -104,6 +104,13 @@ fun RegisterScreen(
     var loading by remember { mutableStateOf(false) }
     var acceptedTerms by remember { mutableStateOf(false) }
 
+    // A guest workspace on this device: ask what happens to its data before the account is made.
+    val guestStore = remember { app.container.guestModeStore }
+    val hasGuestData = remember { guestStore.hasWorkspace() }
+    var showGuestDataChoice by remember { mutableStateOf(hasGuestData) }
+    // true = move the guest data into the new account, false = delete it. Null until answered.
+    var moveGuestData by remember { mutableStateOf<Boolean?>(null) }
+
     // One ticker drives the resend countdown.
     LaunchedEffect(Unit) {
         while (true) {
@@ -178,12 +185,36 @@ fun RegisterScreen(
                             otpCode = phoneCode
                         )
                     )
-                        .onSuccess { result -> recoveryKey = result.recoveryKey }
+                        .onSuccess { result ->
+                            // The guest data is applied when this account signs in, as chosen above.
+                            if (hasGuestData) {
+                                guestStore.savePendingRegistrationChoice(
+                                    phone = validPhone,
+                                    discardGuestData = moveGuestData != true
+                                )
+                            }
+                            recoveryKey = result.recoveryKey
+                        }
                         .onFailure { error = authErrorMessage(it, isPersian, AuthContext.REGISTER) }
                     loading = false
                 }
             }
         }
+    }
+
+    if (showGuestDataChoice) {
+        GuestRegisterChoiceDialog(
+            isPersian = isPersian,
+            onMoveToNewAccount = {
+                moveGuestData = true
+                showGuestDataChoice = false
+            },
+            onDeleteGuestData = {
+                moveGuestData = false
+                showGuestDataChoice = false
+            },
+            onCancel = onBack
+        )
     }
 
     AuthScreenContainer {

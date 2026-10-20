@@ -1,6 +1,8 @@
 package ir.hamedan.budgetmanagement.di
 
 import android.content.Context
+import ir.hamedan.budgetmanagement.data.guest.GuestModeManager
+import ir.hamedan.budgetmanagement.data.guest.GuestModeStore
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.SyncLocalDataSource
 import ir.hamedan.budgetmanagement.data.local.SyncLocalDataSourceImpl
@@ -71,6 +73,17 @@ class AppContainer(context: Context) {
         SyncEngine(database, syncApi, authSessionStore, syncKeyManager)
     }
 
+    val guestModeStore: GuestModeStore by lazy { GuestModeStore(appContext) }
+
+    val guestModeManager: GuestModeManager by lazy {
+        GuestModeManager(
+            store = guestModeStore,
+            userDao = database.userDao(),
+            syncStateRepository = syncStateRepository,
+            syncLocalDataSource = syncLocalDataSource
+        )
+    }
+
     val authRepository: AuthRepository by lazy {
         AuthRepositoryImpl(
             authApi = authApi,
@@ -84,7 +97,8 @@ class AppContainer(context: Context) {
             rememberedLoginStore = rememberedLoginStore,
             syncScheduler = syncScheduler,
             accountApi = accountApi,
-            deviceInfoProvider = deviceInfoProvider
+            deviceInfoProvider = deviceInfoProvider,
+            guestModeManager = guestModeManager
         )
     }
 
@@ -95,7 +109,9 @@ class AppContainer(context: Context) {
             profileApi = profileApi,
             authApi = authApi,
             userDao = database.userDao(),
-            sessionStore = authSessionStore
+            sessionStore = authSessionStore,
+            guestModeStore = guestModeStore,
+            guestModeManager = guestModeManager
         )
     }
 

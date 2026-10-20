@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.data.repository
 
+import ir.hamedan.budgetmanagement.data.guest.GuestModeManager
+import ir.hamedan.budgetmanagement.data.guest.GuestModeStore
 import ir.hamedan.budgetmanagement.data.local.dao.UserDao
 import ir.hamedan.budgetmanagement.data.local.models.UserEntity
 import ir.hamedan.budgetmanagement.data.network.AuthApi
@@ -13,19 +15,27 @@ class ProfileRepositoryImpl(
     private val profileApi: ProfileApi,
     private val authApi: AuthApi,
     private val userDao: UserDao,
-    private val sessionStore: AuthSessionStore
+    private val sessionStore: AuthSessionStore,
+    private val guestModeStore: GuestModeStore,
+    private val guestModeManager: GuestModeManager
 ) : ProfileRepository {
+
+    /** In guest mode the profile is purely local: no request is ever sent to the server. */
+    private val isGuest: Boolean get() = guestModeStore.isSessionActive
 
     override fun observeLocalProfile(userId: String): Flow<UserEntity?> = userDao.observeUserById(userId)
 
-    override suspend fun refresh(): Result<UserEntity> = withContext(Dispatchers.IO) {
-        runCatching {
-            val profile = profileApi.getProfile()
-            require(sessionStore.userId() == profile.userId) { "Profile does not belong to the signed-in account." }
-            val current = userDao.getById(profile.userId)
-            val entity = profile.toEntity(current)
-            userDao.insert(entity)
-            entity
+    override suspend fun refresh(): Result<UserEntity> {
+        if (isGuest) return guestModeManager.ensureGuestProfile()
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val profile = profileApi.getProfile()
+                require(sessionStore.userId() == profile.userId) { "Profile does not belong to the signed-in account." }
+                val current = userDao.getById(profile.userId)
+                val entity = profile.toEntity(current)
+                userDao.insert(entity)
+                entity
+            }
         }
     }
 
@@ -34,25 +44,31 @@ class ProfileRepositoryImpl(
         lastName: String,
         gender: String,
         birthDate: String?
-    ): Result<UserEntity> = withContext(Dispatchers.IO) {
-        runCatching {
-            val profile = profileApi.updateProfile(
-                ProfileApi.UpdateProfileInput(firstName.trim(), lastName.trim(), gender, birthDate)
-            )
-            val current = userDao.getById(profile.userId)
-            val entity = profile.toEntity(current)
-            userDao.insert(entity)
-            entity
+    ): Result<UserEntity> {
+        if (isGuest) return guestModeManager.updateGuestProfile(firstName, lastName, gender, birthDate)
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val profile = profileApi.updateProfile(
+                    ProfileApi.UpdateProfileInput(firstName.trim(), lastName.trim(), gender, birthDate)
+                )
+                val current = userDao.getById(profile.userId)
+                val entity = profile.toEntity(current)
+                userDao.insert(entity)
+                entity
+            }
         }
     }
 
-    override suspend fun requestEmailOtp(email: String): Result<AuthApi.OtpResponse> =
-        withContext(Dispatchers.IO) {
+    override suspend fun requestEmailOtp(email: String): Result<AuthApi.OtpResponse> {
+        if (isGuest) return Result.failure(IllegalStateException(GUEST_NO_EMAIL))
+        return withContext(Dispatchers.IO) {
             runCatching { authApi.requestOtp(email.trim(), "email", "EMAIL_VERIFICATION") }
         }
+    }
 
-    override suspend fun updateEmail(email: String, challengeId: String, code: String): Result<UserEntity> =
-        withContext(Dispatchers.IO) {
+    override suspend fun updateEmail(email: String, challengeId: String, code: String): Result<UserEntity> {
+        if (isGuest) return Result.failure(IllegalStateException(GUEST_NO_EMAIL))
+        return withContext(Dispatchers.IO) {
             runCatching {
                 val profile = profileApi.updateEmail(
                     ProfileApi.UpdateEmailInput(email.trim(), challengeId, code)
@@ -63,6 +79,7 @@ class ProfileRepositoryImpl(
                 entity
             }
         }
+    }
 
     private fun ProfileApi.Profile.toEntity(current: UserEntity?): UserEntity {
         return UserEntity(
@@ -81,3 +98,5 @@ class ProfileRepositoryImpl(
         )
     }
 }
+
+private const val GUEST_NO_EMAIL = "guest_no_email"
