@@ -20,8 +20,6 @@
 <a id="english"></a>
 ## English
 
-> *Presentation edition — written from the marketing seat. Sections 1–7 tell the product story; sections 8–15 are the technical and legal reference for builders and reviewers.*
-
 ## 1. Executive summary
 
 **Cidna** (Persian: **سیدنا**) turns scattered receipts, bank texts and mental arithmetic into one clear picture of where your money goes — in your language, in your calendar, in your currency, on the phone you already carry.
@@ -331,8 +329,6 @@ Project and legal contact: **cidna.app@gmail.com**
 <div dir="rtl">
 
 ## فارسی
-
-> *نسخه ارائه — از زاویه دید مدیر بازاریابی. بخش‌های ۱ تا ۷ داستان محصول را روایت می‌کنند و بخش‌های ۸ تا ۱۵ مرجع فنی و حقوقی برای توسعه‌دهندگان و بازبین‌ها هستند.*
 
 ## ۱. خلاصه مدیریتی
 
