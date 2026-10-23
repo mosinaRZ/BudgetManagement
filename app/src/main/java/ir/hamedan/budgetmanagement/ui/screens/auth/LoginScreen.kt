@@ -195,7 +195,14 @@ fun LoginScreen(
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 super.onAuthenticationSucceeded(result)
                 // Local unlock only. No access/refresh token is touched and no network request is made.
-                finishLocalUnlock()
+                // The hardware key must really have been released, not merely the prompt dismissed.
+                if (result.cryptoObject?.cipher?.let { rememberedLoginStore.confirmBiometric(it) } == true) {
+                    finishLocalUnlock()
+                } else {
+                    isLoggingIn = false
+                    biometricPromptShown = false
+                    errorMessage = if (isPersian) "ورود بیومتریک انجام نشد؛ با رمز عبور ادامه دهید." else "Biometric login failed; continue with your password."
+                }
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
@@ -260,13 +267,12 @@ fun LoginScreen(
                         val activity = context as? FragmentActivity
                         val biometricCipher = rememberedLoginStore.prepareEncryptionCipher()
                         if (SharedPreferences.getBiometricEnabled(context) && activity != null && biometricCipher != null && !rememberedLoginStore.hasBiometricCredential()) {
-                            val passwordToRemember = password
                             val prompt = BiometricPrompt(
                                 activity,
                                 ContextCompat.getMainExecutor(context),
                                 object : BiometricPrompt.AuthenticationCallback() {
                                     override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                                        result.cryptoObject?.cipher?.let { rememberedLoginStore.savePassword(it, passwordToRemember) }
+                                        result.cryptoObject?.cipher?.let { rememberedLoginStore.enrollBiometric(it) }
                                         isLoggingIn = false
                                         password = ""
                                         onLoginSuccess()

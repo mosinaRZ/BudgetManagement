@@ -6,7 +6,7 @@ import org.json.JSONObject
 class AccountApi(private val client: AuthenticatedApiClient) {
 
     /**
-     * Changes the account password. The server verifies [ChangePasswordInput.currentPassword],
+     * Changes the account password. The server verifies [ChangePasswordInput.currentAuthSecret],
      * stores the new opaque key envelope, revokes every other session and returns a fresh session
      * for this device.
      *
@@ -20,8 +20,8 @@ class AccountApi(private val client: AuthenticatedApiClient) {
         onSessionIssued: (AuthApi.ResetPasswordResponse) -> Unit
     ) {
         val body = JSONObject()
-            .put("current_password", input.currentPassword)
-            .put("new_password", input.newPassword)
+            .put("current_auth_secret", input.currentAuthSecret)
+            .put("new_auth_secret", input.newAuthSecret)
             .put("device_id", input.deviceId)
             .put("kdf_salt", input.kdfSalt)
             .put("password_key_envelope", input.passwordKeyEnvelope)
@@ -51,7 +51,7 @@ class AccountApi(private val client: AuthenticatedApiClient) {
     }
 
     /**
-     * Soft-deletes the signed-in account (server flag isDeleted=true). The password is re-verified
+     * Soft-deletes the signed-in account (server flag isDeleted=true). The password-derived authentication secret is re-verified
      * by the server. The account stays restorable for a grace period by signing in again.
      *
      * The server revokes every refresh token the moment this succeeds, so [onDeleted] runs while
@@ -59,8 +59,8 @@ class AccountApi(private val client: AuthenticatedApiClient) {
      * try to refresh with a dead token (which would be reported as an unexpected session end)
      * before the local session has been dropped.
      */
-    fun deleteAccount(password: String, onDeleted: () -> Unit) {
-        val body = JSONObject().put("password", password)
+    fun deleteAccount(authSecret: String, onDeleted: () -> Unit) {
+        val body = JSONObject().put("auth_secret", authSecret)
         synchronized(client) {
             val response = client.request("POST", "/api/v1/account/delete", body)
             if (response.statusCode !in 200..299) {
@@ -71,8 +71,8 @@ class AccountApi(private val client: AuthenticatedApiClient) {
     }
 
     data class ChangePasswordInput(
-        val currentPassword: String,
-        val newPassword: String,
+        val currentAuthSecret: String,
+        val newAuthSecret: String,
         val deviceId: String,
         val kdfSalt: String,
         val passwordKeyEnvelope: String,

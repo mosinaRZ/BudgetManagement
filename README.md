@@ -50,7 +50,7 @@
 ## 3. Positioning: three pillars
 
 1. **Local-first.** Your records live in an encrypted on-device database. Day-to-day use is fast and works offline; the backend is only needed for accounts and sync.
-2. **Private by design.** Financial records are encrypted on the device *before* upload, so the sync server stores ciphertext rather than readable data (exact scope and limits are stated honestly in [Security model](#9-security-model)).
+2. **Private by design.** Financial records are **end-to-end encrypted** on the device *before* upload, and your password never leaves the phone; the sync server stores only ciphertext it cannot read (exact scope and limits are stated in [Security model](#9-security-model)).
 3. **Made for Persian and English speakers.** Full RTL/LTR, Jalali calendar, Toman/Rial display and Persian bank-SMS recognition.
 
 > **Naming.** The product name is **Cidna** in English and **سیدنا** in Persian. "Budget Management" is only a descriptive phrase for what the app does, and the Kotlin package (`ir.hamedan.budgetmanagement`) is a historical identifier that is kept unchanged because it is the Android application ID.
@@ -89,7 +89,7 @@ Amounts are stored as integers (Toman) and converted at the UI boundary, so floa
 
 ## 7. Our trust promise (read with section 9)
 
-We say what we can prove: records are encrypted before upload; passwords are stored only as Argon2id hashes; there is no advertising, analytics or third-party tracking; and account deletion is soft for 30 days, then permanent. We deliberately **do not** claim "end-to-end encrypted" or "zero-knowledge", because the current protocol does not protect against a fully compromised running server — [section 9](#9-security-model) explains the exact scope.
+We say what we can prove: financial records are end-to-end encrypted before upload; your password and recovery key are never sent to our servers (we store only an Argon2id hash of a password-derived sign-in value); there is no advertising, analytics or third-party tracking; and account deletion is soft for 30 days, then permanent. We claim end-to-end encryption of financial records only, not "zero-knowledge" of everything: account details such as phone number and email are visible to the service — [section 9](#9-security-model) explains the exact scope.
 
 **Call to action.** Install Cidna from Google Play (or the direct build), try it as a guest today, and create an account when you want your records on more than one device. Questions, partnerships or press: **cidna.app@gmail.com**.
 
@@ -118,13 +118,15 @@ The whole backend (HTTPS, API, MongoDB, backups) runs on one VPS with Docker Com
 What the project does:
 
 - **On device:** Room database encrypted with SQLCipher; the passphrase is random and kept in `EncryptedSharedPreferences` (Android Keystore-backed). Tokens and keys are stored in encrypted preferences. Optional biometric credential uses a Keystore key that requires strong biometrics.
-- **Before upload:** every synced record is encrypted with a random 256-bit data key using AES-256-GCM. The data key is stored on the server only in *wrapped* form: once under a key derived from the user's password and once under a key derived from the recovery key (PBKDF2-HMAC-SHA256, 600,000 iterations for newly created envelopes; older envelopes remain readable). This protects against a database dump alone, but the current authentication/recovery protocol does not guarantee that an operator or attacker controlling the live server cannot access plaintext data.
-- **Authentication:** passwords are hashed with Argon2id; short-lived JWT access tokens (HS256, issuer-checked, session-versioned); rotating refresh tokens with reuse detection; account lockout after repeated failures; OTP with attempt limits; per-IP and per-user rate limiting.
+- **Before upload:** every synced record is encrypted with a random 256-bit data key using AES-256-GCM. The data key is stored on the server only in *wrapped* form: once under a key derived from the user's password and once under a key derived from the recovery key. **Protocol v2:** the device derives a master key with PBKDF2-HMAC-SHA256 (NFKC-normalised password, 600,000 iterations, per-account salt) and splits it with HKDF into two independent values — a *wrapping key* that never leaves the device and an *authentication secret* that is the only thing sent to the server. Recovery works the same way with a random 256-bit recovery key (a derived *proof* is sent, the key never is). Envelopes are AES-256-GCM, bound to their purpose through AAD. The server therefore holds neither the password, nor the recovery key, nor any key able to unwrap the data key.
+- **Authentication:** the password-derived authentication secret is hashed again with Argon2id (a database leak yields nothing directly usable); clients refuse KDF parameters below the supported minimum; short-lived JWT access tokens (HS256, issuer-checked, session-versioned); rotating refresh tokens with reuse detection; account lockout after repeated failures; OTP with attempt limits; per-IP and per-user rate limiting.
 - **Transport and deployment:** HTTPS only (cleartext is permitted solely in debug builds); MongoDB and the API are reachable only on the internal Docker network; production start-up refuses weak or missing secrets.
 
 Scope and limits (please read):
 
-- The sync server cannot read your data **from a database dump or backup alone**. Because the same password is used both to sign in (it is sent to the server over HTTPS and verified there) and to derive the key that wraps the data key, this design does **not** protect against a malicious or fully compromised *running* server. Do not describe the project as "end-to-end encrypted" or "zero-knowledge" without this qualification.
+- Financial records are end-to-end encrypted: neither the operator nor an attacker who controls the server can decrypt them without guessing the user's password. The residual risk is offline guessing of **weak** passwords by someone who captures the authentication secret (the same model as mainstream password managers), which is why long unique passwords are encouraged and the KDF is expensive.
+- Not covered by the encryption: account metadata the service needs to operate (phone number, email, profile fields, device list, timing and size of sync traffic). Do not describe the project as "zero-knowledge".
+- Screen privacy: the app window is `FLAG_SECURE` by default (no screenshots, blank Recents), user-switchable in Settings. Android backup and device transfer are fully excluded.
 - If a user loses **both** the password and the recovery key, synced data cannot be recovered.
 - Security libraries are not a substitute for an independent audit. Review the implementation and your deployment before making compliance claims.
 
@@ -227,9 +229,11 @@ Never commit secrets, keystores or `.env` files.
 ```http
 GET  /health
 
-POST /auth/otp/request       POST /auth/register       POST /auth/login
-POST /auth/refresh           POST /auth/logout
+POST /auth/otp/request       POST /auth/register       POST /auth/login/params
+POST /auth/login             POST /auth/refresh        POST /auth/logout
 POST /auth/recovery/prepare  POST /auth/password/reset
+# auth_secret / new_auth_secret / current_auth_secret / recovery_proof are values
+# derived on the device - never the password itself.
 
 # Authenticated (Bearer token)
 POST   /api/v1/auth/password/change
@@ -297,7 +301,7 @@ The backend serves the Privacy Policy, Terms of Service, open-source notices and
 | Data | Purpose | Retention |
 |---|---|---|
 | Phone number (email, name, gender and birth date optional) | Account, sign-in, OTP | While the account exists |
-| Password | Authentication | Stored only as an Argon2id hash |
+| Password-derived sign-in value (the password itself is never sent) | Authentication | Stored only as an Argon2id hash |
 | Encrypted financial records and wrapped keys | Multi-device sync | While the account exists |
 | Device name/model, OS and app version, IP (shown masked), installation hash | Device list and new-device alerts | Device activity ≤ 30 days |
 | Temporary sync operations | Sync reliability | ≤ 7 days |
@@ -359,7 +363,7 @@ Project and legal contact: **cidna.app@gmail.com**
 ## ۳. جایگاه‌یابی: سه ستون
 
 1. **محلی‌محور (Local-first).** سوابق شما در پایگاه داده رمزنگاری‌شده روی خود گوشی است. استفاده روزمره سریع است و آفلاین هم کار می‌کند؛ بک‌اند فقط برای حساب کاربری و همگام‌سازی لازم است.
-2. **حریم خصوصی از ابتدا.** اطلاعات مالی پیش از ارسال روی دستگاه رمزنگاری می‌شوند و سرور داده رمزشده را نگه می‌دارد، نه داده خوانا (دامنه دقیق و محدودیت‌ها صادقانه در [مدل امنیتی](#۹-مدل-امنیتی) آمده است).
+2. **حریم خصوصی از ابتدا.** اطلاعات مالی پیش از ارسال روی دستگاه **به‌صورت سرتاسری (End-to-End) رمزنگاری** می‌شوند و گذرواژه‌ی شما هرگز از گوشی خارج نمی‌شود؛ سرور فقط داده‌ی رمزشده‌ای را نگه می‌دارد که نمی‌تواند بخواند (دامنه دقیق و محدودیت‌ها در [مدل امنیتی](#۹-مدل-امنیتی) آمده است).
 3. **ساخته‌شده برای فارسی‌زبان و انگلیسی‌زبان.** پشتیبانی کامل از راست‌به‌چپ و چپ‌به‌راست، تقویم جلالی، نمایش تومان/ریال و تشخیص پیامک‌های بانکی ایران.
 
 > **درباره نام.** نام محصول در فارسی **سیدنا** و در انگلیسی **Cidna** است. عبارت «مدیریت بودجه» صرفاً توصیف کارکرد برنامه است و نام پکیج کاتلین (`ir.hamedan.budgetmanagement`) یک شناسه تاریخی است که چون همان Application ID اندروید است، عمداً تغییر نکرده است.
@@ -398,7 +402,7 @@ Project and legal contact: **cidna.app@gmail.com**
 
 ## ۷. تعهد ما در برابر اعتماد (همراه با بخش ۹ بخوانید)
 
-آنچه می‌توانیم ثابت کنیم را می‌گوییم: سوابق پیش از ارسال رمزنگاری می‌شوند؛ گذرواژه‌ها فقط به‌صورت هش Argon2id نگهداری می‌شوند؛ هیچ تبلیغ، تحلیل رفتار یا ردیاب شخص ثالثی وجود ندارد؛ و حذف حساب تا ۳۰ روز نرم است و پس از آن دائمی. عمداً **ادعا نمی‌کنیم** «رمزنگاری سرتاسری» یا «zero-knowledge» داریم، چون پروتکل فعلی در برابر سرورِ کاملاً نفوذشده و در حال اجرا محافظت نمی‌کند — دامنه دقیق در [بخش ۹](#۹-مدل-امنیتی) آمده است.
+آنچه می‌توانیم ثابت کنیم را می‌گوییم: سوابق مالی پیش از ارسال به‌صورت سرتاسری رمزنگاری می‌شوند؛ گذرواژه و کلید بازیابی هرگز به سرور ارسال نمی‌شوند (فقط هش Argon2id یک مقدار ورودِ مشتق‌شده از گذرواژه نگهداری می‌شود)؛ هیچ تبلیغ، تحلیل رفتار یا ردیاب شخص ثالثی وجود ندارد؛ و حذف حساب تا ۳۰ روز نرم است و پس از آن دائمی. رمزنگاری سرتاسری را فقط برای سوابق مالی ادعا می‌کنیم، نه «zero-knowledge» برای همه چیز: اطلاعات حساب مانند شماره موبایل و ایمیل برای سرویس قابل‌مشاهده است — دامنه دقیق در [بخش ۹](#۹-مدل-امنیتی) آمده است.
 
 **دعوت به اقدام.** سیدنا را از گوگل‌پلی (یا نسخه direct) نصب کنید، همین امروز به‌عنوان مهمان امتحانش کنید و وقتی خواستید سوابقتان روی بیش از یک دستگاه باشد، حساب بسازید. سؤال، همکاری یا رسانه: **cidna.app@gmail.com**.
 
@@ -431,13 +435,15 @@ Project and legal contact: **cidna.app@gmail.com**
 آنچه پروژه انجام می‌دهد:
 
 - **روی دستگاه:** پایگاه داده Room با SQLCipher رمزنگاری می‌شود؛ گذرواژه آن تصادفی است و در `EncryptedSharedPreferences` (متکی بر Android Keystore) نگهداری می‌شود. توکن‌ها و کلیدها در تنظیمات رمزنگاری‌شده ذخیره می‌شوند. اعتبارنامه زیست‌سنجی اختیاری از کلید Keystore استفاده می‌کند که زیست‌سنجی قوی را الزامی می‌کند.
-- **پیش از ارسال:** هر رکورد همگام‌سازی‌شده با یک کلید داده تصادفی ۲۵۶ بیتی و AES-256-GCM رمزنگاری می‌شود. کلید داده روی سرور فقط به‌صورت *بسته‌بندی‌شده* نگه داشته می‌شود: یک‌بار با کلیدی مشتق‌شده از گذرواژه و یک‌بار با کلیدی مشتق‌شده از کلید بازیابی (PBKDF2-HMAC-SHA256؛ برای envelopeهای جدید ۶۰۰٬۰۰۰ تکرار و سازگاری خواندن با envelopeهای قدیمی). این کار در برابر دسترسی صرف به dump پایگاه داده محافظت می‌کند، اما پروتکل فعلی تضمین نمی‌کند که اپراتور یا مهاجمِ کنترل‌کننده سرور فعال نتواند به داده خام دسترسی پیدا کند.
-- **احراز هویت:** گذرواژه‌ها با Argon2id هش می‌شوند؛ توکن دسترسی JWT کوتاه‌عمر (HS256، با بررسی issuer و نسخه نشست)؛ توکن نوسازی چرخشی با تشخیص استفاده مجدد؛ قفل حساب پس از تلاش‌های ناموفق مکرر؛ OTP با محدودیت تعداد تلاش؛ محدودسازی نرخ درخواست برای هر IP و هر کاربر.
+- **پیش از ارسال:** هر رکورد همگام‌سازی‌شده با یک کلید داده تصادفی ۲۵۶ بیتی و AES-256-GCM رمزنگاری می‌شود. کلید داده روی سرور فقط به‌صورت *بسته‌بندی‌شده* نگه داشته می‌شود: یک‌بار با کلیدی مشتق‌شده از گذرواژه و یک‌بار با کلیدی مشتق‌شده از کلید بازیابی. **پروتکل نسخه ۲:** دستگاه با PBKDF2-HMAC-SHA256 (گذرواژه‌ی نرمال‌شده با NFKC، ۶۰۰٬۰۰۰ تکرار، salt اختصاصی هر حساب) یک کلید اصلی می‌سازد و با HKDF آن را به دو مقدار مستقل تقسیم می‌کند: *کلید بسته‌بندی* که هرگز از دستگاه خارج نمی‌شود و *رمز احراز هویت* که تنها چیزی است که به سرور فرستاده می‌شود. بازیابی هم همین‌طور است (کلید بازیابی ۲۵۶ بیتی تصادفی؛ فقط یک «proof» مشتق‌شده ارسال می‌شود). envelopeها AES-256-GCM هستند و با AAD به کاربردشان گره خورده‌اند. بنابراین سرور نه گذرواژه، نه کلید بازیابی و نه هیچ کلیدی که کلید داده را باز کند در اختیار ندارد.
+- **احراز هویت:** رمز احراز هویتِ مشتق‌شده از گذرواژه دوباره با Argon2id هش می‌شود (نشت پایگاه داده چیز قابل‌استفاده‌ای نمی‌دهد)؛ کلاینت پارامترهای KDF ضعیف‌تر از حداقل را رد می‌کند؛ توکن دسترسی JWT کوتاه‌عمر (HS256، با بررسی issuer و نسخه نشست)؛ توکن نوسازی چرخشی با تشخیص استفاده مجدد؛ قفل حساب پس از تلاش‌های ناموفق مکرر؛ OTP با محدودیت تعداد تلاش؛ محدودسازی نرخ درخواست برای هر IP و هر کاربر.
 - **ارتباط و استقرار:** فقط HTTPS (ترافیک بدون رمز فقط در نسخه debug مجاز است)؛ MongoDB و API فقط روی شبکه داخلی Docker در دسترس‌اند؛ در حالت production اجرای سرویس با secretهای ضعیف یا نامعتبر متوقف می‌شود.
 
 دامنه و محدودیت‌ها (لطفاً بخوانید):
 
-- سرور **فقط از روی یک نسخه پشتیبان یا dump پایگاه داده** نمی‌تواند داده شما را بخواند. چون یک گذرواژه هم برای ورود (به سرور ارسال و همان‌جا بررسی می‌شود) و هم برای ساخت کلیدِ بسته‌بندی کلید داده استفاده می‌شود، این طراحی در برابر **سرور مخرب یا کاملاً نفوذشده‌ای که در حال اجراست** محافظت نمی‌کند. بدون این توضیح، پروژه را «رمزنگاری سرتاسری» یا «zero-knowledge» معرفی نکنید.
+- سوابق مالی سرتاسری رمزنگاری می‌شوند: نه اپراتور و نه مهاجمی که سرور را در اختیار دارد بدون حدس زدن گذرواژه‌ی کاربر نمی‌تواند آن‌ها را رمزگشایی کند. ریسک باقی‌مانده، حدس آفلاینِ گذرواژه‌های **ضعیف** توسط کسی است که رمز احراز هویت را ضبط کرده باشد (همان مدل مدیرهای گذرواژه‌ی رایج)؛ به همین دلیل گذرواژه‌ی بلند و منحصربه‌فرد توصیه می‌شود و KDF سنگین است.
+- زیر پوشش رمزنگاری نیست: فراداده‌ای که سرویس برای کار لازم دارد (شماره موبایل، ایمیل، نمایه، فهرست دستگاه‌ها، زمان و حجم همگام‌سازی). پروژه را «zero-knowledge» معرفی نکنید.
+- حریم صفحه: پنجره‌ی برنامه به‌طور پیش‌فرض `FLAG_SECURE` است (بدون اسکرین‌شات و Recents خالی) و کاربر در تنظیمات می‌تواند آن را تغییر دهد. بکاپ و انتقال دستگاه کاملاً مستثنا شده‌اند.
 - اگر کاربر **هم** گذرواژه **و هم** کلید بازیابی را گم کند، داده‌های همگام‌سازی‌شده قابل بازیابی نیست.
 - کتابخانه‌های امنیتی جایگزین ممیزی مستقل نیستند. پیش از ادعای انطباق با الزامات قانونی، پیاده‌سازی و استقرار را بازبینی کنید.
 
@@ -554,9 +560,11 @@ curl http://localhost:8080/health
 ```http
 GET  /health
 
-POST /auth/otp/request       POST /auth/register       POST /auth/login
-POST /auth/refresh           POST /auth/logout
+POST /auth/otp/request       POST /auth/register       POST /auth/login/params
+POST /auth/login             POST /auth/refresh        POST /auth/logout
 POST /auth/recovery/prepare  POST /auth/password/reset
+# auth_secret / new_auth_secret / current_auth_secret / recovery_proof are values
+# derived on the device - never the password itself.
 
 # Authenticated (Bearer token)
 POST   /api/v1/auth/password/change
@@ -630,7 +638,7 @@ GET /privacy-policy   GET /terms   GET /licenses   GET /account-deletion
 | داده | هدف | مدت نگهداری |
 |---|---|---|
 | شماره موبایل (ایمیل، نام، جنسیت و تاریخ تولد اختیاری) | حساب کاربری، ورود، OTP | تا زمانی که حساب وجود دارد |
-| گذرواژه | احراز هویت | فقط به‌صورت هش Argon2id |
+| مقدار ورودِ مشتق‌شده از گذرواژه (خود گذرواژه ارسال نمی‌شود) | احراز هویت | فقط به‌صورت هش Argon2id |
 | سوابق مالی رمزشده و کلیدهای بسته‌بندی‌شده | همگام‌سازی چنددستگاهی | تا زمانی که حساب وجود دارد |
 | نام/مدل دستگاه، نسخه سیستم‌عامل و برنامه، IP (ماسک‌شده نمایش داده می‌شود)، هش نصب | فهرست دستگاه‌ها و اعلان دستگاه جدید | فعالیت دستگاه‌ها حداکثر ۳۰ روز |
 | عملیات موقت همگام‌سازی | پایداری همگام‌سازی | حداکثر ۷ روز |

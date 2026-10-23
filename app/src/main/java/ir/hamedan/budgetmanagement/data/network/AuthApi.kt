@@ -19,10 +19,26 @@ class AuthApi(private val client: ApiHttpClient) {
         )
     }
 
+    /**
+     * Public KDF parameters for [identifier]. The client needs the account salt BEFORE it can
+     * derive its authentication secret; unknown identifiers get a deterministic decoy salt so
+     * the response does not reveal whether an account exists.
+     */
+    fun loginParams(identifier: String): LoginParams {
+        val response = client.request("POST", "/auth/login/params", JSONObject().put("identifier", identifier.trim()))
+        ensureSuccess(response, "ورود ناموفق بود.")
+        val json = response.json()
+        return LoginParams(
+            kdfSalt = json.getString("kdf_salt"),
+            kdfIterations = json.getInt("kdf_iterations"),
+            kdfVersion = json.getInt("kdf_version")
+        )
+    }
+
     fun register(input: RegisterInput): RegisterResponse {
         val body = JSONObject()
             .put("phone_number", input.phoneNumber.trim())
-            .put("password", input.password)
+            .put("auth_secret", input.authSecret)
             .put("device_id", input.deviceId)
             .put("otp_challenge_id", input.otpChallengeId)
             .put("otp_code", input.otpCode)
@@ -48,14 +64,14 @@ class AuthApi(private val client: ApiHttpClient) {
      */
     fun login(
         identifier: String,
-        password: String,
+        authSecret: String,
         deviceId: String,
         deviceInfo: JSONObject? = null,
         restoreAccount: Boolean = false
     ): LoginResponse {
         val body = JSONObject()
             .put("identifier", identifier)
-            .put("password", password)
+            .put("auth_secret", authSecret)
             .put("device_id", deviceId)
         deviceInfo?.let { body.put("device_info", it) }
         if (restoreAccount) body.put("restore_account", true)
@@ -77,11 +93,12 @@ class AuthApi(private val client: ApiHttpClient) {
         )
     }
 
-    fun prepareRecovery(challengeId: String, otpCode: String, recoveryKey: String): RecoveryPreparation {
+    /** [recoveryProof] is derived from the recovery key on the device; the key itself is never sent. */
+    fun prepareRecovery(challengeId: String, otpCode: String, recoveryProof: String): RecoveryPreparation {
         val body = JSONObject()
             .put("otp_challenge_id", challengeId)
             .put("otp_code", otpCode)
-            .put("recovery_key", recoveryKey)
+            .put("recovery_proof", recoveryProof)
         val response = client.request("POST", "/auth/recovery/prepare", body)
         ensureSuccess(response, "بازیابی حساب ناموفق بود.")
         val json = response.json()
@@ -97,7 +114,7 @@ class AuthApi(private val client: ApiHttpClient) {
     fun resetPassword(input: ResetPasswordInput): ResetPasswordResponse {
         val body = JSONObject()
             .put("recovery_session_token", input.recoverySessionToken)
-            .put("new_password", input.newPassword)
+            .put("new_auth_secret", input.newAuthSecret)
             .put("device_id", input.deviceId)
             .put("kdf_salt", input.kdfSalt)
             .put("password_key_envelope", input.passwordKeyEnvelope)
@@ -157,12 +174,14 @@ class AuthApi(private val client: ApiHttpClient) {
         }
     }
 
+    data class LoginParams(val kdfSalt: String, val kdfIterations: Int, val kdfVersion: Int)
+
     data class OtpResponse(val challengeId: String, val expiresAt: Long)
 
     data class RegisterInput(
         val phoneNumber: String,
         val email: String?,
-        val password: String,
+        val authSecret: String,
         val deviceId: String,
         val otpChallengeId: String,
         val otpCode: String,
@@ -218,7 +237,7 @@ class AuthApi(private val client: ApiHttpClient) {
 
     data class ResetPasswordInput(
         val recoverySessionToken: String,
-        val newPassword: String,
+        val newAuthSecret: String,
         val deviceId: String,
         val kdfSalt: String,
         val passwordKeyEnvelope: String,

@@ -22,8 +22,7 @@ class SyncKeyManagerTest {
         val material = manager.createRegistrationMaterial("StrongPassword123!".toCharArray())
 
         manager.initializeFromLogin(
-            password = "StrongPassword123!".toCharArray(),
-            kdfSaltB64 = material.kdfSalt,
+            masterKey = manager.deriveMasterKey("StrongPassword123!".toCharArray(), material.kdfSalt),
             envelopeB64 = material.passwordKeyEnvelope,
             nonceB64 = material.passwordKeyNonce
         )

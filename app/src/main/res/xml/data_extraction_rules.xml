@@ -1,35 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
+    <!--
+      Cidna never participates in Android backup or device-to-device transfer:
+        * the encrypted local database (budget_management.db) is useless without its Keystore-bound
+          key, and a restored copy would also resurrect another device's sync state;
+        * every preference file (session, device identity, sync data key, remembered login,
+          guest mode, app lock, screen privacy, privacy prefs, ...) is bound to this device's
+          Android Keystore master key, which is NOT transferred. Restoring such a file on another
+          device yields undecryptable preferences and crashes at start-up.
+      The account data lives on the server (end-to-end encrypted) and returns after sign-in.
+      android:allowBackup="false" is set as well; these rules also cover adb/transfer paths and
+      stay correct if someone ever flips allowBackup.
+    -->
     <cloud-backup>
-        <exclude domain="database" path="budget_management_db"/>
-        <exclude domain="database" path="budget_management_db-shm"/>
-        <exclude domain="database" path="budget_management_db-wal"/>
-        <exclude domain="sharedpref" path="budget_secure_prefs.xml"/>
-        <exclude domain="sharedpref" path="budget_currency_prefs.xml"/>
-        <exclude domain="sharedpref" path="budget_theme_prefs.xml"/>
-        <exclude domain="sharedpref" path="notification_prefs.xml"/>
-        <exclude domain="sharedpref" path="budget_management_prefs.xml"/>
-        <exclude domain="sharedpref" path="app_prefs.xml"/>
-        <exclude domain="sharedpref" path="settings.xml"/>
-        <exclude domain="sharedpref" path="db_key_prefs.xml"/>
-        <exclude domain="sharedpref" path="budget_auth_session.xml"/>
-        <exclude domain="sharedpref" path="budget_device_identity.xml"/>
-        <exclude domain="sharedpref" path="budget_sync_crypto.xml"/>
+        <!-- Explicit entries for the real Room/SQLCipher database (AppDatabase: "budget_management.db"). -->
+        <exclude domain="database" path="budget_management.db"/>
+        <exclude domain="database" path="budget_management.db-wal"/>
+        <exclude domain="database" path="budget_management.db-shm"/>
+        <exclude domain="database" path="budget_management.db-journal"/>
+        <!-- Whole-domain exclusions: nothing this app stores is ever backed up or transferred,
+             including preference files added in the future. -->
+        <exclude domain="root" path="."/>
+        <exclude domain="file" path="."/>
+        <exclude domain="database" path="."/>
+        <exclude domain="sharedpref" path="."/>
+        <exclude domain="external" path="."/>
+        <exclude domain="device_root" path="."/>
+        <exclude domain="device_file" path="."/>
+        <exclude domain="device_database" path="."/>
+        <exclude domain="device_sharedpref" path="."/>
     </cloud-backup>
     <device-transfer>
-        <exclude domain="database" path="budget_management_db"/>
-        <exclude domain="database" path="budget_management_db-shm"/>
-        <exclude domain="database" path="budget_management_db-wal"/>
-        <exclude domain="sharedpref" path="budget_secure_prefs.xml"/>
-        <exclude domain="sharedpref" path="budget_currency_prefs.xml"/>
-        <exclude domain="sharedpref" path="budget_theme_prefs.xml"/>
-        <exclude domain="sharedpref" path="notification_prefs.xml"/>
-        <exclude domain="sharedpref" path="budget_management_prefs.xml"/>
-        <exclude domain="sharedpref" path="app_prefs.xml"/>
-        <exclude domain="sharedpref" path="settings.xml"/>
-        <exclude domain="sharedpref" path="db_key_prefs.xml"/>
-        <exclude domain="sharedpref" path="budget_auth_session.xml"/>
-        <exclude domain="sharedpref" path="budget_device_identity.xml"/>
-        <exclude domain="sharedpref" path="budget_sync_crypto.xml"/>
+        <!-- Explicit entries for the real Room/SQLCipher database (AppDatabase: "budget_management.db"). -->
+        <exclude domain="database" path="budget_management.db"/>
+        <exclude domain="database" path="budget_management.db-wal"/>
+        <exclude domain="database" path="budget_management.db-shm"/>
+        <exclude domain="database" path="budget_management.db-journal"/>
+        <!-- Whole-domain exclusions: nothing this app stores is ever backed up or transferred,
+             including preference files added in the future. -->
+        <exclude domain="root" path="."/>
+        <exclude domain="file" path="."/>
+        <exclude domain="database" path="."/>
+        <exclude domain="sharedpref" path="."/>
+        <exclude domain="external" path="."/>
+        <exclude domain="device_root" path="."/>
+        <exclude domain="device_file" path="."/>
+        <exclude domain="device_database" path="."/>
+        <exclude domain="device_sharedpref" path="."/>
     </device-transfer>
 </data-extraction-rules>
