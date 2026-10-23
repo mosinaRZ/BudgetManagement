@@ -22,21 +22,9 @@ class ProfileApi(private val client: AuthenticatedApiClient) {
         return parse(response.json())
     }
 
-    fun updateEmail(input: UpdateEmailInput): Profile {
-        val body = JSONObject()
-            .put("email", input.email)
-            .put("otp_challenge_id", input.otpChallengeId)
-            .put("otp_code", input.otpCode)
-        val response = client.request("PUT", "/api/v1/account/email", body)
-        ensureSuccess(response, "تأیید ایمیل ناموفق بود.")
-        return parse(response.json())
-    }
-
     private fun parse(json: JSONObject) = Profile(
         userId = json.getString("user_id"),
         phoneNumber = json.optString("phone_number"),
-        email = json.optString("email").takeIf { it.isNotBlank() },
-        emailVerified = json.optBoolean("email_verified", false),
         firstName = json.optString("first_name"),
         lastName = json.optString("last_name"),
         gender = json.optString("gender").ifBlank { "prefer_not_to_say" },
@@ -52,8 +40,6 @@ class ProfileApi(private val client: AuthenticatedApiClient) {
     data class Profile(
         val userId: String,
         val phoneNumber: String,
-        val email: String?,
-        val emailVerified: Boolean,
         val firstName: String,
         val lastName: String,
         val gender: String,
@@ -67,9 +53,4 @@ class ProfileApi(private val client: AuthenticatedApiClient) {
         val birthDate: String?
     )
 
-    data class UpdateEmailInput(
-        val email: String,
-        val otpChallengeId: String,
-        val otpCode: String
-    )
 }

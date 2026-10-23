@@ -4,7 +4,7 @@ package ir.hamedan.budgetmanagement.ui.screens.auth
 object LoginInputValidator {
     fun validate(identifier: String, password: String, isPersian: Boolean): String? {
         if (identifier.isBlank()) {
-            return if (isPersian) "شماره موبایل یا ایمیل را وارد کنید" else "Enter your phone number or email"
+            return if (isPersian) "شماره موبایل را وارد کنید" else "Enter your phone number"
         }
         if (password.isBlank()) {
             return if (isPersian) "گذرواژه را وارد کنید" else "Enter your password"

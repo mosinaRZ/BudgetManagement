@@ -68,7 +68,7 @@
 | **Analytics** | Summaries and charts, Jalali/Gregorian date presentation |
 | **Export & sharing** | PDF and XLSX export; shareable transaction cards (image) that follow the app's language, direction and currency |
 | **Security** | App lock, optional biometric sign-in, encrypted local database, device list with remote sign-out, new-device alerts |
-| **Accounts** | Phone-based registration with OTP, optional email, password recovery with a recovery key, soft account deletion with a 30-day restore window |
+| **Accounts** | Phone-based registration with OTP, password recovery with a recovery key, soft account deletion with a 30-day restore window |
 | **Convenience** | Light/dark theme, home-screen balance widget, amount-hiding mode, notifications and reminders |
 | **Bank-SMS import** | Detects bank SMS messages and offers them as pending transactions. **Only in the `direct` distribution**; the Google Play build contains no SMS permissions |
 
@@ -89,7 +89,7 @@ Amounts are stored as integers (Toman) and converted at the UI boundary, so floa
 
 ## 7. Our trust promise (read with section 9)
 
-We say what we can prove: financial records are end-to-end encrypted before upload; your password and recovery key are never sent to our servers (we store only an Argon2id hash of a password-derived sign-in value); there is no advertising, analytics or third-party tracking; and account deletion is soft for 30 days, then permanent. We claim end-to-end encryption of financial records only, not "zero-knowledge" of everything: account details such as phone number and email are visible to the service — [section 9](#9-security-model) explains the exact scope.
+We say what we can prove: financial records are end-to-end encrypted before upload; your password and recovery key are never sent to our servers (we store only an Argon2id hash of a password-derived sign-in value); there is no advertising, analytics or third-party tracking; and account deletion is soft for 30 days, then permanent. We claim end-to-end encryption of financial records only, not "zero-knowledge" of everything: account details such as phone number are visible to the service — [section 9](#9-security-model) explains the exact scope.
 
 **Call to action.** Install Cidna from Google Play (or the direct build), try it as a guest today, and create an account when you want your records on more than one device. Questions, partnerships or press: **cidna.app@gmail.com**.
 
@@ -125,12 +125,12 @@ What the project does:
 Scope and limits (please read):
 
 - Financial records are end-to-end encrypted: neither the operator nor an attacker who controls the server can decrypt them without guessing the user's password. The residual risk is offline guessing of **weak** passwords by someone who captures the authentication secret (the same model as mainstream password managers), which is why long unique passwords are encouraged and the KDF is expensive.
-- Not covered by the encryption: account metadata the service needs to operate (phone number, email, profile fields, device list, timing and size of sync traffic). Do not describe the project as "zero-knowledge".
+- Not covered by the encryption: account metadata the service needs to operate (phone number, profile fields, device list, timing and size of sync traffic). Do not describe the project as "zero-knowledge".
 - Screen privacy: the app window is `FLAG_SECURE` by default (no screenshots, blank Recents), user-switchable in Settings. Android backup and device transfer are fully excluded.
 - If a user loses **both** the password and the recovery key, synced data cannot be recovered.
 - Security libraries are not a substitute for an independent audit. Review the implementation and your deployment before making compliance claims.
 
-To report a vulnerability, email **cidna.app@gmail.com** with the subject "Security". Please do not open a public issue for security problems.
+To report a vulnerability, use a private security report. Please do not open a public issue for security problems.
 
 ## 10. Technology stack
 
@@ -188,7 +188,7 @@ Stop it with `docker compose -f docker-compose.dev.yml down`. Add `-v` only if y
 
 ### Deploy the backend (production, single VPS)
 
-Follow `backend/deployments/README.md` (Persian). In short: point a DNS name at the server, copy `.env.production.example` to `.env`, fill **every** value, then run `docker compose up -d --build`. Production mode requires real SMS and email delivery settings and a JWT secret of at least 64 characters.
+Follow `backend/deployments/README.md` (Persian). In short: point a DNS name at the server, copy `.env.production.example` to `.env`, fill **every** value, then run `docker compose up -d --build`. Production mode requires real SMS delivery settings and a JWT secret of at least 64 characters.
 
 ### Build the Android app
 
@@ -217,8 +217,6 @@ Release signing is read from `keystore.properties` (git-ignored) or `RELEASE_*` 
 | `MONGO_URI`, `MONGO_DB_NAME` | Database connection |
 | `TLS_TERMINATED_BY_PROXY`, `TRUSTED_PROXY_CIDRS` | Reverse-proxy HTTPS and trusted client-IP headers |
 | `SMS_WEBHOOK_URL`, `SMS_AUTH_TOKEN` | SMS OTP delivery (required in production) |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | Email OTP delivery (required in production) |
-| `SUPPORT_EMAIL` | Contact address shown on the public legal pages |
 | `DEV_LOG_OTP` | Prints OTPs to the log; refused outside `dev`/`test` |
 | `API_DOMAIN`, `BACKUP_RETENTION_DAYS` | Used by the single-VPS Compose stack |
 
@@ -238,7 +236,7 @@ POST /auth/recovery/prepare  POST /auth/password/reset
 # Authenticated (Bearer token)
 POST   /api/v1/auth/password/change
 GET    /api/v1/account/profile      PUT /api/v1/account/profile
-PUT    /api/v1/account/email        POST /api/v1/account/delete   # soft delete
+POST /api/v1/account/delete   # soft delete
 POST   /api/v1/sync
 GET    /api/v1/devices              GET /api/v1/devices/events
 DELETE /api/v1/devices/{deviceID}
@@ -300,7 +298,7 @@ The backend serves the Privacy Policy, Terms of Service, open-source notices and
 
 | Data | Purpose | Retention |
 |---|---|---|
-| Phone number (email, name, gender and birth date optional) | Account, sign-in, OTP | While the account exists |
+| Phone number (name, gender and birth date optional) | Account, sign-in, OTP | While the account exists |
 | Password-derived sign-in value (the password itself is never sent) | Authentication | Stored only as an Argon2id hash |
 | Encrypted financial records and wrapped keys | Multi-device sync | While the account exists |
 | Device name/model, OS and app version, IP (shown masked), installation hash | Device list and new-device alerts | Device activity ≤ 30 days |
@@ -319,7 +317,7 @@ Account deletion is a **soft delete**: sessions are revoked immediately, the acc
 
 - [ ] Confirm that you hold, or may redistribute, every non-code asset: Lottie animations, share-card backgrounds, banners, icons and fonts.
 - [ ] Keep the privacy policy, the Play Data safety form and the actual behavior of the app consistent with each other.
-- [ ] Use a real `SUPPORT_EMAIL` and review the legal texts with a lawyer.
+- [ ] Review the legal texts with a lawyer.
 - [ ] Keep `LICENSE` and the copyright notice in every distributed copy, and publish the corresponding source.
 
 ## 15. Contact
@@ -381,7 +379,7 @@ Project and legal contact: **cidna.app@gmail.com**
 | **تحلیل مالی** | خلاصه‌ها و نمودارها، نمایش تاریخ جلالی/میلادی |
 | **خروجی و اشتراک‌گذاری** | خروجی PDF و XLSX؛ کارت تصویری تراکنش برای اشتراک‌گذاری، هماهنگ با زبان، جهت متن و واحد پول برنامه |
 | **امنیت** | قفل برنامه، ورود زیست‌سنجی اختیاری، پایگاه داده رمزنگاری‌شده، فهرست دستگاه‌ها با امکان خروج از راه دور، اعلان ورود از دستگاه جدید |
-| **حساب کاربری** | ثبت‌نام با شماره موبایل و OTP، ایمیل اختیاری، بازیابی گذرواژه با کلید بازیابی، حذف نرم حساب با مهلت ۳۰ روزه بازیابی |
+| **حساب کاربری** | ثبت‌نام با شماره موبایل و OTP، بازیابی گذرواژه با کلید بازیابی، حذف نرم حساب با مهلت ۳۰ روزه بازیابی |
 | **امکانات تکمیلی** | تم روشن و تیره، ویجت موجودی، حالت مخفی‌کردن مبالغ، اعلان‌ها و یادآورها |
 | **دریافت از پیامک بانکی** | تشخیص پیامک بانکی و پیشنهاد آن به‌صورت تراکنش در انتظار. **فقط در نسخه `direct`**؛ نسخه گوگل‌پلی هیچ مجوز پیامکی ندارد |
 
@@ -402,7 +400,7 @@ Project and legal contact: **cidna.app@gmail.com**
 
 ## ۷. تعهد ما در برابر اعتماد (همراه با بخش ۹ بخوانید)
 
-آنچه می‌توانیم ثابت کنیم را می‌گوییم: سوابق مالی پیش از ارسال به‌صورت سرتاسری رمزنگاری می‌شوند؛ گذرواژه و کلید بازیابی هرگز به سرور ارسال نمی‌شوند (فقط هش Argon2id یک مقدار ورودِ مشتق‌شده از گذرواژه نگهداری می‌شود)؛ هیچ تبلیغ، تحلیل رفتار یا ردیاب شخص ثالثی وجود ندارد؛ و حذف حساب تا ۳۰ روز نرم است و پس از آن دائمی. رمزنگاری سرتاسری را فقط برای سوابق مالی ادعا می‌کنیم، نه «zero-knowledge» برای همه چیز: اطلاعات حساب مانند شماره موبایل و ایمیل برای سرویس قابل‌مشاهده است — دامنه دقیق در [بخش ۹](#۹-مدل-امنیتی) آمده است.
+آنچه می‌توانیم ثابت کنیم را می‌گوییم: سوابق مالی پیش از ارسال به‌صورت سرتاسری رمزنگاری می‌شوند؛ گذرواژه و کلید بازیابی هرگز به سرور ارسال نمی‌شوند (فقط هش Argon2id یک مقدار ورودِ مشتق‌شده از گذرواژه نگهداری می‌شود)؛ هیچ تبلیغ، تحلیل رفتار یا ردیاب شخص ثالثی وجود ندارد؛ و حذف حساب تا ۳۰ روز نرم است و پس از آن دائمی. رمزنگاری سرتاسری را فقط برای سوابق مالی ادعا می‌کنیم، نه «zero-knowledge» برای همه چیز: اطلاعات حساب مانند شماره موبایل برای سرویس قابل‌مشاهده است — دامنه دقیق در [بخش ۹](#۹-مدل-امنیتی) آمده است.
 
 **دعوت به اقدام.** سیدنا را از گوگل‌پلی (یا نسخه direct) نصب کنید، همین امروز به‌عنوان مهمان امتحانش کنید و وقتی خواستید سوابقتان روی بیش از یک دستگاه باشد، حساب بسازید. سؤال، همکاری یا رسانه: **cidna.app@gmail.com**.
 
@@ -442,12 +440,12 @@ Project and legal contact: **cidna.app@gmail.com**
 دامنه و محدودیت‌ها (لطفاً بخوانید):
 
 - سوابق مالی سرتاسری رمزنگاری می‌شوند: نه اپراتور و نه مهاجمی که سرور را در اختیار دارد بدون حدس زدن گذرواژه‌ی کاربر نمی‌تواند آن‌ها را رمزگشایی کند. ریسک باقی‌مانده، حدس آفلاینِ گذرواژه‌های **ضعیف** توسط کسی است که رمز احراز هویت را ضبط کرده باشد (همان مدل مدیرهای گذرواژه‌ی رایج)؛ به همین دلیل گذرواژه‌ی بلند و منحصربه‌فرد توصیه می‌شود و KDF سنگین است.
-- زیر پوشش رمزنگاری نیست: فراداده‌ای که سرویس برای کار لازم دارد (شماره موبایل، ایمیل، نمایه، فهرست دستگاه‌ها، زمان و حجم همگام‌سازی). پروژه را «zero-knowledge» معرفی نکنید.
+- زیر پوشش رمزنگاری نیست: فراداده‌ای که سرویس برای کار لازم دارد (شماره موبایل، نمایه، فهرست دستگاه‌ها، زمان و حجم همگام‌سازی). پروژه را «zero-knowledge» معرفی نکنید.
 - حریم صفحه: پنجره‌ی برنامه به‌طور پیش‌فرض `FLAG_SECURE` است (بدون اسکرین‌شات و Recents خالی) و کاربر در تنظیمات می‌تواند آن را تغییر دهد. بکاپ و انتقال دستگاه کاملاً مستثنا شده‌اند.
 - اگر کاربر **هم** گذرواژه **و هم** کلید بازیابی را گم کند، داده‌های همگام‌سازی‌شده قابل بازیابی نیست.
 - کتابخانه‌های امنیتی جایگزین ممیزی مستقل نیستند. پیش از ادعای انطباق با الزامات قانونی، پیاده‌سازی و استقرار را بازبینی کنید.
 
-برای گزارش آسیب‌پذیری، ایمیل **cidna.app@gmail.com** را با موضوع «Security» بنویسید و لطفاً مسائل امنیتی را در Issue عمومی مطرح نکنید.
+برای گزارش آسیب‌پذیری، از یک کانال خصوصی و امن گزارش امنیتی استفاده کنید و لطفاً مسائل امنیتی را در Issue عمومی مطرح نکنید.
 
 ## ۱۰. فناوری‌ها
 
@@ -513,7 +511,7 @@ curl http://localhost:8080/health
 
 ### استقرار بک‌اند (production روی یک VPS)
 
-راهنمای `backend/deployments/README.md` را دنبال کنید. خلاصه: یک نام دامنه را روی IP سرور تنظیم کنید، `.env.production.example` را به `.env` کپی کنید، **همه** مقادیر را پر کنید و `docker compose up -d --build` را اجرا کنید. حالت production تنظیمات واقعی ارسال پیامک و ایمیل و JWT secret حداقل ۶۴ کاراکتری می‌خواهد.
+راهنمای `backend/deployments/README.md` را دنبال کنید. خلاصه: یک نام دامنه را روی IP سرور تنظیم کنید، `.env.production.example` را به `.env` کپی کنید، **همه** مقادیر را پر کنید و `docker compose up -d --build` را اجرا کنید. حالت production تنظیمات واقعی ارسال پیامک و JWT secret حداقل ۶۴ کاراکتری می‌خواهد.
 
 ### ساخت برنامه اندروید
 
@@ -546,8 +544,6 @@ curl http://localhost:8080/health
 | `MONGO_URI`، `MONGO_DB_NAME` | اتصال به پایگاه داده |
 | `TLS_TERMINATED_BY_PROXY`، `TRUSTED_PROXY_CIDRS` | HTTPS پشت reverse proxy و اعتماد به هدرهای IP کاربر |
 | `SMS_WEBHOOK_URL`، `SMS_AUTH_TOKEN` | ارسال OTP پیامکی (در production الزامی) |
-| `SMTP_HOST`، `SMTP_PORT`، `SMTP_USER`، `SMTP_PASSWORD`، `EMAIL_FROM` | ارسال OTP ایمیلی (در production الزامی) |
-| `SUPPORT_EMAIL` | نشانی تماس در صفحه‌های حقوقی عمومی |
 | `DEV_LOG_OTP` | چاپ OTP در لاگ؛ خارج از `dev`/`test` پذیرفته نمی‌شود |
 | `API_DOMAIN`، `BACKUP_RETENTION_DAYS` | تنظیمات استقرار تک‌VPS |
 
@@ -569,7 +565,7 @@ POST /auth/recovery/prepare  POST /auth/password/reset
 # Authenticated (Bearer token)
 POST   /api/v1/auth/password/change
 GET    /api/v1/account/profile      PUT /api/v1/account/profile
-PUT    /api/v1/account/email        POST /api/v1/account/delete   # soft delete
+POST /api/v1/account/delete   # soft delete
 POST   /api/v1/sync
 GET    /api/v1/devices              GET /api/v1/devices/events
 DELETE /api/v1/devices/{deviceID}
@@ -637,7 +633,7 @@ GET /privacy-policy   GET /terms   GET /licenses   GET /account-deletion
 
 | داده | هدف | مدت نگهداری |
 |---|---|---|
-| شماره موبایل (ایمیل، نام، جنسیت و تاریخ تولد اختیاری) | حساب کاربری، ورود، OTP | تا زمانی که حساب وجود دارد |
+| شماره موبایل (نام، جنسیت و تاریخ تولد اختیاری) | حساب کاربری، ورود، OTP | تا زمانی که حساب وجود دارد |
 | مقدار ورودِ مشتق‌شده از گذرواژه (خود گذرواژه ارسال نمی‌شود) | احراز هویت | فقط به‌صورت هش Argon2id |
 | سوابق مالی رمزشده و کلیدهای بسته‌بندی‌شده | همگام‌سازی چنددستگاهی | تا زمانی که حساب وجود دارد |
 | نام/مدل دستگاه، نسخه سیستم‌عامل و برنامه، IP (ماسک‌شده نمایش داده می‌شود)، هش نصب | فهرست دستگاه‌ها و اعلان دستگاه جدید | فعالیت دستگاه‌ها حداکثر ۳۰ روز |
@@ -656,7 +652,7 @@ GET /privacy-policy   GET /terms   GET /licenses   GET /account-deletion
 
 - [ ] مطمئن شوید که حق استفاده و بازتوزیع همه دارایی‌های غیرکد را دارید: انیمیشن‌های Lottie، پس‌زمینه کارت‌های اشتراک‌گذاری، بنرها، آیکون‌ها و فونت‌ها.
 - [ ] سیاست حریم خصوصی، فرم Data safety گوگل‌پلی و رفتار واقعی برنامه را با هم هم‌خوان نگه دارید.
-- [ ] از `SUPPORT_EMAIL` واقعی استفاده کنید و متن‌های حقوقی را با وکیل بازبینی کنید.
+- [ ] متن‌های حقوقی را با وکیل بازبینی کنید.
 - [ ] فایل `LICENSE` و اعلان حق نشر را در هر نسخه توزیع‌شده نگه دارید و سورس متناظر را منتشر کنید.
 
 ## ۱۵. تماس

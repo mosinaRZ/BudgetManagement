@@ -4,8 +4,8 @@ import ir.hamedan.budgetmanagement.data.guest.GuestModeManager
 import ir.hamedan.budgetmanagement.data.guest.GuestModeStore
 import ir.hamedan.budgetmanagement.data.local.dao.UserDao
 import ir.hamedan.budgetmanagement.data.local.models.UserEntity
-import ir.hamedan.budgetmanagement.data.network.AuthApi
 import ir.hamedan.budgetmanagement.data.network.ProfileApi
+import ir.hamedan.budgetmanagement.data.network.AuthApi
 import ir.hamedan.budgetmanagement.data.security.AuthSessionStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -59,28 +59,6 @@ class ProfileRepositoryImpl(
         }
     }
 
-    override suspend fun requestEmailOtp(email: String): Result<AuthApi.OtpResponse> {
-        if (isGuest) return Result.failure(IllegalStateException(GUEST_NO_EMAIL))
-        return withContext(Dispatchers.IO) {
-            runCatching { authApi.requestOtp(email.trim(), "email", "EMAIL_VERIFICATION") }
-        }
-    }
-
-    override suspend fun updateEmail(email: String, challengeId: String, code: String): Result<UserEntity> {
-        if (isGuest) return Result.failure(IllegalStateException(GUEST_NO_EMAIL))
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                val profile = profileApi.updateEmail(
-                    ProfileApi.UpdateEmailInput(email.trim(), challengeId, code)
-                )
-                val current = userDao.getById(profile.userId)
-                val entity = profile.toEntity(current)
-                userDao.insert(entity)
-                entity
-            }
-        }
-    }
-
     private fun ProfileApi.Profile.toEntity(current: UserEntity?): UserEntity {
         return UserEntity(
             id = userId,
@@ -90,13 +68,9 @@ class ProfileRepositoryImpl(
             lastName = lastName,
             gender = gender,
             birthDate = birthDate,
-            email = email,
-            emailVerified = emailVerified,
             isLoggedIn = true,
             createdAt = current?.createdAt ?: System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis()
         )
     }
 }
-
-private const val GUEST_NO_EMAIL = "guest_no_email"

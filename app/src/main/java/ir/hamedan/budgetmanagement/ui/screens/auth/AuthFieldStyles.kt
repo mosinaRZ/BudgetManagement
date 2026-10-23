@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 
 /**
- * Text style for credentials (phone, email, password, codes, keys).
+ * Text style for credentials (phone, password, codes, keys).
  *
  * These values are always typed with Latin characters and digits, so the glyphs must stay
  * left-to-right. In a right-to-left layout the text is right-aligned so it lines up with the

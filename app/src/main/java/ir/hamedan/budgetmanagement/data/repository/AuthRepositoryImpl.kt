@@ -111,13 +111,10 @@ class AuthRepositoryImpl(
             val response = authApi.register(
                 AuthApi.RegisterInput(
                     phoneNumber = input.phoneNumber,
-                    email = input.email,
                     authSecret = material.authSecret,
                     deviceId = deviceId,
                     otpChallengeId = input.otpChallengeId,
                     otpCode = input.otpCode,
-                    emailOtpChallengeId = input.emailOtpChallengeId,
-                    emailOtpCode = input.emailOtpCode,
                     kdfSalt = material.kdfSalt,
                     passwordKeyEnvelope = material.passwordKeyEnvelope,
                     passwordKeyNonce = material.passwordKeyNonce,
@@ -128,7 +125,7 @@ class AuthRepositoryImpl(
                 )
             )
             try {
-                persistSession(response, input.password, material.masterKey, phoneNumber = input.phoneNumber, email = input.email)
+                persistSession(response, input.password, material.masterKey, phoneNumber = input.phoneNumber)
             } finally {
                 SyncKeyManager.wipe(material.masterKey)
             }
@@ -282,7 +279,6 @@ class AuthRepositoryImpl(
                 logout().getOrThrow()
             }
             // The fingerprint credential and local password verifier belong to the old account.
-            rememberedLoginStore.clearLocalReauthentication()
             true
         }
     }
@@ -295,7 +291,6 @@ class AuthRepositoryImpl(
         masterKey: ByteArray,
         identifier: String? = null,
         phoneNumber: String? = null,
-        email: String? = null
     ) {
         val deviceId = deviceIdentityStore.getOrCreate()
         val previousUserId = sessionStore.userId() ?: syncStateRepository.get().accountUserId
@@ -332,14 +327,12 @@ class AuthRepositoryImpl(
                 lastName = existingUser?.lastName.orEmpty(),
                 gender = existingUser?.gender ?: "prefer_not_to_say",
                 birthDate = existingUser?.birthDate,
-                email = email ?: identifier?.takeIf { it.contains("@") } ?: existingUser?.email,
-                emailVerified = existingUser?.emailVerified ?: false,
                 isLoggedIn = true,
                 createdAt = existingUser?.createdAt ?: System.currentTimeMillis(),
                 updatedAt = System.currentTimeMillis()
             )
         )
-        rememberedLoginStore.saveIdentifier((identifier ?: phoneNumber ?: email).orEmpty())
+        rememberedLoginStore.saveIdentifier((identifier ?: phoneNumber).orEmpty())
         rememberedLoginStore.savePasswordVerifier(password)
         val state = syncStateRepository.get()
         syncStateRepository.save(state.copy(deviceId = deviceId, accountUserId = response.userId, syncRequired = true))
@@ -351,7 +344,6 @@ class AuthRepositoryImpl(
         password: String,
         masterKey: ByteArray,
         phoneNumber: String? = null,
-        email: String? = null
     ) {
         persistSession(
             AuthApi.LoginResponse(
@@ -364,7 +356,7 @@ class AuthRepositoryImpl(
                 passwordKeyNonce = response.passwordKeyNonce,
                 recoveryKeyEnvelope = response.recoveryKeyEnvelope,
                 recoveryKeyNonce = response.recoveryKeyNonce
-            ), password, masterKey, phoneNumber = phoneNumber, email = email
+            ), password, masterKey, phoneNumber = phoneNumber
         )
     }
 

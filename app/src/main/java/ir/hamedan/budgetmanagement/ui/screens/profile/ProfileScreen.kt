@@ -57,11 +57,9 @@ import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Cake
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Female
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockReset
-import androidx.compose.material.icons.filled.MarkEmailRead
 import androidx.compose.material.icons.filled.Male
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonOutline
@@ -164,7 +162,7 @@ import kotlin.math.roundToInt
  *
  *  Design idea: the profile is an "identity card" whose single memorable element
  *  is a segmented ring around the avatar. The ring has exactly five arcs, one per
- *  profile section (first name, last name, gender, birth date, verified e-mail).
+ *  profile section (first name, last name, gender, birth date, date of birth).
  *  Arcs light up one after another when the screen opens and whenever a section
  *  gets completed, so the ring replaces the old, duplicated "x of 5" cards.
  *  Everything else stays quiet: grouped frosted sheets that reuse the card
@@ -177,10 +175,7 @@ private enum class GenderOption(val value: String) {
 }
 
 /** The five sections that make up the completion ring, in ring order. */
-private enum class ProfileStep { FIRST_NAME, LAST_NAME, GENDER, BIRTH_DATE, EMAIL }
-
-private const val OTP_LENGTH = 6
-private const val OTP_RESEND_SECONDS = 60L
+private enum class ProfileStep { FIRST_NAME, LAST_NAME, GENDER, BIRTH_DATE }
 
 private const val ITEM_HERO = "hero"
 private const val ITEM_PERSONAL = "personal"
@@ -301,7 +296,6 @@ fun ProfileScreen(
 
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
     var showGenderSheet by rememberSaveable { mutableStateOf(false) }
-    var showEmailDialog by rememberSaveable { mutableStateOf(false) }
     var showChangePassword by rememberSaveable { mutableStateOf(false) }
     var showDiscardDialog by rememberSaveable { mutableStateOf(false) }
 
@@ -317,7 +311,6 @@ fun ProfileScreen(
             !user?.lastName.isNullOrBlank(),
             user?.gender?.let { it == GenderOption.MALE.value || it == GenderOption.FEMALE.value } == true,
             !user?.birthDate.isNullOrBlank(),
-            user?.emailVerified == true
         ).let { all -> if (viewModel.isGuest) all.dropLast(1) else all }
     }
     val completion = steps.count { it }
@@ -331,30 +324,20 @@ fun ProfileScreen(
     }
     BackHandler(enabled = form.isDirty) { showDiscardDialog = true }
 
-    LaunchedEffect(state.emailOtpSent) {
-        if (state.emailOtpSent) showEmailDialog = true
-    }
-
-    // One-shot confirmations (saved / e-mail verified).
+    // One-shot profile-save confirmations.
     val notice = state.notice
     LaunchedEffect(notice) {
         if (notice == null) return@LaunchedEffect
-        if (notice == ProfileNotice.EMAIL_VERIFIED) showEmailDialog = false
         if (notice == ProfileNotice.PROFILE_SAVED) form.markSaved()
         snackbarHost.showInfo(
-            when (notice) {
-                ProfileNotice.PROFILE_SAVED -> if (isPersian) "تغییرات ذخیره شد" else "Changes saved"
-                ProfileNotice.EMAIL_VERIFIED -> if (isPersian) "ایمیل شما تأیید شد" else "Email verified"
-            }
+            if (isPersian) "تغییرات ذخیره شد" else "Changes saved"
         )
         viewModel.consumeNotice()
     }
 
-    // Errors go to the snackbar, except while the e-mail dialog is open: the dialog shows
-    // its own error next to the field that failed (a snackbar would sit behind its scrim).
     val error = state.error
-    LaunchedEffect(error, showEmailDialog) {
-        if (error != null && !showEmailDialog) {
+    LaunchedEffect(error) {
+        if (error != null) {
             snackbarHost.showError(error)
             viewModel.clearError()
         }
@@ -401,7 +384,6 @@ fun ProfileScreen(
                                     ProfileStep.LAST_NAME -> focusName(lastNameFocus)
                                     ProfileStep.GENDER -> showGenderSheet = true
                                     ProfileStep.BIRTH_DATE -> showDatePicker = true
-                                    ProfileStep.EMAIL -> showEmailDialog = true
                                 }
                             }
                         )
@@ -418,15 +400,8 @@ fun ProfileScreen(
                         )
                     }
 
-                    // Guest workspaces have no email: the contact section only exists for accounts.
-                    if (!viewModel.isGuest) item(key = ITEM_CONTACT) {
-                        ContactSheet(
-                            phone = user?.phoneNumber.orEmpty(),
-                            email = user?.email.orEmpty(),
-                            emailVerified = user?.emailVerified == true,
-                            isPersian = isPersian,
-                            onEmailClick = { showEmailDialog = true }
-                        )
+                    item(key = ITEM_CONTACT) {
+                        ContactSheet(phone = user?.phoneNumber.orEmpty(), isPersian = isPersian)
                     }
 
                     item(key = ITEM_SECURITY) {
@@ -492,28 +467,6 @@ fun ProfileScreen(
             initialIso = form.birthDate,
             onConfirm = { form.birthDate = it },
             onDismiss = { showDatePicker = false }
-        )
-    }
-
-    if (showEmailDialog) {
-        EmailDialog(
-            isPersian = isPersian,
-            currentEmail = user?.email.orEmpty(),
-            currentVerified = user?.emailVerified == true,
-            otpSent = state.emailOtpSent,
-            challengeId = state.emailOtpChallengeId,
-            pendingEmail = state.emailPending,
-            error = state.error,
-            isSaving = state.isSaving,
-            onClearError = viewModel::clearError,
-            onDismiss = {
-                showEmailDialog = false
-                viewModel.clearError()
-                if (state.emailOtpSent) viewModel.dismissEmailOtp()
-            },
-            onRequestOtp = viewModel::requestEmailVerification,
-            onVerify = viewModel::verifyEmail,
-            onChangeEmail = viewModel::dismissEmailOtp
         )
     }
 
@@ -642,7 +595,7 @@ private fun ProfileHero(
     isPersian: Boolean,
     onStepClick: (ProfileStep) -> Unit
 ) {
-    // Guest profiles have no email step, so the step list is shorter. Its entries keep the same
+    // Profile completion steps contain personal details only. Entries keep the same
     // order as ProfileStep, which is why indexing from the start is safe.
     val total = steps.size
     val fullName = listOf(firstName, lastName).filter { it.isNotBlank() }.joinToString(" ").trim()
@@ -958,10 +911,7 @@ private fun PersonalInfoSheet(
 @Composable
 private fun ContactSheet(
     phone: String,
-    email: String,
-    emailVerified: Boolean,
-    isPersian: Boolean,
-    onEmailClick: () -> Unit
+    isPersian: Boolean
 ) {
     ProfileSheet(
         title = if (isPersian) "راه‌های ارتباطی" else "Contact",
@@ -981,34 +931,6 @@ private fun ContactSheet(
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                 )
             }
-        )
-        SheetDivider()
-        ProfileRow(
-            icon = Icons.Default.Email,
-            label = if (isPersian) "ایمیل" else "Email",
-            value = email.ifBlank { if (isPersian) "افزودن ایمیل" else "Add an email" },
-            valueIsHint = email.isBlank(),
-            valueIsLtr = email.isNotBlank(),
-            trailing = {
-                when {
-                    email.isBlank() -> ActionPill(if (isPersian) "افزودن" else "Add")
-                    emailVerified -> StatusPill(
-                        text = if (isPersian) "تأیید شده" else "Verified",
-                        icon = Icons.Default.CheckCircle,
-                        container = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                        content = MaterialTheme.colorScheme.primary
-                    )
-                    else -> StatusPill(
-                        text = if (isPersian) "نیازمند تأیید" else "Verification required",
-                        icon = null,
-                        container = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f),
-                        content = MaterialTheme.colorScheme.tertiary
-                    )
-                }
-                Spacer(Modifier.width(4.dp))
-                RowChevron()
-            },
-            onClick = onEmailClick
         )
     }
 }
@@ -1288,235 +1210,11 @@ private fun GenderSheet(
     }
 }
 
-/* ─────────────────────────── E-mail dialog ──────────────────────────────── */
-
-@Composable
-private fun EmailDialog(
-    isPersian: Boolean,
-    currentEmail: String,
-    currentVerified: Boolean,
-    otpSent: Boolean,
-    challengeId: String?,
-    pendingEmail: String?,
-    error: String?,
-    isSaving: Boolean,
-    onClearError: () -> Unit,
-    onDismiss: () -> Unit,
-    onRequestOtp: (String) -> Unit,
-    onVerify: (String) -> Unit,
-    onChangeEmail: () -> Unit
-) {
-    var localEmail by remember { mutableStateOf(currentEmail) }
-    var code by remember(challengeId) { mutableStateOf("") }
-
-    // Resend cooldown, restarted every time a new code is issued.
-    val sentAt = remember(challengeId) { System.currentTimeMillis() }
-    var now by remember(challengeId) { mutableLongStateOf(sentAt) }
-    LaunchedEffect(challengeId, otpSent) {
-        if (!otpSent) return@LaunchedEffect
-        while (true) {
-            now = System.currentTimeMillis()
-            delay(1000)
-        }
-    }
-    val cooldown = (OTP_RESEND_SECONDS - (now - sentAt) / 1000).coerceAtLeast(0)
-
-    val trimmed = localEmail.trim()
-    val validEmail = android.util.Patterns.EMAIL_ADDRESS.matcher(trimmed).matches()
-    val alreadyVerified = currentVerified && trimmed.equals(currentEmail, ignoreCase = true)
-    val canSubmit = !isSaving && (if (otpSent) code.length == OTP_LENGTH else (validEmail && !alreadyVerified))
-
-    AlertDialog(
-        onDismissRequest = { if (!isSaving) onDismiss() },
-        shape = RoundedCornerShape(28.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
-        icon = {
-            Icon(
-                imageVector = if (otpSent) Icons.Default.MarkEmailRead else Icons.Default.Email,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(36.dp)
-            )
-        },
-        title = {
-            Text(
-                if (otpSent) (if (isPersian) "تأیید ایمیل" else "Verify email")
-                else (if (isPersian) "ایمیل حساب" else "Account email"),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                if (!otpSent) {
-                    Text(
-                        if (isPersian) "برای تغییر یا تأیید ایمیل، یک کد یک‌بارمصرف به همین آدرس ارسال می‌شود."
-                        else "A one-time code will be sent to this address to verify or change it.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    OutlinedTextField(
-                        value = localEmail,
-                        onValueChange = { localEmail = it.take(320); onClearError() },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text(if (isPersian) "آدرس ایمیل" else "Email address") },
-                        singleLine = true,
-                        textStyle = credentialTextStyle(),
-                        shape = RoundedCornerShape(16.dp),
-                        isError = alreadyVerified.not() && trimmed.isNotEmpty() && !validEmail,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { if (canSubmit) onRequestOtp(trimmed) })
-                    )
-                    if (alreadyVerified) {
-                        Text(
-                            if (isPersian) "این ایمیل قبلاً تأیید شده است." else "This email is already verified.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                } else {
-                    Text(
-                        if (isPersian) "کد ۶ رقمی ارسال‌شده به ${pendingEmail.orEmpty()} را وارد کنید."
-                        else "Enter the 6-digit code sent to ${pendingEmail.orEmpty()}.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    OtpField(
-                        code = code,
-                        onCodeChange = { code = AuthInputNormalizer.otpCode(it, OTP_LENGTH); onClearError() },
-                        onDone = { if (canSubmit) onVerify(code) },
-                        isError = error != null,
-                        enabled = !isSaving
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(
-                            onClick = { pendingEmail?.let(onRequestOtp) },
-                            enabled = cooldown == 0L && !isSaving && pendingEmail != null
-                        ) {
-                            Text(
-                                if (cooldown > 0) (if (isPersian) "ارسال مجدد تا ${persianDigits(cooldown.toString())} ثانیه دیگر" else "Resend in ${cooldown}s")
-                                else (if (isPersian) "ارسال مجدد کد" else "Resend code")
-                            )
-                        }
-                        TextButton(onClick = onChangeEmail, enabled = !isSaving) {
-                            Text(if (isPersian) "تغییر ایمیل" else "Change email")
-                        }
-                    }
-                }
-
-                if (error != null) {
-                    Text(
-                        text = error,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { if (otpSent) onVerify(code) else onRequestOtp(trimmed) },
-                enabled = canSubmit,
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                if (isSaving) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                } else {
-                    Text(
-                        if (otpSent) (if (isPersian) "تأیید" else "Verify")
-                        else (if (isPersian) "ارسال کد" else "Send code")
-                    )
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !isSaving) {
-                Text(if (isPersian) "انصراف" else "Cancel")
-            }
-        }
-    )
-}
-
-/** Six separate digit cells driven by one invisible text field (always laid out left-to-right). */
-@Composable
-private fun OtpField(
-    code: String,
-    onCodeChange: (String) -> Unit,
-    onDone: () -> Unit,
-    isError: Boolean,
-    enabled: Boolean
-) {
-    val focusRequester = remember { FocusRequester() }
-    var focused by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
-
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-        BasicTextField(
-            value = code,
-            onValueChange = onCodeChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .focusRequester(focusRequester)
-                .onFocusChanged { focused = it.isFocused },
-            enabled = enabled,
-            singleLine = true,
-            textStyle = TextStyle(color = Color.Transparent),
-            cursorBrush = SolidColor(Color.Transparent),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { onDone() }),
-            decorationBox = { innerTextField ->
-                Box(Modifier.fillMaxWidth()) {
-                    // The real field stays invisible; it is only here to receive focus and input.
-                    Box(Modifier.size(1.dp)) { innerTextField() }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-                    ) {
-                        repeat(OTP_LENGTH) { index ->
-                            val active = focused && index == code.length.coerceAtMost(OTP_LENGTH - 1)
-                            val borderColor = when {
-                                isError -> MaterialTheme.colorScheme.error
-                                active -> MaterialTheme.colorScheme.primary
-                                else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
-                            }
-                            val shape = RoundedCornerShape(14.dp)
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .heightIn(min = 52.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), shape)
-                                    .border(if (active || isError) 2.dp else 1.dp, borderColor, shape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = code.getOrNull(index)?.toString().orEmpty(),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        )
-    }
-}
-
-/* ───────────────────────────── Helpers ──────────────────────────────────── */
-
 private fun stepLabel(step: ProfileStep, isPersian: Boolean): String = when (step) {
     ProfileStep.FIRST_NAME -> if (isPersian) "نام" else "First name"
     ProfileStep.LAST_NAME -> if (isPersian) "نام خانوادگی" else "Last name"
     ProfileStep.GENDER -> if (isPersian) "جنسیت" else "Gender"
     ProfileStep.BIRTH_DATE -> if (isPersian) "تاریخ تولد" else "Date of birth"
-    ProfileStep.EMAIL -> if (isPersian) "تأیید ایمیل" else "Verify email"
 }
 
 private fun stepIcon(step: ProfileStep): ImageVector = when (step) {
@@ -1524,7 +1222,6 @@ private fun stepIcon(step: ProfileStep): ImageVector = when (step) {
     ProfileStep.LAST_NAME -> Icons.Default.Badge
     ProfileStep.GENDER -> Icons.Default.PersonOutline
     ProfileStep.BIRTH_DATE -> Icons.Default.Cake
-    ProfileStep.EMAIL -> Icons.Default.Email
 }
 
 private fun initialsOf(first: String, last: String, isPersian: Boolean): String {

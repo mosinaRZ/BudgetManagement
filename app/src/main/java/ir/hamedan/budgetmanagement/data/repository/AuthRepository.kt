@@ -57,11 +57,8 @@ interface AuthRepository {
 
     data class RegistrationInput(
         val phoneNumber: String,
-        val email: String?,
         val password: String,
         val otpChallengeId: String,
-        val otpCode: String,
-        val emailOtpChallengeId: String? = null,
-        val emailOtpCode: String? = null
+        val otpCode: String
     )
 }
