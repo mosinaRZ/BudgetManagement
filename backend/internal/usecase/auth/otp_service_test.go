@@ -57,7 +57,7 @@ func TestOTPCodeIsNotStoredPlaintext(t *testing.T) {
 	repo := &otpRepoMock{}
 	d := &deliveryMock{}
 	s := NewOTPService(repo, d, "test-secret", 5*time.Minute)
-	out, err := s.Request(context.Background(), RequestOTPInput{Destination: "a@example.com", Channel: "email", Purpose: entity.OTPPurposePasswordReset})
+	out, err := s.Request(context.Background(), RequestOTPInput{Destination: "+989121234567", Channel: "sms", Purpose: entity.OTPPurposePasswordReset})
 	require.NoError(t, err)
 	require.NotEmpty(t, out.ChallengeID)
 	require.NotEmpty(t, repo.c.CodeHash)
@@ -77,8 +77,8 @@ func TestOTPCodeCannotBeReused(t *testing.T) {
 	d := &deliveryMock{}
 	s := NewOTPService(repo, d, "test-secret", 5*time.Minute)
 	out, err := s.Request(context.Background(), RequestOTPInput{
-		Destination: "a@example.com",
-		Channel:     "email",
+		Destination: "+989121234567",
+		Channel:     "sms",
 		Purpose:     entity.OTPPurposePasswordReset,
 	})
 	require.NoError(t, err)
@@ -102,7 +102,7 @@ func TestOTPWrongCodeConsumesAttempt(t *testing.T) {
 	repo := &otpRepoMock{}
 	d := &deliveryMock{}
 	s := NewOTPService(repo, d, "test-secret", 5*time.Minute)
-	out, err := s.Request(context.Background(), RequestOTPInput{Destination: "a@example.com", Channel: "email", Purpose: entity.OTPPurposePasswordReset})
+	out, err := s.Request(context.Background(), RequestOTPInput{Destination: "+989121234567", Channel: "sms", Purpose: entity.OTPPurposePasswordReset})
 	require.NoError(t, err)
 
 	_, err = s.Verify(context.Background(), VerifyOTPInput{ChallengeID: out.ChallengeID, Code: "000000", Purpose: entity.OTPPurposePasswordReset})

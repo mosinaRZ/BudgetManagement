@@ -119,11 +119,6 @@ func (s *ServiceImpl) Register(ctx context.Context, in RegisterInput) (RegisterO
 		return RegisterOutput{}, err
 	}
 
-	emailHash, emailVerified, err := s.prepareRegistrationEmail(ctx, in)
-	if err != nil {
-		return RegisterOutput{}, err
-	}
-
 	authSalt, err := infraauth.GenerateSalt()
 	if err != nil {
 		return RegisterOutput{}, apperror.ErrInternal("failed to generate password salt")
@@ -155,10 +150,7 @@ func (s *ServiceImpl) Register(ctx context.Context, in RegisterInput) (RegisterO
 		Role:                entity.RoleUser,
 		PhoneHash:           phoneHash,
 		PhoneNumber:         phone,
-		EmailHash:           emailHash,
-		Email:               strings.ToLower(strings.TrimSpace(in.Email)),
 		PhoneVerified:       true,
-		EmailVerified:       emailVerified,
 		PasswordHash:        passwordHash,
 		AuthSalt:            base64.RawStdEncoding.EncodeToString(authSalt),
 		KdfSalt:             kdfSalt,
@@ -217,43 +209,6 @@ func (s *ServiceImpl) ensurePhoneAvailable(ctx context.Context, phoneHash string
 	return nil
 }
 
-func (s *ServiceImpl) prepareRegistrationEmail(ctx context.Context, in RegisterInput) (string, bool, error) {
-	email := strings.TrimSpace(in.Email)
-	if email == "" {
-		return "", false, nil
-	}
-
-	emailHash := hashIdentifier(strings.ToLower(email), s.secret)
-	existing, err := s.users.FindByEmailHash(ctx, emailHash)
-	if err == nil && existing != nil {
-		return "", false, apperror.ErrConflict("email already exists")
-	}
-	if err != nil {
-		code, ok := apperror.CodeOf(err)
-		if !ok || code != apperror.CodeNotFound {
-			return "", false, err
-		}
-	}
-
-	if in.EmailOTPChallengeID == "" || in.EmailOTPCode == "" {
-		return "", false, apperror.ErrValidation("email OTP is required when email is provided")
-	}
-
-	destination, err := s.otp.Verify(ctx, VerifyOTPInput{
-		ChallengeID: in.EmailOTPChallengeID,
-		Code:        in.EmailOTPCode,
-		Purpose:     entity.OTPPurposeEmailVerification,
-	})
-	if err != nil {
-		return "", false, err
-	}
-	if !hmac.Equal([]byte(destination), []byte(emailHash)) {
-		return "", false, apperror.ErrUnauthorized("email OTP destination does not match")
-	}
-
-	return emailHash, true, nil
-}
-
 // prepareRegistrationKdfSalt requires a client-chosen salt: the client must know it before it
 // can derive its authentication secret, so the server can no longer pick one on its behalf.
 func prepareRegistrationKdfSalt(value string) (string, error) {
@@ -280,13 +235,11 @@ func canonicalAuthSecret(v string) (string, error) {
 // whether an account exists.
 func (s *ServiceImpl) LoginParams(ctx context.Context, identifier string) (LoginParamsOutput, error) {
 	id := strings.TrimSpace(identifier)
-	if id == "" || len(id) > 320 {
+	if id == "" || len(id) > 32 {
 		return LoginParamsOutput{}, apperror.ErrValidation("identifier is required")
 	}
 	var u *entity.User
-	if strings.Contains(id, "@") {
-		u, _ = s.users.FindByEmailHash(ctx, hashIdentifier(strings.ToLower(id), s.secret))
-	} else if p, e := normalizePhone(id); e == nil {
+	if p, e := normalizePhone(id); e == nil {
 		u, _ = s.users.FindByPhoneHash(ctx, hashIdentifier(p, s.secret))
 	}
 	salt := ""
@@ -310,9 +263,7 @@ func (s *ServiceImpl) Login(ctx context.Context, in LoginInput) (LoginOutput, er
 	}
 	id := strings.TrimSpace(in.Identifier)
 	var u *entity.User
-	if strings.Contains(id, "@") {
-		u, err = s.users.FindByEmailHash(ctx, hashIdentifier(strings.ToLower(id), s.secret))
-	} else {
+	{
 		p, e := normalizePhone(id)
 		if e == nil {
 			u, err = s.users.FindByPhoneHash(ctx, hashIdentifier(p, s.secret))
@@ -787,56 +738,13 @@ func (s *ServiceImpl) UpdateProfile(ctx context.Context, in UpdateProfileInput) 
 	return profileFromUser(u), nil
 }
 
-func (s *ServiceImpl) UpdateEmail(ctx context.Context, in UpdateEmailInput) (Profile, error) {
-	if strings.TrimSpace(in.UserID) == "" {
-		return Profile{}, apperror.ErrUnauthorized("authentication required")
-	}
-	email := strings.ToLower(strings.TrimSpace(in.Email))
-	if email == "" || len(email) > 320 || !strings.Contains(email, "@") {
-		return Profile{}, apperror.ErrValidation("invalid email address")
-	}
-	if s.otp == nil {
-		return Profile{}, apperror.ErrInternal("OTP service is not configured")
-	}
-	emailHash := hashIdentifier(email, s.secret)
-	existing, err := s.users.FindByEmailHash(ctx, emailHash)
-	if err == nil && existing != nil && existing.ID != in.UserID {
-		return Profile{}, apperror.ErrConflict("email already exists")
-	}
-	if err != nil {
-		code, ok := apperror.CodeOf(err)
-		if !ok || code != apperror.CodeNotFound {
-			return Profile{}, err
-		}
-	}
-	destination, err := s.otp.Verify(ctx, VerifyOTPInput{
-		ChallengeID: in.OTPChallengeID,
-		Code:        in.OTPCode,
-		Purpose:     entity.OTPPurposeEmailVerification,
-	})
-	if err != nil {
-		return Profile{}, err
-	}
-	if !hmac.Equal([]byte(destination), []byte(emailHash)) {
-		return Profile{}, apperror.ErrUnauthorized("email OTP destination does not match")
-	}
-	if err := s.users.UpdateEmail(ctx, in.UserID, emailHash, email, true); err != nil {
-		return Profile{}, err
-	}
-	u, err := s.users.FindByID(ctx, in.UserID)
-	if err != nil {
-		return Profile{}, err
-	}
-	return profileFromUser(u), nil
-}
-
 func profileFromUser(u *entity.User) Profile {
 	gender := u.Gender
 	if !gender.Valid() {
 		gender = entity.GenderPreferNotToSay
 	}
 	return Profile{
-		UserID: u.ID, PhoneNumber: u.PhoneNumber, Email: u.Email, EmailVerified: u.EmailVerified,
+		UserID: u.ID, PhoneNumber: u.PhoneNumber,
 		FirstName: u.FirstName, LastName: u.LastName, Gender: gender, BirthDate: u.BirthDate,
 	}
 }
@@ -917,7 +825,7 @@ func (s *ServiceImpl) findByDestinationHash(ctx context.Context, h string) (*ent
 		}
 	}
 
-	return s.users.FindByEmailHash(ctx, h)
+	return nil, apperror.ErrNotFound("user not found")
 }
 func (s *ServiceImpl) issueSession(ctx context.Context, u *entity.User, d string) (RegisterOutput, error) {
 	x, e := s.issueRefreshAndAccess(ctx, u, d)

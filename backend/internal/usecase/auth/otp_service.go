@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"net/mail"
 	"strings"
 	"time"
 
@@ -46,7 +45,7 @@ func (s *otpService) Request(ctx context.Context, in RequestOTPInput) (RequestOT
 
 	d := strings.TrimSpace(in.Destination)
 	ch := strings.ToLower(strings.TrimSpace(in.Channel))
-	if d == "" || (ch != "sms" && ch != "email") {
+	if d == "" || ch != "sms" {
 		return RequestOTPOutput{}, apperror.ErrValidation("invalid OTP destination")
 	}
 	if ch == "sms" {
@@ -55,14 +54,9 @@ func (s *otpService) Request(ctx context.Context, in RequestOTPInput) (RequestOT
 			return RequestOTPOutput{}, apperror.ErrValidation("invalid phone number")
 		}
 		d = normalized
-	} else {
-		addr, err := mail.ParseAddress(d)
-		if err != nil || addr.Address != d {
-			return RequestOTPOutput{}, apperror.ErrValidation("invalid email address")
-		}
-		d = strings.ToLower(d)
 	}
-	if in.Purpose != entity.OTPPurposeRegister && in.Purpose != entity.OTPPurposePasswordReset && in.Purpose != entity.OTPPurposeEmailVerification && in.Purpose != entity.OTPPurposeLogin {
+
+	if in.Purpose != entity.OTPPurposeRegister && in.Purpose != entity.OTPPurposePasswordReset && in.Purpose != entity.OTPPurposeLogin {
 		return RequestOTPOutput{}, apperror.ErrValidation("OTP purpose is required")
 	}
 

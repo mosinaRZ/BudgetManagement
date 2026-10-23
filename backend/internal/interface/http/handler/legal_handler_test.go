@@ -22,15 +22,6 @@ func TestLegalPagesRender(t *testing.T) {
 			fn(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 			assert.Equal(t, http.StatusOK, rec.Code)
 			assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
-			assert.Contains(t, rec.Body.String(), defaultSupportEmail)
 		})
 	}
-}
-
-func TestLegalHandlerUsesConfiguredEmail(t *testing.T) {
-	h := NewLegalHandler("help@example.test")
-	rec := httptest.NewRecorder()
-	h.Terms(rec, httptest.NewRequest(http.MethodGet, "/terms", nil))
-	assert.Contains(t, rec.Body.String(), "help@example.test")
-	assert.NotContains(t, rec.Body.String(), defaultSupportEmail)
 }

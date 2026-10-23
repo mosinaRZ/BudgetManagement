@@ -7,10 +7,7 @@ type User struct {
 	Role                Role
 	PhoneHash           string
 	PhoneNumber         string
-	EmailHash           string
-	Email               string
 	PhoneVerified       bool
-	EmailVerified       bool
 	FirstName           string
 	LastName            string
 	Gender              Gender

@@ -12,11 +12,9 @@ import (
 type MockUserRepository struct {
 	CreateFunc                  func(ctx context.Context, u *entity.User) error
 	FindByPhoneHashFunc         func(ctx context.Context, phoneHash string) (*entity.User, error)
-	FindByEmailHashFunc         func(ctx context.Context, emailHash string) (*entity.User, error)
 	FindByIDFunc                func(ctx context.Context, id string) (*entity.User, error)
 	UpdateFunc                  func(ctx context.Context, u *entity.User) error
 	UpdateProfileFunc           func(ctx context.Context, userID, firstName, lastName string, gender entity.Gender, birthDate string) error
-	UpdateEmailFunc             func(ctx context.Context, userID, emailHash, email string, verified bool) error
 	UpdateCredentialsFunc       func(ctx context.Context, userID, passwordHash, authSalt, kdfSalt string, passwordKeyEnvelope, passwordKeyNonce []byte) error
 	AddDeviceFunc               func(ctx context.Context, userID, deviceID string) error
 	UpdateRoleFunc              func(ctx context.Context, userID string, role entity.Role) error
@@ -44,13 +42,6 @@ func (m *MockUserRepository) FindByPhoneHash(ctx context.Context, phoneHash stri
 	return nil, nil
 }
 
-func (m *MockUserRepository) FindByEmailHash(ctx context.Context, emailHash string) (*entity.User, error) {
-	if m.FindByEmailHashFunc != nil {
-		return m.FindByEmailHashFunc(ctx, emailHash)
-	}
-	return nil, nil
-}
-
 func (m *MockUserRepository) FindByID(ctx context.Context, id string) (*entity.User, error) {
 	if m.FindByIDFunc != nil {
 		return m.FindByIDFunc(ctx, id)
@@ -68,13 +59,6 @@ func (m *MockUserRepository) Update(ctx context.Context, u *entity.User) error {
 func (m *MockUserRepository) UpdateProfile(ctx context.Context, userID, firstName, lastName string, gender entity.Gender, birthDate string) error {
 	if m.UpdateProfileFunc != nil {
 		return m.UpdateProfileFunc(ctx, userID, firstName, lastName, gender, birthDate)
-	}
-	return nil
-}
-
-func (m *MockUserRepository) UpdateEmail(ctx context.Context, userID, emailHash, email string, verified bool) error {
-	if m.UpdateEmailFunc != nil {
-		return m.UpdateEmailFunc(ctx, userID, emailHash, email, verified)
 	}
 	return nil
 }

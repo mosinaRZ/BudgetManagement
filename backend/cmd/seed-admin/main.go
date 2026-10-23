@@ -3,10 +3,11 @@ package main
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"net/mail"
 	"os"
 	"strings"
 	"time"
@@ -20,7 +21,7 @@ import (
 )
 
 func main() {
-	identifier := flag.String("identifier", "", "administrator email address")
+	identifier := flag.String("identifier", "", "administrator phone number")
 	password := flag.String("password", "", "administrator password (minimum 12 characters)")
 	flag.Parse()
 	if err := run(*identifier, *password); err != nil {
@@ -30,10 +31,14 @@ func main() {
 }
 
 func run(identifier, password string) error {
-	identifier = strings.ToLower(strings.TrimSpace(identifier))
-	parsed, err := mail.ParseAddress(identifier)
-	if err != nil || parsed.Address != identifier {
-		return fmt.Errorf("--identifier must be a valid email address")
+	identifier = strings.TrimSpace(identifier)
+	if len(identifier) < 8 || len(identifier) > 16 || !strings.HasPrefix(identifier, "+") {
+		return fmt.Errorf("--identifier must be an international phone number beginning with +")
+	}
+	for _, digit := range identifier[1:] {
+		if digit < '0' || digit > '9' {
+			return fmt.Errorf("--identifier must contain only digits after the + prefix")
+		}
 	}
 	if len(password) < 12 || len(password) > 256 {
 		return fmt.Errorf("--password must be between 12 and 256 characters")
@@ -79,11 +84,13 @@ func run(identifier, password string) error {
 		return err
 	}
 	now := time.Now().UTC()
+	h := hmac.New(sha256.New, []byte(cfg.JWTSecret))
+	_, _ = h.Write([]byte(strings.ToLower(identifier)))
 	user := &entity.User{
 		Role:          entity.RoleAdmin,
-		Email:         identifier,
-		EmailHash:     authHash(identifier, cfg.JWTSecret),
-		EmailVerified: true,
+		PhoneNumber:   identifier,
+		PhoneHash:     base64.RawURLEncoding.EncodeToString(h.Sum(nil)),
+		PhoneVerified: true,
 		PasswordHash:  passwordHash,
 		AuthSalt:      base64.RawStdEncoding.EncodeToString(salt),
 		KdfSalt:       material.KdfSalt,

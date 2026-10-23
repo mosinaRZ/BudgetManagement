@@ -42,9 +42,6 @@ func (r *userRepo) Create(ctx context.Context, u *entity.User) error {
 func (r *userRepo) FindByPhoneHash(ctx context.Context, h string) (*entity.User, error) {
 	return r.find(ctx, bson.M{"phoneHash": h})
 }
-func (r *userRepo) FindByEmailHash(ctx context.Context, h string) (*entity.User, error) {
-	return r.find(ctx, bson.M{"emailHash": h})
-}
 func (r *userRepo) find(ctx context.Context, f bson.M) (*entity.User, error) {
 	var m models.UserModel
 	if err := r.c.FindOne(ctx, f).Decode(&m); err != nil {
@@ -86,26 +83,6 @@ func (r *userRepo) UpdateProfile(ctx context.Context, userID, firstName, lastNam
 	}})
 	if err != nil {
 		return apperror.ErrInternal("failed to update profile", err)
-	}
-	if res.MatchedCount == 0 {
-		return apperror.ErrNotFound("user not found")
-	}
-	return nil
-}
-
-func (r *userRepo) UpdateEmail(ctx context.Context, userID, emailHash, email string, verified bool) error {
-	oid, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return apperror.ErrNotFound("user not found")
-	}
-	res, err := r.c.UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$set": bson.M{
-		"emailHash": emailHash, "email": email, "emailVerified": verified, "updatedAt": time.Now().UTC(),
-	}})
-	if err != nil {
-		if mongo.IsDuplicateKeyError(err) {
-			return apperror.ErrConflict("email already exists")
-		}
-		return apperror.ErrInternal("failed to update email", err)
 	}
 	if res.MatchedCount == 0 {
 		return apperror.ErrNotFound("user not found")

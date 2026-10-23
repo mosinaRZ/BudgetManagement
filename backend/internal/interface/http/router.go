@@ -85,7 +85,6 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 			r.Post("/api/v1/auth/password/change", deps.AuthHandler.ChangePassword)
 			r.Get("/api/v1/account/profile", deps.AuthHandler.GetProfile)
 			r.Put("/api/v1/account/profile", deps.AuthHandler.UpdateProfile)
-			r.Put("/api/v1/account/email", deps.AuthHandler.UpdateEmail)
 			// POST (not DELETE) because the password must travel in the body and some HTTP
 			// clients, including Android's HttpURLConnection, do not send bodies with DELETE.
 			r.Post("/api/v1/account/delete", deps.AuthHandler.DeleteAccount)
