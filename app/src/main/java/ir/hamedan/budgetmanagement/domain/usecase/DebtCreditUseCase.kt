@@ -7,7 +7,8 @@ import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.DebtCreditRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import kotlinx.coroutines.flow.first
-import java.util.Calendar
+import ir.hamedan.budgetmanagement.utils.DueDay
+import java.time.LocalDate
 import java.util.UUID
 import kotlin.math.ceil
 
@@ -22,7 +23,7 @@ class DebtCreditUseCase(
         require(totalAmount > 0.0) { "Total amount must be greater than zero." }
         if (isMonthly) {
             require(monthlyAmount > 0.0) { "Monthly amount must be greater than zero." }
-            require(dueDay in 1..31) { "Due day must be between 1 and 31." }
+            require(DueDay.isValid(dueDay)) { "Due day must be between 1 and 31." }
         }
         val existing = id?.let { debtCreditRepository.getById(it) }
         val dueDate = if (isMonthly) calculateExpirationDate(totalAmount, monthlyAmount, dueDay) else oneTimeDueDateMillis
@@ -85,15 +86,16 @@ class DebtCreditUseCase(
         transactionRepository.insertTransaction(TransactionEntity(title = if (!reverse) { if (isDebt) "پرداخت بدهی به: ${item.personName}" else "دریافت طلب از: ${item.personName}" } else { if (isDebt) "اصلاح/برداشت از پرداخت بدهی: ${item.personName}" else "اصلاح/برداشت از دریافت طلب: ${item.personName}" }, amount = amount, categoryId = category.id, type = type, note = "ثبت و اصلاح واریزی بدهی و طلب"))
     }
 
+    /**
+     * Date of the last installment. [dueDay] follows [DueDay]: a plain 1..31 is a Gregorian day,
+     * 101..131 a Jalali one, and every month is counted in that same calendar.
+     */
     fun calculateExpirationDate(totalAmount: Double, monthlyAmount: Double, dueDay: Int): Long {
         require(totalAmount > 0.0) { "Total amount must be greater than zero." }
         require(monthlyAmount > 0.0) { "Monthly amount must be greater than zero." }
-        require(dueDay in 1..31) { "Due day must be between 1 and 31." }
+        require(DueDay.isValid(dueDay)) { "Due day must be between 1 and 31." }
         val monthsRequired = ceil(totalAmount / monthlyAmount).toInt().coerceAtLeast(1)
-        return Calendar.getInstance().apply {
-            if (get(Calendar.DAY_OF_MONTH) > dueDay) add(Calendar.MONTH, 1)
-            set(Calendar.DAY_OF_MONTH, dueDay.coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH)))
-            add(Calendar.MONTH, monthsRequired - 1)
-        }.timeInMillis
+        val first = DueDay.firstDueDate(dueDay, LocalDate.now())
+        return DueDay.toMillis(DueDay.dateInMonth(dueDay, first, monthsRequired - 1))
     }
 }

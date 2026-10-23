@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -34,7 +35,9 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,6 +62,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -68,6 +72,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.repository.AuthRepository
@@ -341,24 +346,62 @@ fun RegisterScreen(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
             )
 
-            Row(verticalAlignment = Alignment.Top) {
+            val termsColors = MaterialTheme.colorScheme
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .toggleable(
+                        value = acceptedTerms,
+                        enabled = !loading,
+                        role = Role.Checkbox,
+                        onValueChange = { acceptedTerms = it }
+                    ),
+                verticalAlignment = Alignment.Top
+            ) {
                 Checkbox(
                     checked = acceptedTerms,
-                    onCheckedChange = { acceptedTerms = it },
-                    enabled = !loading
+                    // The whole row is the toggle target, so the box itself only displays the state.
+                    onCheckedChange = null,
+                    enabled = !loading,
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = termsColors.primary,
+                        checkmarkColor = termsColors.onPrimary,
+                        uncheckedColor = termsColors.onSurface.copy(alpha = 0.6f),
+                        disabledCheckedColor = termsColors.primary.copy(alpha = 0.38f),
+                        disabledUncheckedColor = termsColors.onSurface.copy(alpha = 0.2f)
+                    ),
+                    modifier = Modifier.padding(12.dp)
                 )
-                Column(modifier = Modifier.padding(top = 12.dp)) {
+                Column(modifier = Modifier.padding(top = 12.dp, end = 4.dp)) {
                     Text(
                         text = if (isPersian) "قوانین و مقررات و سیاست حریم خصوصی سیدنا را خوانده‌ام و می‌پذیرم."
                         else "I have read and accept Cidna's Terms of Service and Privacy Policy.",
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
+                        color = termsColors.onSurface
                     )
                     Row {
-                        TextButton(onClick = { openLegalPage(uriHandler, "terms") }) {
-                            Text(if (isPersian) "قوانین و مقررات" else "Terms of Service")
+                        TextButton(
+                            onClick = { openLegalPage(uriHandler, "terms") },
+                            colors = ButtonDefaults.textButtonColors(contentColor = termsColors.primary)
+                        ) {
+                            Text(
+                                text = if (isPersian) "قوانین و مقررات" else "Terms of Service",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                textDecoration = TextDecoration.Underline
+                            )
                         }
-                        TextButton(onClick = { openLegalPage(uriHandler, "privacy-policy") }) {
-                            Text(if (isPersian) "حریم خصوصی" else "Privacy Policy")
+                        TextButton(
+                            onClick = { openLegalPage(uriHandler, "privacy-policy") },
+                            colors = ButtonDefaults.textButtonColors(contentColor = termsColors.primary)
+                        ) {
+                            Text(
+                                text = if (isPersian) "حریم خصوصی" else "Privacy Policy",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                textDecoration = TextDecoration.Underline
+                            )
                         }
                     }
                 }
@@ -504,6 +547,7 @@ private fun RecoveryKeyDialog(recoveryKey: String, isPersian: Boolean, onConfirm
                     Text(
                         text = if (isPersian) "کلید را در جای امن ذخیره کرده‌ام" else "I have stored the key safely",
                         style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f)
                     )
                 }

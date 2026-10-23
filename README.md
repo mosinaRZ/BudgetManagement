@@ -20,8 +20,6 @@
 <a id="english"></a>
 ## English
 
-> *Presentation edition — written from the marketing seat. Sections 1–7 tell the product story; sections 8–15 are the technical and legal reference for builders and reviewers.*
-
 ## 1. Executive summary
 
 **Cidna** (Persian: **سیدنا**) turns scattered receipts, bank texts and mental arithmetic into one clear picture of where your money goes — in your language, in your calendar, in your currency, on the phone you already carry.
@@ -88,7 +86,6 @@ Amounts are stored as integers (Toman) and converted at the UI boundary, so floa
 
 - **Clearer guest-data choice at sign-up.** The dialog now presents two plain option cards — *Move to the new account* and *Start fresh (delete guest data)* — each with its consequence spelled out. It can only be closed through its buttons, so a stray tap or the back gesture no longer throws you out of registration, and it uses the app's theme colours in light and dark mode.
 - **Terms consent that matches the theme.** The accept-terms line and its links are now rendered in the theme's own text and accent colours (readable in light and dark), underlined as links, and the whole row is one large tap target.
-- **Provider name corrected.** The English spelling of the provider's surname is now **Ahdieh** in the public legal pages and in this document.
 
 ## 7. Our trust promise (read with section 9)
 
@@ -332,8 +329,6 @@ Project and legal contact: **cidna.app@gmail.com**
 
 ## فارسی
 
-> *نسخه ارائه — از زاویه دید مدیر بازاریابی. بخش‌های ۱ تا ۷ داستان محصول را روایت می‌کنند و بخش‌های ۸ تا ۱۵ مرجع فنی و حقوقی برای توسعه‌دهندگان و بازبین‌ها هستند.*
-
 ## ۱. خلاصه مدیریتی
 
 **سیدنا (Cidna)** رسیدهای پراکنده، پیامک‌های بانکی و حساب‌وکتاب‌های ذهنی را به یک تصویر روشن از مسیر پولتان تبدیل می‌کند — به زبان خودتان، با تقویم خودتان، به واحد پول خودتان و روی همان گوشی‌ای که همیشه همراه دارید.
@@ -400,7 +395,6 @@ Project and legal contact: **cidna.app@gmail.com**
 
 - **انتخاب شفاف‌تر درباره اطلاعات مهمان هنگام ثبت‌نام.** دیالوگ حالا دو کارت انتخاب ساده دارد — *انتقال به حساب جدید* و *شروع از صفر (حذف اطلاعات مهمان)* — و پیامد هر کدام را صریح می‌گوید. فقط با دکمه‌های خودش بسته می‌شود، پس لمس اتفاقی یا حرکت بازگشت دیگر کاربر را از ثبت‌نام بیرون نمی‌اندازد؛ ضمناً از رنگ‌های تم برنامه در حالت روشن و تیره استفاده می‌کند.
 - **پذیرش قوانین هماهنگ با تم.** متن پذیرش و لینک‌های آن حالا با رنگ متن و رنگ تأکید خود تم نمایش داده می‌شوند (خوانا در حالت روشن و تیره)، لینک‌ها زیرخط دارند و کل ردیف یک ناحیه لمس بزرگ است.
-- **اصلاح نام ارائه‌دهنده.** املای انگلیسی نام خانوادگی ارائه‌دهنده در صفحه‌های حقوقی عمومی و این سند اکنون **Ahdieh** است.
 
 ## ۷. تعهد ما در برابر اعتماد (همراه با بخش ۹ بخوانید)
 

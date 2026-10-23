@@ -86,6 +86,7 @@ import ir.hamedan.budgetmanagement.ui.screens.notification.NotificationViewModel
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
 import ir.hamedan.budgetmanagement.utils.AppHapticType
 import ir.hamedan.budgetmanagement.utils.DateUtils
+import ir.hamedan.budgetmanagement.utils.DueDay
 import ir.hamedan.budgetmanagement.utils.rememberAppHaptics
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.ui.screens.debtCredit.DebtCreditViewModel
@@ -2134,6 +2135,11 @@ fun RecentTransactionSkeletonItem() {
  * برای موارد ماهانه همیشه سررسید بعدی محاسبه می‌شود؛ برای موارد تک‌بار، تاریخ ثبت‌شده.
  */
 private fun daysUntilDue(item: DebtCreditEntity): Int {
+    if (item.isMonthly && DueDay.isValid(item.dueDay)) {
+        // Follows the calendar the installment day was saved in (Jalali or Gregorian).
+        val today = java.time.LocalDate.now()
+        return java.time.temporal.ChronoUnit.DAYS.between(today, DueDay.nextDueDate(item.dueDay, today)).toInt()
+    }
     fun Calendar.clearTime(): Calendar = apply {
         set(Calendar.HOUR_OF_DAY, 0)
         set(Calendar.MINUTE, 0)
