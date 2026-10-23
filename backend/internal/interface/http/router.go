@@ -68,6 +68,7 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 		if deps.AuthHandler != nil {
 			r.With(otpRateLimiter.LimitByIP).Post("/auth/otp/request", deps.AuthHandler.RequestOTP)
 			r.Post("/auth/register", deps.AuthHandler.Register)
+			r.Post("/auth/login/params", deps.AuthHandler.LoginParams)
 			r.Post("/auth/login", deps.AuthHandler.Login)
 			r.Post("/auth/refresh", deps.AuthHandler.Refresh)
 			r.Post("/auth/recovery/prepare", deps.AuthHandler.PrepareRecovery)

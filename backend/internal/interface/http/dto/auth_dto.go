@@ -24,15 +24,16 @@ type OTPResponse struct {
 	ExpiresAt   int64  `json:"expires_at"`
 }
 type RegisterRequest struct {
-	PhoneNumber         string             `json:"phone_number" validate:"required"`
-	Email               string             `json:"email,omitempty" validate:"omitempty,email,max=320"`
-	Password            string             `json:"password" validate:"required,min=8,max=256"`
+	PhoneNumber string `json:"phone_number" validate:"required"`
+	Email       string `json:"email,omitempty" validate:"omitempty,email,max=320"`
+	// AuthSecret is derived from the password on the device (never the password itself).
+	AuthSecret          string             `json:"auth_secret" validate:"required,max=128"`
 	DeviceID            string             `json:"device_id" validate:"required,max=128"`
 	OTPChallengeID      string             `json:"otp_challenge_id" validate:"required"`
 	OTPCode             string             `json:"otp_code" validate:"required,len=6,numeric"`
 	EmailOTPChallengeID string             `json:"email_otp_challenge_id,omitempty"`
 	EmailOTPCode        string             `json:"email_otp_code,omitempty" validate:"omitempty,len=6,numeric"`
-	KdfSalt             string             `json:"kdf_salt,omitempty" validate:"max=256"`
+	KdfSalt             string             `json:"kdf_salt" validate:"required,max=256"`
 	PasswordKeyEnvelope string             `json:"password_key_envelope,omitempty"`
 	PasswordKeyNonce    string             `json:"password_key_nonce,omitempty"`
 	RecoveryKeyHash     string             `json:"recovery_key_hash,omitempty"`
@@ -53,13 +54,28 @@ type RegisterResponse struct {
 	Role                entity.Role `json:"role"`
 }
 type LoginRequest struct {
-	Identifier string             `json:"identifier" validate:"required,max=320"`
-	Password   string             `json:"password" validate:"required,max=256"`
+	Identifier string `json:"identifier" validate:"required,max=320"`
+	// AuthSecret is derived from the password on the device (never the password itself).
+	AuthSecret string             `json:"auth_secret" validate:"required,max=128"`
 	DeviceID   string             `json:"device_id" validate:"required,max=128"`
 	DeviceInfo *DeviceInfoRequest `json:"device_info,omitempty"`
 	// RestoreAccount un-deletes a soft-deleted account during this sign-in (grace period only).
 	RestoreAccount bool `json:"restore_account,omitempty"`
 }
+
+// LoginParamsRequest asks for the public key-derivation parameters of an identifier.
+type LoginParamsRequest struct {
+	Identifier string `json:"identifier" validate:"required,max=320"`
+}
+
+// LoginParamsResponse is public by design: the client needs the salt before it can derive
+// its authentication secret. Unknown identifiers get a deterministic decoy salt.
+type LoginParamsResponse struct {
+	KdfSalt       string `json:"kdf_salt"`
+	KdfIterations int    `json:"kdf_iterations"`
+	KdfVersion    int    `json:"kdf_version"`
+}
+
 type LoginResponse struct {
 	AccessToken         string      `json:"access_token"`
 	RefreshToken        string      `json:"refresh_token"`
@@ -82,7 +98,8 @@ type RefreshResponse struct {
 type PrepareRecoveryRequest struct {
 	OTPChallengeID string `json:"otp_challenge_id" validate:"required"`
 	OTPCode        string `json:"otp_code" validate:"required,len=6,numeric"`
-	RecoveryKey    string `json:"recovery_key" validate:"required,min=16,max=512"`
+	// RecoveryProof is derived from the recovery key on the device; the key itself never leaves it.
+	RecoveryProof string `json:"recovery_proof" validate:"required,max=128"`
 }
 
 type PrepareRecoveryResponse struct {
@@ -95,7 +112,7 @@ type PrepareRecoveryResponse struct {
 
 type ResetPasswordRequest struct {
 	RecoverySessionToken string             `json:"recovery_session_token" validate:"required"`
-	NewPassword          string             `json:"new_password" validate:"required,min=8,max=256"`
+	NewAuthSecret        string             `json:"new_auth_secret" validate:"required,max=128"`
 	DeviceID             string             `json:"device_id" validate:"required,max=128"`
 	KdfSalt              string             `json:"kdf_salt" validate:"required,max=256"`
 	PasswordKeyEnvelope  string             `json:"password_key_envelope" validate:"required"`
@@ -118,8 +135,8 @@ type ResetPasswordResponse struct {
 // The client re-wraps its data key under the new password locally (the server only
 // stores the opaque envelope) and must keep using the account's existing KDF salt.
 type ChangePasswordRequest struct {
-	CurrentPassword     string             `json:"current_password" validate:"required,max=256"`
-	NewPassword         string             `json:"new_password" validate:"required,min=8,max=256"`
+	CurrentAuthSecret   string             `json:"current_auth_secret" validate:"required,max=128"`
+	NewAuthSecret       string             `json:"new_auth_secret" validate:"required,max=128"`
 	DeviceID            string             `json:"device_id" validate:"required,max=128"`
 	KdfSalt             string             `json:"kdf_salt" validate:"required,max=256"`
 	PasswordKeyEnvelope string             `json:"password_key_envelope" validate:"required"`
@@ -141,9 +158,9 @@ type ChangePasswordResponse struct {
 	RecoveryKeyNonce    string      `json:"recovery_key_nonce"`
 }
 
-// DeleteAccountRequest soft-deletes the authenticated account. The password is re-verified.
+// DeleteAccountRequest soft-deletes the authenticated account. The password-derived authentication secret is re-verified.
 type DeleteAccountRequest struct {
-	Password string `json:"password" validate:"required,max=256"`
+	AuthSecret string `json:"auth_secret" validate:"required,max=128"`
 }
 
 // DeleteAccountResponse reports when the account was deleted and until when it can be restored.

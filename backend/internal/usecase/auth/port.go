@@ -15,7 +15,7 @@ type DeviceInfo struct {
 }
 
 type RegisterInput struct {
-	PhoneNumber, Email, Password, DeviceID                                                        string
+	PhoneNumber, Email, AuthSecret, DeviceID                                                      string
 	OTPChallengeID, OTPCode                                                                       string
 	EmailOTPChallengeID, EmailOTPCode                                                             string
 	KdfSalt                                                                                       string
@@ -30,7 +30,7 @@ type RegisterOutput struct {
 	PasswordKeyEnvelope, PasswordKeyNonce, RecoveryKeyEnvelope, RecoveryKeyNonce []byte
 }
 type LoginInput struct {
-	Identifier, Password, DeviceID string
+	Identifier, AuthSecret, DeviceID string
 	// RestoreAccount asks the server to un-delete a soft-deleted account (within the grace
 	// period) as part of this sign-in. Without it a deleted account gets ACCOUNT_DELETED.
 	RestoreAccount bool
@@ -59,14 +59,14 @@ type VerifyOTPInput struct {
 	Purpose           entity.OTPPurpose
 }
 type PrepareRecoveryInput struct {
-	ChallengeID, OTPCode, RecoveryKey string
+	ChallengeID, OTPCode, RecoveryProof string
 }
 type PrepareRecoveryOutput struct {
 	RecoverySessionToken, KdfSalt, UserID string
 	RecoveryKeyEnvelope, RecoveryKeyNonce []byte
 }
 type ResetPasswordInput struct {
-	RecoverySessionToken, NewPassword     string
+	RecoverySessionToken, NewAuthSecret   string
 	DeviceID                              string
 	KdfSalt                               string
 	PasswordKeyEnvelope, PasswordKeyNonce []byte
@@ -83,8 +83,8 @@ type ResetPasswordOutput struct {
 // KdfSalt must equal the account's existing salt: the recovery envelope is derived
 // with the same salt, so rotating it would silently break account recovery.
 type ChangePasswordInput struct {
-	UserID, CurrentPassword, NewPassword, DeviceID, KdfSalt string
-	PasswordKeyEnvelope, PasswordKeyNonce                   []byte
+	UserID, CurrentAuthSecret, NewAuthSecret, DeviceID, KdfSalt string
+	PasswordKeyEnvelope, PasswordKeyNonce                       []byte
 
 	Device DeviceInfo
 }
@@ -95,7 +95,7 @@ type ChangePasswordOutput = ResetPasswordOutput
 // DeleteAccountInput soft-deletes the authenticated user's account. The password is
 // re-verified: a stolen access token alone must not be able to delete an account.
 type DeleteAccountInput struct {
-	UserID, Password string
+	UserID, AuthSecret string
 }
 
 // DeleteAccountOutput tells the client until when the account can still be restored.
@@ -113,7 +113,16 @@ type OTPService interface {
 	Request(context.Context, RequestOTPInput) (RequestOTPOutput, error)
 	Verify(context.Context, VerifyOTPInput) (string, error)
 }
+
+// LoginParamsOutput carries the public key-derivation parameters (never secret).
+type LoginParamsOutput struct {
+	KdfSalt       string
+	KdfIterations int
+	KdfVersion    int
+}
+
 type Service interface {
+	LoginParams(ctx context.Context, identifier string) (LoginParamsOutput, error)
 	Register(context.Context, RegisterInput) (RegisterOutput, error)
 	Login(context.Context, LoginInput) (LoginOutput, error)
 	Refresh(context.Context, RefreshInput) (RefreshOutput, error)

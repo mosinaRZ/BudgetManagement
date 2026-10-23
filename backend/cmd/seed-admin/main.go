@@ -60,13 +60,23 @@ func run(identifier, password string) error {
 	if count > 0 {
 		return fmt.Errorf("an administrator already exists; refusing to create another bootstrap administrator")
 	}
+	// The administrator signs in through the same app protocol as everyone else: the server only
+	// ever stores a hash of the password-derived authentication secret, plus the wrapped keys.
+	material, err := infraauth.CreateClientKeyMaterial(password)
+	if err != nil {
+		return fmt.Errorf("derive key material: %w", err)
+	}
 	salt, err := infraauth.GenerateSalt()
 	if err != nil {
 		return fmt.Errorf("generate password salt: %w", err)
 	}
-	passwordHash, err := infraauth.HashPassword(password, salt)
+	passwordHash, err := infraauth.HashPassword(material.AuthSecret, salt)
 	if err != nil {
-		return fmt.Errorf("hash password: %w", err)
+		return fmt.Errorf("hash authentication secret: %w", err)
+	}
+	passwordEnvelope, passwordNonce, recoveryHash, recoveryEnvelope, recoveryNonce, err := decodeMaterial(material)
+	if err != nil {
+		return err
 	}
 	now := time.Now().UTC()
 	user := &entity.User{
@@ -76,14 +86,40 @@ func run(identifier, password string) error {
 		EmailVerified: true,
 		PasswordHash:  passwordHash,
 		AuthSalt:      base64.RawStdEncoding.EncodeToString(salt),
-		CreatedAt:     now, UpdatedAt: now,
+		KdfSalt:       material.KdfSalt,
+
+		PasswordKeyEnvelope: passwordEnvelope,
+		PasswordKeyNonce:    passwordNonce,
+		RecoveryKeyHash:     base64.RawURLEncoding.EncodeToString(recoveryHash),
+		RecoveryKeyEnvelope: recoveryEnvelope,
+		RecoveryKeyNonce:    recoveryNonce,
+		CreatedAt:           now, UpdatedAt: now,
 		Devices: []string{},
 	}
 	if err := mongodb.NewUserRepository(db).Create(ctx, user); err != nil {
 		return fmt.Errorf("create administrator: %w", err)
 	}
 	fmt.Printf("Administrator account created for %s (user id %s). Store the password securely and remove it from shell history.\n", identifier, user.ID)
+	fmt.Printf("Recovery key (shown once, keep it offline): %s\n", material.RecoveryKey)
 	return nil
+}
+
+func decodeMaterial(m infraauth.ClientKeyMaterial) (pe, pn, rh, re, rn []byte, err error) {
+	dec := base64.StdEncoding.DecodeString
+	if pe, err = dec(m.PasswordEnvelope); err != nil {
+		return
+	}
+	if pn, err = dec(m.PasswordNonce); err != nil {
+		return
+	}
+	if rh, err = dec(m.RecoveryKeyHash); err != nil {
+		return
+	}
+	if re, err = dec(m.RecoveryEnvelope); err != nil {
+		return
+	}
+	rn, err = dec(m.RecoveryNonce)
+	return
 }
 
 // Keep the seed tool consistent with the current authentication identifier-hash format.

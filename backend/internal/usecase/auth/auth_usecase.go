@@ -97,8 +97,11 @@ func (s *ServiceImpl) Register(ctx context.Context, in RegisterInput) (RegisterO
 		return RegisterOutput{}, apperror.ErrValidation("invalid phone number")
 	}
 
-	if len(in.Password) < 8 || len(in.Password) > 256 {
-		return RegisterOutput{}, apperror.ErrValidation("password must be between 8 and 256 characters")
+	// The client never sends the password: only an authentication secret derived from it on the
+	// device (see infrastructure/auth/e2ee_envelope.go). Password strength is a client concern.
+	authSecret, err := canonicalAuthSecret(in.AuthSecret)
+	if err != nil {
+		return RegisterOutput{}, err
 	}
 	if err := validDevice(in.DeviceID); err != nil {
 		return RegisterOutput{}, err
@@ -126,7 +129,7 @@ func (s *ServiceImpl) Register(ctx context.Context, in RegisterInput) (RegisterO
 		return RegisterOutput{}, apperror.ErrInternal("failed to generate password salt")
 	}
 
-	passwordHash, err := infraauth.HashPassword(in.Password, authSalt)
+	passwordHash, err := infraauth.HashPassword(authSecret, authSalt)
 	if err != nil {
 		return RegisterOutput{}, apperror.ErrInternal("failed to hash password")
 	}
@@ -251,29 +254,62 @@ func (s *ServiceImpl) prepareRegistrationEmail(ctx context.Context, in RegisterI
 	return emailHash, true, nil
 }
 
+// prepareRegistrationKdfSalt requires a client-chosen salt: the client must know it before it
+// can derive its authentication secret, so the server can no longer pick one on its behalf.
 func prepareRegistrationKdfSalt(value string) (string, error) {
-	if value != "" {
-		decoded, err := decodeBase64Flexible(value)
-		if err != nil || len(decoded) != 16 {
-			return "", apperror.ErrValidation("invalid KDF salt")
-		}
-		return value, nil
+	decoded, err := decodeBase64Flexible(value)
+	if err != nil || len(decoded) != infraauth.KDFSaltBytes {
+		return "", apperror.ErrValidation("invalid KDF salt")
 	}
+	return value, nil
+}
 
-	salt, err := infraauth.GenerateSalt()
-	if err != nil {
-		return "", apperror.ErrInternal("failed to generate KDF salt")
+// canonicalAuthSecret validates the shape of an authentication secret (32 random-looking
+// bytes, base64) and returns its canonical encoding so every spelling hashes identically.
+// Rejecting anything else also stops a legacy client from sending a raw password.
+func canonicalAuthSecret(v string) (string, error) {
+	b, err := decodeBase64Flexible(v)
+	if err != nil || len(b) != 32 {
+		return "", apperror.ErrValidation("auth_secret must be a base64-encoded 32-byte value")
 	}
-	return base64.RawStdEncoding.EncodeToString(salt), nil
+	return base64.StdEncoding.EncodeToString(b), nil
+}
+
+// LoginParams returns the public KDF parameters a client needs before it can authenticate.
+// Unknown identifiers receive a deterministic decoy salt, so the answer does not reveal
+// whether an account exists.
+func (s *ServiceImpl) LoginParams(ctx context.Context, identifier string) (LoginParamsOutput, error) {
+	id := strings.TrimSpace(identifier)
+	if id == "" || len(id) > 320 {
+		return LoginParamsOutput{}, apperror.ErrValidation("identifier is required")
+	}
+	var u *entity.User
+	if strings.Contains(id, "@") {
+		u, _ = s.users.FindByEmailHash(ctx, hashIdentifier(strings.ToLower(id), s.secret))
+	} else if p, e := normalizePhone(id); e == nil {
+		u, _ = s.users.FindByPhoneHash(ctx, hashIdentifier(p, s.secret))
+	}
+	salt := ""
+	if u != nil {
+		if b, err := decodeBase64Flexible(u.KdfSalt); err == nil && len(b) == infraauth.KDFSaltBytes {
+			salt = base64.StdEncoding.EncodeToString(b)
+		}
+	}
+	if salt == "" {
+		mac := hmac.New(sha256.New, []byte(s.secret))
+		_, _ = mac.Write([]byte("cidna/v2/kdf-salt|" + strings.ToLower(id)))
+		salt = base64.StdEncoding.EncodeToString(mac.Sum(nil)[:infraauth.KDFSaltBytes])
+	}
+	return LoginParamsOutput{KdfSalt: salt, KdfIterations: infraauth.ClientPBKDF2Iterations, KdfVersion: infraauth.KDFVersion}, nil
 }
 
 func (s *ServiceImpl) Login(ctx context.Context, in LoginInput) (LoginOutput, error) {
-	if len(in.Password) > 256 {
-		return LoginOutput{}, apperror.ErrUnauthorized("invalid credentials")
+	authSecret, err := canonicalAuthSecret(in.AuthSecret)
+	if err != nil {
+		return LoginOutput{}, err
 	}
 	id := strings.TrimSpace(in.Identifier)
 	var u *entity.User
-	var err error
 	if strings.Contains(id, "@") {
 		u, err = s.users.FindByEmailHash(ctx, hashIdentifier(strings.ToLower(id), s.secret))
 	} else {
@@ -282,20 +318,20 @@ func (s *ServiceImpl) Login(ctx context.Context, in LoginInput) (LoginOutput, er
 			u, err = s.users.FindByPhoneHash(ctx, hashIdentifier(p, s.secret))
 		} else {
 			// Keep malformed identifiers on the same expensive password-verification path.
-			_, _ = infraauth.VerifyPassword(in.Password, dummyAuthSalt, dummyAuthHash)
+			_, _ = infraauth.VerifyPassword(authSecret, dummyAuthSalt, dummyAuthHash)
 			return LoginOutput{}, apperror.ErrUnauthorized("invalid credentials")
 		}
 	}
 	if err != nil || u == nil {
 		// Constant-cost dummy Argon2 verification prevents username/phone enumeration by timing.
-		_, _ = infraauth.VerifyPassword(in.Password, dummyAuthSalt, dummyAuthHash)
+		_, _ = infraauth.VerifyPassword(authSecret, dummyAuthSalt, dummyAuthHash)
 		return LoginOutput{}, apperror.ErrUnauthorized("invalid credentials")
 	}
 	if u.LockedUntil != nil && u.LockedUntil.After(time.Now().UTC()) {
 		// Do not reveal account-lock state; preserve the same public login error.
 		return LoginOutput{}, apperror.ErrUnauthorized("invalid credentials")
 	}
-	ok, _ := infraauth.VerifyPassword(in.Password, u.AuthSalt, u.PasswordHash)
+	ok, _ := infraauth.VerifyPassword(authSecret, u.AuthSalt, u.PasswordHash)
 	if !ok {
 		if err := s.users.RecordFailedLogin(ctx, u.ID, time.Now().UTC(), loginLockThreshold, loginLockDuration); err != nil {
 			return LoginOutput{}, err
@@ -449,7 +485,7 @@ func (s *ServiceImpl) PrepareRecovery(ctx context.Context, in PrepareRecoveryInp
 	if err != nil || u == nil || u.IsDeleted {
 		return PrepareRecoveryOutput{}, apperror.ErrUnauthorized("invalid recovery request")
 	}
-	if !verifyRecoveryKeyHash(u.RecoveryKeyHash, in.RecoveryKey) {
+	if !verifyRecoveryProof(u.RecoveryKeyHash, in.RecoveryProof) {
 		return PrepareRecoveryOutput{}, apperror.ErrUnauthorized("recovery key is invalid")
 	}
 	raw, err := infraauth.GenerateRefreshToken()
@@ -473,8 +509,9 @@ func (s *ServiceImpl) ResetPassword(ctx context.Context, in ResetPasswordInput) 
 	if s.recoverySessions == nil {
 		return ResetPasswordOutput{}, apperror.ErrInternal("recovery service is not configured")
 	}
-	if len(in.NewPassword) < 8 || len(in.NewPassword) > 256 {
-		return ResetPasswordOutput{}, apperror.ErrValidation("password must be between 8 and 256 characters")
+	newAuthSecret, err := canonicalAuthSecret(in.NewAuthSecret)
+	if err != nil {
+		return ResetPasswordOutput{}, err
 	}
 	if err := validDevice(in.DeviceID); err != nil {
 		return ResetPasswordOutput{}, err
@@ -502,7 +539,7 @@ func (s *ServiceImpl) ResetPassword(ctx context.Context, in ResetPasswordInput) 
 	if err != nil {
 		return ResetPasswordOutput{}, apperror.ErrInternal("failed to generate password salt")
 	}
-	ph, err := infraauth.HashPassword(in.NewPassword, salt)
+	ph, err := infraauth.HashPassword(newAuthSecret, salt)
 	if err != nil {
 		return ResetPasswordOutput{}, apperror.ErrInternal("failed to hash password")
 	}
@@ -554,13 +591,16 @@ func (s *ServiceImpl) ChangePassword(ctx context.Context, in ChangePasswordInput
 	if err := validDevice(in.DeviceID); err != nil {
 		return ChangePasswordOutput{}, err
 	}
-	if len(in.NewPassword) < 8 || len(in.NewPassword) > 256 {
-		return ChangePasswordOutput{}, apperror.ErrValidation("password must be between 8 and 256 characters")
+	newAuthSecret, err := canonicalAuthSecret(in.NewAuthSecret)
+	if err != nil {
+		return ChangePasswordOutput{}, err
 	}
-	if in.CurrentPassword == "" {
-		return ChangePasswordOutput{}, apperror.ErrValidation("current password is required")
+	currentAuthSecret, err := canonicalAuthSecret(in.CurrentAuthSecret)
+	if err != nil {
+		return ChangePasswordOutput{}, err
 	}
-	if in.NewPassword == in.CurrentPassword {
+	// The account KDF salt is stable, so identical secrets mean identical passwords.
+	if newAuthSecret == currentAuthSecret {
 		return ChangePasswordOutput{}, apperror.ErrValidation("new password must differ from the current password")
 	}
 	newKdfSalt, err := decodeAndValidateKdfSalt(in.KdfSalt)
@@ -601,10 +641,7 @@ func (s *ServiceImpl) ChangePassword(ctx context.Context, in ChangePasswordInput
 		return ChangePasswordOutput{}, apperror.ErrForbidden("device is not registered")
 	}
 
-	if len(in.CurrentPassword) > 256 {
-		return ChangePasswordOutput{}, apperror.ErrInvalidPassword("current password is incorrect")
-	}
-	ok, _ := infraauth.VerifyPassword(in.CurrentPassword, u.AuthSalt, u.PasswordHash)
+	ok, _ := infraauth.VerifyPassword(currentAuthSecret, u.AuthSalt, u.PasswordHash)
 	if !ok {
 		if err := s.users.RecordFailedLogin(ctx, u.ID, now, loginLockThreshold, loginLockDuration); err != nil {
 			return ChangePasswordOutput{}, err
@@ -619,7 +656,7 @@ func (s *ServiceImpl) ChangePassword(ctx context.Context, in ChangePasswordInput
 	if err != nil {
 		return ChangePasswordOutput{}, apperror.ErrInternal("failed to generate password salt")
 	}
-	passwordHash, err := infraauth.HashPassword(in.NewPassword, salt)
+	passwordHash, err := infraauth.HashPassword(newAuthSecret, salt)
 	if err != nil {
 		return ChangePasswordOutput{}, apperror.ErrInternal("failed to hash password")
 	}
@@ -663,8 +700,9 @@ func (s *ServiceImpl) DeleteAccount(ctx context.Context, in DeleteAccountInput) 
 	if strings.TrimSpace(in.UserID) == "" {
 		return DeleteAccountOutput{}, apperror.ErrUnauthorized("invalid session")
 	}
-	if in.Password == "" {
-		return DeleteAccountOutput{}, apperror.ErrValidation("password is required")
+	authSecret, err := canonicalAuthSecret(in.AuthSecret)
+	if err != nil {
+		return DeleteAccountOutput{}, err
 	}
 	u, err := s.users.FindByID(ctx, in.UserID)
 	if err != nil {
@@ -680,10 +718,7 @@ func (s *ServiceImpl) DeleteAccount(ctx context.Context, in DeleteAccountInput) 
 	if u.LockedUntil != nil && u.LockedUntil.After(now) {
 		return DeleteAccountOutput{}, apperror.ErrRateLimited("too many failed attempts; try again later")
 	}
-	if len(in.Password) > 256 {
-		return DeleteAccountOutput{}, apperror.ErrInvalidPassword("password is incorrect")
-	}
-	ok, _ := infraauth.VerifyPassword(in.Password, u.AuthSalt, u.PasswordHash)
+	ok, _ := infraauth.VerifyPassword(authSecret, u.AuthSalt, u.PasswordHash)
 	if !ok {
 		if err := s.users.RecordFailedLogin(ctx, u.ID, now, loginLockThreshold, loginLockDuration); err != nil {
 			return DeleteAccountOutput{}, err
@@ -1003,45 +1038,23 @@ func hashIdentifier(v, secret string) string {
 	_, _ = mac.Write([]byte(strings.ToLower(strings.TrimSpace(v))))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
-func hashRecovery(v string) string {
-	v = strings.TrimSpace(v)
-	var raw []byte
-	if decoded, err := base64.StdEncoding.DecodeString(v); err == nil {
-		raw = decoded
-	} else if decoded, err := base64.RawStdEncoding.DecodeString(v); err == nil {
-		raw = decoded
-	} else if decoded, err := base64.RawURLEncoding.DecodeString(v); err == nil {
-		raw = decoded
-	}
-	if len(raw) > 0 {
-		h := sha256.Sum256(raw)
-		return base64.RawURLEncoding.EncodeToString(h[:])
-	}
-	h := sha256.Sum256([]byte(v))
-	return base64.RawURLEncoding.EncodeToString(h[:])
-}
 
-func verifyRecoveryKeyHash(stored, recoveryKey string) bool {
+// verifyRecoveryProof checks a client-derived recovery proof against the stored SHA-256 of the
+// expected proof. The recovery key itself never reaches the server (it can unwrap the data key).
+func verifyRecoveryProof(stored, proof string) bool {
 	if stored == "" {
 		return false
 	}
-	canonical := hashRecovery(recoveryKey)
-	if hmac.Equal([]byte(stored), []byte(canonical)) {
-		return true
-	}
-	decodedCanonical, err := base64.RawURLEncoding.DecodeString(canonical)
-	if err != nil {
+	raw, err := decodeBase64Flexible(proof)
+	if err != nil || len(raw) != 32 {
 		return false
 	}
-	// Backward compatibility for installations created before the canonical
-	// Base64URL hash representation was introduced.
-	if len(stored) == sha256.Size && hmac.Equal([]byte(stored), decodedCanonical) {
-		return true
+	want, err := decodeBase64Flexible(stored)
+	if err != nil || len(want) != sha256.Size {
+		return false
 	}
-	if raw, err := base64.StdEncoding.DecodeString(stored); err == nil && len(raw) == sha256.Size {
-		return hmac.Equal(raw, decodedCanonical)
-	}
-	return false
+	got := infraauth.RecoveryKeyHashFromProof(raw)
+	return hmac.Equal(got, want)
 }
 
 // IdentifierHashForCLI hashes a normalized identifier using the same server secret used by authentication.
