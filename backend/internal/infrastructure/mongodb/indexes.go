@@ -2,6 +2,7 @@ package mongodb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -35,8 +36,7 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	if _, err := db.Collection(usersCollectionName).
 		Indexes().
 		DropOne(ctx, "uniq_user_email_hash"); err != nil {
-
-		if commandErr, ok := err.(mongo.CommandError); !ok || commandErr.Code != 27 {
+		if !isMissingIndexOrNamespace(err) {
 			return fmt.Errorf("drop obsolete user index: %w", err)
 		}
 	}
@@ -87,4 +87,14 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 		return fmt.Errorf("device_events indexes: %w", err)
 	}
 	return nil
+}
+
+// isMissingIndexOrNamespace reports whether a DropOne error only means there is
+// nothing to drop: IndexNotFound (27), or NamespaceNotFound (26) on a fresh database.
+func isMissingIndexOrNamespace(err error) bool {
+	var cmdErr mongo.CommandError
+	if errors.As(err, &cmdErr) {
+		return cmdErr.Code == 26 || cmdErr.Code == 27
+	}
+	return false
 }

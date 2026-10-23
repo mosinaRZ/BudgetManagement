@@ -165,7 +165,11 @@ func (r *syncRepositoryImpl) applyRecords(ctx mongo.SessionContext, req reposito
 	}
 	conflicts := make([]*entity.SyncRecord, 0)
 	toWrite := make([]*entity.SyncRecord, 0, len(req.Records))
-	for _, incoming := range req.Records {
+	for _, original := range req.Records {
+		// Work on a copy: the caller's request must never be mutated (it can be
+		// shared across goroutines or replayed when a transaction is retried).
+		copied := *original
+		incoming := &copied
 		// The authenticated request user is authoritative. Never trust the
 		// user ID embedded in client-provided record payloads.
 		incoming.UserID = req.UserID
