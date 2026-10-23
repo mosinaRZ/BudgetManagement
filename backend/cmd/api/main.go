@@ -70,7 +70,7 @@ func run() error {
 	syncUC := syncUsecase.NewSyncUsecase(syncRepo, deviceRepo)
 	syncHandler := handler.NewSyncHandler(syncUC, validate)
 	otpRepo := mongodb.NewOTPRepository(db)
-	delivery := notification.New(notification.Config{SMSWebhookURL: cfg.SMSWebhookURL, SMSAuthToken: cfg.SMSAuthToken, DevLog: cfg.DevLogOTP})
+	delivery := notification.New(notification.Config{SMSWebhookURL: cfg.SMSWebhookURL, SMSAuthToken: cfg.SMSAuthToken, SMSFromNumber: cfg.SMSFromNumber, SMSPatternCode: cfg.SMSPatternCode, DevLog: cfg.DevLogOTP})
 	otpUC := authUsecase.NewOTPService(otpRepo, delivery, cfg.JWTSecret, cfg.OTPExpiry)
 
 	userRepo := mongodb.NewUserRepository(db)

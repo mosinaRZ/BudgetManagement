@@ -30,6 +30,8 @@ services:
       DEV_LOG_OTP: ${DEV_LOG_OTP:-false}
       SMS_WEBHOOK_URL: ${SMS_WEBHOOK_URL:-}
       SMS_AUTH_TOKEN: ${SMS_AUTH_TOKEN:-}
+      SMS_FROM_NUMBER: ${SMS_FROM_NUMBER:-}
+      SMS_PATTERN_CODE: ${SMS_PATTERN_CODE:-}
     depends_on:
       mongo:
         condition: service_healthy
