@@ -68,6 +68,7 @@ import ir.hamedan.budgetmanagement.ui.screens.guest.GuestPasscodeDialog
 import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.preferences.SharedPreferences
+import ir.hamedan.budgetmanagement.data.security.ScreenSecurity
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.saveThemeMode
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
@@ -136,6 +137,8 @@ fun SettingsScreen(
             if (isGuest) guestStore.isBiometricEnabled() else SharedPreferences.getBiometricEnabled(context)
         )
     }
+
+    var isScreenProtected by remember(context) { mutableStateOf(ScreenSecurity.isEnabled(context)) }
 
     var showChangePasswordDialog by remember { mutableStateOf(false) }
     var showBiometricPasswordDialog by remember { mutableStateOf(false) }
@@ -619,6 +622,18 @@ fun SettingsScreen(
                                 )
                             }
 
+                            // Hides balances and transactions in Recents and blocks screenshots / screen
+                            // recording. On by default; the window flag is applied live by ScreenSecurity.
+                            SecuritySwitchRow(
+                                title = if (isPersian) "محافظت از محتوای صفحه (اسکرین‌شات و برنامه‌های اخیر)" else "Screen Privacy (screenshots & recent apps)",
+                                icon = Icons.Default.VisibilityOff,
+                                checked = isScreenProtected,
+                                onCheckedChange = { target ->
+                                    isScreenProtected = target
+                                    ScreenSecurity.setEnabled(context, target)
+                                }
+                            )
+
                             SecurityActionRow(
                                 title = if (isPersian) "تغییر گذرواژه حساب" else "Change Password",
                                 icon = Icons.Default.Password
@@ -842,14 +857,13 @@ fun SettingsScreen(
                         if (activity == null || cipher == null) {
                             biometricSetupError = if (isPersian) "بیومتریک دستگاه آماده استفاده نیست." else "Biometric authentication is not available on this device."
                         } else {
-                            val passwordToRemember = currentPassword
                             val prompt = BiometricPrompt(
                                 activity,
                                 ContextCompat.getMainExecutor(context),
                                 object : BiometricPrompt.AuthenticationCallback() {
                                     override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                                         result.cryptoObject?.cipher?.let { authenticatedCipher ->
-                                            rememberedLoginStore.savePassword(authenticatedCipher, passwordToRemember)
+                                            rememberedLoginStore.enrollBiometric(authenticatedCipher)
                                             isBiometricEnabled = rememberedLoginStore.hasBiometricCredential()
                                             SharedPreferences.setBiometricEnabled(context, isBiometricEnabled)
                                             if (isBiometricEnabled) {

@@ -121,6 +121,9 @@ enum class AuthContext { LOGIN, REGISTER, OTP_REQUEST, RESET_PASSWORD, CHANGE_PA
  * misleading when the user simply typed a wrong password or code.
  */
 fun authErrorMessage(error: Throwable, isPersian: Boolean, context: AuthContext): String {
+    if (error is ir.hamedan.budgetmanagement.data.security.SyncKeyManager.InvalidRecoveryKeyException) {
+        return if (isPersian) "کلید بازیابی نادرست است." else "The recovery key is wrong."
+    }
     val api = error as? ApiException
     if (api != null) {
         val code = api.code.orEmpty()

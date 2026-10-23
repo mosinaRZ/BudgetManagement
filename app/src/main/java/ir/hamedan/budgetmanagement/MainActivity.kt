@@ -54,6 +54,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.data.security.AppLockPreferences
+import ir.hamedan.budgetmanagement.data.security.ScreenSecurity
 import ir.hamedan.budgetmanagement.data.preferences.OnboardingPreferences
 import ir.hamedan.budgetmanagement.data.preferences.PermissionReminderPreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
@@ -188,6 +189,8 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Before any content exists, so not even the first frame can leak into Recents.
+        ScreenSecurity.bind(this)
         enableEdgeToEdge()
 
         // مقداردهی اولیه واحد پول

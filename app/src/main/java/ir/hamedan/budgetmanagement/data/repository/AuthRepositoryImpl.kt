@@ -8,6 +8,7 @@ import ir.hamedan.budgetmanagement.data.local.models.UserEntity
 import ir.hamedan.budgetmanagement.data.network.AccountApi
 import ir.hamedan.budgetmanagement.data.network.AuthApi
 import ir.hamedan.budgetmanagement.data.security.AuthSessionStore
+import ir.hamedan.budgetmanagement.data.security.CidnaKdf
 import ir.hamedan.budgetmanagement.data.security.DeviceIdentityStore
 import ir.hamedan.budgetmanagement.data.security.DeviceInfoProvider
 import ir.hamedan.budgetmanagement.data.security.RememberedLoginStore
@@ -46,16 +47,25 @@ class AuthRepositoryImpl(
         if (password.isBlank()) return Result.failure(IllegalArgumentException("Password must not be blank."))
         return withContext(Dispatchers.IO) {
             runCatching {
-                val response = authApi.login(
-                    identifier = identifier.trim(),
-                    password = password,
-                    deviceId = deviceIdentityStore.getOrCreate(),
-                    deviceInfo = deviceInfoProvider.toJson(),
-                    restoreAccount = restoreAccount
-                )
-                // Credentials are verified; only now may the guest workspace be discarded.
-                if (discardGuestData) guestModeManager.deleteWorkspace().getOrThrow()
-                persistSession(response, password, identifier = identifier.trim())
+                // The password never leaves the device: fetch the public KDF salt, derive the
+                // master key locally and send only the independent authentication secret.
+                val params = authApi.loginParams(identifier.trim())
+                requireSupportedKdf(params)
+                val masterKey = syncKeyManager.deriveMasterKey(password.toCharArray(), params.kdfSalt)
+                try {
+                    val response = authApi.login(
+                        identifier = identifier.trim(),
+                        authSecret = syncKeyManager.authSecret(masterKey),
+                        deviceId = deviceIdentityStore.getOrCreate(),
+                        deviceInfo = deviceInfoProvider.toJson(),
+                        restoreAccount = restoreAccount
+                    )
+                    // Credentials are verified; only now may the guest workspace be discarded.
+                    if (discardGuestData) guestModeManager.deleteWorkspace().getOrThrow()
+                    persistSession(response, password, masterKey, identifier = identifier.trim())
+                } finally {
+                    SyncKeyManager.wipe(masterKey)
+                }
                 // Otherwise the guest workspace stays on the device and is merged into the account
                 // by the normal sync, which runs once the session exists.
                 guestModeManager.onAccountSignedIn().getOrThrow()
@@ -69,7 +79,13 @@ class AuthRepositoryImpl(
             require(sessionStore.isAuthenticated()) { "Not signed in." }
             // Signing out of this device happens inside the API client's lock, right after the
             // server confirmed the deletion (see AccountApi.deleteAccount).
-            accountApi.deleteAccount(password) { sessionStore.clear() }
+            val kdfSalt = sessionStore.kdfSalt()?.takeIf { it.isNotBlank() } ?: error("Account key salt is missing.")
+            val masterKey = syncKeyManager.deriveMasterKey(password.toCharArray(), kdfSalt)
+            try {
+                accountApi.deleteAccount(syncKeyManager.authSecret(masterKey)) { sessionStore.clear() }
+            } finally {
+                SyncKeyManager.wipe(masterKey)
+            }
             // From here on the account is deleted server-side; local cleanup must not turn that
             // into a reported failure, so each step is attempted independently.
             runCatching { syncLocalDataSource.clearAccountData() }
@@ -96,7 +112,7 @@ class AuthRepositoryImpl(
                 AuthApi.RegisterInput(
                     phoneNumber = input.phoneNumber,
                     email = input.email,
-                    password = input.password,
+                    authSecret = material.authSecret,
                     deviceId = deviceId,
                     otpChallengeId = input.otpChallengeId,
                     otpCode = input.otpCode,
@@ -111,7 +127,11 @@ class AuthRepositoryImpl(
                     deviceInfo = deviceInfoProvider.toJson()
                 )
             )
-            persistSession(response, input.password, phoneNumber = input.phoneNumber, email = input.email)
+            try {
+                persistSession(response, input.password, material.masterKey, phoneNumber = input.phoneNumber, email = input.email)
+            } finally {
+                SyncKeyManager.wipe(material.masterKey)
+            }
             // The recovery key is returned exactly once so the registration UI can
             // force an explicit secure backup instead of silently persisting it.
             AuthRepository.RegistrationResult(
@@ -122,7 +142,18 @@ class AuthRepositoryImpl(
     }
 
     override suspend fun prepareRecovery(challengeId: String, otpCode: String, recoveryKey: String): Result<AuthApi.RecoveryPreparation> =
-        withContext(Dispatchers.IO) { runCatching { authApi.prepareRecovery(challengeId, otpCode, recoveryKey) } }
+        withContext(Dispatchers.IO) {
+            runCatching {
+                // Only a derived proof is sent; the recovery key itself (which can unwrap the
+                // data key) stays on the device.
+                val recoveryBytes = CidnaKdf.decodeRecoveryKey(recoveryKey) ?: throw SyncKeyManager.InvalidRecoveryKeyException()
+                try {
+                    authApi.prepareRecovery(challengeId, otpCode, CidnaKdf.recoveryProof(recoveryBytes))
+                } finally {
+                    SyncKeyManager.wipe(recoveryBytes)
+                }
+            }
+        }
 
     override suspend fun resetPassword(
         recoverySessionToken: String,
@@ -146,7 +177,7 @@ class AuthRepositoryImpl(
             val response = authApi.resetPassword(
                 AuthApi.ResetPasswordInput(
                     recoverySessionToken = recoverySessionToken,
-                    newPassword = newPassword,
+                    newAuthSecret = passwordMaterial.authSecret,
                     deviceId = deviceId,
                     kdfSalt = passwordMaterial.kdfSalt,
                     passwordKeyEnvelope = passwordMaterial.passwordKeyEnvelope,
@@ -155,7 +186,11 @@ class AuthRepositoryImpl(
                 )
             )
             syncKeyManager.storeRecoveredDataKey(passwordMaterial.dataKey)
-            persistSession(response, newPassword, expectedUserId = userId)
+            try {
+                persistSession(response, newPassword, passwordMaterial.masterKey, expectedUserId = userId)
+            } finally {
+                SyncKeyManager.wipe(passwordMaterial.masterKey, passwordMaterial.dataKey)
+            }
         }
     }
 
@@ -166,11 +201,17 @@ class AuthRepositoryImpl(
             require(sessionStore.isAuthenticated()) { "Not signed in." }
             val kdfSalt = sessionStore.kdfSalt()?.takeIf { it.isNotBlank() } ?: error("Account key salt is missing.")
             val deviceId = sessionStore.deviceId()?.takeIf { it.isNotBlank() } ?: deviceIdentityStore.getOrCreate()
+            val currentMasterKey = syncKeyManager.deriveMasterKey(currentPassword.toCharArray(), kdfSalt)
+            val currentAuthSecret = try {
+                syncKeyManager.authSecret(currentMasterKey)
+            } finally {
+                SyncKeyManager.wipe(currentMasterKey)
+            }
             val material = syncKeyManager.createPasswordChangeMaterial(newPassword.toCharArray(), kdfSalt)
             accountApi.changePassword(
                 AccountApi.ChangePasswordInput(
-                    currentPassword = currentPassword,
-                    newPassword = newPassword,
+                    currentAuthSecret = currentAuthSecret,
+                    newAuthSecret = material.authSecret,
                     deviceId = deviceId,
                     kdfSalt = material.kdfSalt,
                     passwordKeyEnvelope = material.passwordKeyEnvelope,
@@ -193,8 +234,9 @@ class AuthRepositoryImpl(
                     role = issued.role ?: sessionStore.role()
                 )
             }
-            // Local re-authentication must follow the new password; the fingerprint credential
-            // still wraps the OLD one, so it is dropped and can be re-enabled from Settings.
+            // Local re-authentication must follow the new password; the fingerprint credential is
+            // dropped as well so it is re-enrolled deliberately from Settings.
+            SyncKeyManager.wipe(material.masterKey, material.dataKey)
             rememberedLoginStore.savePasswordVerifier(newPassword)
             rememberedLoginStore.clearBiometricCredential()
         }
@@ -250,6 +292,7 @@ class AuthRepositoryImpl(
     private suspend fun persistSession(
         response: AuthApi.LoginResponse,
         password: String,
+        masterKey: ByteArray,
         identifier: String? = null,
         phoneNumber: String? = null,
         email: String? = null
@@ -260,8 +303,7 @@ class AuthRepositoryImpl(
             syncLocalDataSource.clearAccountData()
         }
         syncKeyManager.initializeFromLogin(
-            password = password.toCharArray(),
-            kdfSaltB64 = response.kdfSalt,
+            masterKey = masterKey,
             envelopeB64 = response.passwordKeyEnvelope.takeIf { it.isNotBlank() },
             nonceB64 = response.passwordKeyNonce.takeIf { it.isNotBlank() }
         )
@@ -307,6 +349,7 @@ class AuthRepositoryImpl(
     private suspend fun persistSession(
         response: AuthApi.RegisterResponse,
         password: String,
+        masterKey: ByteArray,
         phoneNumber: String? = null,
         email: String? = null
     ) {
@@ -321,11 +364,11 @@ class AuthRepositoryImpl(
                 passwordKeyNonce = response.passwordKeyNonce,
                 recoveryKeyEnvelope = response.recoveryKeyEnvelope,
                 recoveryKeyNonce = response.recoveryKeyNonce
-            ), password, phoneNumber = phoneNumber, email = email
+            ), password, masterKey, phoneNumber = phoneNumber, email = email
         )
     }
 
-    private suspend fun persistSession(response: AuthApi.ResetPasswordResponse, password: String, expectedUserId: String) {
+    private suspend fun persistSession(response: AuthApi.ResetPasswordResponse, password: String, masterKey: ByteArray, expectedUserId: String) {
         require(response.userId == expectedUserId) { "Recovered account does not match the requested account." }
         persistSession(
             AuthApi.LoginResponse(
@@ -338,7 +381,14 @@ class AuthRepositoryImpl(
                 passwordKeyNonce = response.passwordKeyNonce,
                 recoveryKeyEnvelope = response.recoveryKeyEnvelope,
                 recoveryKeyNonce = response.recoveryKeyNonce
-            ), password
+            ), password, masterKey
         )
+    }
+
+    /** Refuses KDF parameters this build does not implement (also blocks a downgrade by a rogue server). */
+    private fun requireSupportedKdf(params: AuthApi.LoginParams) {
+        check(params.kdfVersion == CidnaKdf.VERSION && params.kdfIterations == CidnaKdf.PBKDF2_ITERATIONS) {
+            "Unsupported key-derivation parameters; please update the app."
+        }
     }
 }
