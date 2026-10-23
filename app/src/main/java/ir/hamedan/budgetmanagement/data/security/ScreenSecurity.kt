@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 /**
  * Screen-content protection for a financial app.
  *
- * When enabled (the default, and recommended) the app window is marked FLAG_SECURE, so the
+ * When enabled the app window is marked FLAG_SECURE, so the
  * system blanks it in the Recents overview and rejects screenshots, screen recording and
  * casting / non-secure virtual displays. On Android 13+ the Recents thumbnail is additionally
  * disabled explicitly. Compose dialogs, bottom sheets and menus use `SecureFlagPolicy.Inherit`
@@ -30,7 +30,7 @@ object ScreenSecurity {
     private const val PREFS_NAME = "budget_screen_security"
     private const val KEY_PROTECT_SCREEN = "protect_screen"
 
-    private val state = MutableStateFlow(true)
+    private val state = MutableStateFlow(false)
 
     /** Current protection state; collected by [bind] so Settings changes apply instantly. */
     val enabled: StateFlow<Boolean> = state.asStateFlow()
@@ -38,8 +38,8 @@ object ScreenSecurity {
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    /** Secure by default: a missing value means protected. */
-    fun isEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_PROTECT_SCREEN, true)
+    /** Privacy protection is opt-in: a missing preference means disabled. */
+    fun isEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_PROTECT_SCREEN, false)
 
     fun setEnabled(context: Context, value: Boolean) {
         prefs(context).edit().putBoolean(KEY_PROTECT_SCREEN, value).apply()

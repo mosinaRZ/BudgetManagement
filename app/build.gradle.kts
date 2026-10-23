@@ -123,6 +123,13 @@ android {
         buildConfig = true
     }
 
+    // Make merged Android resources (including R.raw.export_logo_mark) available to Robolectric tests.
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+
     packaging {
         resources {
             excludes += setOf(

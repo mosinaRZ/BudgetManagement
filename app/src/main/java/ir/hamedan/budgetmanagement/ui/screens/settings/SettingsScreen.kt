@@ -631,10 +631,10 @@ fun SettingsScreen(
                                 )
                             }
 
-                            // Hides balances and transactions in Recents and blocks screenshots / screen
-                            // recording. On by default; the window flag is applied live by ScreenSecurity.
+                            // Optional privacy protection. The preference is opt-in and applied live.
                             SecuritySwitchRow(
-                                title = if (isPersian) "محافظت از محتوای صفحه (اسکرین‌شات و برنامه‌های اخیر)" else "Screen Privacy (screenshots & recent apps)",
+                                title = if (isPersian) "محافظت از محتوای صفحه" else "Screen content protection",
+                                subtitle = if (isPersian) "جلوگیری از اسکرین‌شات و نمایش محتوا در برنامه‌های اخیر" else "Block screenshots and hide content in Recents",
                                 icon = Icons.Default.VisibilityOff,
                                 checked = isScreenProtected,
                                 onCheckedChange = { target ->
@@ -1410,6 +1410,7 @@ private fun SettingsSimpleItem(
 @Composable
 private fun SecuritySwitchRow(
     title: String,
+    subtitle: String? = null,
     icon: ImageVector,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
@@ -1423,6 +1424,7 @@ private fun SecuritySwitchRow(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
+            modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -1432,11 +1434,23 @@ private fun SecuritySwitchRow(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(22.dp)
             )
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
 
         Switch(
