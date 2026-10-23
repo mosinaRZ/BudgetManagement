@@ -85,7 +85,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	in := auth.RegisterInput{
 		PhoneNumber:         q.PhoneNumber,
 		Email:               q.Email,
-		Password:            q.Password,
+		AuthSecret:          q.AuthSecret,
 		DeviceID:            q.DeviceID,
 		OTPChallengeID:      q.OTPChallengeID,
 		OTPCode:             q.OTPCode,
@@ -106,6 +106,26 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	response.JSON(w, http.StatusCreated, dto.RegisterResponse{AccessToken: out.AccessToken, RefreshToken: out.RefreshToken, KdfSalt: out.KdfSalt, UserID: out.UserID, RecoveryRequired: out.RecoveryRequired, PasswordKeyEnvelope: enc(out.PasswordKeyEnvelope), PasswordKeyNonce: enc(out.PasswordKeyNonce), RecoveryKeyEnvelope: enc(out.RecoveryKeyEnvelope), RecoveryKeyNonce: enc(out.RecoveryKeyNonce), Role: out.Role})
 }
+
+// LoginParams returns the public KDF parameters for an identifier (see dto.LoginParamsResponse).
+func (h *AuthHandler) LoginParams(w http.ResponseWriter, r *http.Request) {
+	var q dto.LoginParamsRequest
+	if err := decodeJSON(w, r, &q); err != nil {
+		response.Error(w, err)
+		return
+	}
+	if err := validateRequest(h.validate, q); err != nil {
+		response.Error(w, err)
+		return
+	}
+	out, err := h.usecase.LoginParams(r.Context(), q.Identifier)
+	if err != nil {
+		response.Error(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, dto.LoginParamsResponse{KdfSalt: out.KdfSalt, KdfIterations: out.KdfIterations, KdfVersion: out.KdfVersion})
+}
+
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var q dto.LoginRequest
 	if err := decodeJSON(w, r, &q); err != nil {
@@ -116,7 +136,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, err)
 		return
 	}
-	out, err := h.usecase.Login(r.Context(), auth.LoginInput{Identifier: q.Identifier, Password: q.Password, DeviceID: q.DeviceID, RestoreAccount: q.RestoreAccount, Device: deviceInfoFrom(r, q.DeviceInfo)})
+	out, err := h.usecase.Login(r.Context(), auth.LoginInput{Identifier: q.Identifier, AuthSecret: q.AuthSecret, DeviceID: q.DeviceID, RestoreAccount: q.RestoreAccount, Device: deviceInfoFrom(r, q.DeviceInfo)})
 	if err != nil {
 		response.Error(w, err)
 		return
@@ -155,7 +175,7 @@ func (h *AuthHandler) PrepareRecovery(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, apperror.ErrInternal("recovery service is not configured"))
 		return
 	}
-	out, err := extended.PrepareRecovery(r.Context(), auth.PrepareRecoveryInput{ChallengeID: q.OTPChallengeID, OTPCode: q.OTPCode, RecoveryKey: q.RecoveryKey})
+	out, err := extended.PrepareRecovery(r.Context(), auth.PrepareRecoveryInput{ChallengeID: q.OTPChallengeID, OTPCode: q.OTPCode, RecoveryProof: q.RecoveryProof})
 	if err != nil {
 		response.Error(w, err)
 		return
@@ -188,7 +208,7 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, apperror.ErrValidation("password_key_nonce must be valid base64"))
 		return
 	}
-	out, err := extended.ResetPassword(r.Context(), auth.ResetPasswordInput{RecoverySessionToken: q.RecoverySessionToken, NewPassword: q.NewPassword, DeviceID: q.DeviceID, KdfSalt: q.KdfSalt, PasswordKeyEnvelope: passwordKeyEnvelope, PasswordKeyNonce: passwordKeyNonce, Device: deviceInfoFrom(r, q.DeviceInfo)})
+	out, err := extended.ResetPassword(r.Context(), auth.ResetPasswordInput{RecoverySessionToken: q.RecoverySessionToken, NewAuthSecret: q.NewAuthSecret, DeviceID: q.DeviceID, KdfSalt: q.KdfSalt, PasswordKeyEnvelope: passwordKeyEnvelope, PasswordKeyNonce: passwordKeyNonce, Device: deviceInfoFrom(r, q.DeviceInfo)})
 	if err != nil {
 		response.Error(w, err)
 		return
@@ -320,7 +340,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out, err := changer.ChangePassword(r.Context(), auth.ChangePasswordInput{
-		UserID: userID, CurrentPassword: q.CurrentPassword, NewPassword: q.NewPassword, DeviceID: q.DeviceID,
+		UserID: userID, CurrentAuthSecret: q.CurrentAuthSecret, NewAuthSecret: q.NewAuthSecret, DeviceID: q.DeviceID,
 		KdfSalt: q.KdfSalt, PasswordKeyEnvelope: passwordKeyEnvelope, PasswordKeyNonce: passwordKeyNonce,
 		Device: deviceInfoFrom(r, q.DeviceInfo),
 	})
@@ -352,7 +372,7 @@ func (h *AuthHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, apperror.ErrInternal("account deletion service is not configured"))
 		return
 	}
-	out, err := deleter.DeleteAccount(r.Context(), auth.DeleteAccountInput{UserID: userID, Password: q.Password})
+	out, err := deleter.DeleteAccount(r.Context(), auth.DeleteAccountInput{UserID: userID, AuthSecret: q.AuthSecret})
 	if err != nil {
 		response.Error(w, err)
 		return

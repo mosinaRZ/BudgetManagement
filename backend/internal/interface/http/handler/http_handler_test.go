@@ -25,6 +25,9 @@ type fakeAuthService struct {
 func (f fakeAuthService) Register(ctx context.Context, in authusecase.RegisterInput) (authusecase.RegisterOutput, error) {
 	return f.register(ctx, in)
 }
+func (f fakeAuthService) LoginParams(context.Context, string) (authusecase.LoginParamsOutput, error) {
+	return authusecase.LoginParamsOutput{}, nil
+}
 func (f fakeAuthService) Login(ctx context.Context, in authusecase.LoginInput) (authusecase.LoginOutput, error) {
 	return f.login(ctx, in)
 }
@@ -46,7 +49,7 @@ func TestAuthHandlerMapsUsecaseError(t *testing.T) {
 	h := NewAuthHandler(fakeAuthService{login: func(context.Context, authusecase.LoginInput) (authusecase.LoginOutput, error) {
 		return authusecase.LoginOutput{}, apperror.ErrUnauthorized("invalid credentials")
 	}}, validator.New())
-	body, _ := json.Marshal(dto.LoginRequest{Identifier: "+989121234567", Password: "correct horse", DeviceID: "device"})
+	body, _ := json.Marshal(dto.LoginRequest{Identifier: "+989121234567", AuthSecret: "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=", DeviceID: "device"})
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(string(body)))
 	rec := httptest.NewRecorder()
 	h.Login(rec, req)
@@ -70,7 +73,7 @@ func TestAuthHandlerDoesNotExposeUnexpectedError(t *testing.T) {
 	h := NewAuthHandler(fakeAuthService{login: func(context.Context, authusecase.LoginInput) (authusecase.LoginOutput, error) {
 		return authusecase.LoginOutput{}, errors.New("mongo secret details")
 	}}, validator.New())
-	body := `{"identifier":"+989121234567","password":"correct horse","device_id":"device"}`
+	body := `{"identifier":"+989121234567","auth_secret":"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=","device_id":"device"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	h.Login(rec, req)

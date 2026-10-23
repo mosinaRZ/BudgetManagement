@@ -11,7 +11,7 @@ import (
 	"github.com/mosinaRZ/finance-sync-backend/internal/usecase/mocks"
 )
 
-const deletionTestPassword = "correct horse battery"
+const deletionTestPassword = testAuthSecret
 
 // deletionFixture is an account that can sign in with deletionTestPassword.
 func deletionFixture(t *testing.T, deletedAt *time.Time) *entity.User {
@@ -60,7 +60,7 @@ func TestDeleteAccountSoftDeletesAndRevokesEverySession(t *testing.T) {
 	s := newService(users, refresh)
 
 	before := time.Now().UTC()
-	out, err := s.DeleteAccount(context.Background(), DeleteAccountInput{UserID: "u1", Password: deletionTestPassword})
+	out, err := s.DeleteAccount(context.Background(), DeleteAccountInput{UserID: "u1", AuthSecret: deletionTestPassword})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestDeleteAccountRequiresTheCorrectPassword(t *testing.T) {
 	}
 	s := newService(users, &mocks.MockRefreshTokenRepository{})
 
-	_, err := s.DeleteAccount(context.Background(), DeleteAccountInput{UserID: "u1", Password: "wrong password!"})
+	_, err := s.DeleteAccount(context.Background(), DeleteAccountInput{UserID: "u1", AuthSecret: testWrongSecret})
 	requireCode(t, err, apperror.CodeInvalidPassword)
 	if !failed {
 		t.Fatal("a wrong password must count towards the lockout")
@@ -97,7 +97,7 @@ func TestDeleteAccountRequiresTheCorrectPassword(t *testing.T) {
 		t.Fatal("account deleted despite a wrong password")
 	}
 
-	_, err = s.DeleteAccount(context.Background(), DeleteAccountInput{UserID: "u1", Password: ""})
+	_, err = s.DeleteAccount(context.Background(), DeleteAccountInput{UserID: "u1", AuthSecret: ""})
 	requireCode(t, err, apperror.CodeValidation)
 }
 
@@ -105,7 +105,7 @@ func TestDeleteAccountOfAnAlreadyDeletedAccountIsRejected(t *testing.T) {
 	at := time.Now().Add(-time.Hour)
 	user := deletionFixture(t, &at)
 	users := &mocks.MockUserRepository{FindByIDFunc: func(context.Context, string) (*entity.User, error) { return user, nil }}
-	_, err := newService(users, &mocks.MockRefreshTokenRepository{}).DeleteAccount(context.Background(), DeleteAccountInput{UserID: "u1", Password: deletionTestPassword})
+	_, err := newService(users, &mocks.MockRefreshTokenRepository{}).DeleteAccount(context.Background(), DeleteAccountInput{UserID: "u1", AuthSecret: deletionTestPassword})
 	requireCode(t, err, apperror.CodeUnauthorized)
 }
 
@@ -128,11 +128,11 @@ func TestLoginOfADeletedAccountReportsItOnlyAfterTheCorrectPassword(t *testing.T
 	s := newService(loginUsers(user, nil), &mocks.MockRefreshTokenRepository{})
 
 	// Correct password, no restore requested: the client learns the account is deleted.
-	_, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: deletionTestPassword, DeviceID: "d"})
+	_, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", AuthSecret: deletionTestPassword, DeviceID: "d"})
 	requireCode(t, err, apperror.CodeAccountDeleted)
 
 	// Wrong password: indistinguishable from any other failed sign-in (no account probing).
-	_, err = s.Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: "wrong password!", DeviceID: "d", RestoreAccount: true})
+	_, err = s.Login(context.Background(), LoginInput{Identifier: "+989121234567", AuthSecret: testWrongSecret, DeviceID: "d", RestoreAccount: true})
 	requireCode(t, err, apperror.CodeUnauthorized)
 }
 
@@ -142,7 +142,7 @@ func TestLoginWithRestoreReactivatesTheAccountWithinTheGracePeriod(t *testing.T)
 	var restored *bool
 	s := newService(loginUsers(user, func(d bool) { restored = &d }), &mocks.MockRefreshTokenRepository{})
 
-	out, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: deletionTestPassword, DeviceID: "d", RestoreAccount: true})
+	out, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", AuthSecret: deletionTestPassword, DeviceID: "d", RestoreAccount: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestLoginAfterTheGracePeriodTreatsTheAccountAsGone(t *testing.T) {
 	restored := false
 	s := newService(loginUsers(user, func(bool) { restored = true }), &mocks.MockRefreshTokenRepository{})
 
-	_, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: deletionTestPassword, DeviceID: "d", RestoreAccount: true})
+	_, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", AuthSecret: deletionTestPassword, DeviceID: "d", RestoreAccount: true})
 	requireCode(t, err, apperror.CodeUnauthorized)
 	if restored {
 		t.Fatal("an expired account must not be restorable")
@@ -198,7 +198,7 @@ func TestRegisterWithThePhoneOfADeletedAccountPointsToRestore(t *testing.T) {
 	users := &mocks.MockUserRepository{FindByPhoneHashFunc: func(context.Context, string) (*entity.User, error) { return user, nil }}
 	s := NewService(users, &mocks.MockRefreshTokenRepository{}, testSecret, time.Minute, 24*time.Hour, testRegisterOTPService())
 	in := validRegistrationMaterial()
-	in.PhoneNumber, in.Password, in.DeviceID, in.OTPChallengeID, in.OTPCode = "+989121234567", "correct horse battery", "d", "challenge-1", "123456"
+	in.PhoneNumber, in.AuthSecret, in.DeviceID, in.OTPChallengeID, in.OTPCode = "+989121234567", testAuthSecret, "d", "challenge-1", "123456"
 	_, err := s.Register(context.Background(), in)
 	requireCode(t, err, apperror.CodeConflict)
 }

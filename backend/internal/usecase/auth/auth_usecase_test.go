@@ -71,7 +71,7 @@ func TestRegisterSuccess(t *testing.T) {
 	}}
 	s := NewService(users, refresh, testSecret, time.Minute, 24*time.Hour, testRegisterOTPService())
 	in := validRegistrationMaterial()
-	in.PhoneNumber, in.Password, in.DeviceID, in.OTPChallengeID, in.OTPCode = "+989121234567", "correct horse battery", "device-1", "challenge-1", "123456"
+	in.PhoneNumber, in.AuthSecret, in.DeviceID, in.OTPChallengeID, in.OTPCode = "+989121234567", testAuthSecret, "device-1", "challenge-1", "123456"
 	out, err := s.Register(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
@@ -88,7 +88,7 @@ func TestRegisterDuplicate(t *testing.T) {
 	users := &mocks.MockUserRepository{FindByPhoneHashFunc: func(context.Context, string) (*entity.User, error) { return &entity.User{ID: "u1"}, nil }}
 	s := NewService(users, &mocks.MockRefreshTokenRepository{}, testSecret, time.Minute, 24*time.Hour, testRegisterOTPService())
 	in := validRegistrationMaterial()
-	in.PhoneNumber, in.Password, in.DeviceID, in.OTPChallengeID, in.OTPCode = "+989121234567", "correct horse battery", "d", "challenge-1", "123456"
+	in.PhoneNumber, in.AuthSecret, in.DeviceID, in.OTPChallengeID, in.OTPCode = "+989121234567", testAuthSecret, "d", "challenge-1", "123456"
 	_, err := s.Register(context.Background(), in)
 	code, _ := apperror.CodeOf(err)
 	if code != apperror.CodeConflict {
@@ -111,15 +111,15 @@ func TestLogoutRevokesRefreshAndAccessSessions(t *testing.T) {
 
 func TestLoginSuccessAndWrongPassword(t *testing.T) {
 	salt, _ := infraauth.GenerateSalt()
-	hash, _ := infraauth.HashPassword("correct horse battery", salt)
+	hash, _ := infraauth.HashPassword(testAuthSecret, salt)
 	user := &entity.User{ID: "u1", PasswordHash: hash, AuthSalt: encode(salt), KdfSalt: encode(make([]byte, 16))}
 	users := &mocks.MockUserRepository{FindByPhoneHashFunc: func(context.Context, string) (*entity.User, error) { return user, nil }, AddDeviceFunc: func(context.Context, string, string) error { return nil }}
 	refresh := &mocks.MockRefreshTokenRepository{}
 	s := newService(users, refresh)
-	if _, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: "correct horse battery", DeviceID: "d"}); err != nil {
+	if _, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", AuthSecret: testAuthSecret, DeviceID: "d"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: "wrong password", DeviceID: "d"}); func() bool { code, _ := apperror.CodeOf(err); return code != apperror.CodeUnauthorized }() {
+	if _, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", AuthSecret: testWrongSecret, DeviceID: "d"}); func() bool { code, _ := apperror.CodeOf(err); return code != apperror.CodeUnauthorized }() {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -128,7 +128,7 @@ func TestLoginSuccessAndWrongPassword(t *testing.T) {
 // reports `known` as the devices already registered on the account.
 func signInFixture(known map[string]bool, events *mocks.MockDeviceEventRepository) *ServiceImpl {
 	salt, _ := infraauth.GenerateSalt()
-	hash, _ := infraauth.HashPassword("correct horse battery", salt)
+	hash, _ := infraauth.HashPassword(testAuthSecret, salt)
 	user := &entity.User{ID: "u1", PasswordHash: hash, AuthSalt: encode(salt), KdfSalt: encode(make([]byte, 16))}
 	users := &mocks.MockUserRepository{
 		FindByPhoneHashFunc: func(context.Context, string) (*entity.User, error) { return user, nil },
@@ -150,7 +150,7 @@ func TestLoginFromANewDeviceRecordsSignInEvent(t *testing.T) {
 	s := signInFixture(map[string]bool{"existing": true}, events)
 
 	// A device that is already part of the account signing in again is not news.
-	if _, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: "correct horse battery", DeviceID: "existing"}); err != nil {
+	if _, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", AuthSecret: testAuthSecret, DeviceID: "existing"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(recorded) != 0 {
@@ -158,7 +158,7 @@ func TestLoginFromANewDeviceRecordsSignInEvent(t *testing.T) {
 	}
 
 	// A device that was not part of the account is.
-	in := LoginInput{Identifier: "+989121234567", Password: "correct horse battery", DeviceID: "new-phone", Device: DeviceInfo{Name: "Pixel 8", Platform: "android"}}
+	in := LoginInput{Identifier: "+989121234567", AuthSecret: testAuthSecret, DeviceID: "new-phone", Device: DeviceInfo{Name: "Pixel 8", Platform: "android"}}
 	if _, err := s.Login(context.Background(), in); err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestLoginSucceedsEvenWhenTheSignInEventCannotBeRecorded(t *testing.T) {
 		return apperror.ErrInternal("event store down")
 	}}
 	s := signInFixture(nil, events)
-	if _, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: "correct horse battery", DeviceID: "new-phone"}); err != nil {
+	if _, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", AuthSecret: testAuthSecret, DeviceID: "new-phone"}); err != nil {
 		t.Fatalf("login must not depend on the event feed: %v", err)
 	}
 }
@@ -301,7 +301,7 @@ func TestRefreshReuseRevokesAllSessions(t *testing.T) {
 
 func TestLoginLocksAfterThreshold(t *testing.T) {
 	salt, _ := infraauth.GenerateSalt()
-	hash, _ := infraauth.HashPassword("correct horse battery", salt)
+	hash, _ := infraauth.HashPassword(testAuthSecret, salt)
 	user := &entity.User{ID: "u1", PasswordHash: hash, AuthSalt: encode(salt)}
 	attempts := 0
 	users := &mocks.MockUserRepository{
@@ -310,7 +310,7 @@ func TestLoginLocksAfterThreshold(t *testing.T) {
 	}
 	s := newService(users, &mocks.MockRefreshTokenRepository{})
 	for i := 0; i < 5; i++ {
-		_, _ = s.Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: "wrong", DeviceID: "d"})
+		_, _ = s.Login(context.Background(), LoginInput{Identifier: "+989121234567", AuthSecret: testWrongSecret, DeviceID: "d"})
 	}
 	if attempts != 5 {
 		t.Fatalf("attempts=%d", attempts)
@@ -323,7 +323,7 @@ func TestLoginSkipsPasswordVerificationWhenLocked(t *testing.T) {
 		return &entity.User{ID: "u1", AuthSalt: "invalid", PasswordHash: "invalid", LockedUntil: &future}, nil
 	}}
 	s := newService(users, &mocks.MockRefreshTokenRepository{})
-	_, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: "wrong", DeviceID: "d"})
+	_, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", AuthSecret: testWrongSecret, DeviceID: "d"})
 	code, _ := apperror.CodeOf(err)
 	if code != apperror.CodeUnauthorized {
 		t.Fatalf("code=%v err=%v", code, err)
@@ -332,7 +332,7 @@ func TestLoginSkipsPasswordVerificationWhenLocked(t *testing.T) {
 
 func TestLoginSuccessResetsFailedAttempts(t *testing.T) {
 	salt, _ := infraauth.GenerateSalt()
-	hash, _ := infraauth.HashPassword("correct horse battery", salt)
+	hash, _ := infraauth.HashPassword(testAuthSecret, salt)
 	user := &entity.User{ID: "u1", PasswordHash: hash, AuthSalt: encode(salt), FailedLoginAttempts: 4}
 	reset := false
 	users := &mocks.MockUserRepository{
@@ -340,7 +340,7 @@ func TestLoginSuccessResetsFailedAttempts(t *testing.T) {
 		ResetFailedLoginFunc: func(context.Context, string) error { reset = true; return nil },
 		AddDeviceFunc:        func(context.Context, string, string) error { return nil },
 	}
-	_, err := newService(users, &mocks.MockRefreshTokenRepository{}).Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: "correct horse battery", DeviceID: "d"})
+	_, err := newService(users, &mocks.MockRefreshTokenRepository{}).Login(context.Background(), LoginInput{Identifier: "+989121234567", AuthSecret: testAuthSecret, DeviceID: "d"})
 	if err != nil || !reset {
 		t.Fatalf("err=%v reset=%v", err, reset)
 	}
@@ -349,7 +349,7 @@ func TestLoginSuccessResetsFailedAttempts(t *testing.T) {
 func TestLoginAllowsVerificationAfterLockExpiry(t *testing.T) {
 	past := time.Now().Add(-time.Minute)
 	salt, _ := infraauth.GenerateSalt()
-	hash, _ := infraauth.HashPassword("correct horse battery", salt)
+	hash, _ := infraauth.HashPassword(testAuthSecret, salt)
 	user := &entity.User{ID: "u1", PasswordHash: hash, AuthSalt: encode(salt), LockedUntil: &past}
 	reset := false
 	users := &mocks.MockUserRepository{
@@ -357,25 +357,83 @@ func TestLoginAllowsVerificationAfterLockExpiry(t *testing.T) {
 		ResetFailedLoginFunc: func(context.Context, string) error { reset = true; return nil },
 		AddDeviceFunc:        func(context.Context, string, string) error { return nil },
 	}
-	if _, err := newService(users, &mocks.MockRefreshTokenRepository{}).Login(context.Background(), LoginInput{Identifier: "+989121234567", Password: "correct horse battery", DeviceID: "d"}); err != nil || !reset {
+	if _, err := newService(users, &mocks.MockRefreshTokenRepository{}).Login(context.Background(), LoginInput{Identifier: "+989121234567", AuthSecret: testAuthSecret, DeviceID: "d"}); err != nil || !reset {
 		t.Fatalf("err=%v reset=%v", err, reset)
 	}
 }
 
-func TestRecoveryKeyHashCanonicalRepresentation(t *testing.T) {
-	raw := []byte("01234567890123456789012345678901")
-	keyStd := base64.StdEncoding.EncodeToString(raw)
-	keyRaw := base64.RawStdEncoding.EncodeToString(raw)
+func TestRecoveryProofVerification(t *testing.T) {
+	recovery := []byte("01234567890123456789012345678901")
+	proof := infraauth.RecoveryProofFromBytes(recovery)
+	proofBytes, err := base64.StdEncoding.DecodeString(proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored := base64.RawURLEncoding.EncodeToString(infraauth.RecoveryKeyHashFromProof(proofBytes))
 
-	canonical := hashRecovery(keyStd)
-	if canonical != hashRecovery(keyRaw) {
-		t.Fatal("padded and raw standard Base64 recovery keys must hash identically")
+	if !verifyRecoveryProof(stored, proof) {
+		t.Fatal("the proof derived from the recovery key must verify")
 	}
-	if !verifyRecoveryKeyHash(canonical, keyStd) {
-		t.Fatal("canonical recovery hash must verify")
+	if !verifyRecoveryProof(stored, base64.RawStdEncoding.EncodeToString(proofBytes)) {
+		t.Fatal("padding of the proof must not matter")
 	}
-	if !verifyRecoveryKeyHash(string(mustDecodeRawURL(t, canonical)), keyStd) {
-		t.Fatal("legacy raw 32-byte recovery hash must remain verifiable")
+	// The recovery key itself is not a valid proof: sending it must never succeed.
+	if verifyRecoveryProof(stored, base64.StdEncoding.EncodeToString(recovery)) {
+		t.Fatal("the raw recovery key must not be accepted as a proof")
+	}
+	if verifyRecoveryProof("", proof) || verifyRecoveryProof(stored, "short") {
+		t.Fatal("empty or malformed values must not verify")
+	}
+}
+
+func TestAuthSecretRejectsAnythingThatIsNotAKeyDerivedValue(t *testing.T) {
+	if _, err := canonicalAuthSecret("correct horse battery staple"); err == nil {
+		t.Fatal("a raw password must be rejected")
+	}
+	if _, err := canonicalAuthSecret(""); err == nil {
+		t.Fatal("empty secret must be rejected")
+	}
+	got, err := canonicalAuthSecret(testAuthSecret)
+	if err != nil || got != testAuthSecret {
+		t.Fatalf("valid secret rejected or altered: %v %q", err, got)
+	}
+	unpadded := testAuthSecret[:len(testAuthSecret)-1]
+	if got, err := canonicalAuthSecret(unpadded); err != nil || got != testAuthSecret {
+		t.Fatalf("unpadded spelling must canonicalise: %v %q", err, got)
+	}
+}
+
+func TestLoginRejectsRawPasswordsBeforeAnyLookup(t *testing.T) {
+	users := &mocks.MockUserRepository{}
+	_, err := newService(users, &mocks.MockRefreshTokenRepository{}).Login(context.Background(), LoginInput{Identifier: "+989121234567", AuthSecret: "correct horse battery", DeviceID: "d"})
+	requireCode(t, err, apperror.CodeValidation)
+}
+
+func TestLoginParamsDecoySaltIsDeterministicAndIndistinguishable(t *testing.T) {
+	salt := make([]byte, 16)
+	for i := range salt {
+		salt[i] = byte(i + 1)
+	}
+	known := &entity.User{ID: "u1", KdfSalt: base64.RawStdEncoding.EncodeToString(salt)}
+	users := &mocks.MockUserRepository{FindByPhoneHashFunc: func(_ context.Context, hash string) (*entity.User, error) {
+		if hash == hashIdentifier("+989121234567", testSecret) {
+			return known, nil
+		}
+		return nil, apperror.ErrNotFound("user")
+	}}
+	s := NewService(users, &mocks.MockRefreshTokenRepository{}, testSecret, time.Minute, 24*time.Hour, testRegisterOTPService())
+
+	real, err := s.LoginParams(context.Background(), "+989121234567")
+	if err != nil || real.KdfSalt != base64.StdEncoding.EncodeToString(salt) || real.KdfVersion != infraauth.KDFVersion || real.KdfIterations != infraauth.ClientPBKDF2Iterations {
+		t.Fatalf("real params wrong: %+v %v", real, err)
+	}
+	a, _ := s.LoginParams(context.Background(), "+989129999999")
+	b, _ := s.LoginParams(context.Background(), "+989129999999")
+	if a.KdfSalt == "" || a.KdfSalt != b.KdfSalt {
+		t.Fatal("decoy salt must be deterministic")
+	}
+	if raw, err := base64.StdEncoding.DecodeString(a.KdfSalt); err != nil || len(raw) != 16 {
+		t.Fatal("decoy salt must look exactly like a real one")
 	}
 }
 
