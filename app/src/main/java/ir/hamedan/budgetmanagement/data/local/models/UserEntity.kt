@@ -24,8 +24,6 @@ data class UserEntity(
     val lastName: String = "",
     val gender: String = "prefer_not_to_say",
     val birthDate: String? = null,
-    val email: String? = null,
-    val emailVerified: Boolean = false,
 
     /**
      * Indicates the currently active local account.

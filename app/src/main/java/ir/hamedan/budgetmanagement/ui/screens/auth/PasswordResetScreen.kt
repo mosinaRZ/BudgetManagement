@@ -88,7 +88,7 @@ fun PasswordResetScreen(
     fun requestOtp() {
         val destination = normalizedIdentifier
         if (destination == null) {
-            error = if (isPersian) "شماره موبایل یا ایمیل معتبر نیست" else "Enter a valid phone number or email"
+            error = if (isPersian) "شماره موبایل معتبر نیست" else "Enter a valid phone number"
             return
         }
         // A new OTP request invalidates the previous challenge on the client.
@@ -99,7 +99,7 @@ fun PasswordResetScreen(
         scope.launch {
             authRepository.requestOtp(
                 destination = destination,
-                channel = if (destination.contains("@")) "email" else "sms",
+                channel = "sms",
                 purpose = "PASSWORD_RESET"
             )
                 .onSuccess { response -> challengeId = response.challengeId; sentAt = System.currentTimeMillis(); now = sentAt }
@@ -177,12 +177,12 @@ fun PasswordResetScreen(
                     error = null
                 },
                 enabled = !loading,
-                label = { Text(if (isPersian) "شماره موبایل یا ایمیل" else "Phone or email") },
+                label = { Text(if (isPersian) "شماره موبایل" else "Phone number") },
                 leadingIcon = { Icon(Icons.Default.Person, null) },
                 singleLine = true,
                 shape = RoundedCornerShape(16.dp),
                 textStyle = credentialTextStyle(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
                 keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                 modifier = Modifier.fillMaxWidth()
             )

@@ -117,8 +117,6 @@ class GuestModeManager(
             lastName = "",
             gender = "prefer_not_to_say",
             birthDate = null,
-            email = null,
-            emailVerified = false,
             isLoggedIn = true,
             createdAt = now,
             updatedAt = now

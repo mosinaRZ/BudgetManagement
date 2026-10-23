@@ -49,9 +49,6 @@ class AuthApi(private val client: ApiHttpClient) {
             .put("recovery_key_envelope", input.recoveryKeyEnvelope)
             .put("recovery_key_nonce", input.recoveryKeyNonce)
         input.deviceInfo?.let { body.put("device_info", it) }
-        input.email?.takeIf { it.isNotBlank() }?.let { body.put("email", it.trim()) }
-        input.emailOtpChallengeId?.takeIf { it.isNotBlank() }?.let { body.put("email_otp_challenge_id", it) }
-        input.emailOtpCode?.takeIf { it.isNotBlank() }?.let { body.put("email_otp_code", it) }
 
         val response = client.request("POST", "/auth/register", body)
         ensureSuccess(response, "ثبت‌نام ناموفق بود.")
@@ -180,13 +177,10 @@ class AuthApi(private val client: ApiHttpClient) {
 
     data class RegisterInput(
         val phoneNumber: String,
-        val email: String?,
         val authSecret: String,
         val deviceId: String,
         val otpChallengeId: String,
         val otpCode: String,
-        val emailOtpChallengeId: String?,
-        val emailOtpCode: String?,
         val kdfSalt: String,
         val passwordKeyEnvelope: String,
         val passwordKeyNonce: String,

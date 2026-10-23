@@ -184,13 +184,15 @@ fun RegisterScreen(
                     authRepository.register(
                         AuthRepository.RegistrationInput(
                             phoneNumber = validPhone,
-                            email = null,
                             password = password,
                             otpChallengeId = challenge,
                             otpCode = phoneCode
                         )
                     )
                         .onSuccess { result ->
+                            // A newly created account must never inherit a previous account's biometric opt-in.
+                            ir.hamedan.budgetmanagement.data.preferences.SharedPreferences.setBiometricEnabled(context, false)
+                            app.container.rememberedLoginStore.clearBiometricCredential()
                             // The guest data is applied when this account signs in, as chosen above.
                             if (hasGuestData) {
                                 guestStore.savePendingRegistrationChoice(

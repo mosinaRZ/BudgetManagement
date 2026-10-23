@@ -16,17 +16,13 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /** One-shot confirmations the screen turns into a localized snackbar. */
-enum class ProfileNotice { PROFILE_SAVED, EMAIL_VERIFIED }
+enum class ProfileNotice { PROFILE_SAVED }
 
 data class ProfileUiState(
     val user: UserEntity? = null,
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
     val error: String? = null,
-    val emailOtpSent: Boolean = false,
-    val emailOtpChallengeId: String? = null,
-    val emailOtpExpiresAt: Long? = null,
-    val emailPending: String? = null,
     val notice: ProfileNotice? = null
 )
 
@@ -40,7 +36,7 @@ class ProfileViewModel(
 
     private var observedUserId: String? = null
 
-    /** True while the guest workspace is open (no email, no server profile). */
+    /** True while the guest workspace is open (no server profile). */
     val isGuest: Boolean
 
     init {
@@ -80,54 +76,6 @@ class ProfileViewModel(
                 .onSuccess { _state.value = _state.value.copy(isSaving = false, notice = ProfileNotice.PROFILE_SAVED) }
                 .onFailure { _state.value = _state.value.copy(isSaving = false, error = it.userMessage()) }
         }
-    }
-
-    fun requestEmailVerification(email: String) {
-        viewModelScope.launch {
-            _state.value = _state.value.copy(isSaving = true, error = null)
-            repository.requestEmailOtp(email)
-                .onSuccess {
-                    _state.value = _state.value.copy(
-                        isSaving = false,
-                        emailOtpSent = true,
-                        emailOtpChallengeId = it.challengeId,
-                        emailOtpExpiresAt = it.expiresAt,
-                        emailPending = email.trim()
-                    )
-                }
-                .onFailure {
-                    _state.value = _state.value.copy(isSaving = false, error = it.userMessage())
-                }
-        }
-    }
-
-    fun verifyEmail(code: String) {
-        val challenge = _state.value.emailOtpChallengeId ?: return
-        val email = _state.value.emailPending ?: return
-        viewModelScope.launch {
-            _state.value = _state.value.copy(isSaving = true, error = null)
-            repository.updateEmail(email, challenge, code)
-                .onSuccess {
-                    _state.value = _state.value.copy(
-                        isSaving = false,
-                        emailOtpSent = false,
-                        emailOtpChallengeId = null,
-                        emailOtpExpiresAt = null,
-                        emailPending = null,
-                        notice = ProfileNotice.EMAIL_VERIFIED
-                    )
-                }
-                .onFailure { _state.value = _state.value.copy(isSaving = false, error = it.userMessage()) }
-        }
-    }
-
-    fun dismissEmailOtp() {
-        _state.value = _state.value.copy(
-            emailOtpSent = false,
-            emailOtpChallengeId = null,
-            emailOtpExpiresAt = null,
-            emailPending = null
-        )
     }
 
     fun clearError() {

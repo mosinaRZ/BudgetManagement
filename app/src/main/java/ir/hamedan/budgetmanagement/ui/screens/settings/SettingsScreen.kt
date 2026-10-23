@@ -94,7 +94,7 @@ private data class SettingsSearchItem(
 )
 
 private val ALL_SETTINGS_ITEMS = listOf(
-    SettingsSearchItem("پروفایل من", "My Profile", "اطلاعات شخصی، ایمیل و امنیت حساب", "Personal information, email and account security"),
+    SettingsSearchItem("پروفایل من", "My Profile", "اطلاعات شخصی و امنیت حساب", "Personal information and account security"),
     SettingsSearchItem("ظاهر برنامه", "App Theme", "تغییر حالت تاریک و روشن", "Switch between Dark and Light mode"),
     SettingsSearchItem("زبان برنامه", "App Language", "انتخاب زبان کاربری (فارسی / انگلیسی)", "Choose UI language (Persian / English)"),
     SettingsSearchItem("واحد پولی", "Currency", "نمایش مبالغ بر اساس تومان یا ریال", "Display amounts in Toman or Rial"),
@@ -103,7 +103,7 @@ private val ALL_SETTINGS_ITEMS = listOf(
     SettingsSearchItem("امنیت برنامه", "App Security", "تنظیم رمز ورود و ویژگی‌های بیومتریک", "Configure passcode and biometric login"),
     SettingsSearchItem("دستگاه‌های حساب", "Account Devices", "مدیریت دستگاه‌های متصل به حساب", "Manage devices connected to your account"),
     SettingsSearchItem("دریافت اطلاعات و گزارش‌ها", "Export Data & Reports", "خروجی گرفتن از تراکنش‌ها در قالب PDF یا Excel", "Export transactions to PDF or Excel formats"),
-    SettingsSearchItem("درباره ما و پشتیبانی", "About Us & Support", "راه‌های ارتباطی، واتس‌اپ و ایمیل", "Contact channels, Gmail, WhatsApp & Support")
+    SettingsSearchItem("درباره ما و پشتیبانی", "About Us & Support", "راه‌های ارتباطی و پشتیبانی", "Contact channels, WhatsApp & Support")
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -136,6 +136,15 @@ fun SettingsScreen(
         mutableStateOf(
             if (isGuest) guestStore.isBiometricEnabled() else SharedPreferences.getBiometricEnabled(context)
         )
+    }
+    // A stale opt-in without a usable Keystore credential must not advertise biometric login.
+    LaunchedEffect(isGuest) {
+        if (!isGuest && isBiometricEnabled &&
+            (!app.container.rememberedLoginStore.hasBiometricCredential() ||
+                    !app.container.rememberedLoginStore.canUseStrongBiometric())) {
+            isBiometricEnabled = false
+            SharedPreferences.setBiometricEnabled(context, false)
+        }
     }
 
     var isScreenProtected by remember(context) { mutableStateOf(ScreenSecurity.isEnabled(context)) }
@@ -282,11 +291,11 @@ fun SettingsScreen(
             }
 
             // پروفایل کاربر
-            if (matchesSearch("پروفایل من", "My Profile", "اطلاعات شخصی، ایمیل و امنیت حساب", "Personal information, email and account security")) {
+            if (matchesSearch("پروفایل من", "My Profile", "اطلاعات شخصی و امنیت حساب", "Personal information and account security")) {
                 item {
                     SettingsSimpleItem(
                         title = if (isPersian) "پروفایل من" else "My Profile",
-                        subtitle = if (isPersian) "اطلاعات شخصی، ایمیل و امنیت حساب" else "Personal information, email and account security",
+                        subtitle = if (isPersian) "اطلاعات شخصی و امنیت حساب" else "Personal information and account security",
                         icon = Icons.Default.AccountCircle,
                         onClick = onProfileClick
                     )
@@ -707,11 +716,11 @@ fun SettingsScreen(
             }
 
             // ۶. درباره ما
-            if (matchesSearch("درباره ما و پشتیبانی", "About Us & Support", "راه‌های ارتباطی،واتس‌اپ و ایمیل", "Contact channels, Gmail, WhatsApp & Support")) {
+            if (matchesSearch("درباره ما و پشتیبانی", "About Us & Support", "راه‌های ارتباطی، ایمیل و پشتیبانی", "Contact channels, email, WhatsApp & Support")) {
                 item {
                     SettingsAccordionItem(
                         title = if (isPersian) "درباره ما و پشتیبانی" else "About Us & Support",
-                        subtitle = if (isPersian) "راه‌های ارتباطی، واتس‌اپ و ایمیل" else "Contact channels, Gmail, WhatsApp & Support",
+                        subtitle = if (isPersian) "راه‌های ارتباطی، ایمیل و پشتیبانی" else "Contact channels, email, WhatsApp & Support",
                         icon = Icons.Default.Info,
                         isExpanded = activeMenu == SettingsMenu.ABOUT,
                         onClick = { activeMenu = if (activeMenu == SettingsMenu.ABOUT) SettingsMenu.NONE else SettingsMenu.ABOUT }
@@ -721,7 +730,7 @@ fun SettingsScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             SocialLinkRow(
-                                title = if (isPersian) "پشتیبانی جیمیل" else "Gmail Support",
+                                title = if (isPersian) "ارسال ایمیل به پشتیبانی" else "Email Support",
                                 iconRes = R.drawable.ic_gmail,
                                 color = Color(0xFFEA4335)
                             ) {
@@ -730,7 +739,6 @@ fun SettingsScreen(
                                     data = Uri.parse("mailto:$email")
                                     setPackage("com.google.android.gm")
                                 }
-
                                 try {
                                     context.startActivity(intent)
                                 } catch (e: Exception) {

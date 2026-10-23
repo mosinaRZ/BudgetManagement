@@ -50,18 +50,8 @@ object AuthInputNormalizer {
         return value.takeIf { it.length in 8..16 && it.drop(1).all { ch -> ch in '0'..'9' } }
     }
 
-    fun email(input: String): String? {
-        val value = input.trim()
-        return value.takeIf { EMAIL_REGEX.matches(it) && it.length <= 320 }
-    }
-
-    /** Phone or email, depending on whether the value contains "@". */
-    fun identifier(input: String): String? {
-        val value = input.trim()
-        return if (value.contains('@')) email(value) else phone(value)
-    }
-
-    private val EMAIL_REGEX = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
+    /** Account identifiers are phone numbers only. */
+    fun identifier(input: String): String? = phone(input)
 }
 
 /** Password rules for NEW passwords (registration, recovery, change). Login accepts any stored password. */
@@ -139,13 +129,13 @@ fun authErrorMessage(error: Throwable, isPersian: Boolean, context: AuthContext)
                 else -> api.userMessage(isPersian)
             }
             context == AuthContext.LOGIN && (api.statusCode == 401 || code == "UNAUTHORIZED") ->
-                if (isPersian) "شماره موبایل/ایمیل یا گذرواژه نادرست است." else "Incorrect phone/email or password."
+                if (isPersian) "شماره موبایل یا گذرواژه نادرست است." else "Incorrect phone number or password."
             context == AuthContext.REGISTER && (api.statusCode == 401 || code == "UNAUTHORIZED") ->
                 if (isPersian) "کد تأیید نادرست یا منقضی شده است." else "The verification code is wrong or has expired."
             context == AuthContext.REGISTER && code == "CONFLICT" && api.message.contains("deleted account", ignoreCase = true) ->
                 if (isPersian) "این شماره متعلق به حسابی است که حذف شده؛ برای بازیابی، از صفحه ورود وارد شوید." else "This number belongs to a deleted account. Sign in to restore it."
             context == AuthContext.REGISTER && code == "CONFLICT" ->
-                if (isPersian) "با این شماره یا ایمیل قبلاً حساب ساخته شده است." else "An account already exists for this phone number or email."
+                if (isPersian) "با این شماره موبایل قبلاً حساب ساخته شده است." else "An account already exists for this phone number."
             context == AuthContext.RESET_PASSWORD && (api.statusCode == 401 || code == "UNAUTHORIZED") ->
                 if (isPersian) "کد تأیید یا کلید بازیابی نادرست است." else "The verification code or recovery key is wrong."
             (context == AuthContext.CHANGE_PASSWORD || context == AuthContext.DELETE_ACCOUNT) && api.statusCode == 401 ->

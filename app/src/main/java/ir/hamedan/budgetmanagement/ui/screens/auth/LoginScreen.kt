@@ -264,40 +264,10 @@ fun LoginScreen(
                         rememberedLoginStore.savePasswordVerifier(password)
                         NotificationHelper.sendWelcomeIfNeeded(context)
 
-                        val activity = context as? FragmentActivity
-                        val biometricCipher = rememberedLoginStore.prepareEncryptionCipher()
-                        if (SharedPreferences.getBiometricEnabled(context) && activity != null && biometricCipher != null && !rememberedLoginStore.hasBiometricCredential()) {
-                            val prompt = BiometricPrompt(
-                                activity,
-                                ContextCompat.getMainExecutor(context),
-                                object : BiometricPrompt.AuthenticationCallback() {
-                                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                                        result.cryptoObject?.cipher?.let { rememberedLoginStore.enrollBiometric(it) }
-                                        isLoggingIn = false
-                                        password = ""
-                                        onLoginSuccess()
-                                    }
-
-                                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                                        isLoggingIn = false
-                                        password = ""
-                                        onLoginSuccess()
-                                    }
-                                }
-                            )
-                            prompt.authenticate(
-                                BiometricPrompt.PromptInfo.Builder()
-                                    .setTitle(if (isPersian) "فعال‌سازی ورود با اثر انگشت" else "Enable biometric login")
-                                    .setSubtitle(if (isPersian) "برای ورودهای بعدی، اثر انگشت خود را تأیید کنید" else "Confirm your biometric for future logins")
-                                    .setNegativeButtonText(if (isPersian) "بعداً" else "Later")
-                                    .build(),
-                                BiometricPrompt.CryptoObject(biometricCipher)
-                            )
-                        } else {
-                            isLoggingIn = false
-                            password = ""
-                            onLoginSuccess()
-                        }
+                        // Biometric enrollment is opt-in and is performed only from Settings.
+                        isLoggingIn = false
+                        password = ""
+                        onLoginSuccess()
                     }.onFailure { error ->
                         isLoggingIn = false
                         errorMessage = error.message?.takeIf { it.isNotBlank() }
@@ -327,7 +297,7 @@ fun LoginScreen(
         // "09123456789" / "0912 345 6789" / Persian digits -> "+989123456789" (what the API expects).
         val identifier = AuthInputNormalizer.identifier(username)
         if (identifier == null) {
-            errorMessage = if (isPersian) "شماره موبایل یا ایمیل معتبر نیست" else "Enter a valid phone number or email"
+            errorMessage = if (isPersian) "شماره موبایل معتبر نیست" else "Enter a valid phone number"
             return
         }
         // A guest workspace on this device must be decided on before it can merge into an account.
@@ -627,12 +597,12 @@ fun LoginScreen(
                     value = username,
                     onValueChange = { username = it; errorMessage = null },
                     enabled = !isLoggingIn,
-                    label = { Text(if (isPersian) "شماره موبایل یا ایمیل" else "Phone or email") },
+                    label = { Text(if (isPersian) "شماره موبایل" else "Phone number") },
                     leadingIcon = { Icon(Icons.Default.Person, null) },
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
                     textStyle = credentialTextStyle(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next, hintLocales = LocaleList(Locale("en"))),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next, hintLocales = LocaleList(Locale("en"))),
                     keyboardActions = KeyboardActions(onNext = { passwordFocusRequester.requestFocus() }),
                     modifier = Modifier.fillMaxWidth()
                 )
