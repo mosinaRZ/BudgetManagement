@@ -28,9 +28,20 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	if _, err := db.Collection(syncRevisionCountersCollectionName).Indexes().CreateOne(ctx, mongo.IndexModel{Keys: bson.D{{Key: "_id", Value: 1}}, Options: options.Index().SetName("uniq_sync_revision_counter")}); err != nil {
 		return fmt.Errorf("sync_revision_counters indexes: %w", err)
 	}
+	// Remove legacy optional account-contact properties from existing records and drop their old index.
+	if _, err := db.Collection(usersCollectionName).UpdateMany(ctx, bson.M{}, bson.M{"$unset": bson.M{"email": "", "emailHash": "", "emailVerified": ""}}); err != nil {
+		return fmt.Errorf("remove obsolete user fields: %w", err)
+	}
+	if _, err := db.Collection(usersCollectionName).
+		Indexes().
+		DropOne(ctx, "uniq_user_email_hash"); err != nil {
+
+		if commandErr, ok := err.(mongo.CommandError); !ok || commandErr.Code != 27 {
+			return fmt.Errorf("drop obsolete user index: %w", err)
+		}
+	}
 	if _, err := db.Collection(usersCollectionName).Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{{Key: "phoneHash", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true).SetName("uniq_user_phone_hash")},
-		{Keys: bson.D{{Key: "emailHash", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true).SetName("uniq_user_email_hash")},
 		// Lets the purge job find expired soft-deleted accounts without scanning the collection.
 		{Keys: bson.D{{Key: "isDeleted", Value: 1}, {Key: "deletedAt", Value: 1}}, Options: options.Index().SetPartialFilterExpression(bson.M{"isDeleted": true}).SetName("idx_user_deleted")},
 	}); err != nil {

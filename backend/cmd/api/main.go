@@ -70,7 +70,7 @@ func run() error {
 	syncUC := syncUsecase.NewSyncUsecase(syncRepo, deviceRepo)
 	syncHandler := handler.NewSyncHandler(syncUC, validate)
 	otpRepo := mongodb.NewOTPRepository(db)
-	delivery := notification.New(notification.Config{SMSWebhookURL: cfg.SMSWebhookURL, SMSAuthToken: cfg.SMSAuthToken, SMTPHost: cfg.SMTPHost, SMTPPort: cfg.SMTPPort, SMTPUser: cfg.SMTPUser, SMTPPassword: cfg.SMTPPassword, EmailFrom: cfg.EmailFrom, DevLog: cfg.DevLogOTP})
+	delivery := notification.New(notification.Config{SMSWebhookURL: cfg.SMSWebhookURL, SMSAuthToken: cfg.SMSAuthToken, DevLog: cfg.DevLogOTP})
 	otpUC := authUsecase.NewOTPService(otpRepo, delivery, cfg.JWTSecret, cfg.OTPExpiry)
 
 	userRepo := mongodb.NewUserRepository(db)
@@ -96,7 +96,7 @@ func run() error {
 	corsOrigins := splitCSV(cfg.CORSAllowedOrigins)
 	router := httpiface.NewRouter(httpiface.RouterDependencies{
 		AuthHandler: authHandler, SyncHandler: syncHandler, AdminHandler: handler.NewAdminHandler(roleUC, validate),
-		DeviceHandler: handler.NewDeviceHandler(deviceUC), LegalHandler: handler.NewLegalHandler(supportEmail(cfg)), JWTSecret: cfg.JWTSecret, UserRepository: userRepo, DeviceRepository: deviceRepo, Env: cfg.Env,
+		DeviceHandler: handler.NewDeviceHandler(deviceUC), LegalHandler: handler.NewLegalHandler(""), JWTSecret: cfg.JWTSecret, UserRepository: userRepo, DeviceRepository: deviceRepo, Env: cfg.Env,
 		TrustedProxyCIDRs: trustedProxies, CORSAllowedOrigins: corsOrigins, RateLimitStore: rateStore,
 	})
 
@@ -168,10 +168,4 @@ func splitCSV(raw string) []string {
 		}
 	}
 	return out
-}
-
-// supportEmail is the public contact shown on the legal pages: SUPPORT_EMAIL, else empty so the
-// legal handler falls back to Cidna's own support address (never the no-reply OTP sender).
-func supportEmail(_ *config.Config) string {
-	return strings.TrimSpace(os.Getenv("SUPPORT_EMAIL"))
 }

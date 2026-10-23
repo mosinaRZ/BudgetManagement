@@ -3,7 +3,6 @@ package handler
 import (
 	"html/template"
 	"net/http"
-	"strings"
 )
 
 // LegalHandler serves the public pages that app stores require: a privacy policy, terms of
@@ -11,34 +10,23 @@ import (
 //
 // The texts describe what this backend and app actually do. They are a starting point: have them
 // reviewed by a lawyer before publishing, and update them whenever the app's data handling changes.
-type LegalHandler struct {
-	supportEmail string
-}
+type LegalHandler struct{}
 
 const (
-	// defaultSupportEmail is the public support address of Cidna, used when SUPPORT_EMAIL is not set.
-	defaultSupportEmail = "cidna.app@gmail.com"
 	// legalVersion and the dates below must be bumped together whenever a legal text changes.
 	legalVersion   = "1.0"
 	legalUpdatedFa = "۲۶ مهر ۱۴۰۵"
 	legalUpdatedEn = "18 October 2026"
 )
 
-func NewLegalHandler(supportEmail string) *LegalHandler {
-	email := strings.TrimSpace(supportEmail)
-	if email == "" {
-		email = defaultSupportEmail
-	}
-	return &LegalHandler{supportEmail: email}
-}
+func NewLegalHandler(_ string) *LegalHandler { return &LegalHandler{} }
 
 type legalPage struct {
-	Title        string
-	SupportEmail string
-	Kind         string
-	Version      string
-	UpdatedFa    string
-	UpdatedEn    string
+	Title     string
+	Kind      string
+	Version   string
+	UpdatedFa string
+	UpdatedEn string
 }
 
 var legalTemplate = template.Must(template.New("legal").Parse(`<!doctype html>
@@ -64,15 +52,15 @@ td,th{border:1px solid #d0d7de;padding:6px 10px;vertical-align:top}
 <h1>سیاست حریم خصوصی — سیدنا (Cidna)</h1>
 <p class="meta">نسخه {{.Version}} — آخرین به‌روزرسانی: {{.UpdatedFa}}</p>
 <h2>مسئول داده‌ها</h2>
-<p>برنامه سیدنا (Cidna) توسط محمدسینا رمضانی عهدیه (شخص حقیقی) ارائه می‌شود. مسئول نگه‌داری داده‌های سمت سرور همین شخص است. راه تماس: <a href="mailto:{{.SupportEmail}}">{{.SupportEmail}}</a></p>
+<p>برنامه سیدنا (Cidna) توسط محمدسینا رمضانی عهدیه (شخص حقیقی) ارائه می‌شود. مسئول نگه‌داری داده‌های سمت سرور همین شخص است. راه تماس: از بخش پشتیبانی داخل برنامه استفاده کنید</p>
 <h2>اطلاعاتی که جمع‌آوری می‌کنیم</h2>
-<p>شماره موبایل (برای ثبت‌نام و ورود)، ایمیل و نام و جنسیت و تاریخ تولد (اختیاری)، و اطلاعات نمایشی دستگاه شامل نام و مدل، نسخه اندروید و برنامه، آدرس IP (به‌صورت ماسک‌شده نمایش داده می‌شود) و یک اثر انگشت یک‌طرفه (hash) از نصب برنامه برای شناسایی نصب مجدد. خود گذرواژه شما هرگز به سرور ارسال نمی‌شود: دستگاه شما از آن یک مقدار ورود جداگانه مشتق می‌کند و فقط هشِ Argon2id همان مقدار نزد ما نگه داشته می‌شود.</p>
+<p>شماره موبایل (برای ثبت‌نام و ورود)، نام و جنسیت و تاریخ تولد (اختیاری)، و اطلاعات نمایشی دستگاه شامل نام و مدل، نسخه اندروید و برنامه، آدرس IP (به‌صورت ماسک‌شده نمایش داده می‌شود) و یک اثر انگشت یک‌طرفه (hash) از نصب برنامه برای شناسایی نصب مجدد. خود گذرواژه شما هرگز به سرور ارسال نمی‌شود: دستگاه شما از آن یک مقدار ورود جداگانه مشتق می‌کند و فقط هشِ Argon2id همان مقدار نزد ما نگه داشته می‌شود.</p>
 <h2>اطلاعات مالی شما</h2>
-<p>تراکنش‌ها، دسته‌بندی‌ها، بودجه‌ها، بدهی‌ها و اهداف پس‌انداز <strong>به‌صورت سرتاسری (End-to-End) رمزنگاری می‌شوند</strong>: کلید رمزنگاری روی دستگاه شما ساخته می‌شود و فقط به‌شکل رمزشده از آن خارج می‌شود، و سرور فقط داده رمزشده‌ای را نگه می‌دارد که ما نمی‌توانیم بخوانیم. گذرواژه و کلید بازیابی شما هرگز به سرور ارسال نمی‌شوند (دستگاه فقط مقادیری مشتق‌شده می‌فرستد که قفل داده را باز نمی‌کنند)؛ بنابراین ما و هر مهاجمی که به سرور نفوذ کند، بدون حدس زدن گذرواژه‌ی شما نمی‌توانیم داده مالی را رمزگشایی کنیم. به همین دلیل از گذرواژه‌ی بلند و منحصربه‌فرد استفاده کنید. اطلاعات لازم برای کارکرد سرویس (شماره موبایل، ایمیل، اطلاعات نمایه و فهرست دستگاه‌ها) زیر پوشش این رمزنگاری نیستند. اگر گذرواژه و کلید بازیابی را هر دو گم کنید، بازیابی داده ممکن نیست. پایگاه داده روی خود دستگاه نیز رمزنگاری شده است.</p>
+<p>تراکنش‌ها، دسته‌بندی‌ها، بودجه‌ها، بدهی‌ها و اهداف پس‌انداز <strong>به‌صورت سرتاسری (End-to-End) رمزنگاری می‌شوند</strong>: کلید رمزنگاری روی دستگاه شما ساخته می‌شود و فقط به‌شکل رمزشده از آن خارج می‌شود، و سرور فقط داده رمزشده‌ای را نگه می‌دارد که ما نمی‌توانیم بخوانیم. گذرواژه و کلید بازیابی شما هرگز به سرور ارسال نمی‌شوند (دستگاه فقط مقادیری مشتق‌شده می‌فرستد که قفل داده را باز نمی‌کنند)؛ بنابراین ما و هر مهاجمی که به سرور نفوذ کند، بدون حدس زدن گذرواژه‌ی شما نمی‌توانیم داده مالی را رمزگشایی کنیم. به همین دلیل از گذرواژه‌ی بلند و منحصربه‌فرد استفاده کنید. اطلاعات لازم برای کارکرد سرویس (شماره موبایل، اطلاعات نمایه و فهرست دستگاه‌ها) زیر پوشش این رمزنگاری نیستند. اگر گذرواژه و کلید بازیابی را هر دو گم کنید، بازیابی داده ممکن نیست. پایگاه داده روی خود دستگاه نیز رمزنگاری شده است.</p>
 <h2>پیامک و میکروفون</h2>
 <p>در نسخه‌هایی که تشخیص پیامک بانکی دارند، متن پیامک فقط روی همان دستگاه پردازش می‌شود و به سرور ارسال نمی‌شود. این قابلیت فقط پس از اجازه شما در پنجره مجوز اندروید کار می‌کند و هر زمان می‌توانید مجوز را از تنظیمات گوشی بگیرید. میکروفون فقط وقتی شما ورود صوتی را انتخاب کنید استفاده می‌شود. تشخیص گفتار توسط سرویس گفتار خود گوشی انجام می‌شود؛ بسته به گوشی و تنظیمات آن، ممکن است صدا برای پردازش به ارائه‌دهنده آن سرویس (مثلاً گوگل) ارسال شود. سیدنا صدای شما را ضبط یا ذخیره نمی‌کند.</p>
 <h2>اشتراک‌گذاری و اشخاص ثالث</h2>
-<p>اطلاعات شما فروخته یا برای تبلیغات استفاده نمی‌شود. برنامه ابزار تبلیغاتی، رهگیری یا تحلیل رفتار شخص ثالث ندارد. برای ارسال کد تأیید، شماره یا ایمیل شما به سرویس ارسال پیامک/ایمیل داده می‌شود. فایل‌های خروجی (PDF و Excel) و کارت اشتراک‌گذاری تراکنش فقط وقتی شما درخواست کنید ساخته می‌شوند و هر جا که خودتان ارسال کنید می‌روند.</p>
+<p>اطلاعات شما فروخته یا برای تبلیغات استفاده نمی‌شود. برنامه ابزار تبلیغاتی، رهگیری یا تحلیل رفتار شخص ثالث ندارد. برای ارسال کد تأیید، شماره موبایل شما به سرویس ارسال پیامک داده می‌شود. فایل‌های خروجی (PDF و Excel) و کارت اشتراک‌گذاری تراکنش فقط وقتی شما درخواست کنید ساخته می‌شوند و هر جا که خودتان ارسال کنید می‌روند.</p>
 <h2>کوکی</h2>
 <p>این صفحه‌ها و سرویس سیدنا از کوکی یا ابزار ردیابی استفاده نمی‌کنند.</p>
 <h2>مدت نگه‌داری</h2>
@@ -86,25 +74,25 @@ td,th{border:1px solid #d0d7de;padding:6px 10px;vertical-align:top}
 <h2>حقوق شما</h2>
 <p>می‌توانید درباره اطلاعات خود پرسش، درخواست اصلاح یا درخواست حذف داشته باشید. از اطلاعات مالی خود نیز می‌توانید داخل برنامه خروجی PDF یا Excel بگیرید.</p>
 <h2>تغییر این سیاست</h2>
-<p>در صورت تغییر، نسخه و تاریخ بالای صفحه به‌روز می‌شود و تغییرات مهم از راه برنامه یا ایمیل اطلاع داده می‌شود.</p>
+<p>در صورت تغییر، نسخه و تاریخ بالای صفحه به‌روز می‌شود و تغییرات مهم از راه برنامه اطلاع داده می‌شود.</p>
 <h2>تماس</h2>
-<p><a href="mailto:{{.SupportEmail}}">{{.SupportEmail}}</a></p>
+<p>پشتیبانی داخل برنامه / in-app support</p>
 <div class="en">
 <h1>Privacy Policy — Cidna</h1>
 <p class="meta">Version {{.Version}} — last updated: {{.UpdatedEn}}</p>
-<p><strong>Controller:</strong> Cidna is provided by Mohammad Sina Ramezani Ahdieh (an individual), who is responsible for the data kept on the server. Contact: <a href="mailto:{{.SupportEmail}}">{{.SupportEmail}}</a></p>
-<p><strong>Data we collect:</strong> phone number (sign-up/sign-in); optional email, name, gender, birth date; display-only device info (name, model, OS/app version, masked IP, one-way installation hash). Your password itself never reaches our servers: your device derives a separate sign-in value from it, and we store only an Argon2id hash of that value.</p>
-<p><strong>Financial data is end-to-end encrypted.</strong> It is encrypted on your device with a key that is generated on your device and leaves it only in wrapped (encrypted) form; our servers store ciphertext that we cannot read. Your password and your recovery key are never sent to us (your device sends only values derived from them that cannot unlock your data), so neither we nor an attacker who compromises our servers can decrypt your financial data without guessing your password. Because of that last point, please use a long, unique password. Account details the service needs to operate (phone number, email, profile fields, device list) are not covered by this encryption. If you lose both your password and recovery key, data cannot be recovered. The on-device database is encrypted too.</p>
+<p><strong>Controller:</strong> Cidna is provided by Mohammad Sina Ramezani Ahdieh (an individual), who is responsible for the data kept on the server. Contact: use in-app support</p>
+<p><strong>Data we collect:</strong> phone number (sign-up/sign-in); name, gender, birth date; display-only device info (name, model, OS/app version, masked IP, one-way installation hash). Your password itself never reaches our servers: your device derives a separate sign-in value from it, and we store only an Argon2id hash of that value.</p>
+<p><strong>Financial data is end-to-end encrypted.</strong> It is encrypted on your device with a key that is generated on your device and leaves it only in wrapped (encrypted) form; our servers store ciphertext that we cannot read. Your password and your recovery key are never sent to us (your device sends only values derived from them that cannot unlock your data), so neither we nor an attacker who compromises our servers can decrypt your financial data without guessing your password. Because of that last point, please use a long, unique password. Account details the service needs to operate (phone number, profile fields, device list) are not covered by this encryption. If you lose both your password and recovery key, data cannot be recovered. The on-device database is encrypted too.</p>
 <p><strong>SMS &amp; microphone:</strong> where bank-SMS detection exists, SMS text is processed on-device only, and only after you grant the Android permission (you can revoke it any time). The microphone is used only when you choose voice input. Speech recognition is performed by your phone's speech service; depending on the phone and its settings, audio may be sent to that service's provider (for example Google). Cidna does not record or store your voice.</p>
-<p><strong>Sharing:</strong> we do not sell data or use it for ads. The app contains no third-party advertising, tracking or analytics. Your phone/email is passed to our SMS/email provider to deliver verification codes. PDF/Excel exports and transaction share cards are created only when you ask and go wherever you send them.</p>
+<p><strong>Sharing:</strong> we do not sell data or use it for ads. The app contains no third-party advertising, tracking or analytics. Your phone number is passed to our SMS provider to deliver verification codes. PDF/Excel exports and transaction share cards are created only when you ask and go wherever you send them.</p>
 <p><strong>Cookies:</strong> these pages and the Cidna service use no cookies or tracking tools.</p>
 <p><strong>Retention:</strong> account data is kept while your account is active. Device activity records are kept at most 30 days and temporary sync operations at most 7 days, then erased automatically.</p>
 <p><strong>Deletion:</strong> delete your account in Settings → Security → Delete Account (see <a href="/account-deletion">/account-deletion</a>). Deleted accounts are kept 30 days for restoration, then permanently erased.</p>
 <p><strong>Security:</strong> HTTPS transport, end-to-end encryption of financial data, password-derived sign-in values hashed with Argon2id, revocable sessions. No system is perfectly secure.</p>
 <p><strong>Under 18:</strong> use by people under 18 should be with the knowledge and supervision of a parent or legal guardian.</p>
 <p><strong>Your rights:</strong> you may ask questions, request correction or deletion of your data, and export your financial data as PDF or Excel inside the app.</p>
-<p><strong>Changes:</strong> the version and date above are updated on every change; material changes are announced in the app or by email.</p>
-<p><strong>Contact:</strong> <a href="mailto:{{.SupportEmail}}">{{.SupportEmail}}</a></p>
+<p><strong>Changes:</strong> the version and date above are updated on every change; material changes are announced in the app.</p>
+<p><strong>Contact:</strong> پشتیبانی داخل برنامه / in-app support</p>
 </div>
 {{else if eq .Kind "terms"}}
 <h1>قوانین و مقررات استفاده — سیدنا (Cidna)</h1>
@@ -128,11 +116,11 @@ td,th{border:1px solid #d0d7de;padding:6px 10px;vertical-align:top}
 <h2>۹. مالکیت</h2>
 <p>نام و نشان «سیدنا / Cidna» متعلق به ارائه‌دهنده است. کد برنامه تحت مجوز GNU AGPL نسخه ۳ یا بالاتر منتشر شده است و فهرست اجزای متن‌باز در <a href="/licenses">صفحه مجوزها</a> آمده است. داده‌های شما متعلق به خودتان است.</p>
 <h2>۱۰. تغییر قوانین</h2>
-<p>ممکن است این قوانین به‌روز شوند. نسخه و تاریخ بالای صفحه تغییر می‌کند و ادامه استفاده پس از اطلاع‌رسانی به معنای پذیرش نسخه جدید است. تغییرات مهم از راه برنامه یا ایمیل اطلاع داده می‌شود.</p>
+<p>ممکن است این قوانین به‌روز شوند. نسخه و تاریخ بالای صفحه تغییر می‌کند و ادامه استفاده پس از اطلاع‌رسانی به معنای پذیرش نسخه جدید است. تغییرات مهم از راه برنامه اطلاع داده می‌شود.</p>
 <h2>۱۱. قانون حاکم</h2>
 <p>این قوانین تابع قوانین جمهوری اسلامی ایران است و اختلافات در مراجع صالح قضایی ایران بررسی می‌شود.</p>
 <h2>۱۲. تماس</h2>
-<p><a href="mailto:{{.SupportEmail}}">{{.SupportEmail}}</a></p>
+<p>پشتیبانی داخل برنامه / in-app support</p>
 <div class="en">
 <h1>Terms of Service — Cidna</h1>
 <p class="meta">Version {{.Version}} — last updated: {{.UpdatedEn}}</p>
@@ -145,9 +133,9 @@ td,th{border:1px solid #d0d7de;padding:6px 10px;vertical-align:top}
 <p><strong>7. Limitation of liability.</strong> The app is provided “as is”. To the extent permitted by law, the provider is not liable for indirect damages, loss of data or profit, or financial decisions based on information in the app. This does not limit rights you cannot waive under the laws of the Islamic Republic of Iran.</p>
 <p><strong>8. Deletion and termination.</strong> You can delete your account at any time (<a href="/account-deletion">how to delete</a>). Access may be restricted or ended for breach of these Terms or abuse of the service.</p>
 <p><strong>9. Ownership.</strong> The name and mark “Cidna / سیدنا” belong to the provider. The app's code is released under the GNU AGPL v3 or later; open-source components are listed on the <a href="/licenses">licenses page</a>. Your data belongs to you.</p>
-<p><strong>10. Changes.</strong> We may update these Terms. The version and date above change, and continued use after notice means you accept the new version. Material changes are announced in the app or by email.</p>
+<p><strong>10. Changes.</strong> We may update these Terms. The version and date above change, and continued use after notice means you accept the new version. Material changes are announced in the app or in the app.</p>
 <p><strong>11. Governing law.</strong> These Terms are governed by the laws of the Islamic Republic of Iran; disputes go to the competent Iranian courts.</p>
-<p><strong>12. Contact:</strong> <a href="mailto:{{.SupportEmail}}">{{.SupportEmail}}</a></p>
+<p><strong>12. Contact:</strong> پشتیبانی داخل برنامه / in-app support</p>
 </div>
 {{else if eq .Kind "licenses"}}
 <h1>مجوزهای متن‌باز — سیدنا (Cidna)</h1>
@@ -164,10 +152,10 @@ td,th{border:1px solid #d0d7de;padding:6px 10px;vertical-align:top}
 <tr><td>Inter font — Copyright The Inter Project Authors (github.com/rsms/inter)</td><td>SIL Open Font License 1.1</td></tr>
 <tr><td>Backend (Go): go-chi/chi, go-playground/validator, golang-jwt/jwt, joho/godotenv, mongo-go-driver, golang.org/x/*</td><td>MIT / Apache-2.0 / BSD-3-Clause (see each module)</td></tr>
 </table>
-<p>متن کامل هر مجوز در مخزن بالادستی همان جزء در دسترس است. برای درخواست متن کامل یا گزارش اشتباه در این فهرست: <a href="mailto:{{.SupportEmail}}">{{.SupportEmail}}</a></p>
+<p>متن کامل هر مجوز در مخزن بالادستی همان جزء در دسترس است. برای درخواست متن کامل یا گزارش اشتباه در این فهرست: پشتیبانی داخل برنامه / in-app support</p>
 <div class="en">
 <h1>Open-source notices — Cidna</h1>
-<p>Cidna is released under the <strong>GNU AGPL v3.0 or later</strong>. The components listed above carry their own licenses, named as stated by each upstream project. Full license texts are available from each upstream repository. To request a full text or report an error in this list: <a href="mailto:{{.SupportEmail}}">{{.SupportEmail}}</a></p>
+<p>Cidna is released under the <strong>GNU AGPL v3.0 or later</strong>. The components listed above carry their own licenses, named as stated by each upstream project. Full license texts are available from each upstream repository. To request a full text or report an error in this list: پشتیبانی داخل برنامه / in-app support</p>
 </div>
 {{else}}
 <h1>حذف حساب کاربری — سیدنا (Cidna)</h1>
@@ -176,12 +164,12 @@ td,th{border:1px solid #d0d7de;padding:6px 10px;vertical-align:top}
 <h2>چه اتفاقی می‌افتد؟</h2>
 <p>از همه دستگاه‌ها خارج می‌شوید و اطلاعات روی دستگاه شما پاک می‌شود. اطلاعات رمزشده روی سرور ۳۰ روز نگه داشته می‌شود؛ در این مدت با ورود دوباره و انتخاب «بازیابی حساب» حساب برمی‌گردد. پس از ۳۰ روز، حساب، داده‌های همگام‌شده و دستگاه‌ها برای همیشه پاک می‌شوند.</p>
 <h2>بدون دسترسی به برنامه</h2>
-<p>از ایمیل <a href="mailto:{{.SupportEmail}}">{{.SupportEmail}}</a> با موضوع «حذف حساب» و شماره موبایل ثبت‌شده برایمان بنویسید.</p>
+<p>برای حذف حساب، از بخش پشتیبانی داخل برنامه اقدام کنید.</p>
 <div class="en">
 <h1>Delete your account — Cidna</h1>
 <p><strong>In the app:</strong> Settings → Security → Delete Account, then confirm with your password.</p>
 <p><strong>What happens:</strong> you are signed out everywhere and local data is erased. Encrypted server data is kept 30 days so you can restore by signing in and choosing “Restore account”; after 30 days the account, synced data and devices are permanently erased.</p>
-<p><strong>Without the app:</strong> email <a href="mailto:{{.SupportEmail}}">{{.SupportEmail}}</a> with the subject “Delete account” and your registered phone number.</p>
+<p><strong>Without the app:</strong> use in-app support to request account deletion.</p>
 </div>
 {{end}}
 </body>
@@ -189,7 +177,7 @@ td,th{border:1px solid #d0d7de;padding:6px 10px;vertical-align:top}
 
 func (h *LegalHandler) page(title, kind string) legalPage {
 	return legalPage{
-		Title: title, SupportEmail: h.supportEmail, Kind: kind,
+		Title: title, Kind: kind,
 		Version: legalVersion, UpdatedFa: legalUpdatedFa, UpdatedEn: legalUpdatedEn,
 	}
 }

@@ -15,9 +15,8 @@ type DeviceInfo struct {
 }
 
 type RegisterInput struct {
-	PhoneNumber, Email, AuthSecret, DeviceID                                                      string
+	PhoneNumber, AuthSecret, DeviceID                                                             string
 	OTPChallengeID, OTPCode                                                                       string
-	EmailOTPChallengeID, EmailOTPCode                                                             string
 	KdfSalt                                                                                       string
 	PasswordKeyEnvelope, PasswordKeyNonce, RecoveryKeyHash, RecoveryKeyEnvelope, RecoveryKeyNonce []byte
 
@@ -141,14 +140,12 @@ type PasswordChanger interface {
 }
 
 type Profile struct {
-	UserID        string
-	PhoneNumber   string
-	Email         string
-	EmailVerified bool
-	FirstName     string
-	LastName      string
-	Gender        entity.Gender
-	BirthDate     string
+	UserID      string
+	PhoneNumber string
+	FirstName   string
+	LastName    string
+	Gender      entity.Gender
+	BirthDate   string
 }
 
 type UpdateProfileInput struct {
@@ -156,12 +153,7 @@ type UpdateProfileInput struct {
 	Gender                                 entity.Gender
 }
 
-type UpdateEmailInput struct {
-	UserID, Email, OTPChallengeID, OTPCode string
-}
-
 type ProfileService interface {
 	GetProfile(context.Context, string) (Profile, error)
 	UpdateProfile(context.Context, UpdateProfileInput) (Profile, error)
-	UpdateEmail(context.Context, UpdateEmailInput) (Profile, error)
 }

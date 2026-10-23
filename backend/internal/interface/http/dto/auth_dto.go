@@ -15,9 +15,9 @@ type DeviceInfoRequest struct {
 }
 
 type OTPRequest struct {
-	Destination string `json:"destination" validate:"required,max=320"`
-	Channel     string `json:"channel" validate:"required,oneof=sms email"`
-	Purpose     string `json:"purpose" validate:"required,oneof=REGISTER LOGIN PASSWORD_RESET EMAIL_VERIFICATION"`
+	Destination string `json:"destination" validate:"required,max=32"`
+	Channel     string `json:"channel" validate:"required,oneof=sms"`
+	Purpose     string `json:"purpose" validate:"required,oneof=REGISTER LOGIN PASSWORD_RESET"`
 }
 type OTPResponse struct {
 	ChallengeID string `json:"challenge_id"`
@@ -25,14 +25,11 @@ type OTPResponse struct {
 }
 type RegisterRequest struct {
 	PhoneNumber string `json:"phone_number" validate:"required"`
-	Email       string `json:"email,omitempty" validate:"omitempty,email,max=320"`
 	// AuthSecret is derived from the password on the device (never the password itself).
 	AuthSecret          string             `json:"auth_secret" validate:"required,max=128"`
 	DeviceID            string             `json:"device_id" validate:"required,max=128"`
 	OTPChallengeID      string             `json:"otp_challenge_id" validate:"required"`
 	OTPCode             string             `json:"otp_code" validate:"required,len=6,numeric"`
-	EmailOTPChallengeID string             `json:"email_otp_challenge_id,omitempty"`
-	EmailOTPCode        string             `json:"email_otp_code,omitempty" validate:"omitempty,len=6,numeric"`
 	KdfSalt             string             `json:"kdf_salt" validate:"required,max=256"`
 	PasswordKeyEnvelope string             `json:"password_key_envelope,omitempty"`
 	PasswordKeyNonce    string             `json:"password_key_nonce,omitempty"`
@@ -54,7 +51,7 @@ type RegisterResponse struct {
 	Role                entity.Role `json:"role"`
 }
 type LoginRequest struct {
-	Identifier string `json:"identifier" validate:"required,max=320"`
+	Identifier string `json:"identifier" validate:"required,max=32"`
 	// AuthSecret is derived from the password on the device (never the password itself).
 	AuthSecret string             `json:"auth_secret" validate:"required,max=128"`
 	DeviceID   string             `json:"device_id" validate:"required,max=128"`
@@ -65,7 +62,7 @@ type LoginRequest struct {
 
 // LoginParamsRequest asks for the public key-derivation parameters of an identifier.
 type LoginParamsRequest struct {
-	Identifier string `json:"identifier" validate:"required,max=320"`
+	Identifier string `json:"identifier" validate:"required,max=32"`
 }
 
 // LoginParamsResponse is public by design: the client needs the salt before it can derive
@@ -184,14 +181,12 @@ type UpdateUserRoleResponse struct {
 }
 
 type ProfileResponse struct {
-	UserID        string        `json:"user_id"`
-	PhoneNumber   string        `json:"phone_number"`
-	Email         string        `json:"email,omitempty"`
-	EmailVerified bool          `json:"email_verified"`
-	FirstName     string        `json:"first_name,omitempty"`
-	LastName      string        `json:"last_name,omitempty"`
-	Gender        entity.Gender `json:"gender"`
-	BirthDate     string        `json:"birth_date,omitempty"`
+	UserID      string        `json:"user_id"`
+	PhoneNumber string        `json:"phone_number"`
+	FirstName   string        `json:"first_name,omitempty"`
+	LastName    string        `json:"last_name,omitempty"`
+	Gender      entity.Gender `json:"gender"`
+	BirthDate   string        `json:"birth_date,omitempty"`
 }
 
 type UpdateProfileRequest struct {
@@ -199,10 +194,4 @@ type UpdateProfileRequest struct {
 	LastName  string        `json:"last_name" validate:"max=80"`
 	Gender    entity.Gender `json:"gender" validate:"required"`
 	BirthDate string        `json:"birth_date" validate:"omitempty,len=10"`
-}
-
-type UpdateEmailRequest struct {
-	Email          string `json:"email" validate:"required,email,max=320"`
-	OTPChallengeID string `json:"otp_challenge_id" validate:"required"`
-	OTPCode        string `json:"otp_code" validate:"required,len=6,numeric"`
 }

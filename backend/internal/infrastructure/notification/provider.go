@@ -6,13 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/smtp"
 	"time"
 )
 
 type Config struct {
-	SMSWebhookURL, SMSAuthToken, SMTPHost, SMTPPort, SMTPUser, SMTPPassword, EmailFrom string
-	DevLog                                                                             bool
+	SMSWebhookURL, SMSAuthToken string
+	DevLog                      bool
 }
 type Provider struct {
 	c      Config
@@ -25,22 +24,7 @@ func (p *Provider) Send(ctx context.Context, destination, channel, code string) 
 		fmt.Printf("OTP %s -> %s: %s\n", channel, destination, code)
 		return nil
 	}
-	if channel == "email" {
-		return p.email(destination, code)
-	}
 	return p.sms(ctx, destination, code)
-}
-func (p *Provider) email(to, code string) error {
-	if p.c.SMTPHost == "" || p.c.EmailFrom == "" {
-		return fmt.Errorf("SMTP is not configured")
-	}
-	msg := []byte("To: " + to + "\r\nSubject: Cidna verification code\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nYour verification code is " + code + ". It expires soon.\r\n")
-	addr := p.c.SMTPHost + ":" + p.c.SMTPPort
-	var a smtp.Auth
-	if p.c.SMTPUser != "" {
-		a = smtp.PlainAuth("", p.c.SMTPUser, p.c.SMTPPassword, p.c.SMTPHost)
-	}
-	return smtp.SendMail(addr, a, p.c.EmailFrom, []string{to}, msg)
 }
 func (p *Provider) sms(ctx context.Context, to, code string) error {
 	if p.c.SMSWebhookURL == "" {

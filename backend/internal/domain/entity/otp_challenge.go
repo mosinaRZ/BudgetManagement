@@ -5,10 +5,9 @@ import "time"
 type OTPPurpose string
 
 const (
-	OTPPurposeRegister          OTPPurpose = "REGISTER"
-	OTPPurposeLogin             OTPPurpose = "LOGIN"
-	OTPPurposePasswordReset     OTPPurpose = "PASSWORD_RESET"
-	OTPPurposeEmailVerification OTPPurpose = "EMAIL_VERIFICATION"
+	OTPPurposeRegister      OTPPurpose = "REGISTER"
+	OTPPurposeLogin         OTPPurpose = "LOGIN"
+	OTPPurposePasswordReset OTPPurpose = "PASSWORD_RESET"
 )
 
 type OTPChallenge struct {
