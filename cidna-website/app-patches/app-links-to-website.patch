@@ -1,0 +1,76 @@
+diff -ruN a/build.gradle.kts b/build.gradle.kts
+--- a/build.gradle.kts	2026-10-24 20:03:44.481311440 +0000
++++ b/build.gradle.kts	2026-10-24 20:03:44.496160822 +0000
+@@ -59,6 +59,7 @@
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+ 
+         buildConfigField("String", "APP_NAME", "\"Cidna\"")
++        buildConfigField("String", "SITE_URL", "\"https://cidna.app/\"")
+         buildConfigField("String", "BASE_URL", "\"https://api.example.com/\"")
+     }
+ 
+diff -ruN a/src/main/java/ir/hamedan/budgetmanagement/ui/screens/auth/RegisterScreen.kt b/src/main/java/ir/hamedan/budgetmanagement/ui/screens/auth/RegisterScreen.kt
+--- a/src/main/java/ir/hamedan/budgetmanagement/ui/screens/auth/RegisterScreen.kt	2026-10-24 20:03:44.474088976 +0000
++++ b/src/main/java/ir/hamedan/budgetmanagement/ui/screens/auth/RegisterScreen.kt	2026-10-24 20:03:44.496079045 +0000
+@@ -384,7 +384,7 @@
+                     )
+                     Row {
+                         TextButton(
+-                            onClick = { openLegalPage(uriHandler, "terms") },
++                            onClick = { openLegalPage(uriHandler, "terms/") },
+                             colors = ButtonDefaults.textButtonColors(contentColor = termsColors.primary)
+                         ) {
+                             Text(
+@@ -395,7 +395,7 @@
+                             )
+                         }
+                         TextButton(
+-                            onClick = { openLegalPage(uriHandler, "privacy-policy") },
++                            onClick = { openLegalPage(uriHandler, "privacy/") },
+                             colors = ButtonDefaults.textButtonColors(contentColor = termsColors.primary)
+                         ) {
+                             Text(
+@@ -438,7 +438,7 @@
+ /** Opens a public legal page served by the backend (path without a leading slash, e.g. "terms"). */
+ private fun openLegalPage(uriHandler: UriHandler, path: String) {
+     try {
+-        uriHandler.openUri(ir.hamedan.budgetmanagement.BuildConfig.BASE_URL + path)
++        uriHandler.openUri(ir.hamedan.budgetmanagement.BuildConfig.SITE_URL + path)
+     } catch (e: Exception) {
+         // No browser available: nothing to open, the checkbox text still states what is being accepted.
+     }
+diff -ruN a/src/main/java/ir/hamedan/budgetmanagement/ui/screens/settings/SettingsScreen.kt b/src/main/java/ir/hamedan/budgetmanagement/ui/screens/settings/SettingsScreen.kt
+--- a/src/main/java/ir/hamedan/budgetmanagement/ui/screens/settings/SettingsScreen.kt	2026-10-24 20:03:44.465260590 +0000
++++ b/src/main/java/ir/hamedan/budgetmanagement/ui/screens/settings/SettingsScreen.kt	2026-10-24 20:03:44.495735552 +0000
+@@ -776,17 +776,17 @@
+                                 title = if (isPersian) "قوانین و مقررات" else "Terms of Service",
+                                 iconRes = R.drawable.ic_legal,
+                                 color = Color(0xFF607D8B)
+-                            ) { openUrl(context, ir.hamedan.budgetmanagement.BuildConfig.BASE_URL + "terms") }
++                            ) { openUrl(context, legalSiteUrl(isPersian, "terms/")) }
+                             SocialLinkRow(
+                                 title = if (isPersian) "حریم خصوصی" else "Privacy Policy",
+                                 iconRes = R.drawable.ic_legal,
+                                 color = Color(0xFF607D8B)
+-                            ) { openUrl(context, ir.hamedan.budgetmanagement.BuildConfig.BASE_URL + "privacy-policy") }
++                            ) { openUrl(context, legalSiteUrl(isPersian, "privacy/")) }
+                             SocialLinkRow(
+                                 title = if (isPersian) "مجوزهای متن‌باز" else "Open-source licenses",
+                                 iconRes = R.drawable.ic_legal,
+                                 color = Color(0xFF607D8B)
+-                            ) { openUrl(context, ir.hamedan.budgetmanagement.BuildConfig.BASE_URL + "licenses") }
++                            ) { openUrl(context, legalSiteUrl(isPersian, "licenses/")) }
+                         }
+                     }
+                 }
+@@ -2276,4 +2276,8 @@
+             .build(),
+         BiometricPrompt.CryptoObject(cipher)
+     )
+-}
+\ No newline at end of file
++}
++
++/** Public website page (fa at root, en under /en/). Keep paths in sync with the website's slugs. */
++internal fun legalSiteUrl(isPersian: Boolean, path: String): String =
++    ir.hamedan.budgetmanagement.BuildConfig.SITE_URL + (if (isPersian) "" else "en/") + path

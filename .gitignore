@@ -91,3 +91,6 @@ Thumbs.db
 keystore.properties
 *.jks
 *.keystore
+
+__pycache__/
+*.pyc
