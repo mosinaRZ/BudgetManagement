@@ -83,7 +83,7 @@ def page(L, slug, title, desc, body, schema=None, crumbs=None, og_type="website"
 <meta name="theme-color" content="#F4FBF7" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#091413" media="(prefers-color-scheme: dark)">
 <meta name="color-scheme" content="light dark">
 <meta name="application-name" content="Cidna"><meta name="apple-mobile-web-app-title" content="Cidna">
-<link rel="icon" href="/assets/img/cidna-mark.png" type="image/png"><link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png"><link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/assets/img/favicon-48.png" sizes="48x48" type="image/png"><link rel="icon" href="/assets/img/favicon-192.png" sizes="192x192" type="image/png"><link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png"><link rel="manifest" href="/manifest.webmanifest">
 <meta property="og:type" content="{og_type}"><meta property="og:site_name" content="Cidna | سیدنا"><meta property="og:title" content="{e(full_title)}"><meta property="og:description" content="{e(desc)}">
 <meta property="og:url" content="{canon}"><meta property="og:image" content="{og_img}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="{e(t('صفحهٔ اصلی اپلیکیشن سیدنا با تراز حساب، قلک‌های پس‌انداز و محدودیت‌های خرج','Cidna app home screen with balance, savings piggy banks and spending limits'))}">
