@@ -94,3 +94,10 @@ keystore.properties
 
 __pycache__/
 *.pyc
+
+# Backups and archives (may contain secrets)
+*.tar.gz
+*.tgz
+*.zip
+*.archive.gz
+backups/
