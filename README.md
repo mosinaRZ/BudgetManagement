@@ -2,8 +2,8 @@
 
 # Cidna · سیدنا
 
-### Your money, finally calm.
-### پولتان، بالاخره آرام و روشن.
+### The New Generation of Financial Managers!
+### نسل جدید مدیر مالی!
 
 **Personal finance, budgeting & savings for Persian and English speakers — private by design, on Android.**
 
@@ -82,18 +82,13 @@ Amounts are stored as integers (Toman) and converted at the UI boundary, so floa
 4. **Protect** — save the recovery key shown once at the end of registration. It is the only way back in if the password is forgotten.
 5. **Go multi-device** — sign in on another device, sync, and get an alert whenever a new device signs in to your account.
 
-## 6. What's new in this release
+## 6. Our trust promise (read with section 8)
 
-- **Clearer guest-data choice at sign-up.** The dialog now presents two plain option cards — *Move to the new account* and *Start fresh (delete guest data)* — each with its consequence spelled out. It can only be closed through its buttons, so a stray tap or the back gesture no longer throws you out of registration, and it uses the app's theme colours in light and dark mode.
-- **Terms consent that matches the theme.** The accept-terms line and its links are now rendered in the theme's own text and accent colours (readable in light and dark), underlined as links, and the whole row is one large tap target.
-
-## 7. Our trust promise (read with section 9)
-
-We say what we can prove: financial records are end-to-end encrypted before upload; your password and recovery key are never sent to our servers (we store only an Argon2id hash of a password-derived sign-in value); there is no advertising, analytics or third-party tracking; and account deletion is soft for 30 days, then permanent. We claim end-to-end encryption of financial records only, not "zero-knowledge" of everything: account details such as phone number are visible to the service — [section 9](#9-security-model) explains the exact scope.
+We say what we can prove: financial records are end-to-end encrypted before upload; your password and recovery key are never sent to our servers (we store only an Argon2id hash of a password-derived sign-in value); there is no advertising, analytics or third-party tracking; and account deletion is soft for 30 days, then permanent. We claim end-to-end encryption of financial records only, not "zero-knowledge" of everything: account details such as phone number are visible to the service — [section 8](#8-security-model) explains the exact scope.
 
 **Call to action.** Install Cidna from Google Play (or the direct build), try it as a guest today, and create an account when you want your records on more than one device. Questions, partnerships or press: **cidna.app@gmail.com**.
 
-## 8. Architecture
+## 7. Architecture
 
 ```text
 ┌──────────────────────────── Android app ────────────────────────────┐
@@ -113,7 +108,7 @@ We say what we can prove: financial records are end-to-end encrypted before uplo
 
 The whole backend (HTTPS, API, MongoDB, backups) runs on one VPS with Docker Compose. No Redis or other external cache is required.
 
-## 9. Security model
+## 8. Security model
 
 What the project does:
 
@@ -132,7 +127,7 @@ Scope and limits (please read):
 
 To report a vulnerability, use a private security report. Please do not open a public issue for security problems.
 
-## 10. Technology stack
+## 9. Technology stack
 
 | Area | Technology |
 |---|---|
@@ -145,7 +140,7 @@ To report a vulnerability, use a private security report. Please do not open a p
 | Deployment | Docker Compose, Caddy, scheduled `mongodump` backups |
 | Localization | Persian and English resources, Jalali date utilities |
 
-## 11. Repository layout
+## 10. Repository layout
 
 ```text
 cidna/
@@ -167,7 +162,7 @@ cidna/
 └── README.md
 ```
 
-## 12. Getting started
+## 11. Getting started
 
 ### Prerequisites
 
@@ -206,7 +201,7 @@ Follow `backend/deployments/README.md` (Persian). In short: point a DNS name at 
 
 Release signing is read from `keystore.properties` (git-ignored) or `RELEASE_*` environment variables. A phone cannot reach `localhost` on your computer: use the computer's LAN address for debug builds on a physical device.
 
-## 13. Configuration and API
+## 12. Configuration and API
 
 ### Key environment variables
 
@@ -248,13 +243,13 @@ GET /privacy-policy   GET /terms   GET /licenses   GET /account-deletion
 
 The server's handlers and DTOs are the source of truth for request and response contracts.
 
-## 14. Legal information
+## 13. Legal information
 
 > This section describes the project's licensing and legal posture to the best of the maintainer's knowledge. It is **not legal advice**; consult a qualified lawyer before relying on it, especially for commercial or cross-border use.
 
-### 14.1 Software license
+### 13.1 Software license
 
-Copyright © 2026 Mohammad Sina Ramezani Ahdieh.
+Copyright © 2026 Muhammed Cenna Ramezani Ahdieh.
 
 Cidna is free software released under the **GNU Affero General Public License, version 3 or (at your option) any later version** (`AGPL-3.0-or-later`). The full text is in [`LICENSE`](LICENSE).
 
@@ -265,11 +260,11 @@ In practical terms:
 - **Running a modified backend as a network service** triggers AGPL section 13: you must offer the complete corresponding source of your modified version to the users who interact with it over the network.
 - The license grants **no rights to the name or logo** "Cidna / سیدنا" (see 14.4).
 
-### 14.2 Contributions
+### 13.2 Contributions
 
 Contributions are accepted under the project license (AGPL-3.0-or-later). By submitting a contribution you confirm that you have the right to do so and that it may be distributed under that license. Do not submit code, fonts, images or animations you do not have the right to license.
 
-### 14.3 Third-party components
+### 13.3 Third-party components
 
 Each component keeps its own license; those terms continue to apply.
 
@@ -286,15 +281,15 @@ Each component keeps its own license; those terms continue to apply.
 
 The running backend also lists these notices at `/licenses`. Distributing the app means passing on the required copyright and license notices of these components (for example the SQLCipher and OFL font notices).
 
-### 14.4 Name, logos and third-party marks
+### 13.4 Name, logos and third-party marks
 
 "Cidna" and "سیدنا" identify this project and its provider. Forks must use a different name and icon. WhatsApp, Instagram, X and Gmail are trademarks of their respective owners; their icons appear only to identify share destinations and imply no endorsement.
 
-### 14.5 User-facing legal documents
+### 13.5 User-facing legal documents
 
 The backend serves the Privacy Policy, Terms of Service, open-source notices and account-deletion instructions in Persian and English. Their addresses are what you enter in Google Play Console (Privacy policy URL and the account-deletion URL in the Data safety form). Bump `legalVersion` and the dates in `backend/internal/interface/http/handler/legal_handler.go` whenever the texts or the app's data handling change. The texts are a starting point and should be reviewed by a lawyer.
 
-### 14.6 Personal data and retention
+### 13.6 Personal data and retention
 
 | Data | Purpose | Retention |
 |---|---|---|
@@ -306,21 +301,21 @@ The backend serves the Privacy Policy, Terms of Service, open-source notices and
 
 Account deletion is a **soft delete**: sessions are revoked immediately, the account can be restored by signing in within **30 days**, and after that the `purge-deleted` job erases it permanently (run it daily from cron). The app does not include advertising, analytics or third-party trackers. SMS text is processed on the device only, and only in the `direct` distribution.
 
-### 14.7 Disclaimers
+### 13.7 Disclaimers
 
 - Cidna is a record-keeping tool. It is **not** financial, accounting, legal or tax advice, and it is not connected to any bank account or payment system.
 - Automatic SMS detection, voice input and calculations may be wrong. Verify important figures against your bank records.
 - The software is provided **"as is", without warranty** of any kind, as stated in the AGPL (sections 15 and 16).
 - The Terms of Service are governed by the laws of the Islamic Republic of Iran.
 
-### 14.8 Before publishing a release
+### 13.8 Before publishing a release
 
 - [ ] Confirm that you hold, or may redistribute, every non-code asset: Lottie animations, share-card backgrounds, banners, icons and fonts.
 - [ ] Keep the privacy policy, the Play Data safety form and the actual behavior of the app consistent with each other.
 - [ ] Review the legal texts with a lawyer.
 - [ ] Keep `LICENSE` and the copyright notice in every distributed copy, and publish the corresponding source.
 
-## 15. Contact
+## 14. Contact
 
 Project and legal contact: **cidna.app@gmail.com**
 
@@ -393,18 +388,13 @@ Project and legal contact: **cidna.app@gmail.com**
 4. **محافظت** — کلید بازیابی را که یک‌بار در پایان ثبت‌نام نمایش داده می‌شود ذخیره کنید. اگر گذرواژه را فراموش کنید، تنها راه بازگشت همین است.
 5. **چنددستگاهی شدن** — روی دستگاه دیگر وارد شوید، همگام‌سازی کنید و با هر ورود از دستگاه جدید اعلان بگیرید.
 
-## ۶. تازه‌های این نسخه
+## ۶. تعهد ما در برابر اعتماد (همراه با بخش ۸ بخوانید)
 
-- **انتخاب شفاف‌تر درباره اطلاعات مهمان هنگام ثبت‌نام.** دیالوگ حالا دو کارت انتخاب ساده دارد — *انتقال به حساب جدید* و *شروع از صفر (حذف اطلاعات مهمان)* — و پیامد هر کدام را صریح می‌گوید. فقط با دکمه‌های خودش بسته می‌شود، پس لمس اتفاقی یا حرکت بازگشت دیگر کاربر را از ثبت‌نام بیرون نمی‌اندازد؛ ضمناً از رنگ‌های تم برنامه در حالت روشن و تیره استفاده می‌کند.
-- **پذیرش قوانین هماهنگ با تم.** متن پذیرش و لینک‌های آن حالا با رنگ متن و رنگ تأکید خود تم نمایش داده می‌شوند (خوانا در حالت روشن و تیره)، لینک‌ها زیرخط دارند و کل ردیف یک ناحیه لمس بزرگ است.
-
-## ۷. تعهد ما در برابر اعتماد (همراه با بخش ۹ بخوانید)
-
-آنچه می‌توانیم ثابت کنیم را می‌گوییم: سوابق مالی پیش از ارسال به‌صورت سرتاسری رمزنگاری می‌شوند؛ گذرواژه و کلید بازیابی هرگز به سرور ارسال نمی‌شوند (فقط هش Argon2id یک مقدار ورودِ مشتق‌شده از گذرواژه نگهداری می‌شود)؛ هیچ تبلیغ، تحلیل رفتار یا ردیاب شخص ثالثی وجود ندارد؛ و حذف حساب تا ۳۰ روز نرم است و پس از آن دائمی. رمزنگاری سرتاسری را فقط برای سوابق مالی ادعا می‌کنیم، نه «zero-knowledge» برای همه چیز: اطلاعات حساب مانند شماره موبایل برای سرویس قابل‌مشاهده است — دامنه دقیق در [بخش ۹](#۹-مدل-امنیتی) آمده است.
+آنچه می‌توانیم ثابت کنیم را می‌گوییم: سوابق مالی پیش از ارسال به‌صورت سرتاسری رمزنگاری می‌شوند؛ گذرواژه و کلید بازیابی هرگز به سرور ارسال نمی‌شوند (فقط هش Argon2id یک مقدار ورودِ مشتق‌شده از گذرواژه نگهداری می‌شود)؛ هیچ تبلیغ، تحلیل رفتار یا ردیاب شخص ثالثی وجود ندارد؛ و حذف حساب تا ۳۰ روز نرم است و پس از آن دائمی. رمزنگاری سرتاسری را فقط برای سوابق مالی ادعا می‌کنیم، نه «zero-knowledge» برای همه چیز: اطلاعات حساب مانند شماره موبایل برای سرویس قابل‌مشاهده است — دامنه دقیق در [بخش ۸](#۸-مدل-امنیتی) آمده است.
 
 **دعوت به اقدام.** سیدنا را از گوگل‌پلی (یا نسخه direct) نصب کنید، همین امروز به‌عنوان مهمان امتحانش کنید و وقتی خواستید سوابقتان روی بیش از یک دستگاه باشد، حساب بسازید. سؤال، همکاری یا رسانه: **cidna.app@gmail.com**.
 
-## ۸. معماری
+## ۷. معماری
 
 <div dir="ltr">
 
@@ -428,7 +418,7 @@ Project and legal contact: **cidna.app@gmail.com**
 
 کل بک‌اند (HTTPS، API، MongoDB و بکاپ) با Docker Compose روی یک VPS اجرا می‌شود. Redis یا هیچ کش خارجی دیگری لازم نیست.
 
-## ۹. مدل امنیتی
+## ۸. مدل امنیتی
 
 آنچه پروژه انجام می‌دهد:
 
@@ -447,7 +437,7 @@ Project and legal contact: **cidna.app@gmail.com**
 
 برای گزارش آسیب‌پذیری، از یک کانال خصوصی و امن گزارش امنیتی استفاده کنید و لطفاً مسائل امنیتی را در Issue عمومی مطرح نکنید.
 
-## ۱۰. فناوری‌ها
+## ۹. فناوری‌ها
 
 | بخش | فناوری |
 |---|---|
@@ -460,7 +450,7 @@ Project and legal contact: **cidna.app@gmail.com**
 | استقرار | Docker Compose، Caddy، بکاپ زمان‌بندی‌شده `mongodump` |
 | زبان و تاریخ | منابع فارسی و انگلیسی، ابزارهای تاریخ جلالی |
 
-## ۱۱. ساختار مخزن
+## ۱۰. ساختار مخزن
 
 <div dir="ltr">
 
@@ -486,7 +476,7 @@ cidna/
 
 </div>
 
-## ۱۲. راه‌اندازی
+## ۱۱. راه‌اندازی
 
 ### پیش‌نیازها
 
@@ -533,7 +523,7 @@ curl http://localhost:8080/health
 
 امضای release از `keystore.properties` (خارج از Git) یا متغیرهای محیطی `RELEASE_*` خوانده می‌شود. گوشی به `localhost` رایانه شما دسترسی ندارد؛ برای تست روی گوشی واقعی از آدرس رایانه در شبکه محلی استفاده کنید.
 
-## ۱۳. تنظیمات و API
+## ۱۲. تنظیمات و API
 
 ### متغیرهای محیطی مهم
 
@@ -579,13 +569,13 @@ GET /privacy-policy   GET /terms   GET /licenses   GET /account-deletion
 
 مرجع نهایی قرارداد درخواست و پاسخ، handlerها و DTOهای سرور هستند.
 
-## ۱۴. اطلاعات حقوقی
+## ۱۳. اطلاعات حقوقی
 
 > این بخش وضعیت مجوز و ملاحظات حقوقی پروژه را بر اساس بهترین دانش نگهدارنده شرح می‌دهد و **مشاوره حقوقی نیست**. پیش از اتکا به آن، به‌ویژه برای استفاده تجاری یا فرامرزی، با یک وکیل یا مشاور حقوقی مشورت کنید.
 
-### ۱۴.۱ مجوز نرم‌افزار
+### ۱۳.۱ مجوز نرم‌افزار
 
-حق نشر © ۲۰۲۶ محمدسینا رمضانی عهدیه (Mohammad Sina Ramezani Ahdieh).
+حق نشر © ۲۰۲۶ محمدسینا رمضانی عهدیه.
 
 سیدنا نرم‌افزار آزاد است و تحت **مجوز عمومی همگانی آفرو گنو (GNU AGPL) نسخه ۳ یا (به انتخاب شما) هر نسخه جدیدتر** (`AGPL-3.0-or-later`) منتشر می‌شود. متن کامل در فایل [`LICENSE`](LICENSE) قرار دارد.
 
@@ -596,11 +586,11 @@ GET /privacy-policy   GET /terms   GET /licenses   GET /account-deletion
 - **اجرای نسخه تغییریافته بک‌اند به‌عنوان سرویس شبکه‌ای** بند ۱۳ AGPL را فعال می‌کند: باید سورس کامل متناظر نسخه تغییریافته را در اختیار کاربرانی که از طریق شبکه با آن کار می‌کنند قرار دهید.
 - این مجوز **هیچ حقی نسبت به نام و نشان** «سیدنا / Cidna» نمی‌دهد (بند ۱۴.۴).
 
-### ۱۴.۲ مشارکت در توسعه
+### ۱۳.۲ مشارکت در توسعه
 
 مشارکت‌ها تحت مجوز پروژه (AGPL-3.0-or-later) پذیرفته می‌شوند. با ارسال مشارکت تأیید می‌کنید که حق ارائه آن را دارید و می‌تواند با همان مجوز توزیع شود. کد، فونت، تصویر یا انیمیشنی را که حق مجوزدهی آن را ندارید ارسال نکنید.
 
-### ۱۴.۳ اجزای شخص ثالث
+### ۱۳.۳ اجزای شخص ثالث
 
 هر جزء مجوز مستقل خود را دارد و شرایط آن همچنان برقرار است.
 
@@ -621,15 +611,15 @@ GET /privacy-policy   GET /terms   GET /licenses   GET /account-deletion
 
 بک‌اند در حال اجرا همین اعلان‌ها را در آدرس `/licenses` نیز نمایش می‌دهد. توزیع برنامه یعنی انتقال اعلان‌های حق نشر و مجوز لازم این اجزا (مثلاً اعلان SQLCipher و فونت‌های OFL).
 
-### ۱۴.۴ نام، نشان و علائم تجاری اشخاص ثالث
+### ۱۳.۴ نام، نشان و علائم تجاری اشخاص ثالث
 
 «سیدنا» و «Cidna» شناسه این پروژه و ارائه‌دهنده آن هستند؛ فورک‌ها باید نام و آیکون متفاوتی به کار ببرند. WhatsApp، Instagram، X و Gmail علائم تجاری صاحبان خود هستند و آیکون آن‌ها فقط برای نشان‌دادن مقصد اشتراک‌گذاری آمده و به معنای تأیید یا همکاری نیست.
 
-### ۱۴.۵ متن‌های حقوقی رو به کاربر
+### ۱۳.۵ متن‌های حقوقی رو به کاربر
 
 بک‌اند سیاست حریم خصوصی، قوانین و مقررات، اعلان‌های متن‌باز و راهنمای حذف حساب را به دو زبان فارسی و انگلیسی ارائه می‌دهد. همین آدرس‌ها را در Google Play Console (نشانی Privacy policy و نشانی حذف حساب در فرم Data safety) وارد می‌کنید. با هر تغییر در متن‌ها یا در نحوه برخورد برنامه با داده، `legalVersion` و تاریخ‌ها را در `backend/internal/interface/http/handler/legal_handler.go` به‌روز کنید. این متن‌ها نقطه شروع‌اند و باید توسط وکیل بازبینی شوند.
 
-### ۱۴.۶ داده‌های شخصی و مدت نگهداری
+### ۱۳.۶ داده‌های شخصی و مدت نگهداری
 
 | داده | هدف | مدت نگهداری |
 |---|---|---|
@@ -641,21 +631,21 @@ GET /privacy-policy   GET /terms   GET /licenses   GET /account-deletion
 
 حذف حساب **حذف نرم** است: نشست‌ها فوراً باطل می‌شوند، حساب تا **۳۰ روز** با ورود دوباره قابل بازیابی است و پس از آن ابزار `purge-deleted` آن را برای همیشه پاک می‌کند (آن را روزانه با cron اجرا کنید). برنامه ابزار تبلیغاتی، تحلیل رفتار یا ردیاب شخص ثالث ندارد. متن پیامک فقط روی خود دستگاه و فقط در نسخه `direct` پردازش می‌شود.
 
-### ۱۴.۷ سلب مسئولیت‌ها
+### ۱۳.۷ سلب مسئولیت‌ها
 
 - سیدنا ابزار ثبت و نگهداری سوابق است و **مشاوره مالی، حسابداری، حقوقی یا مالیاتی نیست**؛ همچنین به هیچ حساب بانکی یا سامانه پرداختی متصل نیست.
 - تشخیص خودکار پیامک، ورود صوتی و محاسبات ممکن است نادرست باشند. ارقام مهم را با سوابق بانکی خود تطبیق دهید.
 - نرم‌افزار مطابق بندهای ۱۵ و ۱۶ مجوز AGPL **«همان‌گونه که هست» و بدون هیچ‌گونه ضمانتی** ارائه می‌شود.
 - قوانین و مقررات استفاده تابع قوانین جمهوری اسلامی ایران است.
 
-### ۱۴.۸ پیش از انتشار هر نسخه
+### ۱۳.۸ پیش از انتشار هر نسخه
 
 - [ ] مطمئن شوید که حق استفاده و بازتوزیع همه دارایی‌های غیرکد را دارید: انیمیشن‌های Lottie، پس‌زمینه کارت‌های اشتراک‌گذاری، بنرها، آیکون‌ها و فونت‌ها.
 - [ ] سیاست حریم خصوصی، فرم Data safety گوگل‌پلی و رفتار واقعی برنامه را با هم هم‌خوان نگه دارید.
 - [ ] متن‌های حقوقی را با وکیل بازبینی کنید.
 - [ ] فایل `LICENSE` و اعلان حق نشر را در هر نسخه توزیع‌شده نگه دارید و سورس متناظر را منتشر کنید.
 
-## ۱۵. تماس
+## ۱۴. تماس
 
 تماس پروژه و امور حقوقی: **cidna.app@gmail.com**
 

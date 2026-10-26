@@ -1,0 +1,24 @@
+# Cidna (سیدنا)
+> Free Android personal finance, budgeting and savings app for Persian and English speakers. End-to-end encrypted financial records, usable offline after sign-in, Jalali & Gregorian calendars, Toman/Rial, no ads or trackers. Open source (AGPL-3.0-or-later).
+
+## Key pages
+- [Home](https://cidna.ir/en/): overview
+- [Features](https://cidna.ir/en/features/)
+- [Download](https://cidna.ir/en/download/): Myket, Cafe Bazaar, direct file
+- [Security model & honest limits](https://cidna.ir/en/security/)
+- [Privacy policy](https://cidna.ir/en/privacy/)
+- [Terms](https://cidna.ir/en/terms/)
+- [FAQ](https://cidna.ir/en/faq/)
+- [Persian site](https://cidna.ir/)
+
+## Guides
+- [Getting started with Cidna: from install to first sign-in](https://cidna.ir/en/guides/getting-started/): Guest or account? How to start, where to keep your recovery key and how to turn on the app lock.
+- [Recording a transaction in Cidna: manual, voice and quick](https://cidna.ir/en/guides/add-transaction/): Log an expense or income in seconds — with a category, a note and swipe-to-save.
+- [Spending limits and savings piggy banks in Cidna](https://cidna.ir/en/guides/limits-and-piggy-banks/): Set a limit per category and create a piggy bank per goal, straight from the home screen.
+- [Using Cidna offline, and how sync works](https://cidna.ir/en/guides/offline-and-sync/): After the first sign-in it works with no internet. What works offline and when things sync.
+- [Exporting to PDF and Excel, and sharing a transaction](https://cidna.ir/en/guides/export-and-share/): Create reports from your records and send a transaction as an image card.
+- [Securing your account: lock, fingerprint and devices](https://cidna.ir/en/guides/secure-your-account/): Set up the app lock, biometric sign-in, signed-in devices and your recovery key properly.
+- [How to build a budget: a practical guide](https://cidna.ir/en/guides/how-to-budget/): Learn budgeting from scratch: income, categories, spending limits and monthly reviews.
+- [Track daily expenses without burning out](https://cidna.ir/en/guides/track-expenses/): A few simple habits that turn expense tracking from a chore into a 30-second routine.
+- [Goal-based saving: from piggy banks to monthly deposits](https://cidna.ir/en/guides/savings-goals/): Define financial goals and reach them with scheduled deposits.
+- [Managing debts and receivables with friends and family](https://cidna.ir/en/guides/manage-debts/): How to track personal debts and receivables without awkwardness or forgetting.
