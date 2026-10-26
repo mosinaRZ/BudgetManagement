@@ -8,13 +8,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Fingerprint
@@ -24,12 +27,12 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -39,7 +42,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 
-/** Entry point of guest mode on the sign-in screen. The label names the method the guest set up. */
+/**
+ * Entry point of guest mode on the sign-in screen. The label names the method the guest set up.
+ *
+ * A quiet "tonal" secondary action: soft primary-tinted fill, an icon badge at the start and a
+ * direction-aware arrow at the end, so it reads as an option next to the filled sign-in button
+ * without competing with it.
+ */
 @Composable
 fun GuestEntryButton(
     label: String,
@@ -47,25 +56,52 @@ fun GuestEntryButton(
     enabled: Boolean,
     onClick: () -> Unit
 ) {
-    OutlinedButton(
-        onClick = onClick,
-        enabled = enabled,
+    val primary = MaterialTheme.colorScheme.primary
+    val shape = RoundedCornerShape(16.dp)
+    val contentAlpha = if (enabled) 1f else 0.5f
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
+            .height(60.dp)
+            .alpha(contentAlpha)
+            .clip(shape)
+            .background(primary.copy(alpha = 0.08f))
+            .border(BorderStroke(1.dp, primary.copy(alpha = 0.22f)), shape)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = if (usesFingerprint) Icons.Default.Fingerprint else Icons.Default.PersonOutline,
-            contentDescription = null,
-            modifier = Modifier.height(20.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(primary.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = if (usesFingerprint) Icons.Default.Fingerprint else Icons.Default.PersonOutline,
+                contentDescription = null,
+                tint = primary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        Spacer(Modifier.width(12.dp))
+
         Text(
             text = label,
+            modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = null,
+            tint = primary.copy(alpha = 0.8f),
+            modifier = Modifier.size(18.dp)
         )
     }
 }
