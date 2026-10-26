@@ -37,6 +37,11 @@ class SmsParserTest {
         "بانک ملت\nبرداشت:500,000-\nمانده:1,200,000\n1403/05/01_12:30", 50000.0, "EXPENSE"
     )
 
+    @Test fun bankMelliLegacySignedAmountFromPhoneLikeSender() = accepts(
+        "بانك ملي ايران\nبرداشت:300,000-\nحساب:31003\nمانده:8,280,766\n1113-08:43",
+        30000.0, "EXPENSE", sender = "+989180500841"
+    )
+
     @Test fun signedPrefixDeposit() = accepts(
         "بانک ملی\nحساب 0123456789\n+1,000,000\nمانده: 3,500,000\n1403/06/01 10:15", 100000.0, "INCOME"
     )
@@ -238,6 +243,25 @@ class SmsParserTest {
     @Test fun telecomPromo() = rejects("همراه گرامی، با شارژ 100,000 تومانی هدیه بگیرید. جشنواره ویژه. لغو 11")
 
     @Test fun bluStyleWordingFromPersonalNumber() = rejects(
+        "علی عزیز، 60,000,000ریال به حساب شما نشست.", sender = "09121234567"
+    )
+
+    @Test fun bluRealWithdrawFromPhoneLikeSenderIsAccepted() = accepts(
+        "بلو\nبرداشت پول\nمحمدسینا عزیز، 8,805,000ریال از حساب شما پرید.\nموجودی: 44,536,598 ریال\n۱۱:۴۲\n۱۴۰۵.۰۸.۰۱",
+        880500.0, "EXPENSE", sender = "09180500841"
+    )
+
+    @Test fun bluRealDepositFromPhoneLikeSenderIsAccepted() = accepts(
+        "بلو\nواریز پول\nمحمدسینا عزیز، 45,000,000ریال به حساب شما نشست.\nموجودی: 467,756,534 ریال\n۱۷:۲۱\n۱۴۰۵.۰۷.۲۷",
+        4500000.0, "INCOME", sender = "+989180500841"
+    )
+
+    @Test fun phoneLikeSenderDoesNotBypassOtpFilter() = rejects(
+        "بلو\nبفرمایید رمز پویا\nخرید\nمبلغ: 20,156,499 ریال\nرمز: 586421\n11:43",
+        sender = "09180500841"
+    )
+
+    @Test fun phoneLikeSenderWithWeakTransferWordingIsStillRejected() = rejects(
         "علی عزیز، 60,000,000ریال به حساب شما نشست.", sender = "09121234567"
     )
 }

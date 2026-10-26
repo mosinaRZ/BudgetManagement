@@ -176,7 +176,7 @@ object SmsParser {
     // ---------------------------------------------------------------------
 
     /**
-     * @param sender optional originating address; personal mobile numbers are rejected.
+     * @param sender optional originating address; phone-like senders require stronger body evidence.
      */
     fun isLikelyBankSms(body: String, sender: String? = null): Boolean =
         analyze(body, sender).accepted
@@ -294,7 +294,10 @@ object SmsParser {
         fun reject(reason: String) = Analysis(false, reason, null, 0, text)
 
         if (text.isBlank()) return reject("blank")
-        if (isPersonalSender(sender)) return reject("personal_sender")
+        // A phone-like sender is not enough to reject a message: some banks use
+        // ordinary mobile numbers. Keep it as a risk signal and decide only after
+        // the message body has been structurally analysed.
+        val personalSender = isPersonalSender(sender)
         if (otpRegex.containsMatchIn(text)) return reject("otp")
         if (failedRegex.containsMatchIn(text)) return reject("failed_transaction")
         if (reminderRegex.containsMatchIn(text)) return reject("reminder")
@@ -403,6 +406,26 @@ object SmsParser {
         if (txnWord) structure += 2
 
         if (structure < MIN_STRUCTURE_SCORE) return reject("weak_structure")
+
+        // Messages from ordinary mobile numbers need substantially stronger
+        // evidence than alphanumeric/short-code senders. This admits bank SMS
+        // such as Blu's while continuing to ignore friends who merely mention
+        // a transfer or a bank. No bank-specific sender allowlist is required.
+        if (personalSender) {
+            val strongTransactionStructure =
+                hasBalance &&
+                        dateTimeEvidenceRegex.containsMatchIn(text) &&
+                        best.hasLabel &&
+                        // Some legacy bank templates (e.g. Bank Melli) encode the
+                        // amount as "برداشت:300,000-" without a currency suffix.
+                        // An explicit amount sign is equally strong evidence here.
+                        (best.unit != null || signed) &&
+                        txnWord &&
+                        (bankWord || accountPhraseRegex.containsMatchIn(text) || maskedEvidence)
+            if (!strongTransactionStructure || structure < 9) {
+                return reject("personal_sender_weak_evidence")
+            }
+        }
 
         var confidence = minOf(100, structure * 100 / 12)
         if (ambiguous) confidence -= 15
