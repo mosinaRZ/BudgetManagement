@@ -488,30 +488,51 @@ object SmsParser {
     private fun stripGreetingName(text: String): String =
         greetingNameRegex.replace(text, "").replace(Regex(""" {2,}"""), " ").trim()
 
+    private const val FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹"
+    private const val AR_DIGITS = "٠١٢٣٤٥٦٧٨٩"
+
+    /** True for a digit (any script) or a thousands/decimal separator that may sit inside an amount. */
+    private fun isDigitLike(c: Char): Boolean =
+        c in '0'..'9' || FA_DIGITS.indexOf(c) != -1 || AR_DIGITS.indexOf(c) != -1 ||
+                c == ',' || c == '٬' || c == '،' || c == '，'
+
     /**
-     * Persian/Arabic digits -> Latin, Arabic letter variants -> Persian, strips bidi marks,
-     * ZWNJ -> space, unifies separators/minus signs, lowercases.
+     * Persian/Arabic digits -> Latin, Arabic letter variants -> Persian, unifies separators/minus
+     * signs, lowercases.
+     *
+     * Invisible characters are handled defensively because some SMS gateways insert them anywhere
+     * (inside amounts and keywords): every Unicode "format" character (bidi marks, ALM, ZWJ, word
+     * joiner, soft hyphen, ...) is dropped, and ZWNJ / ZWSP / exotic spaces become a normal space
+     * unless they sit between two digits, where they are dropped so "8,80<ZWSP>5,000" stays one amount.
      */
     private fun normalizeText(input: String): String {
-        val fa = "۰۱۲۳۴۵۶۷۸۹"
-        val ar = "٠١٢٣٤٥٦٧٨٩"
         val sb = StringBuilder(input.length)
 
-        for (c in input) {
-            when (c) {
-                '\u200E', '\u200F', '\u202A', '\u202B', '\u202C', '\u202D', '\u202E',
-                '\u2066', '\u2067', '\u2068', '\u2069', '\uFEFF', '\u0640' -> Unit
-                '\u200C', '\u00A0', '\t' -> sb.append(' ')
-                '٬', '،', '，' -> sb.append(',')
-                '٫' -> sb.append('.')
-                'ي', 'ى' -> sb.append('ی')
-                'ك' -> sb.append('ک')
-                'ۀ', 'ة' -> sb.append('ه')
-                'أ', 'إ', 'ٱ' -> sb.append('ا')
-                '−', '–', '—', '‐', '‑' -> sb.append('-')
+        for (i in input.indices) {
+            val c = input[i]
+            val charType = Character.getType(c)
+            when {
+                c == '\u200C' || c == '\u200B' ||
+                        (c != ' ' && c != '\u00A0' && charType == Character.SPACE_SEPARATOR.toInt()) -> {
+                    val prev = sb.lastOrNull()
+                    val next = input.getOrNull(i + 1)
+                    val insideNumber = prev != null && next != null && isDigitLike(prev) && isDigitLike(next)
+                    if (!insideNumber) sb.append(' ')
+                }
+                c == '\u00A0' || c == '\t' -> sb.append(' ')
+                c == '\u0640' -> Unit // tatweel
+                c == '\u2028' || c == '\u2029' || c == '\u0085' -> sb.append('\n')
+                charType == Character.FORMAT.toInt() -> Unit
+                c == '٬' || c == '،' || c == '，' -> sb.append(',')
+                c == '٫' -> sb.append('.')
+                c == 'ي' || c == 'ى' -> sb.append('ی')
+                c == 'ك' -> sb.append('ک')
+                c == 'ۀ' || c == 'ة' -> sb.append('ه')
+                c == 'أ' || c == 'إ' || c == 'ٱ' -> sb.append('ا')
+                c == '−' || c == '–' || c == '—' || c == '‐' || c == '‑' -> sb.append('-')
                 else -> {
-                    val faIdx = fa.indexOf(c)
-                    val arIdx = ar.indexOf(c)
+                    val faIdx = FA_DIGITS.indexOf(c)
+                    val arIdx = AR_DIGITS.indexOf(c)
                     when {
                         faIdx != -1 -> sb.append(faIdx)
                         arIdx != -1 -> sb.append(arIdx)

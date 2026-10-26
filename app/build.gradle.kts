@@ -54,7 +54,7 @@ android {
         targetSdk = 36
         // Play rejects an upload whose versionCode was already used: bump with -PversionCode=N.
         versionCode = providers.gradleProperty("versionCode").map { it.toInt() }.getOrElse(1)
-        versionName = providers.gradleProperty("versionName").getOrElse("1.1.2")
+        versionName = providers.gradleProperty("versionName").getOrElse("1.1.3")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -183,6 +183,7 @@ dependencies {
     implementation(libs.core.ktx)
     implementation(libs.lottie.compose)
     implementation(libs.androidx.biometric)
+    implementation(libs.androidx.browser)
     implementation(libs.androidx.security.crypto)
     implementation(libs.fastexcel)
     implementation(libs.androidx.glance.appwidget)

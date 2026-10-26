@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.painterResource
 import androidx.annotation.DrawableRes
 import ir.hamedan.budgetmanagement.R
@@ -80,6 +81,7 @@ import ir.hamedan.budgetmanagement.data.export.ExportManager
 import ir.hamedan.budgetmanagement.data.export.ExportPeriod
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
+import ir.hamedan.budgetmanagement.utils.WebLinks
 import kotlinx.coroutines.launch
 
 enum class SettingsMenu {
@@ -772,21 +774,29 @@ fun SettingsScreen(
                                 iconRes = R.drawable.ic_instagram,
                                 color = Color(0xFFFF0069)
                             ) { openUrl(context, "https://www.instagram.com/cidnaapp") }
-                            SocialLinkRow(
-                                title = if (isPersian) "قوانین و مقررات" else "Terms of Service",
-                                iconRes = R.drawable.ic_legal,
-                                color = Color(0xFF607D8B)
-                            ) { openUrl(context, ir.hamedan.budgetmanagement.BuildConfig.BASE_URL + "terms") }
+                            // Legal and security pages come from the official website (same text as the
+                            // store listings), shown in a Custom Tab with the app's light/dark scheme.
+                            val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
                             SocialLinkRow(
                                 title = if (isPersian) "حریم خصوصی" else "Privacy Policy",
                                 iconRes = R.drawable.ic_legal,
                                 color = Color(0xFF607D8B)
-                            ) { openUrl(context, ir.hamedan.budgetmanagement.BuildConfig.BASE_URL + "privacy-policy") }
+                            ) { WebLinks.open(context, WebLinks.Page.PRIVACY, isPersian, darkTheme) }
+                            SocialLinkRow(
+                                title = if (isPersian) "امنیت و رمزنگاری" else "Security & Encryption",
+                                iconRes = R.drawable.ic_legal,
+                                color = Color(0xFF607D8B)
+                            ) { WebLinks.open(context, WebLinks.Page.SECURITY, isPersian, darkTheme) }
+                            SocialLinkRow(
+                                title = if (isPersian) "قوانین و مقررات" else "Terms of Service",
+                                iconRes = R.drawable.ic_legal,
+                                color = Color(0xFF607D8B)
+                            ) { WebLinks.open(context, WebLinks.Page.TERMS, isPersian, darkTheme) }
                             SocialLinkRow(
                                 title = if (isPersian) "مجوزهای متن‌باز" else "Open-source licenses",
                                 iconRes = R.drawable.ic_legal,
                                 color = Color(0xFF607D8B)
-                            ) { openUrl(context, ir.hamedan.budgetmanagement.BuildConfig.BASE_URL + "licenses") }
+                            ) { WebLinks.open(context, WebLinks.Page.LICENSES, isPersian, darkTheme) }
                         }
                     }
                 }
@@ -1566,7 +1576,7 @@ fun LogoutConfirmationDialog(
 }
 
 @Composable
-private fun EnableBiometricLoginDialog(
+internal fun EnableBiometricLoginDialog(
     isPersian: Boolean,
     errorMessage: String?,
     onDismiss: () -> Unit,
@@ -2236,7 +2246,7 @@ private fun findSuggestion(query: String, isPersian: Boolean): String? {
  * Enrolls the fingerprint for guest mode: the Keystore key is created here and the guest marker is
  * encrypted with it once the user verified the fingerprint.
  */
-private fun enrollGuestBiometric(
+internal fun enrollGuestBiometric(
     activity: FragmentActivity,
     store: GuestModeStore,
     isPersian: Boolean,

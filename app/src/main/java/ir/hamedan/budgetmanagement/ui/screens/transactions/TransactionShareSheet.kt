@@ -94,9 +94,10 @@ fun TransactionShareSheet(
         TransactionShareFormatter.build(transaction, categoryTitle, categoryEmoji, currencyUnit, isPersian)
     }
 
-    // Different transactions open with different artwork; the user can change it freely.
+    // Different transactions open with different artwork (always a real picture when one exists);
+    // the user can change it freely.
     var selectedIndex by rememberSaveable(transaction.id) {
-        mutableStateOf(Math.floorMod(transaction.id.hashCode(), TransactionShareCardRenderer.BACKGROUND_COUNT))
+        mutableStateOf(TransactionShareCardRenderer.defaultBackgroundIndex(context, transaction.id.hashCode()))
     }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
     var isRendering by remember { mutableStateOf(true) }
