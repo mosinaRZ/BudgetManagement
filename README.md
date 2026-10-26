@@ -287,7 +287,7 @@ The running backend also lists these notices at `/licenses`. Distributing the ap
 
 ### 13.5 User-facing legal documents
 
-The backend serves the Privacy Policy, Terms of Service, open-source notices and account-deletion instructions in Persian and English. Their addresses are what you enter in Google Play Console (Privacy policy URL and the account-deletion URL in the Data safety form). Bump `legalVersion` and the dates in `backend/internal/interface/http/handler/legal_handler.go` whenever the texts or the app's data handling change. The texts are a starting point and should be reviewed by a lawyer.
+The Privacy Policy, Terms of Service, open-source notices and account-deletion instructions live on the official website (`cidna-website/content/legal.py`, Persian at `https://cidna.ir/privacy/`, English at `https://cidna.ir/en/privacy/`). The app opens those pages in a Chrome Custom Tab, and the backend's old `/privacy-policy`, `/terms`, `/licenses` and `/account-deletion` addresses permanently redirect to them, so there is only one copy of each text. Enter the website addresses in Google Play Console (Privacy policy URL and the account-deletion URL in the Data safety form). Update the texts in the website whenever they or the app's data handling change. They are a starting point and should be reviewed by a lawyer.
 
 ### 13.6 Personal data and retention
 

@@ -81,7 +81,7 @@ docker compose exec api /app/purge-deleted --older-than-days 30 --dry-run
 
 ## صفحه‌های لازم برای گوگل‌پلی
 
-بک‌اند صفحه‌های حقوقی عمومی را ارائه می‌کند:
+صفحه‌های حقوقی روی وب‌سایت رسمی (`https://cidna.ir`) منتشر می‌شوند و آدرس‌های قدیمی بک‌اند با ریدایرکت دائمی (301) به همان صفحه‌ها می‌روند؛ بنابراین هر دو آدرس زیر معتبرند (در Play Console آدرس وب‌سایت را وارد کنید، مثلاً `https://cidna.ir/privacy/`):
 
 - `https://api.example.com/privacy-policy` ← حریم خصوصی (فیلد Privacy policy در Play Console)
 - `https://api.example.com/account-deletion` ← حذف حساب (فیلد Delete account URL در بخش Data safety)
