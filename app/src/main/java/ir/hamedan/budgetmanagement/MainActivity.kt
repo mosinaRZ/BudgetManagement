@@ -65,6 +65,7 @@ import ir.hamedan.budgetmanagement.ui.components.InAppNotificationHint
 import ir.hamedan.budgetmanagement.ui.components.OnboardingDialog
 import ir.hamedan.budgetmanagement.ui.components.OnboardingPermission
 import ir.hamedan.budgetmanagement.ui.components.PermissionReminderItem
+import ir.hamedan.budgetmanagement.ui.components.BiometricReminderHost
 import ir.hamedan.budgetmanagement.ui.components.PermissionReminderSheet
 import ir.hamedan.budgetmanagement.ui.components.onboardingPermissions
 import ir.hamedan.budgetmanagement.ui.navigation.AppRoute
@@ -131,10 +132,14 @@ class MainActivity : FragmentActivity() {
     // Set when the user taps a device-security notification: open the Devices screen.
     private var openDevicesRequested by mutableStateOf(false)
 
+    // Set when the user taps a due-date reminder: open the Debt/Credit screen.
+    private var openDebtRequested by mutableStateOf(false)
+
     private fun handleShortcutIntent(intent: Intent?) {
         shortcutOpenAddTransaction = intent?.action == ACTION_ADD_TRANSACTION
-        openDevicesRequested =
-            intent?.getStringExtra(AppNotificationManager.EXTRA_OPEN_ROUTE) == AppNotificationManager.ROUTE_DEVICES
+        val requestedRoute = intent?.getStringExtra(AppNotificationManager.EXTRA_OPEN_ROUTE)
+        openDevicesRequested = requestedRoute == AppNotificationManager.ROUTE_DEVICES
+        openDebtRequested = requestedRoute == AppNotificationManager.ROUTE_DEBT
         // Consume it so a configuration change does not re-open the screen.
         intent?.removeExtra(AppNotificationManager.EXTRA_OPEN_ROUTE)
     }
@@ -268,6 +273,8 @@ class MainActivity : FragmentActivity() {
                         onShortcutConsumed = { shortcutOpenAddTransaction = false },
                         openDevicesRequested = openDevicesRequested,
                         onDevicesConsumed = { openDevicesRequested = false },
+                        openDebtRequested = openDebtRequested,
+                        onDebtConsumed = { openDebtRequested = false },
                         onThemeToggle = {
                             // جابه‌جایی سریع و بدون دردسر تم
                             val newMode = when (themeMode) {
@@ -341,6 +348,8 @@ class MainActivity : FragmentActivity() {
         onShortcutConsumed: () -> Unit = {},
         openDevicesRequested: Boolean = false,
         onDevicesConsumed: () -> Unit = {},
+        openDebtRequested: Boolean = false,
+        onDebtConsumed: () -> Unit = {},
         onThemeToggle: () -> Unit = {}
     ) {
 
@@ -381,6 +390,22 @@ class MainActivity : FragmentActivity() {
             ) {
                 if (!route.contains("Devices")) navController.navigate(AppRoute.Devices)
                 onDevicesConsumed()
+            }
+        }
+
+        // Tapped a due-date reminder: go straight to the debts and receivables screen.
+        LaunchedEffect(openDebtRequested, hasSession, currentRouteEntry?.destination?.route) {
+            val route = currentRouteEntry?.destination?.route.orEmpty()
+            if (openDebtRequested &&
+                hasSession &&
+                route.isNotBlank() &&
+                !route.contains("Login") &&
+                !route.contains("Register") &&
+                !route.contains("PasswordReset") &&
+                !route.contains("Splash")
+            ) {
+                if (!route.contains("Debt")) navController.navigate(AppRoute.Debt)
+                onDebtConsumed()
             }
         }
 
@@ -798,6 +823,12 @@ class MainActivity : FragmentActivity() {
                             onAllGranted = { showPermissionSheet = false }
                         )
                     }
+
+                    // ===== یادآوری فعال‌سازی ورود با اثر انگشت (بعد از شیت مجوزها، با زمان‌بندی هوشمند) =====
+                    BiometricReminderHost(
+                        isPersian = isPersian,
+                        blockedByOtherSheet = showPermissionSheet
+                    )
 
                     // ===== Bottom Bar + FAB =====
                     Row(

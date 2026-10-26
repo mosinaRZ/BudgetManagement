@@ -13,6 +13,7 @@ appcompat = "1.7.1"
 ksp = "2.2.10-2.0.2"
 room = "2.8.4"
 lottie = "6.4.0"
+browser = "1.8.0"            # Chrome Custom Tabs: official website pages inside the app
 biometric = "1.1.0"          # به جای alpha از نسخه پایدار استفاده می‌کنیم
 fastexcel = "0.17.0"
 glance = "1.1.1"             # نسخه کمی جدیدتر و پایدارتر
@@ -49,6 +50,7 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 lottie-compose = { group = "com.airbnb.android", name = "lottie-compose", version.ref = "lottie" }
+androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
 androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 fastexcel = { group = "org.dhatim", name = "fastexcel", version.ref = "fastexcel" }
 androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }

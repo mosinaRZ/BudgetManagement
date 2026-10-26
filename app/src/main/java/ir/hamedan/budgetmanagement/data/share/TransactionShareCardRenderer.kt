@@ -81,10 +81,52 @@ object TransactionShareCardRenderer {
         intArrayOf(0xFF500724.toInt(), 0xFFA21CAF.toInt(), 0xFF2E1065.toInt())
     )
 
+    /**
+     * Artwork that ships with the app, index-aligned with [BACKGROUND_NAMES_EN] (0 = that picture is
+     * not in the project yet, so the built-in gradient is drawn for it).
+     *
+     * The ids are referenced directly (not only looked up by name) so the release build's resource
+     * shrinker can never strip a picture that is really used. A picture added later without editing
+     * this table is still found by name (see [backgroundResId] and `res/raw/keep.xml`).
+     */
+    private val BUNDLED_BACKGROUNDS = intArrayOf(
+        R.drawable.share_bg_01,
+        R.drawable.share_bg_02,
+        R.drawable.share_bg_03,
+        R.drawable.share_bg_04,
+        R.drawable.share_bg_05,
+        0, // share_bg_06 (Cars): artwork not added yet
+        R.drawable.share_bg_07,
+        R.drawable.share_bg_08,
+        R.drawable.share_bg_09,
+        0, // share_bg_10 (Persian garden): artwork not added yet
+        R.drawable.share_bg_11,
+        0  // share_bg_12 (Abstract): artwork not added yet
+    )
+
     /** Resource id of `share_bg_NN` (NN = index + 1), or 0 when the artwork is not in the project. */
     fun backgroundResId(context: Context, index: Int): Int {
-        val name = String.format(Locale.ROOT, "share_bg_%02d", safeIndex(index) + 1)
+        val safe = safeIndex(index)
+        BUNDLED_BACKGROUNDS.getOrElse(safe) { 0 }.let { if (it != 0) return it }
+        val name = String.format(Locale.ROOT, "share_bg_%02d", safe + 1)
         return context.resources.getIdentifier(name, "drawable", context.packageName)
+    }
+
+    /** True when a real picture exists for this slot; only the other slots use the built-in gradient. */
+    fun hasArtwork(context: Context, index: Int): Boolean = backgroundResId(context, index) != 0
+
+    /**
+     * The slot a card opens with: derived from [seed] (so different transactions get different
+     * artwork) but chosen among the slots that have a real picture. Only when no picture exists
+     * at all does it fall back to any slot (and thus the gradient).
+     */
+    fun defaultBackgroundIndex(context: Context, seed: Int): Int {
+        val withArtwork = (0 until BACKGROUND_COUNT).filter { hasArtwork(context, it) }
+        return if (withArtwork.isEmpty()) {
+            Math.floorMod(seed, BACKGROUND_COUNT)
+        } else {
+            withArtwork[Math.floorMod(seed, withArtwork.size)]
+        }
     }
 
     private fun safeIndex(index: Int): Int = ((index % BACKGROUND_COUNT) + BACKGROUND_COUNT) % BACKGROUND_COUNT
@@ -386,23 +428,34 @@ object TransactionShareCardRenderer {
 
     private fun decodeSampled(context: Context, resId: Int, reqW: Int, reqH: Int): Bitmap? {
         if (resId == 0) return null
-        return try {
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true; inScaled = false }
-            BitmapFactory.decodeResource(context.resources, resId, bounds)
-            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-            var sample = 1
-            while (bounds.outWidth / (sample * 2) >= reqW && bounds.outHeight / (sample * 2) >= reqH) sample *= 2
-            val opts = BitmapFactory.Options().apply {
-                inSampleSize = sample
-                inScaled = false
-                inPreferredConfig = Bitmap.Config.ARGB_8888
-            }
-            BitmapFactory.decodeResource(context.resources, resId, opts)
+        val bounds = try {
+            BitmapFactory.Options().apply { inJustDecodeBounds = true; inScaled = false }
+                .also { BitmapFactory.decodeResource(context.resources, resId, it) }
         } catch (e: Exception) {
-            null
-        } catch (e: OutOfMemoryError) {
-            null
+            return null
         }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        var sample = 1
+        while (bounds.outWidth / (sample * 2) >= reqW && bounds.outHeight / (sample * 2) >= reqH) sample *= 2
+
+        // A picture that is too big for the free memory is decoded smaller, not replaced by a gradient.
+        repeat(3) {
+            try {
+                val opts = BitmapFactory.Options().apply {
+                    inSampleSize = sample
+                    inScaled = false
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                }
+                BitmapFactory.decodeResource(context.resources, resId, opts)?.let { return it }
+                return null
+            } catch (e: OutOfMemoryError) {
+                sample *= 2
+            } catch (e: Exception) {
+                return null
+            }
+        }
+        return null
     }
 
     private fun decodeLogo(context: Context): Bitmap? = try {

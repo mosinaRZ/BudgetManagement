@@ -32,6 +32,7 @@ object AppNotificationManager {
     /** Intent extra telling MainActivity which screen a tapped notification should open. */
     const val EXTRA_OPEN_ROUTE = "open_route"
     const val ROUTE_DEVICES = "devices"
+    const val ROUTE_DEBT = "debt"
 
     fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

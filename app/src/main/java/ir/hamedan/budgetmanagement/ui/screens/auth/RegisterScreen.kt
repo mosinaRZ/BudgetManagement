@@ -58,10 +58,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -77,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.repository.AuthRepository
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
+import ir.hamedan.budgetmanagement.utils.WebLinks
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -94,7 +94,7 @@ fun RegisterScreen(
     val scope = rememberCoroutineScope()
     val isPersian = isPersianLocale()
     val focusManager = LocalFocusManager.current
-    val uriHandler = LocalUriHandler.current
+    val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
     var phone by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -384,7 +384,7 @@ fun RegisterScreen(
                     )
                     Row {
                         TextButton(
-                            onClick = { openLegalPage(uriHandler, "terms") },
+                            onClick = { WebLinks.open(context, WebLinks.Page.TERMS, isPersian, darkTheme) },
                             colors = ButtonDefaults.textButtonColors(contentColor = termsColors.primary)
                         ) {
                             Text(
@@ -395,7 +395,7 @@ fun RegisterScreen(
                             )
                         }
                         TextButton(
-                            onClick = { openLegalPage(uriHandler, "privacy-policy") },
+                            onClick = { WebLinks.open(context, WebLinks.Page.PRIVACY, isPersian, darkTheme) },
                             colors = ButtonDefaults.textButtonColors(contentColor = termsColors.primary)
                         ) {
                             Text(
@@ -432,15 +432,6 @@ fun RegisterScreen(
 
     recoveryKey?.let { key ->
         RecoveryKeyDialog(recoveryKey = key, isPersian = isPersian, onConfirmed = onRegistered)
-    }
-}
-
-/** Opens a public legal page served by the backend (path without a leading slash, e.g. "terms"). */
-private fun openLegalPage(uriHandler: UriHandler, path: String) {
-    try {
-        uriHandler.openUri(ir.hamedan.budgetmanagement.BuildConfig.BASE_URL + path)
-    } catch (e: Exception) {
-        // No browser available: nothing to open, the checkbox text still states what is being accepted.
     }
 }
 

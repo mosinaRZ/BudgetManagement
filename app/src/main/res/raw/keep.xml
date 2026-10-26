@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The share-card pictures are looked up by name (share_bg_01 .. share_bg_12) when one is added
+    without updating TransactionShareCardRenderer.BUNDLED_BACKGROUNDS. Resource shrinking cannot
+    see such lookups, so keep them explicitly.
+-->
+<resources
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/share_bg_*" />

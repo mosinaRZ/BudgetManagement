@@ -144,6 +144,53 @@ class SmsParserTest {
         292380.0, "EXPENSE", sender = "Blu"
     )
 
+    // Real Blu messages (1405/07-08) as reported by a user.
+    @Test fun bluRealWithdrawEightMillion() = accepts(
+        "بلو\nبرداشت پول\nمحمدسینا عزیز، 8,805,000ریال از حساب شما پرید.\nموجودی: 44,536,598 ریال\n۱۱:۴۲\n۱۴۰۵.۰۸.۰۱",
+        880500.0, "EXPENSE", sender = "Blu"
+    )
+
+    @Test fun bluRealWithdrawOverOneBillionRial() = accepts(
+        "بلو\nبرداشت پول\nمحمدسینا عزیز، 1,050,000,000ریال از حساب شما پرید.\nموجودی: 67,756,534 ریال\n۱۳:۰۶\n۱۴۰۵.۰۷.۲۸",
+        105000000.0, "EXPENSE", sender = "Blu"
+    )
+
+    @Test fun bluRealDepositFortyFiveMillion() = accepts(
+        "بلو\nواریز پول\nمحمدسینا عزیز، 45,000,000ریال به حساب شما نشست.\nموجودی: 467,756,534 ریال\n۱۷:۲۱\n۱۴۰۵.۰۷.۲۷",
+        4500000.0, "INCOME", sender = "Blu"
+    )
+
+    @Test fun bluDynamicPasswordWithArabicLettersIsNotATransaction() = rejects(
+        "بلو\nبفرمایید رمز پویا\nخرید\nنوآوران پرداخت مجازي ايرانيان\nمبلغ: 20,156,499 ریال\nرمز: 586421 \n11:43",
+        sender = "Blu"
+    )
+
+    // SMS gateways may inject invisible characters anywhere (inside the amount too).
+    // A single invisible character at ANY position must neither reject the SMS nor change the amount.
+    @Test fun invisibleCharactersAnywhereDoNotBreakDetection() {
+        val cases = listOf(
+            Triple(
+                "بلو\nبرداشت پول\nمحمدسینا عزیز، 8,805,000ریال از حساب شما پرید.\nموجودی: 44,536,598 ریال\n۱۱:۴۲\n۱۴۰۵.۰۸.۰۱",
+                880500.0, "EXPENSE"
+            ),
+            Triple(
+                "بلو\nواریز پول\nمحمدسینا عزیز، 45,000,000ریال به حساب شما نشست.\nموجودی: 467,756,534 ریال\n۱۷:۲۱\n۱۴۰۵.۰۷.۲۷",
+                4500000.0, "INCOME"
+            )
+        )
+        val invisibles = listOf(
+            '\u200B', '\u200C', '\u200D', '\u200E', '\u200F', '\u2060', '\u00AD',
+            '\u061C', '\u202F', '\u2009', '\u2068', '\uFEFF'
+        )
+        for ((base, amount, type) in cases) {
+            for (ch in invisibles) {
+                for (i in 0..base.length) {
+                    accepts(base.substring(0, i) + ch + base.substring(i), amount, type, sender = "Blu")
+                }
+            }
+        }
+    }
+
     // ------------------------------ must be ignored ------------------------------
 
     @Test fun lotteryPromo() = rejects(

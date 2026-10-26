@@ -13,6 +13,7 @@ import ir.hamedan.budgetmanagement.data.preferences.AppUsagePreferences
 import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
 import ir.hamedan.budgetmanagement.di.AppContainer
 import ir.hamedan.budgetmanagement.data.notification.AppNotificationManager
+import ir.hamedan.budgetmanagement.worker.DebtDueReminderWorker
 import ir.hamedan.budgetmanagement.worker.InactivityReminderWorker
 import ir.hamedan.budgetmanagement.worker.MonthlyGoalDepositWorker
 import ir.hamedan.budgetmanagement.worker.ProfileOccasionWorker
@@ -152,6 +153,19 @@ class BudgetApp : Application() {
             "inactivity_reminder",
             ExistingPeriodicWorkPolicy.KEEP,
             inactivityWork
+        )
+
+        // یادآوری سررسید بدهی/طلب (اقساطی و غیراقساطی): ۷، ۳ و ۱ روز مانده به سررسید،
+        // حتی وقتی برنامه بسته است. دو بار در روز اجرا می‌شود تا یک اجرای ازدست‌رفته
+        // (گوشی خاموش/Doze) در اجرای بعدی جبران شود؛ تکرار اعلان با DebtDueReminderState جلوگیری می‌شود.
+        val debtDueReminderWork = PeriodicWorkRequestBuilder<DebtDueReminderWorker>(
+            12, TimeUnit.HOURS
+        ).build()
+
+        workManager.enqueueUniquePeriodicWork(
+            DebtDueReminderWorker.UNIQUE_WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            debtDueReminderWork
         )
 
         // مناسبت‌های شخصی پروفایل: تولد و مناسبت‌های جنسیتی.
