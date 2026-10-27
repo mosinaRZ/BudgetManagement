@@ -4,6 +4,7 @@ import android.content.Context
 import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.utils.DateUtils
+import ir.hamedan.budgetmanagement.utils.SystemTransactionText
 import org.dhatim.fastexcel.BorderSide
 import org.dhatim.fastexcel.BorderStyle
 import org.dhatim.fastexcel.Position
@@ -206,8 +207,8 @@ object XlsxExporter {
             val category = categoryNames[tx.categoryId]
                 ?: tx.categoryId.takeUnless { it.isBlank() || it.equals("UNCATEGORIZED", true) }
                 ?: t("دسته‌بندی نشده", "Uncategorized")
-            val title = tx.title.ifBlank { t("بدون عنوان", "Untitled") }
-            val note = tx.note.ifBlank { "—" }.take(MAX_CELL_CHARS)
+            val title = SystemTransactionText.localizeTitle(tx.title, isPersian).ifBlank { t("بدون عنوان", "Untitled") }
+            val note = (SystemTransactionText.localizeNote(tx.note, isPersian) ?: "").ifBlank { "—" }.take(MAX_CELL_CHARS)
             val signedAmount = toDisplayAmount(tx.amount.toDouble(), currency).let { if (isIncome) it else -it }
             val fill = if (index % 2 == 0) WHITE else ALT_ROW
 

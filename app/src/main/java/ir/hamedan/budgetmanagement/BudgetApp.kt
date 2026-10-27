@@ -114,9 +114,7 @@ class BudgetApp : Application() {
         definitions.forEach { (title, emoji, isExpense) ->
             if (currentCategories.none { it.title == title }) {
                 // Stable IDs make simultaneous first sign-ins on different devices converge.
-                val stableId = java.util.UUID.nameUUIDFromBytes(
-                    "budget-management:default-category:$title".toByteArray(Charsets.UTF_8)
-                ).toString()
+                val stableId = ir.hamedan.budgetmanagement.utils.CategoryRules.stableDefaultId(title)
                 container.categoryRepository.insertCategory(
                     CategoryEntity(
                         id = stableId,

@@ -91,6 +91,7 @@ import ir.hamedan.budgetmanagement.utils.rememberAppHaptics
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.ui.screens.debtCredit.DebtCreditViewModel
 import ir.hamedan.budgetmanagement.utils.StringMapper
+import ir.hamedan.budgetmanagement.utils.SystemTransactionText
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.*
@@ -1155,7 +1156,7 @@ fun HomeScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 val categories = categoriesList.orEmpty()
                                 Text(
-                                    text = transaction.title.ifEmpty {
+                                    text = SystemTransactionText.localizeTitle(transaction.title, isPersian).ifEmpty {
                                         categories.find { it.id == transaction.categoryId }?.title.orEmpty()
                                     },
                                     style = MaterialTheme.typography.bodyMedium,

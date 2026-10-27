@@ -5,6 +5,7 @@ import android.net.Uri
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.SyncLocalDataSource
 import ir.hamedan.budgetmanagement.data.sync.SyncEntityType
+import ir.hamedan.budgetmanagement.utils.CategoryRules
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -30,7 +31,18 @@ class LocalBackupManager(
     private val database: AppDatabase,
     private val syncLocalDataSource: SyncLocalDataSource
 ) {
-    data class Summary(val records: Int)
+    /**
+     * [records] = items in the file. [added]/[updated]/[unchanged] describe what happened to them on
+     * import (all 0 for export). [mergedCategories] = categories that already existed under another
+     * id (e.g. the built-in Piggy Bank) and were matched instead of duplicated.
+     */
+    data class Summary(
+        val records: Int,
+        val added: Int = 0,
+        val updated: Int = 0,
+        val unchanged: Int = 0,
+        val mergedCategories: Int = 0
+    )
 
     /** @throws IOException the destination cannot be written. */
     suspend fun export(destination: Uri, password: CharArray): Summary = withContext(Dispatchers.IO) {
@@ -55,7 +67,6 @@ class LocalBackupManager(
             ?: throw IOException("Cannot open the backup file")
         val content = BackupCodec.decode(BackupCrypto.decrypt(encrypted, password))
         syncLocalDataSource.transaction { applyBackup(content) }
-        Summary(content.totalRecords)
     }
 
     private suspend fun readAll() = BackupContent(
@@ -68,53 +79,158 @@ class LocalBackupManager(
         savingGoalOperations = database.savingGoalOperationDao().getAllSnapshot()
     )
 
-    /** Runs inside one Room transaction: either everything is imported or nothing is. */
-    private suspend fun applyBackup(content: BackupContent) {
+    private class Counters {
+        var added = 0
+        var updated = 0
+        var unchanged = 0
+        var merged = 0
+    }
+
+    /**
+     * Runs inside one Room transaction: either everything is imported or nothing is.
+     *
+     * Categories are matched by identity, not only by id: the built-in categories (Piggy Bank,
+     * Food, ...) get different ids on different installs, so a backup's "Piggy Bank" must resolve
+     * to the one already on this phone. Every reference (transactions, budget limits) is rewritten
+     * to the resolved id, so nothing is duplicated and nothing is left pointing at a missing row.
+     */
+    private suspend fun applyBackup(content: BackupContent): Summary {
+        val counters = Counters()
+
+        // Heal duplicates that earlier imports/syncs may already have created on this device.
+        healDuplicateCategories()
+
+        val known = database.categoryDao().getAllSnapshot().toMutableList()
+        val idMap = HashMap<String, String>()
+
         // Parents first, so references are valid at every point of the transaction.
         content.categories.forEach { backup ->
-            val current = database.categoryDao().getById(backup.id)
-            if (current == null || backup.updatedAt > current.updatedAt) {
-                database.categoryDao().insert(backup)
-                record(SyncEntityType.CATEGORY, backup.id, backup.updatedAt)
+            val sameId = known.indexOfFirst { it.id == backup.id }
+            if (sameId >= 0) {
+                val current = known[sameId]
+                if (backup.updatedAt > current.updatedAt) {
+                    val merged = backup.copy(isSystem = backup.isSystem || current.isSystem)
+                    database.categoryDao().insert(merged)
+                    known[sameId] = merged
+                    record(SyncEntityType.CATEGORY, merged.id, merged.updatedAt)
+                    counters.updated++
+                } else {
+                    counters.unchanged++
+                }
+                idMap[backup.id] = backup.id
+                return@forEach
             }
+            val twin = known.firstOrNull { CategoryRules.isSameIdentity(it, backup) }
+            if (twin != null) {
+                // Same category under another id: reuse the local one instead of adding a duplicate.
+                idMap[backup.id] = twin.id
+                counters.merged++
+                return@forEach
+            }
+            database.categoryDao().insert(backup)
+            known += backup
+            idMap[backup.id] = backup.id
+            record(SyncEntityType.CATEGORY, backup.id, backup.updatedAt)
+            counters.added++
         }
+        fun resolve(categoryId: String): String = idMap[categoryId] ?: categoryId
+
         content.savingGoals.forEach { backup ->
             val current = database.savingGoalDao().getById(backup.id)
             if (current == null || backup.updatedAt > current.updatedAt) {
                 database.savingGoalDao().insertGoal(backup)
                 record(SyncEntityType.SAVING_GOAL, backup.id, backup.updatedAt)
-            }
+                if (current == null) counters.added++ else counters.updated++
+            } else counters.unchanged++
         }
         content.debtCredits.forEach { backup ->
             val current = database.debtCreditDao().getById(backup.id)
             if (current == null || backup.updatedAt > current.updatedAt) {
                 database.debtCreditDao().insertOrUpdate(backup)
                 record(SyncEntityType.DEBT_CREDIT, backup.id, backup.updatedAt)
-            }
+                if (current == null) counters.added++ else counters.updated++
+            } else counters.unchanged++
         }
-        content.transactions.forEach { backup ->
+        content.transactions.forEach { original ->
+            val backup = original.copy(categoryId = resolve(original.categoryId))
             val current = database.transactionDao().getById(backup.id)
             if (current == null || backup.updatedAt > current.updatedAt) {
                 database.transactionDao().insertTransaction(backup)
                 record(SyncEntityType.TRANSACTION, backup.id, backup.updatedAt)
-            }
+                if (current == null) counters.added++ else counters.updated++
+            } else counters.unchanged++
         }
-        content.budgetLimits.forEach { backup ->
+        content.budgetLimits.forEach { original ->
+            val backup = original.copy(categoryId = resolve(original.categoryId))
             val current = database.budgetLimitDao().getById(backup.id)
             if (current == null || backup.updatedAt > current.updatedAt) {
                 database.budgetLimitDao().insertOrUpdate(backup)
                 record(SyncEntityType.BUDGET_LIMIT, backup.id, backup.updatedAt)
-            }
+                if (current == null) counters.added++ else counters.updated++
+            } else counters.unchanged++
         }
         // Ledger entries are immutable: insert-if-missing (the DAOs ignore existing ids).
         content.savingGoalOperations.forEach { backup ->
             if (database.savingGoalOperationDao().insert(backup) != IGNORED_ROW) {
                 record(SyncEntityType.SAVING_GOAL_OPERATION, backup.id, backup.updatedAt)
-            }
+                counters.added++
+            } else counters.unchanged++
         }
         content.debtPayments.forEach { backup ->
             if (database.debtPaymentDao().insert(backup) != IGNORED_ROW) {
                 record(SyncEntityType.DEBT_PAYMENT, backup.id, backup.updatedAt)
+                counters.added++
+            } else counters.unchanged++
+        }
+
+        return Summary(
+            records = content.totalRecords,
+            added = counters.added,
+            updated = counters.updated,
+            unchanged = counters.unchanged,
+            mergedCategories = counters.merged
+        )
+    }
+
+    /**
+     * Collapses categories that are the same category stored more than once (same identity, see
+     * [CategoryRules.isSameIdentity]) into one canonical row: transactions and budget limits are
+     * moved to it, the extras are deleted and tombstoned for sync. Only built-in categories are
+     * healed automatically; user categories with the same name are left alone because the user
+     * may have created them on purpose.
+     */
+    private suspend fun healDuplicateCategories() {
+        val now = System.currentTimeMillis()
+        val groups = database.categoryDao().getAllSnapshot()
+            .filter { CategoryRules.isBuiltInKey(it.title) }
+            .groupBy { it.title.trim().uppercase() }
+            .values
+            .filter { it.size > 1 }
+        groups.forEach { group ->
+            val canonical = CategoryRules.pickCanonical(group)
+            group.filter { it.id != canonical.id }.forEach { duplicate ->
+                database.transactionDao().getByCategoryId(duplicate.id).forEach { tx ->
+                    record(SyncEntityType.TRANSACTION, tx.id, now)
+                }
+                database.transactionDao().reassignCategoryForTransactions(duplicate.id, canonical.id, now)
+
+                database.budgetLimitDao().getByCategoryId(duplicate.id).forEach { limit ->
+                    record(SyncEntityType.BUDGET_LIMIT, limit.id, now)
+                }
+                database.budgetLimitDao().reassignCategoryForLimits(duplicate.id, canonical.id, now)
+
+                database.categoryDao().delete(duplicate)
+                syncLocalDataSource.recordMutationInTransaction(
+                    entityType = SyncEntityType.CATEGORY,
+                    entityId = duplicate.id,
+                    updatedAt = now,
+                    isDeleted = true
+                )
+            }
+            if (!canonical.isSystem && canonical.title.trim().uppercase() in SYSTEM_TITLES) {
+                val fixed = canonical.copy(isSystem = true, updatedAt = now)
+                database.categoryDao().insert(fixed)
+                record(SyncEntityType.CATEGORY, fixed.id, now)
             }
         }
     }
@@ -141,5 +257,6 @@ class LocalBackupManager(
         /** Room's insert returns -1 when OnConflictStrategy.IGNORE skipped the row. */
         const val IGNORED_ROW = -1L
         const val MAX_BACKUP_BYTES = 128L * 1024 * 1024
+        val SYSTEM_TITLES = setOf("DEBT_CREDIT_PAYABLE", "DEBT_CREDIT_RECEIVABLE", "SAVING_GOAL", "UNCATEGORIZED")
     }
 }

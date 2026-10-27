@@ -49,9 +49,29 @@ data class AppSnackbarVisuals(
     val isError: Boolean = false
 ) : SnackbarVisuals
 
+/** Shared layout constants so every screen places its snackbar the same way. */
+object AppSnackbarDefaults {
+    /**
+     * Bottom padding that lifts a snackbar above the floating capsule navigation bar + FAB
+     * (56dp FAB + 5dp gap + breathing room). Screens that show the main bar must use at least this.
+     */
+    val AboveBottomBar = 84.dp
+}
+
+/**
+ * Single entry point for showing a snackbar: a new message always replaces the one currently on
+ * screen immediately (instead of queueing behind it), so the user never waits for stale feedback.
+ * Dismissing an Undo snackbar this way resolves it as [SnackbarResult.Dismissed], which callers
+ * treat as "commit".
+ */
+suspend fun SnackbarHostState.showReplacing(visuals: SnackbarVisuals): SnackbarResult {
+    currentSnackbarData?.dismiss()
+    return showSnackbar(visuals)
+}
+
 /** Shows a failure message. Errors stay a little longer than confirmations so they can be read. */
 suspend fun SnackbarHostState.showError(message: String): SnackbarResult =
-    showSnackbar(AppSnackbarVisuals(message = message, duration = SnackbarDuration.Long, isError = true))
+    showReplacing(AppSnackbarVisuals(message = message, duration = SnackbarDuration.Long, isError = true))
 
 /** Shows a neutral/confirmation message, optionally with an action (e.g. Undo). */
 suspend fun SnackbarHostState.showInfo(
@@ -59,7 +79,7 @@ suspend fun SnackbarHostState.showInfo(
     actionLabel: String? = null,
     duration: SnackbarDuration = SnackbarDuration.Short
 ): SnackbarResult =
-    showSnackbar(AppSnackbarVisuals(message = message, actionLabel = actionLabel, duration = duration))
+    showReplacing(AppSnackbarVisuals(message = message, actionLabel = actionLabel, duration = duration))
 
 /**
  * The one snackbar host every screen uses. Callers keep their own [modifier] (alignment/padding

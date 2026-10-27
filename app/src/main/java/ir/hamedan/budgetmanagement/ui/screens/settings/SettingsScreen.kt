@@ -3,6 +3,7 @@ package ir.hamedan.budgetmanagement.ui.screens.settings
 import android.app.Activity
 import ir.hamedan.budgetmanagement.ui.components.showError
 import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
+import ir.hamedan.budgetmanagement.ui.components.AppSnackbarDefaults
 import androidx.compose.material3.SnackbarHostState
 import android.content.Context
 import android.content.Intent
@@ -1247,7 +1248,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 24.dp, start = 16.dp, end = 16.dp)
+                .padding(bottom = AppSnackbarDefaults.AboveBottomBar, start = 16.dp, end = 16.dp)
         )
     }
 }

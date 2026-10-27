@@ -1,5 +1,6 @@
 package ir.hamedan.budgetmanagement.data.export
 
+import ir.hamedan.budgetmanagement.utils.SystemTransactionText
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -370,11 +371,11 @@ private class PdfPainter(
 
     fun buildRow(tx: TransactionEntity, currency: String, categoryNames: Map<String, String>): RowLayout {
         val isIncome = tx.type == "INCOME"
-        val title = tx.title.ifBlank { t("بدون عنوان", "Untitled") }
+        val title = SystemTransactionText.localizeTitle(tx.title, rtl).ifBlank { t("بدون عنوان", "Untitled") }
         val category = categoryNames[tx.categoryId]
             ?: tx.categoryId.takeUnless { it.isBlank() || it.equals("UNCATEGORIZED", true) }
             ?: t("دسته‌بندی نشده", "Uncategorized")
-        val note = tx.note.ifBlank { "—" }
+        val note = (SystemTransactionText.localizeNote(tx.note, rtl) ?: "").ifBlank { "—" }
         val signed = tx.amount.toDouble().let { if (isIncome) it else -it }
         val amountText = formatMoney(signed, currency, forceSign = true)
         val amountColor = if (isIncome) cIncome else cExpense

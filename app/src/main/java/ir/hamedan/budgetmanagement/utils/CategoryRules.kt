@@ -22,4 +22,45 @@ object CategoryRules {
     /** لیست دسته‌هایی که کاربر اجازه‌ی انتخابشان را دارد. */
     fun userSelectable(categories: List<CategoryEntity>): List<CategoryEntity> =
         categories.filter { isUserSelectable(it) }
+
+    /** کلیدهای دسته‌بندی‌های داخلی برنامه؛ هر کدام در هر حساب فقط یک نمونه می‌تواند داشته باشد. */
+    private val BUILT_IN_KEYS = setOf(
+        "FOOD", "TRANSPORT", "SHOPPING", "BILL", "SALARY", "INVESTMENT",
+        "DEBT_CREDIT_PAYABLE", "DEBT_CREDIT_RECEIVABLE",
+        SAVING_GOAL_TITLE, "SAVING_GOAL_RETURN", "UNCATEGORIZED"
+    )
+
+    fun isBuiltInKey(title: String): Boolean = title.trim().uppercase() in BUILT_IN_KEYS
+
+    /**
+     * شناسه‌ی ثابتِ دسته‌های پیش‌فرض (روی همه‌ی دستگاه‌ها یکسان است تا همگام‌سازی و
+     * بازیابی پشتیبان، نسخه‌ی تکراری نسازند).
+     */
+    fun stableDefaultId(title: String): String =
+        java.util.UUID.nameUUIDFromBytes(
+            "budget-management:default-category:$title".toByteArray(Charsets.UTF_8)
+        ).toString()
+
+    /**
+     * آیا دو دسته در واقع یک دسته‌اند؟ دسته‌های داخلی فقط با کلیدشان یکی حساب می‌شوند؛
+     * دسته‌های کاربر با «عنوان + نوع (درآمد/هزینه)» و بدون حساسیت به حروف/فاصله‌ی اضافه.
+     */
+    fun isSameIdentity(a: CategoryEntity, b: CategoryEntity): Boolean {
+        val ta = a.title.trim()
+        val tb = b.title.trim()
+        if (ta.isEmpty() || tb.isEmpty()) return false
+        if (isBuiltInKey(ta) || isBuiltInKey(tb)) return ta.equals(tb, ignoreCase = true)
+        return ta.equals(tb, ignoreCase = true) && a.isExpense == b.isExpense
+    }
+
+    /**
+     * از بین چند نسخه‌ی تکراریِ یک دسته، نسخه‌ی اصلی را انتخاب می‌کند:
+     * اول شناسه‌ی ثابت پیش‌فرض، بعد قدیمی‌ترین، و در نهایت کوچک‌ترین id (قطعی و تکرارپذیر).
+     */
+    fun pickCanonical(group: List<CategoryEntity>): CategoryEntity {
+        val title = group.first().title.trim().uppercase()
+        val stable = stableDefaultId(title)
+        return group.firstOrNull { it.id == stable }
+            ?: group.sortedWith(compareBy<CategoryEntity> { it.createdAt }.thenBy { it.id }).first()
+    }
 }

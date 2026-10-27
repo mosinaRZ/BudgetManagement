@@ -62,6 +62,7 @@ import ir.hamedan.budgetmanagement.utils.DateUtils
 import ir.hamedan.budgetmanagement.utils.CategoryRules
 import ir.hamedan.budgetmanagement.utils.CategorySuggestionHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
+import ir.hamedan.budgetmanagement.utils.SystemTransactionText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
@@ -358,7 +359,7 @@ fun TransactionsScreen(
 
                                 coroutineScope.launch {
                                     val newTitle = if (isPersian) newTimeFilter.titleFa else newTimeFilter.titleEn
-                                    snackbarHostState.showSnackbar(
+                                    snackbarHostState.showInfo(
                                         message = if (isPersian) "فیلتر زمان به «$newTitle» تغییر یافت" else "Filter set to \"$newTitle\"",
                                         duration = SnackbarDuration.Indefinite
                                     )
@@ -567,10 +568,10 @@ fun TransactionsScreen(
                     transactionToDelete = null
 
                     coroutineScope.launch {
-                        val displayTitle = deletedTx.title.ifEmpty {
+                        val displayTitle = SystemTransactionText.localizeTitle(deletedTx.title, isPersian).ifEmpty {
                             "تراکنش"
                         }
-                        val result = snackbarHostState.showSnackbar(
+                        val result = snackbarHostState.showInfo(
                             message = if (isPersian) "تراکنش «$displayTitle» حذف شد" else "Transaction \"$displayTitle\" deleted",
                             actionLabel = if (isPersian) "بازگردانی" else "Undo",
                             duration = SnackbarDuration.Indefinite
@@ -1035,14 +1036,14 @@ private fun EditTransactionBottomSheet(
 ) {
     val scope = rememberCoroutineScope()
 
-    var title by remember { mutableStateOf(transaction.title) }
+    var title by remember { mutableStateOf(SystemTransactionText.localizeTitle(transaction.title, isPersian)) }
 
     val initialAmount = remember(transaction.amount, currencyUnit) {
         if (currencyUnit == "IRR") (transaction.amount * 10).toLong().toString()
         else transaction.amount.toLong().toString()
     }
     var rawAmountText by remember { mutableStateOf(initialAmount) }
-    var note by remember { mutableStateOf(transaction.note ?: "") }
+    var note by remember { mutableStateOf(SystemTransactionText.localizeNote(transaction.note, isPersian) ?: "") }
     var category by remember { mutableStateOf(transaction.categoryId) }
     var type by remember { mutableStateOf(transaction.type) } // "EXPENSE" or "INCOME"
     var userManuallySelectedCategory by remember { mutableStateOf(false) }
@@ -1685,7 +1686,7 @@ private fun TransactionRow(
                 verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 Text(
-                    text = transaction.title.ifEmpty { categoryTitle },
+                    text = SystemTransactionText.localizeTitle(transaction.title, isPersian).ifEmpty { categoryTitle },
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -1695,7 +1696,7 @@ private fun TransactionRow(
 
                 if (!transaction.note.isNullOrBlank()) {
                     Text(
-                        text = transaction.note,
+                        text = SystemTransactionText.localizeNote(transaction.note, isPersian).orEmpty(),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
                         maxLines = 1,

@@ -24,4 +24,26 @@ class CategoryRulesTest {
         )
         assertThat(CategoryRules.userSelectable(all).map { it.title }).containsExactly("FOOD", "SALARY").inOrder()
     }
+
+    @Test fun builtInCategoriesMatchByKeyRegardlessOfIdOrType() {
+        val local = CategoryEntity(id = "a", title = "SAVING_GOAL", isExpense = true)
+        val fromBackup = CategoryEntity(id = "b", title = "saving_goal", isExpense = false)
+        assertThat(CategoryRules.isSameIdentity(local, fromBackup)).isTrue()
+    }
+
+    @Test fun userCategoriesMatchByTitleAndType() {
+        val a = CategoryEntity(id = "a", title = "Coffee", isExpense = true)
+        assertThat(CategoryRules.isSameIdentity(a, CategoryEntity(id = "b", title = " coffee ", isExpense = true))).isTrue()
+        assertThat(CategoryRules.isSameIdentity(a, CategoryEntity(id = "c", title = "Coffee", isExpense = false))).isFalse()
+        assertThat(CategoryRules.isSameIdentity(a, CategoryEntity(id = "d", title = "FOOD"))).isFalse()
+    }
+
+    @Test fun canonicalPrefersStableIdThenOldest() {
+        val stable = CategoryRules.stableDefaultId("SAVING_GOAL")
+        val old = CategoryEntity(id = "x", title = "SAVING_GOAL", createdAt = 1L)
+        val stableCopy = CategoryEntity(id = stable, title = "SAVING_GOAL", createdAt = 99L)
+        assertThat(CategoryRules.pickCanonical(listOf(old, stableCopy)).id).isEqualTo(stable)
+        val older = CategoryEntity(id = "y", title = "SAVING_GOAL", createdAt = 0L)
+        assertThat(CategoryRules.pickCanonical(listOf(old, older)).id).isEqualTo("y")
+    }
 }

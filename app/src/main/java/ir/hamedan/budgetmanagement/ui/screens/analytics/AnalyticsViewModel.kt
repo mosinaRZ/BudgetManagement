@@ -406,7 +406,8 @@ class AnalyticsViewModel(
     }
 
     private fun calculateSelectedTrendChartData(transactions: List<TransactionEntity>): TrendChartData {
-        if (transactions.isEmpty()) return TrendChartData(emptyList(), false, 0)
+        // یک نقطه خط روند نمی‌سازد: برای روز/بازه‌ی انتخاب‌شده حداقل دو تراکنش لازم است.
+        if (transactions.size < 2) return TrendChartData(emptyList(), false, 0)
         val sorted = transactions.sortedBy { it.timestamp }
         var running = 0.0
         val points = sorted.map { tx ->

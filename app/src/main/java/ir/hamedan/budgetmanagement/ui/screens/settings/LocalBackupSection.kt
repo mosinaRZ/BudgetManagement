@@ -18,19 +18,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,11 +41,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import ir.hamedan.budgetmanagement.BudgetApp
-import ir.hamedan.budgetmanagement.data.backup.BackupCrypto
+import ir.hamedan.budgetmanagement.data.backup.LocalBackupManager
 import ir.hamedan.budgetmanagement.data.backup.BackupFormatException
 import ir.hamedan.budgetmanagement.data.backup.BackupPasswordException
 import ir.hamedan.budgetmanagement.ui.components.showError
@@ -76,6 +71,8 @@ fun LocalBackupButtons(
     var pendingExportPassword by remember { mutableStateOf<String?>(null) }
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var busyIsExport by remember { mutableStateOf(true) }
+    var restoreResult by remember { mutableStateOf<LocalBackupManager.Summary?>(null) }
 
     val createLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")
@@ -83,14 +80,16 @@ fun LocalBackupButtons(
         val password = pendingExportPassword
         pendingExportPassword = null
         if (uri == null || password == null) return@rememberLauncherForActivityResult
+        busyIsExport = true
         busy = true
         scope.launch {
             val chars = password.toCharArray()
             try {
                 val summary = manager.export(uri, chars)
                 snackbarHostState.showInfo(
-                    if (isPersian) "پشتیبان ذخیره شد (${summary.records} مورد). رمز آن را جایی امن نگه دارید؛ بدون رمز قابل بازیابی نیست."
-                    else "Backup saved (${summary.records} items). Keep its password safe; the backup cannot be opened without it."
+                    message = if (isPersian) "پشتیبان ذخیره شد (${summary.records} مورد). رمز آن را جایی امن نگه دارید؛ بدون رمز قابل بازیابی نیست."
+                    else "Backup saved (${summary.records} items). Keep its password safe; the backup cannot be opened without it.",
+                    duration = SnackbarDuration.Long
                 )
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -142,8 +141,7 @@ fun LocalBackupButtons(
     if (askExportPassword) {
         BackupPasswordDialog(
             isPersian = isPersian,
-            title = if (isPersian) "رمز پشتیبان" else "Backup password",
-            confirmNeeded = true,
+            isExport = true,
             onDismiss = { askExportPassword = false },
             onConfirm = { password ->
                 askExportPassword = false
@@ -157,20 +155,17 @@ fun LocalBackupButtons(
     pendingImportUri?.let { uri ->
         BackupPasswordDialog(
             isPersian = isPersian,
-            title = if (isPersian) "رمز فایل پشتیبان" else "Password of the backup file",
-            confirmNeeded = false,
+            isExport = false,
             onDismiss = { pendingImportUri = null },
             onConfirm = { password ->
                 pendingImportUri = null
+                busyIsExport = false
                 busy = true
                 scope.launch {
                     val chars = password.toCharArray()
                     try {
                         val summary = manager.import(uri, chars)
-                        snackbarHostState.showInfo(
-                            if (isPersian) "پشتیبان بازیابی شد (${summary.records} مورد). موارد موجود فقط وقتی جایگزین می‌شوند که نسخه‌ی پشتیبان جدیدتر باشد."
-                            else "Backup restored (${summary.records} items). Existing items are replaced only when the backup's copy is newer."
-                        )
+                        restoreResult = summary
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
                     } catch (e: BackupPasswordException) {
@@ -194,62 +189,18 @@ fun LocalBackupButtons(
             }
         )
     }
-}
 
-@Composable
-private fun BackupPasswordDialog(
-    isPersian: Boolean,
-    title: String,
-    confirmNeeded: Boolean,
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
-) {
-    var password by remember { mutableStateOf("") }
-    var repeat by remember { mutableStateOf("") }
-    val min = BackupCrypto.MIN_PASSWORD_LENGTH
-    val longEnough = password.length >= min
-    val matches = !confirmNeeded || password == repeat
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (confirmNeeded) {
-                    Text(
-                        if (isPersian) "این رمز را فراموش نکنید؛ بدون آن پشتیبان قابل بازیابی نیست (حداقل $min کاراکتر)."
-                        else "Do not forget this password: the backup cannot be opened without it (at least $min characters)."
-                    )
-                }
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    singleLine = true,
-                    label = { Text(if (isPersian) "رمز" else "Password") },
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
-                )
-                if (confirmNeeded) {
-                    OutlinedTextField(
-                        value = repeat,
-                        onValueChange = { repeat = it },
-                        singleLine = true,
-                        label = { Text(if (isPersian) "تکرار رمز" else "Repeat password") },
-                        isError = repeat.isNotEmpty() && !matches,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(password) }, enabled = longEnough && matches) {
-                Text(if (isPersian) "ادامه" else "Continue")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(if (isPersian) "انصراف" else "Cancel") }
-        }
-    )
+    if (busy) {
+        BackupProgressDialog(isPersian = isPersian, isExport = busyIsExport)
+    }
+
+    restoreResult?.let { summary ->
+        BackupResultDialog(
+            isPersian = isPersian,
+            summary = summary,
+            onDismiss = { restoreResult = null }
+        )
+    }
 }
 
 /** Small bold heading + one-line hint used to separate groups inside a settings card. */

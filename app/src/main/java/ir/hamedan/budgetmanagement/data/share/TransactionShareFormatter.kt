@@ -1,5 +1,6 @@
 package ir.hamedan.budgetmanagement.data.share
 
+import ir.hamedan.budgetmanagement.utils.SystemTransactionText
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.money.MoneyContract
 import ir.hamedan.budgetmanagement.utils.DateUtils
@@ -42,7 +43,7 @@ object TransactionShareFormatter {
     ): TransactionShareContent {
         val isExpense = transaction.type == "EXPENSE"
         return TransactionShareContent(
-            title = transaction.title.trim().ifBlank { categoryTitle },
+            title = SystemTransactionText.localizeTitle(transaction.title.trim(), isPersian).ifBlank { categoryTitle },
             amountText = formatAmount(transaction.amount, currencyUnit, isExpense, isPersian),
             currencyLabel = currencyLabel(currencyUnit, isPersian),
             typeLabel = typeLabel(isExpense, isPersian),
@@ -50,7 +51,7 @@ object TransactionShareFormatter {
             categoryTitle = categoryTitle,
             categoryEmoji = categoryEmoji.ifBlank { "📁" },
             dateTimeText = formatDateTime(transaction.timestamp, isPersian, zone),
-            note = transaction.note.trim(),
+            note = (SystemTransactionText.localizeNote(transaction.note, isPersian) ?: "").trim(),
             referenceId = referenceId(transaction.id),
             isPersian = isPersian
         )

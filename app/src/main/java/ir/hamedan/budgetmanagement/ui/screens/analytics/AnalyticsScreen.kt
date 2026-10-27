@@ -62,6 +62,7 @@ import ir.hamedan.budgetmanagement.ui.screens.transactions.TimeFilter
 import ir.hamedan.budgetmanagement.utils.DateUtils
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
+import ir.hamedan.budgetmanagement.utils.SystemTransactionText
 import java.math.BigDecimal
 import java.text.NumberFormat
 import java.time.LocalDate
@@ -140,7 +141,8 @@ fun AnalyticsScreen(
                     hasEnoughData = uiState.trendHasEnoughData,
                     selectedFilter = selectedFilter,
                     currentTimeIndex = uiState.trendCurrentIndex,
-                    isCustomRange = uiState.isCustomRange
+                    isCustomRange = uiState.isCustomRange,
+                    isBucketSelected = uiState.selectedTimeBucketIndex != null
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1080,7 +1082,8 @@ private fun BalanceTrendChartCard(
     hasEnoughData: Boolean,
     selectedFilter: TimeFilter,
     currentTimeIndex: Int,
-    isCustomRange: Boolean = false
+    isCustomRange: Boolean = false,
+    isBucketSelected: Boolean = false
 ) {
     val cardShape = RoundedCornerShape(24.dp)
     val lineColor = MaterialTheme.colorScheme.primary
@@ -1100,8 +1103,20 @@ private fun BalanceTrendChartCard(
         TimeFilter.ALL -> if (isPersian) "روند موجودی به ازای هر تراکنش" else "Balance trend per transaction"
     }
 
-    val insufficientTitle = if (isPersian) "هنوز داده کافی برای رسم روند وجود ندارد" else "Not Enough Data for Trend"
-    val insufficientMessage = when (selectedFilter) {
+    val defaultInsufficientTitle = if (isPersian) "هنوز داده کافی برای رسم روند وجود ندارد" else "Not Enough Data for Trend"
+    // وقتی کاربر روی یک ستون کلیک کرده، تعداد تراکنش‌های همان ستون تعیین‌کننده است نه کل ماه.
+    val selectedBucketMode = isBucketSelected || isCustomRange
+    val insufficientTitle = if (selectedBucketMode) {
+        if (isPersian) "تراکنش کافی برای رسم روند نیست" else "Not Enough Transactions"
+    } else defaultInsufficientTitle
+    val insufficientMessage = if (selectedBucketMode) {
+        val isDaySelection = selectedFilter == TimeFilter.DAILY && !isCustomRange
+        val fa = if (isDaySelection) "باید تراکنش‌های این روز بیشتر از یکی باشند تا نمودار روند نمایش داده شود."
+        else "باید تراکنش‌های این بازه بیشتر از یکی باشند تا نمودار روند نمایش داده شود."
+        val en = if (isDaySelection) "This day needs more than one transaction for the trend chart to be shown."
+        else "This period needs more than one transaction for the trend chart to be shown."
+        if (isPersian) fa else en
+    } else when (selectedFilter) {
         TimeFilter.MONTHLY -> if (isPersian) {
             "برای نمایش روند ماهانه، تراکنش‌ها باید حداقل در دو ماه مختلف ثبت شده باشند. با ثبت تراکنش در ماه‌های بیشتر، این نمودار به‌صورت خودکار فعال می‌شود."
         } else {
@@ -1604,7 +1619,7 @@ private fun TopExpensesCard(
         }
 
         topExpenses.size == 1 -> {
-            val title = topExpenses.first().title
+            val title = SystemTransactionText.localizeTitle(topExpenses.first().title, isPersian)
                 .takeIf { it.isNotBlank() }
                 ?: StringMapper.getCategoryName(topExpenses.first().categoryId, isPersian)
             if (isPersian) {
@@ -1680,7 +1695,7 @@ private fun TopExpensesCard(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = item.title
+                                        text = SystemTransactionText.localizeTitle(item.title, isPersian)
                                             .takeIf { it.isNotBlank() }
                                             ?.let { localizeInsightCategories(it, isPersian) }
                                             ?: StringMapper.getCategoryName(item.categoryId, isPersian),
