@@ -1,6 +1,11 @@
 package ir.hamedan.budgetmanagement.ui.screens.settings
 
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -40,6 +45,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ir.hamedan.budgetmanagement.BudgetApp
@@ -49,12 +55,16 @@ import ir.hamedan.budgetmanagement.data.backup.BackupPasswordException
 import ir.hamedan.budgetmanagement.ui.components.showError
 import ir.hamedan.budgetmanagement.ui.components.showInfo
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
- * "Save backup" / "Restore backup" buttons with their file pickers and password dialogs.
+ * "Save backup" / "Restore backup" buttons with their password dialogs.
+ *
+ * Saving needs no file picker: the backup goes straight into the app's own folder
+ * (`Documents/Cidna/Backups`, see [LocalBackupManager.DISPLAY_PATH]). Restoring opens the system
+ * picker directly inside that folder.
+ *
+ * Only shown in guest mode: an account's data lives (encrypted) on the server and returns after
+ * sign-in, so a local backup would be redundant there.
  * Everything runs through [ir.hamedan.budgetmanagement.data.backup.LocalBackupManager].
  */
 @Composable
@@ -74,21 +84,16 @@ fun LocalBackupButtons(
     var busyIsExport by remember { mutableStateOf(true) }
     var restoreResult by remember { mutableStateOf<LocalBackupManager.Summary?>(null) }
 
-    val createLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/octet-stream")
-    ) { uri ->
-        val password = pendingExportPassword
-        pendingExportPassword = null
-        if (uri == null || password == null) return@rememberLauncherForActivityResult
+    fun runExport(password: String) {
         busyIsExport = true
         busy = true
         scope.launch {
             val chars = password.toCharArray()
             try {
-                val summary = manager.export(uri, chars)
+                val saved = manager.exportToAppFolder(chars)
                 snackbarHostState.showInfo(
-                    message = if (isPersian) "پشتیبان ذخیره شد (${summary.records} مورد). رمز آن را جایی امن نگه دارید؛ بدون رمز قابل بازیابی نیست."
-                    else "Backup saved (${summary.records} items). Keep its password safe; the backup cannot be opened without it.",
+                    message = if (isPersian) "پشتیبان (${saved.summary.records} مورد) در پوشه‌ی ${LocalBackupManager.DISPLAY_PATH} ذخیره شد. رمز آن را جایی امن نگه دارید؛ بدون رمز قابل بازیابی نیست."
+                    else "Backup (${saved.summary.records} items) saved to ${LocalBackupManager.DISPLAY_PATH}. Keep its password safe; the backup cannot be opened without it.",
                     duration = SnackbarDuration.Long
                 )
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -106,7 +111,26 @@ fun LocalBackupButtons(
         }
     }
 
-    val openLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    // Android 8-9 only: the shared Documents folder needs the legacy storage permission.
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val password = pendingExportPassword
+        pendingExportPassword = null
+        if (password == null) return@rememberLauncherForActivityResult
+        if (granted) {
+            runExport(password)
+        } else {
+            scope.launch {
+                snackbarHostState.showError(
+                    if (isPersian) "برای ذخیره پشتیبان در پوشه‌ی برنامه، اجازه‌ی دسترسی به حافظه لازم است."
+                    else "Storage permission is needed to save the backup in the app's folder."
+                )
+            }
+        }
+    }
+
+    val openLauncher = rememberLauncherForActivityResult(OpenBackupDocument()) { uri ->
         if (uri != null) pendingImportUri = uri
     }
 
@@ -115,8 +139,8 @@ fun LocalBackupButtons(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         BackupInfoNote(
-            text = if (isPersian) "پشتیبان با رمز شما رمزنگاری می‌شود و بدون وابستگی به کلید گوشی باز می‌شود."
-            else "The backup is encrypted with your password and does not depend on this phone's security key."
+            text = if (isPersian) "پشتیبان با رمز شما رمزنگاری می‌شود و بدون وابستگی به کلید گوشی باز می‌شود. فایل‌ها در پوشه‌ی اختصاصی برنامه ذخیره می‌شوند: ${LocalBackupManager.DISPLAY_PATH}"
+            else "The backup is encrypted with your password and does not depend on this phone's security key. Files are saved in the app's own folder: ${LocalBackupManager.DISPLAY_PATH}"
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -145,9 +169,16 @@ fun LocalBackupButtons(
             onDismiss = { askExportPassword = false },
             onConfirm = { password ->
                 askExportPassword = false
-                pendingExportPassword = password
-                val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())
-                createLauncher.launch("cidna-backup-$stamp.cidnabackup")
+                val needsPermission = LocalBackupManager.needsLegacyStoragePermission() &&
+                        ContextCompat.checkSelfPermission(
+                            context, Manifest.permission.WRITE_EXTERNAL_STORAGE
+                        ) != PackageManager.PERMISSION_GRANTED
+                if (needsPermission) {
+                    pendingExportPassword = password
+                    storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                } else {
+                    runExport(password)
+                }
             }
         )
     }
@@ -287,4 +318,16 @@ internal fun SettingsActionButton(
         Spacer(modifier = Modifier.width(8.dp))
         Text(text = title, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = primary)
     }
+}
+
+/**
+ * Same as the standard "open a document" picker, but asks the system to start inside the app's own
+ * backup folder (`Documents/Cidna/Backups`). The hint is ignored by the system if the folder does
+ * not exist yet, in which case the picker simply opens where it normally would.
+ */
+private class OpenBackupDocument : ActivityResultContracts.OpenDocument() {
+    override fun createIntent(context: Context, input: Array<String>): Intent =
+        super.createIntent(context, input).apply {
+            putExtra(DocumentsContract.EXTRA_INITIAL_URI, LocalBackupManager.backupFolderPickerHint())
+        }
 }

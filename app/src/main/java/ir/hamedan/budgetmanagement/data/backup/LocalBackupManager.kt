@@ -1,13 +1,20 @@
 package ir.hamedan.budgetmanagement.data.backup
 
+import android.content.ContentValues
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.DocumentsContract
+import android.provider.MediaStore
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
 import ir.hamedan.budgetmanagement.data.local.SyncLocalDataSource
 import ir.hamedan.budgetmanagement.data.sync.SyncEntityType
 import ir.hamedan.budgetmanagement.utils.CategoryRules
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.io.IOException
 import java.io.InputStream
 
@@ -55,6 +62,81 @@ class LocalBackupManager(
             it.flush()
         }
         Summary(content.totalRecords)
+    }
+
+    /**
+     * Result of [exportToAppFolder]: where the file went, so the UI can tell the user exactly where
+     * to find it.
+     */
+    data class SavedBackup(val uri: Uri, val fileName: String, val summary: Summary)
+
+    /**
+     * Saves the encrypted backup into the app's own, separate folder
+     * (`Documents/`[FOLDER_NAME]`/`[BACKUPS_NAME]) without asking the user to pick a location.
+     *
+     * Android 10+: written through MediaStore (no storage permission needed, the folder is created
+     * automatically). Android 8-9: written to the same public folder, which needs the legacy
+     * WRITE_EXTERNAL_STORAGE permission (see [needsLegacyStoragePermission]).
+     *
+     * @throws IOException the file cannot be written.
+     */
+    suspend fun exportToAppFolder(password: CharArray): SavedBackup = withContext(Dispatchers.IO) {
+        val content = syncLocalDataSource.transaction { readAll() }
+        val now = System.currentTimeMillis()
+        val encrypted = BackupCrypto.encrypt(BackupCodec.encode(content, now), password)
+        val fileName = newFileName(now)
+        val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            writeWithMediaStore(fileName, encrypted)
+        } else {
+            writeLegacy(fileName, encrypted)
+        }
+        SavedBackup(uri, fileName, Summary(content.totalRecords))
+    }
+
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.Q)
+    private fun writeWithMediaStore(fileName: String, bytes: ByteArray): Uri {
+        val resolver = context.contentResolver
+        val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+            put(MediaStore.MediaColumns.MIME_TYPE, MIME_TYPE)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, RELATIVE_PATH)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = resolver.insert(collection, values) ?: throw IOException("Cannot create the backup file")
+        try {
+            resolver.openOutputStream(uri, "wt")?.use {
+                it.write(bytes)
+                it.flush()
+            } ?: throw IOException("Cannot open the backup file")
+            resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+            return uri
+        } catch (e: Exception) {
+            // Never leave a half-written (and therefore unreadable) backup behind.
+            runCatching { resolver.delete(uri, null, null) }
+            throw if (e is IOException) e else IOException("Cannot write the backup file", e)
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun writeLegacy(fileName: String, bytes: ByteArray): Uri {
+        val dir = File(
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), FOLDER_NAME),
+            BACKUPS_NAME
+        )
+        if (!dir.exists() && !dir.mkdirs() && !dir.exists()) throw IOException("Cannot create the backup folder")
+        val file = File(dir, fileName)
+        try {
+            file.outputStream().use {
+                it.write(bytes)
+                it.flush()
+            }
+        } catch (e: IOException) {
+            runCatching { file.delete() }
+            throw e
+        }
+        MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath), arrayOf(MIME_TYPE), null)
+        return Uri.fromFile(file)
     }
 
     /**
@@ -253,10 +335,37 @@ class LocalBackupManager(
         return out.toByteArray()
     }
 
-    private companion object {
+    companion object {
+        /** The app's own top-level folder inside Documents. */
+        const val FOLDER_NAME = "Cidna"
+        const val BACKUPS_NAME = "Backups"
+        const val FILE_EXTENSION = "cidnabackup"
+
+        /** Shown to the user, e.g. in the "saved to ..." message. */
+        const val DISPLAY_PATH = "Documents/$FOLDER_NAME/$BACKUPS_NAME"
+        private const val RELATIVE_PATH = "Documents/$FOLDER_NAME/$BACKUPS_NAME/"
+        private const val MIME_TYPE = "application/octet-stream"
+
+        /** True when saving to the shared Documents folder needs the runtime WRITE_EXTERNAL_STORAGE permission. */
+        fun needsLegacyStoragePermission(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+
+        /**
+         * Where the system file picker should open when restoring, so the user lands directly in the
+         * app's backup folder. Only a hint: the picker ignores it if the folder does not exist.
+         */
+        fun backupFolderPickerHint(): Uri = DocumentsContract.buildDocumentUri(
+            "com.android.externalstorage.documents",
+            "primary:Documents/$FOLDER_NAME/$BACKUPS_NAME"
+        )
+
+        internal fun newFileName(timeMillis: Long): String {
+            val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US).format(java.util.Date(timeMillis))
+            return "cidna-backup-$stamp.$FILE_EXTENSION"
+        }
+
         /** Room's insert returns -1 when OnConflictStrategy.IGNORE skipped the row. */
-        const val IGNORED_ROW = -1L
-        const val MAX_BACKUP_BYTES = 128L * 1024 * 1024
-        val SYSTEM_TITLES = setOf("DEBT_CREDIT_PAYABLE", "DEBT_CREDIT_RECEIVABLE", "SAVING_GOAL", "UNCATEGORIZED")
+        private const val IGNORED_ROW = -1L
+        private const val MAX_BACKUP_BYTES = 128L * 1024 * 1024
+        private val SYSTEM_TITLES = setOf("DEBT_CREDIT_PAYABLE", "DEBT_CREDIT_RECEIVABLE", "SAVING_GOAL", "UNCATEGORIZED")
     }
 }

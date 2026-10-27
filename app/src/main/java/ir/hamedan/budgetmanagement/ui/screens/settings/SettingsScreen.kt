@@ -726,20 +726,25 @@ fun SettingsScreen(
                                 }
                             }
 
-                            HorizontalDivider(
-                                modifier = Modifier.padding(vertical = 4.dp),
-                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
-                            )
+                            // Backup is a guest-only feature: guest data lives only on this phone.
+                            // An account's data is stored (encrypted) on the server and comes back
+                            // after sign-in, so signed-in users get no local backup at all.
+                            if (isGuest) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(vertical = 4.dp),
+                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
+                                )
 
-                            SettingsGroupLabel(
-                                title = if (isPersian) "پشتیبان‌گیری" else "Backup",
-                                subtitle = if (isPersian) "نسخه‌ی رمزنگاری‌شده از تمام اطلاعات شما"
-                                else "An encrypted copy of all your data"
-                            )
-                            LocalBackupButtons(
-                                snackbarHostState = settingsSnackbarHostState,
-                                isPersian = isPersian
-                            )
+                                SettingsGroupLabel(
+                                    title = if (isPersian) "پشتیبان‌گیری" else "Backup",
+                                    subtitle = if (isPersian) "نسخه‌ی رمزنگاری‌شده از تمام اطلاعات شما"
+                                    else "An encrypted copy of all your data"
+                                )
+                                LocalBackupButtons(
+                                    snackbarHostState = settingsSnackbarHostState,
+                                    isPersian = isPersian
+                                )
+                            }
                         }
                     }
                 }

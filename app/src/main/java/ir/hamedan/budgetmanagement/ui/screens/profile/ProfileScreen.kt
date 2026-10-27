@@ -400,8 +400,11 @@ fun ProfileScreen(
                         )
                     }
 
-                    item(key = ITEM_CONTACT) {
-                        ContactSheet(phone = user?.phoneNumber.orEmpty(), isPersian = isPersian)
+                    // A guest has no account and no phone number, so there is nothing to show here.
+                    if (!viewModel.isGuest) {
+                        item(key = ITEM_CONTACT) {
+                            ContactSheet(phone = user?.phoneNumber.orEmpty(), isPersian = isPersian)
+                        }
                     }
 
                     item(key = ITEM_SECURITY) {

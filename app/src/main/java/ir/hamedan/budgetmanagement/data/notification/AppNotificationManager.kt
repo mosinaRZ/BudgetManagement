@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -101,7 +102,7 @@ object AppNotificationManager {
         )
 
         val builder = NotificationCompat.Builder(context, if (security) SECURITY_CHANNEL_ID else CHANNEL_ID)
-            .setColor(ContextCompat.getColor(context, R.color.primary))
+            .setColor(ContextCompat.getColor(context, R.color.icon_background))
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -116,7 +117,10 @@ object AppNotificationManager {
                 .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
         } else {
             builder
-                .setSmallIcon(R.mipmap.icon)   // آیکون اعلان — ادامه راهنما
+                .setSmallIcon(R.drawable.ic_notification_app) // سیلوئت تک‌رنگ با گوشه‌های گرد (اندروید فقط آلفا را می‌خواند)
+                // نوار وضعیت همیشه تک‌رنگ است و برنامه نمی‌تواند رنگش کند؛ آیکون رنگی اصلی را
+                // به‌صورت تصویر بزرگ داخل خود اعلان نشان می‌دهیم.
+                .setLargeIcon(BitmapFactory.decodeResource(context.resources, R.mipmap.icon))
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
         }
         val notification = builder.build()
