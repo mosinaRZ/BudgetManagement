@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget picker preview for Android 11 and below (android:previewImage): the card with
+     placeholder bars where text goes. Android 12+ uses layout/widget_balance_preview.xml. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/widget_preview_card" />
+    <item
+        android:width="70dp"
+        android:height="8dp"
+        android:gravity="top|start"
+        android:left="16dp"
+        android:top="16dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#66707974" />
+            <corners android:radius="4dp" />
+        </shape>
+    </item>
+    <item
+        android:width="150dp"
+        android:height="22dp"
+        android:gravity="center_vertical|start"
+        android:left="16dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#FF408A71" />
+            <corners android:radius="6dp" />
+        </shape>
+    </item>
+    <item
+        android:width="90dp"
+        android:height="26dp"
+        android:gravity="bottom|start"
+        android:left="16dp"
+        android:bottom="14dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#33408A71" />
+            <corners android:radius="8dp" />
+        </shape>
+    </item>
+    <item
+        android:width="90dp"
+        android:height="26dp"
+        android:gravity="bottom|end"
+        android:right="16dp"
+        android:bottom="14dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#33BA1A1A" />
+            <corners android:radius="8dp" />
+        </shape>
+    </item>
+</layer-list>

@@ -180,7 +180,7 @@ fun onboardingPermissions(sdkInt: Int): List<OnboardingPermission> = buildList {
         add(
             OnboardingPermission(
                 key = "sms",
-                permissions = listOf(Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS),
+                permissions = listOf(Manifest.permission.RECEIVE_SMS),
                 emoji = "💬",
                 titleFa = "پیامک بانکی",
                 titleEn = "Bank SMS",

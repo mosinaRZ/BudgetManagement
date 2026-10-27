@@ -119,4 +119,8 @@ interface TransactionDao {
 
     @Query("DELETE FROM transactions")
     suspend fun clearAll(): Int
+
+    /** Every row, for the local backup export (not observed, not paged). */
+    @Query("SELECT * FROM transactions")
+    suspend fun getAllSnapshot(): List<TransactionEntity>
 }

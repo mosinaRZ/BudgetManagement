@@ -64,4 +64,8 @@ interface CategoryDao {
 
     @Query("DELETE FROM categories")
     suspend fun clearAll(): Int
+
+    /** Every row, for the local backup export (not observed, not paged). */
+    @Query("SELECT * FROM categories")
+    suspend fun getAllSnapshot(): List<CategoryEntity>
 }

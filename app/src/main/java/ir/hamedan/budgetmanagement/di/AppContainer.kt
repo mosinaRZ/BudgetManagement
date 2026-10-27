@@ -75,6 +75,10 @@ class AppContainer(context: Context) {
 
     val guestModeStore: GuestModeStore by lazy { GuestModeStore(appContext) }
 
+    val localBackupManager: ir.hamedan.budgetmanagement.data.backup.LocalBackupManager by lazy {
+        ir.hamedan.budgetmanagement.data.backup.LocalBackupManager(appContext, database, syncLocalDataSource)
+    }
+
     val guestModeManager: GuestModeManager by lazy {
         GuestModeManager(
             store = guestModeStore,

@@ -126,6 +126,7 @@ class ApiException(
         "DEVICE_REMOVAL_FORBIDDEN" -> if (isPersian) "فقط دستگاه اصلی می‌تواند دستگاه‌های دیگر را حذف کند." else "Only the primary device can remove other devices."
         "NOT_FOUND" -> if (isPersian) "اطلاعات موردنظر پیدا نشد." else "The requested information was not found."
         "CONFLICT" -> if (isPersian) "این عملیات با وضعیت فعلی اطلاعات سازگار نیست." else "The operation conflicts with the current data."
+        "STORAGE_QUOTA_EXCEEDED" -> if (isPersian) "سقف فضای همگام‌سازی حساب پر شده است. برخی داده‌ها را حذف کنید یا با پشتیبانی تماس بگیرید." else "This account's sync storage limit is reached. Delete some data or contact support."
         "RATE_LIMITED" -> if (isPersian) "درخواست‌های زیادی ارسال شده است. کمی بعد دوباره تلاش کنید." else "Too many requests. Please try again later."
         "REQUEST_TIMEOUT" -> if (isPersian) "پاسخ سرور خیلی طول کشید. دوباره تلاش کنید." else "The server took too long to respond. Please try again."
         "PAYLOAD_TOO_LARGE" -> if (isPersian) "حجم اطلاعات ارسالی بیش از حد مجاز است." else "The data you sent is too large."

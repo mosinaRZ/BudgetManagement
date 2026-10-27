@@ -692,26 +692,53 @@ fun SettingsScreen(
                         isExpanded = activeMenu == SettingsMenu.EXPORT,
                         onClick = { activeMenu = if (activeMenu == SettingsMenu.EXPORT) SettingsMenu.NONE else SettingsMenu.EXPORT }
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        // Column (not Box): the accordion hosts its content in a Box, so two
+                        // sibling blocks would be drawn on top of each other.
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            ExportButton(
-                                title = "Excel (XLSX)",
-                                icon = Icons.Default.TableChart,
-                                modifier = Modifier.weight(1f)
+                            SettingsGroupLabel(
+                                title = if (isPersian) "گزارش‌ها" else "Reports",
+                                subtitle = if (isPersian) "خروجی خوانا از تراکنش‌ها برای چاپ و اشتراک‌گذاری"
+                                else "A readable copy of your transactions to print or share"
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                exportFormat = ExportFormat.XLSX
-                                showExportSheet = true
+                                SettingsActionButton(
+                                    title = "Excel (XLSX)",
+                                    icon = Icons.Default.TableChart,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    exportFormat = ExportFormat.XLSX
+                                    showExportSheet = true
+                                }
+                                SettingsActionButton(
+                                    title = "PDF",
+                                    icon = Icons.Default.PictureAsPdf,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    exportFormat = ExportFormat.PDF
+                                    showExportSheet = true
+                                }
                             }
-                            ExportButton(
-                                title = "PDF Document",
-                                icon = Icons.Default.PictureAsPdf,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                exportFormat = ExportFormat.PDF
-                                showExportSheet = true
-                            }
+
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 4.dp),
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
+                            )
+
+                            SettingsGroupLabel(
+                                title = if (isPersian) "پشتیبان‌گیری" else "Backup",
+                                subtitle = if (isPersian) "نسخه‌ی رمزنگاری‌شده از تمام اطلاعات شما"
+                                else "An encrypted copy of all your data"
+                            )
+                            LocalBackupButtons(
+                                snackbarHostState = settingsSnackbarHostState,
+                                isPersian = isPersian
+                            )
                         }
                     }
                 }
@@ -1975,31 +2002,6 @@ fun DeleteAccountDialog(
             }
         }
     )
-}
-
-@Composable
-private fun ExportButton(
-    title: String,
-    icon: ImageVector,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    val shape = RoundedCornerShape(12.dp)
-    Row(
-        modifier = modifier
-            .height(48.dp)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.05f))
-            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), shape)
-            .clickable { onClick() }
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
-    ) {
-        Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(text = title, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-    }
 }
 
 @Composable

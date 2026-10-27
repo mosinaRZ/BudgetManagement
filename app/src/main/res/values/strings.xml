@@ -6,4 +6,9 @@
 
     <string name="shortcut_add_transaction_short">Add transaction</string>
     <string name="shortcut_add_transaction_long">Add a new transaction</string>
+    <string name="widget_balance_description">Your total balance, income and expenses at a glance</string>
+    <string name="widget_preview_title">Total balance</string>
+    <string name="widget_preview_amount">12,500,000</string>
+    <string name="widget_preview_income">Income</string>
+    <string name="widget_preview_expense">Expense</string>
 </resources>

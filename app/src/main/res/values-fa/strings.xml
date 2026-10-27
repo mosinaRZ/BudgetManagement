@@ -7,4 +7,9 @@
 
     <string name="shortcut_add_transaction_short">ثبت تراکنش</string>
     <string name="shortcut_add_transaction_long">ثبت تراکنش جدید</string>
+    <string name="widget_balance_description">موجودی کل، درآمد و هزینه‌ها یک‌جا</string>
+    <string name="widget_preview_title">موجودی کل</string>
+    <string name="widget_preview_amount">۱۲٬۵۰۰٬۰۰۰</string>
+    <string name="widget_preview_income">درآمد</string>
+    <string name="widget_preview_expense">هزینه</string>
 </resources>

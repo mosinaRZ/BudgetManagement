@@ -28,4 +28,8 @@ interface DebtPaymentDao {
 
     @Query("DELETE FROM debt_payments WHERE debtCreditId = :debtCreditId")
     suspend fun deleteByDebtCreditId(debtCreditId: String): Int
+
+    /** Every row, for the local backup export (not observed, not paged). */
+    @Query("SELECT * FROM debt_payments")
+    suspend fun getAllSnapshot(): List<DebtPaymentEntity>
 }

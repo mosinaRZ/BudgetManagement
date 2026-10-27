@@ -116,4 +116,8 @@ interface BudgetLimitDao {
 
     @Query("DELETE FROM budget_limits")
     suspend fun clearAll(): Int
+
+    /** Every row, for the local backup export (not observed, not paged). */
+    @Query("SELECT * FROM budget_limits")
+    suspend fun getAllSnapshot(): List<BudgetLimitEntity>
 }

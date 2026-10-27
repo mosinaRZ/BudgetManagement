@@ -28,4 +28,8 @@ interface SavingGoalOperationDao {
 
     @Query("DELETE FROM saving_goal_operations WHERE goalId = :goalId")
     suspend fun deleteByGoalId(goalId: String): Int
+
+    /** Every row, for the local backup export (not observed, not paged). */
+    @Query("SELECT * FROM saving_goal_operations")
+    suspend fun getAllSnapshot(): List<SavingGoalOperationEntity>
 }

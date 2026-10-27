@@ -246,6 +246,16 @@ class MainActivity : FragmentActivity() {
                 mutableStateOf<NotificationHelper.InAppNotification?>(null)
             }
 
+            // Tells the user once if the local database had to be reset because its key was lost.
+            var showDatabaseResetNotice by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                showDatabaseResetNotice = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching {
+                        ir.hamedan.budgetmanagement.data.security.DatabaseKeyProvider.consumeKeyResetNotice(context)
+                    }.getOrDefault(false)
+                }
+            }
+
             LaunchedEffect(Unit) {
                 NotificationHelper.inAppNotifications.collect { notification ->
                     inAppNotification = notification
@@ -291,6 +301,13 @@ class MainActivity : FragmentActivity() {
                             }
                         }
                     )
+
+                    if (showDatabaseResetNotice) {
+                        ir.hamedan.budgetmanagement.ui.components.DatabaseResetNoticeDialog(
+                            isPersian = LocaleHelper.getLanguage(context) == "fa",
+                            onDismiss = { showDatabaseResetNotice = false }
+                        )
+                    }
 
                     if (showOnboarding) {
                         val isPersian = LocaleHelper.getLanguage(context) == "fa"

@@ -80,7 +80,7 @@ abstract class AppDatabase : RoomDatabase() {
 
             // The passphrase is durably committed (and verified) before it is returned, i.e. before
             // SQLCipher can create the file with it. If no usable key exists (first run, or the key
-            // was lost), the hook removes any database the new key could not open.
+            // was definitively lost), the hook removes the database that the new key cannot open.
             val passphrase = DatabaseKeyProvider.getPassphrase(context) {
                 deleteUnreadableDatabase(context)
             }
@@ -98,9 +98,17 @@ abstract class AppDatabase : RoomDatabase() {
 
         /**
          * Deletes the database files (main, -wal, -shm, -journal). Only called when no key that can
-         * open the existing file is available, so the file is unreadable anyway; account data is
-         * restored by the next sync. Throws if a file cannot be removed, which aborts the key
-         * replacement instead of leaving a key that does not match the file.
+         * open the existing file is available, so the file is unreadable anyway.
+         *
+         * Be clear about what this means: nothing restores this data automatically.
+         *  - Account data is synced to the server, so it returns after the next sign-in/sync
+         *    (changes that were never synced are lost).
+         *  - Guest-workspace data exists ONLY on this device and is NOT synced anywhere, so it is
+         *    gone for good, unless the user kept a backup file (see LocalBackupManager). The UI
+         *    tells the user (DatabaseKeyProvider.consumeKeyResetNotice) and offers restoring one.
+         *
+         * Throws if a file cannot be removed, which aborts the key replacement instead of leaving a
+         * key that does not match the file.
          */
         private fun deleteUnreadableDatabase(context: Context) {
             val file = context.getDatabasePath(DATABASE_NAME)
