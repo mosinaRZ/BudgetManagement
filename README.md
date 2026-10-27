@@ -208,7 +208,12 @@ Release signing is read from `keystore.properties` (git-ignored) or `RELEASE_*` 
 | Variable | Purpose |
 |---|---|
 | `ENV` | `dev`, `test` or `prod` (production enforces stricter checks) |
-| `JWT_SECRET` | Token signing secret (≥ 32 chars; ≥ 64 in production) |
+| `JWT_SECRET` | Access-token signing secret only (≥ 32 chars; ≥ 64 in production) |
+| `PHONE_HASH_KEY` | HMAC key of the stored phone identifier. Independent random value. Upgrading: set it to the old `JWT_SECRET`, then give `JWT_SECRET` a new value; after rotating it later run `rehash-phones` |
+| `OTP_HMAC_KEY` | HMAC key of stored one-time-code hashes. Independent random value |
+| `LOGIN_DECOY_KEY` | Derives the fake KDF salt for unknown phone numbers. Independent random value |
+| `ARGON2_MAX_CONCURRENCY` / `ARGON2_MAX_WAITING` | Max simultaneous password hashes (default 2; each uses 64 MiB) / queue length before requests get 429 (default 64) |
+| `SYNC_MAX_RECORDS_PER_ACCOUNT` / `SYNC_MAX_BYTES_PER_ACCOUNT` | Per-account storage quota (default 50000 records / 50 MiB) |
 | `MONGO_URI`, `MONGO_DB_NAME` | Database connection |
 | `TLS_TERMINATED_BY_PROXY`, `TRUSTED_PROXY_CIDRS` | Reverse-proxy HTTPS and trusted client-IP headers |
 | `SMS_WEBHOOK_URL`, `SMS_AUTH_TOKEN` | SMS OTP delivery (required in production) |
@@ -530,7 +535,12 @@ curl http://localhost:8080/health
 | متغیر | کاربرد |
 |---|---|
 | `ENV` | `dev`، `test` یا `prod` (حالت production بررسی‌های سخت‌گیرانه‌تری دارد) |
-| `JWT_SECRET` | کلید امضای توکن (حداقل ۳۲ و در production حداقل ۶۴ کاراکتر) |
+| `JWT_SECRET` | فقط کلید امضای توکن دسترسی (حداقل ۳۲ و در production حداقل ۶۴ کاراکتر) |
+| `PHONE_HASH_KEY` | کلید HMAC شناسه‌ی تلفن (مستقل و تصادفی). هنگام ارتقا مقدار قدیمیِ `JWT_SECRET` را در آن بگذارید و برای `JWT_SECRET` مقدار تازه بسازید؛ پس از چرخاندن بعدیِ آن `rehash-phones` را اجرا کنید |
+| `OTP_HMAC_KEY` | کلید HMAC هش کدهای یک‌بارمصرف (مستقل و تصادفی) |
+| `LOGIN_DECOY_KEY` | کلید تولید salt ساختگی برای شماره‌های ناشناخته (مستقل و تصادفی) |
+| `ARGON2_MAX_CONCURRENCY` / `ARGON2_MAX_WAITING` | حداکثر هشِ هم‌زمان رمز (پیش‌فرض ۲؛ هرکدام ۶۴ مگابایت) / طول صف قبل از پاسخ ۴۲۹ (پیش‌فرض ۶۴) |
+| `SYNC_MAX_RECORDS_PER_ACCOUNT` / `SYNC_MAX_BYTES_PER_ACCOUNT` | سهمیه‌ی ذخیره‌سازی هر حساب (پیش‌فرض ۵۰٬۰۰۰ رکورد / ۵۰ مگابایت) |
 | `MONGO_URI`، `MONGO_DB_NAME` | اتصال به پایگاه داده |
 | `TLS_TERMINATED_BY_PROXY`، `TRUSTED_PROXY_CIDRS` | HTTPS پشت reverse proxy و اعتماد به هدرهای IP کاربر |
 | `SMS_WEBHOOK_URL`، `SMS_AUTH_TOKEN` | ارسال OTP پیامکی (در production الزامی) |
