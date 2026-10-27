@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
 
+	"github.com/mosinaRZ/finance-sync-backend/internal/domain/apperror"
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/entity"
 	"github.com/mosinaRZ/finance-sync-backend/internal/domain/repository"
 )
@@ -35,6 +36,7 @@ func integrationRepo(t *testing.T) (*syncRepositoryImpl, func()) {
 	require.NoError(t, db.Collection(syncRecordsCollectionName).Drop(context.Background()))
 	require.NoError(t, db.Collection(syncOperationsCollectionName).Drop(context.Background()))
 	require.NoError(t, db.Collection(syncRevisionCountersCollectionName).Drop(context.Background()))
+	require.NoError(t, db.Collection(syncUsageCollectionName).Drop(context.Background()))
 	require.NoError(t, EnsureIndexes(context.Background(), db))
 	return NewSyncRepository(client, db), func() { _ = db.Drop(context.Background()); _ = Disconnect(client) }
 }
@@ -301,4 +303,130 @@ func TestSyncRepository_ConcurrentWritesSameRecordRemainConsistent(t *testing.T)
 	count, err := r.collection.CountDocuments(ctx, bson.M{"userId": "user-test", "entityType": string(entity.EntityTypeTransaction), "entityId": "x"})
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), count)
+}
+
+func bigRec(id string, version int, size int, device string) *entity.SyncRecord {
+	r := rec(id, version, time.Now().UTC(), false, device)
+	r.Ciphertext = make([]byte, size)
+	r.Nonce = []byte("n")
+	return r
+}
+
+func isQuota(err error) bool {
+	code, ok := apperror.CodeOf(err)
+	return ok && code == apperror.CodeStorageQuotaExceeded
+}
+
+func TestSyncRepository_QuotaRejectsGrowthBeyondRecordLimitAtomically(t *testing.T) {
+	r, done := integrationRepo(t)
+	defer done()
+	r.WithQuota(repository.SyncQuota{MaxRecords: 3, MaxBytes: 0})
+	ctx := context.Background()
+	_, err := r.Sync(ctx, syncReq("a", "D", 0, bigRec("r1", 1, 10, "D"), bigRec("r2", 1, 10, "D")))
+	require.NoError(t, err)
+	// Two more would make 4 > 3: the whole request is refused and r3 must not be stored.
+	_, err = r.Sync(ctx, syncReq("b", "D", 0, bigRec("r3", 1, 10, "D"), bigRec("r4", 1, 10, "D")))
+	require.True(t, isQuota(err), "got %v", err)
+	n, err := r.collection.CountDocuments(ctx, bson.M{"userId": "user-test"})
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, n, "a rejected request must leave nothing behind")
+	// One more fits exactly.
+	_, err = r.Sync(ctx, syncReq("c", "D", 0, bigRec("r3", 1, 10, "D")))
+	require.NoError(t, err)
+	// Updating an existing record does not add a record.
+	_, err = r.Sync(ctx, syncReq("d", "D", 0, bigRec("r1", 2, 10, "D")))
+	require.NoError(t, err)
+}
+
+func TestSyncRepository_QuotaBytesAndShrinkingAlwaysAllowed(t *testing.T) {
+	r, done := integrationRepo(t)
+	defer done()
+	r.WithQuota(repository.SyncQuota{MaxRecords: 0, MaxBytes: 100})
+	ctx := context.Background()
+	_, err := r.Sync(ctx, syncReq("a", "D", 0, bigRec("r1", 1, 90, "D"))) // 91 bytes with nonce
+	require.NoError(t, err)
+	_, err = r.Sync(ctx, syncReq("b", "D", 0, bigRec("r2", 1, 20, "D")))
+	require.True(t, isQuota(err), "got %v", err)
+	// Growing an existing record over the limit is refused too.
+	_, err = r.Sync(ctx, syncReq("c", "D", 0, bigRec("r1", 2, 120, "D")))
+	require.True(t, isQuota(err), "got %v", err)
+	// A full account can always recover: shrink, then tombstone.
+	_, err = r.Sync(ctx, syncReq("d", "D", 0, bigRec("r1", 2, 10, "D")))
+	require.NoError(t, err)
+	tomb := rec("r1", 3, time.Now().UTC(), true, "D")
+	tomb.Ciphertext, tomb.Nonce = nil, nil
+	_, err = r.Sync(ctx, syncReq("e", "D", 0, tomb))
+	require.NoError(t, err)
+	// Freed space is reusable.
+	_, err = r.Sync(ctx, syncReq("f", "D", 0, bigRec("r2", 1, 80, "D")))
+	require.NoError(t, err)
+}
+
+func TestSyncRepository_QuotaIsPerAccountAndSeedsFromExistingData(t *testing.T) {
+	r, done := integrationRepo(t)
+	defer done()
+	ctx := context.Background()
+	// Data written before any usage document existed (an installation upgraded in place).
+	_, err := r.Sync(ctx, syncReq("a", "D", 0, bigRec("r1", 1, 50, "D"), bigRec("r2", 1, 50, "D")))
+	require.NoError(t, err)
+	_, err = r.db.Collection(syncUsageCollectionName).DeleteMany(ctx, bson.M{})
+	require.NoError(t, err)
+
+	r.WithQuota(repository.SyncQuota{MaxRecords: 2, MaxBytes: 0})
+	_, err = r.Sync(ctx, syncReq("b", "D", 0, bigRec("r3", 1, 1, "D")))
+	require.True(t, isQuota(err), "usage must be seeded from stored records, got %v", err)
+
+	// Another account is unaffected.
+	other := syncReq("c", "D", 0, bigRec("r1", 1, 1, "D"))
+	other.UserID = "someone-else"
+	other.Records[0].UserID = "someone-else"
+	_, err = r.Sync(ctx, other)
+	require.NoError(t, err)
+}
+
+func TestSyncRepository_ReplayLogIsBoundedPerAccount(t *testing.T) {
+	r, done := integrationRepo(t)
+	defer done()
+	ctx := context.Background()
+	for i := 0; i < maxRetainedSyncOperationsPerUser+9; i++ {
+		_, err := r.Sync(ctx, syncReq(fmt.Sprintf("req-%d", i), "D", 0))
+		require.NoError(t, err)
+	}
+	n, err := r.db.Collection(syncOperationsCollectionName).CountDocuments(ctx, bson.M{"userId": "user-test"})
+	require.NoError(t, err)
+	assert.EqualValues(t, maxRetainedSyncOperationsPerUser, n)
+	// The newest request is still replayable.
+	_, err = r.Sync(ctx, syncReq(fmt.Sprintf("req-%d", maxRetainedSyncOperationsPerUser+8), "D", 0))
+	require.NoError(t, err)
+}
+
+func TestRehashPhonesRecomputesHashesIdempotently(t *testing.T) {
+	r, done := integrationRepo(t)
+	defer done()
+	ctx := context.Background()
+	users := r.db.Collection(usersCollectionName)
+	require.NoError(t, users.Drop(ctx))
+	_, err := users.InsertMany(ctx, []interface{}{
+		bson.M{"phoneNumber": "+989121111111", "phoneHash": "old-1"},
+		bson.M{"phoneNumber": "+989122222222", "phoneHash": "new:+989122222222"},
+		bson.M{"phoneHash": "no-phone"},
+	})
+	require.NoError(t, err)
+	hash := func(p string) string { return "new:" + p }
+
+	dry, err := RehashPhones(ctx, r.db, hash, true)
+	require.NoError(t, err)
+	assert.EqualValues(t, RehashPhonesReport{Scanned: 2, Updated: 1, Unchanged: 1, NoPhone: 1}, dry)
+	n, _ := users.CountDocuments(ctx, bson.M{"phoneHash": "old-1"})
+	assert.EqualValues(t, 1, n, "dry run must not write")
+
+	rep, err := RehashPhones(ctx, r.db, hash, false)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, rep.Updated)
+	n, _ = users.CountDocuments(ctx, bson.M{"phoneHash": "new:+989121111111"})
+	assert.EqualValues(t, 1, n)
+	again, err := RehashPhones(ctx, r.db, hash, false)
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, again.Updated, "second run is a no-op")
+	require.NoError(t, users.Drop(ctx))
 }

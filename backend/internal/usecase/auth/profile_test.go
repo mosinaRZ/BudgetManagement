@@ -17,7 +17,7 @@ func TestGetProfileReturnsAccountProfile(t *testing.T) {
 	}
 	svc := NewService(&mocks.MockUserRepository{
 		FindByIDFunc: func(context.Context, string) (*entity.User, error) { return user, nil },
-	}, &mocks.MockRefreshTokenRepository{}, testSecret, time.Minute, time.Hour)
+	}, &mocks.MockRefreshTokenRepository{}, testKeys, time.Minute, time.Hour)
 
 	got, err := svc.GetProfile(context.Background(), "u1")
 	if err != nil {
@@ -29,7 +29,7 @@ func TestGetProfileReturnsAccountProfile(t *testing.T) {
 }
 
 func TestUpdateProfileRejectsFutureBirthDate(t *testing.T) {
-	svc := NewService(&mocks.MockUserRepository{}, &mocks.MockRefreshTokenRepository{}, testSecret, time.Minute, time.Hour)
+	svc := NewService(&mocks.MockUserRepository{}, &mocks.MockRefreshTokenRepository{}, testKeys, time.Minute, time.Hour)
 	_, err := svc.UpdateProfile(context.Background(), UpdateProfileInput{
 		UserID: "u1", FirstName: "A", LastName: "B",
 		Gender: entity.GenderFemale, BirthDate: time.Now().UTC().Add(24 * time.Hour).Format("2006-01-02"),

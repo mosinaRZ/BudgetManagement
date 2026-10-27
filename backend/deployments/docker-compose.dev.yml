@@ -21,7 +21,12 @@ services:
       HTTP_PORT: 8080
       MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/?replicaSet=rs0&authSource=admin
       MONGO_DB_NAME: cidna_sync_db
+      # Four independent keys, one purpose each (JWT signing / phone identifier hash / OTP code
+      # hash / decoy KDF salt). They must all be different values.
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      PHONE_HASH_KEY: ${PHONE_HASH_KEY:?PHONE_HASH_KEY must be set}
+      OTP_HMAC_KEY: ${OTP_HMAC_KEY:?OTP_HMAC_KEY must be set}
+      LOGIN_DECOY_KEY: ${LOGIN_DECOY_KEY:?LOGIN_DECOY_KEY must be set}
       JWT_ACCESS_TTL_MINUTES: ${JWT_ACCESS_TTL_MINUTES:?JWT_ACCESS_TTL_MINUTES must be set}
       JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS:?JWT_REFRESH_TTL_DAYS must be set}
       TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}

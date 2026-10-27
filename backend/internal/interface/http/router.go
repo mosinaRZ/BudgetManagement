@@ -47,9 +47,12 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 	if store == nil {
 		store = middleware.NewMemoryRateLimitStore()
 	}
-	publicRateLimiter := middleware.NewRateLimiterWithStoreAndProxies(store, rate.Every(3*time.Second), 20, deps.TrustedProxyCIDRs)
-	protectedRateLimiter := middleware.NewRateLimiterWithStoreAndProxies(store, rate.Every(6*time.Second), 10, deps.TrustedProxyCIDRs)
-	otpRateLimiter := middleware.NewRateLimiterWithStoreAndProxies(store, rate.Every(30*time.Second), 3, deps.TrustedProxyCIDRs)
+	// All limiters share one store, so each needs its own key scope. Without it the first limiter
+	// to see a client creates the bucket and every other limiter silently reuses its parameters
+	// (the OTP limit used to be swallowed by the general public limit this way).
+	publicRateLimiter := middleware.NewRateLimiterWithStoreAndProxies("public", store, rate.Every(3*time.Second), 20, deps.TrustedProxyCIDRs)
+	protectedRateLimiter := middleware.NewRateLimiterWithStoreAndProxies("protected", store, rate.Every(6*time.Second), 10, deps.TrustedProxyCIDRs)
+	otpRateLimiter := middleware.NewRateLimiterWithStoreAndProxies("otp", store, rate.Every(30*time.Second), 3, deps.TrustedProxyCIDRs)
 
 	r.Group(func(r chi.Router) {
 		r.Use(publicRateLimiter.LimitByIP)

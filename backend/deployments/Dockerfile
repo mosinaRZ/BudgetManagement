@@ -16,6 +16,7 @@ COPY . .
 # CGO_ENABLED=0 required for scratch/alpine execution
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /app/bin/server ./cmd/api && \
     CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /app/bin/purge-deleted ./cmd/purge-deleted && \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /app/bin/rehash-phones ./cmd/rehash-phones && \
     if [ -d ./cmd/seed-admin ]; then \
         CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /app/bin/seed-admin ./cmd/seed-admin; \
     else \
@@ -31,7 +32,8 @@ WORKDIR /app
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 
-# Copies server, purge-deleted and (when present in the source tree) seed-admin:
+# Copies server, purge-deleted, rehash-phones and (when present in the source tree) seed-admin:
+#   docker compose exec api /app/rehash-phones --dry-run   (only after rotating PHONE_HASH_KEY)
 #   docker compose exec api /app/seed-admin --identifier ...
 #   docker compose exec api /app/purge-deleted --older-than-days 30   (run daily, see README)
 COPY --from=builder /app/bin/ /app/

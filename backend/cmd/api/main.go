@@ -14,6 +14,8 @@ import (
 
 	"github.com/go-playground/validator/v10"
 
+	"github.com/mosinaRZ/finance-sync-backend/internal/domain/repository"
+	infraauth "github.com/mosinaRZ/finance-sync-backend/internal/infrastructure/auth"
 	"github.com/mosinaRZ/finance-sync-backend/internal/infrastructure/config"
 	"github.com/mosinaRZ/finance-sync-backend/internal/infrastructure/logger"
 	"github.com/mosinaRZ/finance-sync-backend/internal/infrastructure/mongodb"
@@ -64,19 +66,33 @@ func run() error {
 		return fmt.Errorf("failed to ensure database indexes: %w", err)
 	}
 
+	// Password hashing is memory-hungry (64 MiB each) and reachable without authentication.
+	infraauth.ConfigureArgon2(cfg.Argon2MaxConcurrent, cfg.Argon2MaxWaiting, infraauth.DefaultArgon2MaxWait)
+
 	validate := validator.New()
-	syncRepo := mongodb.NewSyncRepository(mongoClient, db)
+	quota := repository.DefaultSyncQuota()
+	if cfg.SyncMaxRecords > 0 {
+		quota.MaxRecords = cfg.SyncMaxRecords
+	}
+	if cfg.SyncMaxBytes > 0 {
+		quota.MaxBytes = cfg.SyncMaxBytes
+	}
+	syncRepo := mongodb.NewSyncRepository(mongoClient, db).WithQuota(quota)
 	deviceRepo := mongodb.NewDeviceRepository(db)
 	syncUC := syncUsecase.NewSyncUsecase(syncRepo, deviceRepo)
 	syncHandler := handler.NewSyncHandler(syncUC, validate)
 	otpRepo := mongodb.NewOTPRepository(db)
 	delivery := notification.New(notification.Config{SMSWebhookURL: cfg.SMSWebhookURL, SMSAuthToken: cfg.SMSAuthToken, SMSFromNumber: cfg.SMSFromNumber, SMSPatternCode: cfg.SMSPatternCode, DevLog: cfg.DevLogOTP})
-	otpUC := authUsecase.NewOTPService(otpRepo, delivery, cfg.JWTSecret, cfg.OTPExpiry)
+	keys := authUsecase.Keys{JWTSecret: cfg.JWTSecret, PhoneHashKey: cfg.PhoneHashKey, OTPCodeKey: cfg.OTPCodeKey, DecoySaltKey: cfg.DecoySaltKey}
+	if err := keys.Validate(); err != nil {
+		return fmt.Errorf("invalid server keys: %w", err)
+	}
+	otpUC := authUsecase.NewOTPService(otpRepo, delivery, keys, cfg.OTPExpiry)
 
 	userRepo := mongodb.NewUserRepository(db)
 	refreshRepo := mongodb.NewRefreshTokenRepository(db)
 	recoverySessionRepo := mongodb.NewRecoverySessionRepository(db)
-	authUC := authUsecase.NewService(userRepo, refreshRepo, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL, otpUC)
+	authUC := authUsecase.NewService(userRepo, refreshRepo, keys, cfg.JWTAccessTTL, cfg.JWTRefreshTTL, otpUC)
 	authUC.SetDeviceRepository(deviceRepo)
 	deviceEventRepo := mongodb.NewDeviceEventRepository(db)
 	authUC.SetDeviceEventRepository(deviceEventRepo)

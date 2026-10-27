@@ -23,6 +23,8 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	if _, err := db.Collection(syncOperationsCollectionName).Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "requestId", Value: 1}}, Options: options.Index().SetUnique(true).SetName("uniq_sync_request")},
 		{Keys: bson.D{{Key: "createdAt", Value: 1}}, Options: options.Index().SetExpireAfterSeconds(7 * 24 * 3600).SetName("ttl_sync_operations")},
+		// Lets the per-account replay-log trim find the newest entries of one user cheaply.
+		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_sync_ops_user_created")},
 	}); err != nil {
 		return fmt.Errorf("sync_operations indexes: %w", err)
 	}

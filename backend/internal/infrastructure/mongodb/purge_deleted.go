@@ -73,6 +73,7 @@ func PurgeDeletedUsers(ctx context.Context, db *mongo.Database, cutoff time.Time
 			{syncRecordsCollectionName, bson.M{"userId": uid}, &report.SyncRecords},
 			{syncOperationsCollectionName, bson.M{"userId": uid}, &report.SyncOperations},
 			{syncRevisionCountersCollectionName, bson.M{"_id": uid}, &report.SyncRevisionState},
+			{syncUsageCollectionName, bson.M{"_id": uid}, new(int64)},
 			{refreshTokensCollectionName, bson.M{"userId": uid}, &report.RefreshTokens},
 			{recoverySessionsCollectionName, bson.M{"userId": uid}, &report.RecoverySessions},
 			{devicesCollectionName, bson.M{"userId": uid}, &report.Devices},
