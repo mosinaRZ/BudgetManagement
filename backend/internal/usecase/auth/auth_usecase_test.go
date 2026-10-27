@@ -14,6 +14,14 @@ import (
 
 const testSecret = "01234567890123456789012345678901"
 
+// Every key has its own value, so a test that accidentally uses one key for another purpose fails.
+var testKeys = Keys{
+	JWTSecret:    testSecret,
+	PhoneHashKey: "phone-hash-key-0123456789abcdef0123456789",
+	OTPCodeKey:   "otp-code-key-0123456789abcdef0123456789ab",
+	DecoySaltKey: "decoy-salt-key-0123456789abcdef0123456789",
+}
+
 type fakeOTPService struct {
 	verify func(context.Context, VerifyOTPInput) (string, error)
 }
@@ -45,12 +53,12 @@ func testRegisterOTPService() OTPService {
 		if in.Purpose != entity.OTPPurposeRegister {
 			return "", apperror.ErrUnauthorized("invalid OTP purpose")
 		}
-		return hashIdentifier("+989121234567", testSecret), nil
+		return hashIdentifier("+989121234567", testKeys.PhoneHashKey), nil
 	}}
 }
 
 func newService(users *mocks.MockUserRepository, refresh *mocks.MockRefreshTokenRepository) *ServiceImpl {
-	return NewService(users, refresh, testSecret, time.Minute, 24*time.Hour)
+	return NewService(users, refresh, testKeys, time.Minute, 24*time.Hour)
 }
 
 func TestRegisterSuccess(t *testing.T) {
@@ -69,7 +77,7 @@ func TestRegisterSuccess(t *testing.T) {
 		}
 		return nil
 	}}
-	s := NewService(users, refresh, testSecret, time.Minute, 24*time.Hour, testRegisterOTPService())
+	s := NewService(users, refresh, testKeys, time.Minute, 24*time.Hour, testRegisterOTPService())
 	in := validRegistrationMaterial()
 	in.PhoneNumber, in.AuthSecret, in.DeviceID, in.OTPChallengeID, in.OTPCode = "+989121234567", testAuthSecret, "device-1", "challenge-1", "123456"
 	out, err := s.Register(context.Background(), in)
@@ -86,7 +94,7 @@ func TestRegisterSuccess(t *testing.T) {
 
 func TestRegisterDuplicate(t *testing.T) {
 	users := &mocks.MockUserRepository{FindByPhoneHashFunc: func(context.Context, string) (*entity.User, error) { return &entity.User{ID: "u1"}, nil }}
-	s := NewService(users, &mocks.MockRefreshTokenRepository{}, testSecret, time.Minute, 24*time.Hour, testRegisterOTPService())
+	s := NewService(users, &mocks.MockRefreshTokenRepository{}, testKeys, time.Minute, 24*time.Hour, testRegisterOTPService())
 	in := validRegistrationMaterial()
 	in.PhoneNumber, in.AuthSecret, in.DeviceID, in.OTPChallengeID, in.OTPCode = "+989121234567", testAuthSecret, "d", "challenge-1", "123456"
 	_, err := s.Register(context.Background(), in)
@@ -416,12 +424,12 @@ func TestLoginParamsDecoySaltIsDeterministicAndIndistinguishable(t *testing.T) {
 	}
 	known := &entity.User{ID: "u1", KdfSalt: base64.RawStdEncoding.EncodeToString(salt)}
 	users := &mocks.MockUserRepository{FindByPhoneHashFunc: func(_ context.Context, hash string) (*entity.User, error) {
-		if hash == hashIdentifier("+989121234567", testSecret) {
+		if hash == hashIdentifier("+989121234567", testKeys.PhoneHashKey) {
 			return known, nil
 		}
 		return nil, apperror.ErrNotFound("user")
 	}}
-	s := NewService(users, &mocks.MockRefreshTokenRepository{}, testSecret, time.Minute, 24*time.Hour, testRegisterOTPService())
+	s := NewService(users, &mocks.MockRefreshTokenRepository{}, testKeys, time.Minute, 24*time.Hour, testRegisterOTPService())
 
 	real, err := s.LoginParams(context.Background(), "+989121234567")
 	if err != nil || real.KdfSalt != base64.StdEncoding.EncodeToString(salt) || real.KdfVersion != infraauth.KDFVersion || real.KdfIterations != infraauth.ClientPBKDF2Iterations {
@@ -444,4 +452,55 @@ func mustDecodeRawURL(t *testing.T, value string) []byte {
 		t.Fatal(err)
 	}
 	return decoded
+}
+
+// A saturated hashing gate means "could not check the password", not "wrong password": it must
+// never count as a failed attempt, otherwise keeping the server busy would lock users out.
+func TestLoginWhileServerIsBusyDoesNotRecordAFailedAttempt(t *testing.T) {
+	salt, _ := infraauth.GenerateSalt()
+	hash, _ := infraauth.HashPassword(testAuthSecret, salt)
+	user := &entity.User{ID: "u1", PasswordHash: hash, AuthSalt: encode(salt), KdfSalt: encode(make([]byte, 16))}
+	failedRecorded := 0
+	users := &mocks.MockUserRepository{
+		FindByPhoneHashFunc:   func(context.Context, string) (*entity.User, error) { return user, nil },
+		AddDeviceFunc:         func(context.Context, string, string) error { return nil },
+		RecordFailedLoginFunc: func(context.Context, string, time.Time, int, time.Duration) error { failedRecorded++; return nil },
+	}
+	s := newService(users, &mocks.MockRefreshTokenRepository{})
+
+	infraauth.ConfigureArgon2(1, 0, time.Second)
+	t.Cleanup(func() {
+		infraauth.ConfigureArgon2(infraauth.DefaultArgon2MaxConcurrent, infraauth.DefaultArgon2MaxWaiting, infraauth.DefaultArgon2MaxWait)
+	})
+	release, err := infraauth.ReserveArgon2Slot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, secret := range []string{testAuthSecret, testWrongSecret} {
+		_, err = s.Login(context.Background(), LoginInput{Identifier: "+989121234567", AuthSecret: secret, DeviceID: "d"})
+		if code, _ := apperror.CodeOf(err); code != apperror.CodeRateLimited {
+			t.Fatalf("busy login: got %v, want a retryable rate-limited error", err)
+		}
+	}
+	// Unknown accounts take the same path, so the answer cannot be used to find out who exists.
+	unknown := &mocks.MockUserRepository{FindByPhoneHashFunc: func(context.Context, string) (*entity.User, error) { return nil, apperror.ErrNotFound("x") }}
+	_, err = newService(unknown, &mocks.MockRefreshTokenRepository{}).Login(context.Background(), LoginInput{Identifier: "+989129999999", AuthSecret: testAuthSecret, DeviceID: "d"})
+	if code, _ := apperror.CodeOf(err); code != apperror.CodeRateLimited {
+		t.Fatalf("busy login for unknown account: got %v", err)
+	}
+	if failedRecorded != 0 {
+		t.Fatalf("busy server recorded %d failed attempts, want 0", failedRecorded)
+	}
+
+	release()
+	if _, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", AuthSecret: testAuthSecret, DeviceID: "d"}); err != nil {
+		t.Fatalf("login after capacity returned: %v", err)
+	}
+	if _, err := s.Login(context.Background(), LoginInput{Identifier: "+989121234567", AuthSecret: testWrongSecret, DeviceID: "d"}); err == nil {
+		t.Fatal("wrong password must still fail")
+	}
+	if failedRecorded != 1 {
+		t.Fatalf("genuinely wrong password recorded %d failed attempts, want 1", failedRecorded)
+	}
 }

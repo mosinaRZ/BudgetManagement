@@ -63,33 +63,59 @@ func (s *memoryRateLimitStore) Allow(_ context.Context, key string, r rate.Limit
 	return c.limiter.Allow(), nil
 }
 
+// RateLimiter applies a token-bucket limit per client (IP or user).
+//
+// Several limiters usually share one RateLimitStore. The store creates a bucket the first time a
+// key is seen and keeps the rate/burst of that first call for the key's lifetime, so two limiters
+// that map the same client to the same key silently share one bucket (and the parameters of
+// whichever ran first). To rule that out, every limiter has a mandatory scope that is part of the
+// key: limiters with different scopes can never collide, whatever the store.
 type RateLimiter struct {
+	scope          string
 	store          RateLimitStore
 	r              rate.Limit
 	burst          int
 	trustedProxies []*net.IPNet
 }
 
-func NewRateLimiter(r rate.Limit, burst int) *RateLimiter {
-	return &RateLimiter{store: NewMemoryRateLimitStore(), r: r, burst: burst}
+// normalizeScope returns the scope as it is used in keys. An empty scope is a programming error:
+// it would put the limiter back in the shared, collision-prone key space.
+func normalizeScope(scope string) string {
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		panic("middleware: rate limiter scope must not be empty")
+	}
+	if strings.Contains(scope, ":") {
+		panic("middleware: rate limiter scope must not contain ':'")
+	}
+	return scope
 }
-func NewRateLimiterWithStore(store RateLimitStore, r rate.Limit, burst int) *RateLimiter {
+
+func NewRateLimiter(scope string, r rate.Limit, burst int) *RateLimiter {
+	return &RateLimiter{scope: normalizeScope(scope), store: NewMemoryRateLimitStore(), r: r, burst: burst}
+}
+func NewRateLimiterWithStore(scope string, store RateLimitStore, r rate.Limit, burst int) *RateLimiter {
 	if store == nil {
 		store = NewMemoryRateLimitStore()
 	}
-	return &RateLimiter{store: store, r: r, burst: burst}
+	return &RateLimiter{scope: normalizeScope(scope), store: store, r: r, burst: burst}
 }
-func NewRateLimiterWithStoreAndProxies(store RateLimitStore, r rate.Limit, burst int, trusted []*net.IPNet) *RateLimiter {
+func NewRateLimiterWithStoreAndProxies(scope string, store RateLimitStore, r rate.Limit, burst int, trusted []*net.IPNet) *RateLimiter {
 	if store == nil {
 		store = NewMemoryRateLimitStore()
 	}
-	return &RateLimiter{store: store, r: r, burst: burst, trustedProxies: trusted}
+	return &RateLimiter{scope: normalizeScope(scope), store: store, r: r, burst: burst, trustedProxies: trusted}
+}
+
+// key builds the store key "<scope>:<kind>:<subject>", e.g. "otp:ip:203.0.113.7".
+func (rl *RateLimiter) key(kind, subject string) string {
+	return rl.scope + ":" + kind + ":" + subject
 }
 
 func (rl *RateLimiter) LimitByIP(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := ClientIP(r, rl.trustedProxies)
-		allowed, err := rl.store.Allow(r.Context(), "ip:"+ip, rl.r, rl.burst)
+		allowed, err := rl.store.Allow(r.Context(), rl.key("ip", ip), rl.r, rl.burst)
 		if err != nil {
 			response.Error(w, apperror.ErrInternal("rate limiter unavailable"))
 			return
@@ -108,7 +134,7 @@ func (rl *RateLimiter) LimitByUser(next http.Handler) http.Handler {
 			response.Error(w, apperror.ErrUnauthorized("User context not found for rate limiting"))
 			return
 		}
-		allowed, err := rl.store.Allow(r.Context(), "user:"+userID, rl.r, rl.burst)
+		allowed, err := rl.store.Allow(r.Context(), rl.key("user", userID), rl.r, rl.burst)
 		if err != nil {
 			response.Error(w, apperror.ErrInternal("rate limiter unavailable"))
 			return

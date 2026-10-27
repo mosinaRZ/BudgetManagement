@@ -46,6 +46,11 @@ const CodeDeviceRemoved Code = "DEVICE_REMOVED"
 // numbers are registered. Clients offer to restore the account while the grace period lasts.
 const CodeAccountDeleted Code = "ACCOUNT_DELETED"
 
+// CodeStorageQuotaExceeded means the account would exceed its server-side storage quota (number
+// of synced records or total encrypted bytes). It is deliberately not a 401/403: clients must not
+// treat it as a lost session, only as "stop uploading, free up or contact support".
+const CodeStorageQuotaExceeded Code = "STORAGE_QUOTA_EXCEEDED"
+
 type AppError struct {
 	Code    Code
 	Message string
@@ -108,6 +113,9 @@ func ErrDeviceRemoved(message string, wrapped ...error) *AppError {
 }
 func ErrAccountDeleted(message string, wrapped ...error) *AppError {
 	return newAppError(CodeAccountDeleted, message, firstOrNil(wrapped))
+}
+func ErrStorageQuotaExceeded(message string, wrapped ...error) *AppError {
+	return newAppError(CodeStorageQuotaExceeded, message, firstOrNil(wrapped))
 }
 func ErrInternal(message string, wrapped ...error) *AppError {
 	return newAppError(CodeInternal, message, firstOrNil(wrapped))

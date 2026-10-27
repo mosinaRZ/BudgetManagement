@@ -39,7 +39,7 @@ type ServiceImpl struct {
 	deviceEvents          repository.DeviceEventRepository
 	recoverySessions      repository.RecoverySessionRepository
 	otp                   OTPService
-	secret                string
+	keys                  Keys
 	accessTTL, refreshTTL time.Duration
 	restoreWindow         time.Duration
 }
@@ -47,7 +47,7 @@ type ServiceImpl struct {
 func NewService(
 	users repository.UserRepository,
 	refresh repository.RefreshTokenRepository,
-	secret string,
+	keys Keys,
 	accessTTL time.Duration,
 	refreshTTL time.Duration,
 	otp ...OTPService,
@@ -61,7 +61,7 @@ func NewService(
 		users:      users,
 		refresh:    refresh,
 		otp:        otpService,
-		secret:     secret,
+		keys:       keys,
 		accessTTL:  accessTTL,
 		refreshTTL: refreshTTL,
 
@@ -110,7 +110,7 @@ func (s *ServiceImpl) Register(ctx context.Context, in RegisterInput) (RegisterO
 		return RegisterOutput{}, apperror.ErrInternal("OTP service is not configured")
 	}
 
-	phoneHash := hashIdentifier(phone, s.secret)
+	phoneHash := hashIdentifier(phone, s.keys.PhoneHashKey)
 	if err := s.verifyRegistrationOTP(ctx, in, phoneHash); err != nil {
 		return RegisterOutput{}, err
 	}
@@ -124,9 +124,9 @@ func (s *ServiceImpl) Register(ctx context.Context, in RegisterInput) (RegisterO
 		return RegisterOutput{}, apperror.ErrInternal("failed to generate password salt")
 	}
 
-	passwordHash, err := infraauth.HashPassword(authSecret, authSalt)
+	passwordHash, err := infraauth.HashPasswordContext(ctx, authSecret, authSalt)
 	if err != nil {
-		return RegisterOutput{}, apperror.ErrInternal("failed to hash password")
+		return RegisterOutput{}, passwordWorkError(err, "failed to hash password")
 	}
 
 	kdfSalt, err := prepareRegistrationKdfSalt(in.KdfSalt)
@@ -240,7 +240,7 @@ func (s *ServiceImpl) LoginParams(ctx context.Context, identifier string) (Login
 	}
 	var u *entity.User
 	if p, e := normalizePhone(id); e == nil {
-		u, _ = s.users.FindByPhoneHash(ctx, hashIdentifier(p, s.secret))
+		u, _ = s.users.FindByPhoneHash(ctx, hashIdentifier(p, s.keys.PhoneHashKey))
 	}
 	salt := ""
 	if u != nil {
@@ -249,7 +249,7 @@ func (s *ServiceImpl) LoginParams(ctx context.Context, identifier string) (Login
 		}
 	}
 	if salt == "" {
-		mac := hmac.New(sha256.New, []byte(s.secret))
+		mac := hmac.New(sha256.New, []byte(s.keys.DecoySaltKey))
 		_, _ = mac.Write([]byte("cidna/v2/kdf-salt|" + strings.ToLower(id)))
 		salt = base64.StdEncoding.EncodeToString(mac.Sum(nil)[:infraauth.KDFSaltBytes])
 	}
@@ -266,23 +266,32 @@ func (s *ServiceImpl) Login(ctx context.Context, in LoginInput) (LoginOutput, er
 	{
 		p, e := normalizePhone(id)
 		if e == nil {
-			u, err = s.users.FindByPhoneHash(ctx, hashIdentifier(p, s.secret))
+			u, err = s.users.FindByPhoneHash(ctx, hashIdentifier(p, s.keys.PhoneHashKey))
 		} else {
 			// Keep malformed identifiers on the same expensive password-verification path.
-			_, _ = infraauth.VerifyPassword(authSecret, dummyAuthSalt, dummyAuthHash)
+			if _, verr := infraauth.VerifyPasswordContext(ctx, authSecret, dummyAuthSalt, dummyAuthHash); infraauth.IsCapacityError(verr) {
+				return LoginOutput{}, passwordWorkError(verr, "")
+			}
 			return LoginOutput{}, apperror.ErrUnauthorized("invalid credentials")
 		}
 	}
 	if err != nil || u == nil {
 		// Constant-cost dummy Argon2 verification prevents username/phone enumeration by timing.
-		_, _ = infraauth.VerifyPassword(authSecret, dummyAuthSalt, dummyAuthHash)
+		if _, verr := infraauth.VerifyPasswordContext(ctx, authSecret, dummyAuthSalt, dummyAuthHash); infraauth.IsCapacityError(verr) {
+			return LoginOutput{}, passwordWorkError(verr, "")
+		}
 		return LoginOutput{}, apperror.ErrUnauthorized("invalid credentials")
 	}
 	if u.LockedUntil != nil && u.LockedUntil.After(time.Now().UTC()) {
 		// Do not reveal account-lock state; preserve the same public login error.
 		return LoginOutput{}, apperror.ErrUnauthorized("invalid credentials")
 	}
-	ok, _ := infraauth.VerifyPassword(authSecret, u.AuthSalt, u.PasswordHash)
+	ok, verr := infraauth.VerifyPasswordContext(ctx, authSecret, u.AuthSalt, u.PasswordHash)
+	if infraauth.IsCapacityError(verr) {
+		// The password was not checked at all: never count this as a failed attempt, or an
+		// attacker who keeps the server busy could lock real users out of their accounts.
+		return LoginOutput{}, passwordWorkError(verr, "")
+	}
 	if !ok {
 		if err := s.users.RecordFailedLogin(ctx, u.ID, time.Now().UTC(), loginLockThreshold, loginLockDuration); err != nil {
 			return LoginOutput{}, err
@@ -490,9 +499,9 @@ func (s *ServiceImpl) ResetPassword(ctx context.Context, in ResetPasswordInput) 
 	if err != nil {
 		return ResetPasswordOutput{}, apperror.ErrInternal("failed to generate password salt")
 	}
-	ph, err := infraauth.HashPassword(newAuthSecret, salt)
+	ph, err := infraauth.HashPasswordContext(ctx, newAuthSecret, salt)
 	if err != nil {
-		return ResetPasswordOutput{}, apperror.ErrInternal("failed to hash password")
+		return ResetPasswordOutput{}, passwordWorkError(err, "failed to hash password")
 	}
 	if err := s.users.AddDevice(ctx, u.ID, in.DeviceID); err != nil {
 		return ResetPasswordOutput{}, err
@@ -592,7 +601,10 @@ func (s *ServiceImpl) ChangePassword(ctx context.Context, in ChangePasswordInput
 		return ChangePasswordOutput{}, apperror.ErrForbidden("device is not registered")
 	}
 
-	ok, _ := infraauth.VerifyPassword(currentAuthSecret, u.AuthSalt, u.PasswordHash)
+	ok, verr := infraauth.VerifyPasswordContext(ctx, currentAuthSecret, u.AuthSalt, u.PasswordHash)
+	if infraauth.IsCapacityError(verr) {
+		return ChangePasswordOutput{}, passwordWorkError(verr, "")
+	}
 	if !ok {
 		if err := s.users.RecordFailedLogin(ctx, u.ID, now, loginLockThreshold, loginLockDuration); err != nil {
 			return ChangePasswordOutput{}, err
@@ -607,9 +619,9 @@ func (s *ServiceImpl) ChangePassword(ctx context.Context, in ChangePasswordInput
 	if err != nil {
 		return ChangePasswordOutput{}, apperror.ErrInternal("failed to generate password salt")
 	}
-	passwordHash, err := infraauth.HashPassword(newAuthSecret, salt)
+	passwordHash, err := infraauth.HashPasswordContext(ctx, newAuthSecret, salt)
 	if err != nil {
-		return ChangePasswordOutput{}, apperror.ErrInternal("failed to hash password")
+		return ChangePasswordOutput{}, passwordWorkError(err, "failed to hash password")
 	}
 	newAuthSalt := base64.RawStdEncoding.EncodeToString(salt)
 	newKdfSaltB64 := base64.RawStdEncoding.EncodeToString(newKdfSalt)
@@ -669,7 +681,10 @@ func (s *ServiceImpl) DeleteAccount(ctx context.Context, in DeleteAccountInput) 
 	if u.LockedUntil != nil && u.LockedUntil.After(now) {
 		return DeleteAccountOutput{}, apperror.ErrRateLimited("too many failed attempts; try again later")
 	}
-	ok, _ := infraauth.VerifyPassword(authSecret, u.AuthSalt, u.PasswordHash)
+	ok, verr := infraauth.VerifyPasswordContext(ctx, authSecret, u.AuthSalt, u.PasswordHash)
+	if infraauth.IsCapacityError(verr) {
+		return DeleteAccountOutput{}, passwordWorkError(verr, "")
+	}
 	if !ok {
 		if err := s.users.RecordFailedLogin(ctx, u.ID, now, loginLockThreshold, loginLockDuration); err != nil {
 			return DeleteAccountOutput{}, err
@@ -843,7 +858,7 @@ func (s *ServiceImpl) issueRefreshAndAccess(ctx context.Context, u *entity.User,
 	if !u.Role.Valid() {
 		u.Role = entity.RoleUser
 	}
-	a, e := infraauth.GenerateAccessTokenForDevice(u.ID, u.Role, u.SessionVersion, d, s.accessTTL, s.secret)
+	a, e := infraauth.GenerateAccessTokenForDevice(u.ID, u.Role, u.SessionVersion, d, s.accessTTL, s.keys.JWTSecret)
 	if e != nil {
 		return sessionOutput{}, apperror.ErrInternal("failed to create access token")
 	}
@@ -922,6 +937,15 @@ func decodeAndValidateKdfSalt(value string) ([]byte, error) {
 	return b, nil
 }
 
+// passwordWorkError turns a failed Argon2 operation into an application error. "Server busy" and
+// "caller went away" become a retryable 429; anything else is an internal error with fallback.
+func passwordWorkError(err error, fallback string) error {
+	if infraauth.IsCapacityError(err) {
+		return apperror.ErrRateLimited("the server is busy, please try again in a moment")
+	}
+	return apperror.ErrInternal(fallback)
+}
+
 func validDevice(v string) error {
 	v = strings.TrimSpace(v)
 	if v == "" || len(v) > 128 {
@@ -941,8 +965,11 @@ func normalizePhone(v string) (string, error) {
 	}
 	return v, nil
 }
-func hashIdentifier(v, secret string) string {
-	mac := hmac.New(sha256.New, []byte(secret))
+
+// hashIdentifier is the stored form of a phone identifier: HMAC-SHA256 under the dedicated
+// phone hash key (never the JWT secret).
+func hashIdentifier(v, phoneHashKey string) string {
+	mac := hmac.New(sha256.New, []byte(phoneHashKey))
 	_, _ = mac.Write([]byte(strings.ToLower(strings.TrimSpace(v))))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
@@ -965,9 +992,10 @@ func verifyRecoveryProof(stored, proof string) bool {
 	return hmac.Equal(got, want)
 }
 
-// IdentifierHashForCLI hashes a normalized identifier using the same server secret used by authentication.
-func IdentifierHashForCLI(identifier, secret string) string {
-	return hashIdentifier(identifier, secret)
+// IdentifierHashForCLI hashes a normalized identifier with the phone hash key, exactly as
+// registration and login do. Maintenance tools must use it instead of re-implementing the hash.
+func IdentifierHashForCLI(identifier, phoneHashKey string) string {
+	return hashIdentifier(identifier, phoneHashKey)
 }
 
 // NormalizePhoneForCLI exposes the same validation used by login/register to maintenance tooling.

@@ -13,10 +13,12 @@ import (
 const MaxChangesPerRequest = 100
 
 const (
-	MaxDeviceIDLength        = 128
-	MaxEntityTypeLength      = 64
-	MaxEntityIDLength        = 128
-	MaxCiphertextSize        = 1024 * 1024
+	MaxDeviceIDLength   = 128
+	MaxEntityTypeLength = 64
+	MaxEntityIDLength   = 128
+	// MaxCiphertextSize bounds one encrypted record. An encrypted budget entity (transaction,
+	// category, goal ...) is well below 2 KiB, so 256 KiB leaves two orders of magnitude of room.
+	MaxCiphertextSize        = 256 * 1024
 	MaxNonceSize             = 64
 	MaxRequestCiphertextSize = 4 * 1024 * 1024
 )
@@ -63,7 +65,7 @@ func (u *SyncUsecase) Execute(ctx context.Context, userID string, req SyncInput)
 	records := make([]*entity.SyncRecord, 0, len(req.Changes))
 	totalCiphertextSize := 0
 	for _, change := range req.Changes {
-		totalCiphertextSize += len(change.Ciphertext)
+		totalCiphertextSize += len(change.Ciphertext) + len(change.Nonce)
 		if totalCiphertextSize > MaxRequestCiphertextSize || len(change.EntityType) > MaxEntityTypeLength || len(change.EntityID) > MaxEntityIDLength || len(change.Ciphertext) > MaxCiphertextSize || len(change.Nonce) > MaxNonceSize {
 			return SyncOutput{}, apperror.ErrValidation("sync change exceeds size limits")
 		}

@@ -196,7 +196,7 @@ func TestRegisterWithThePhoneOfADeletedAccountPointsToRestore(t *testing.T) {
 	at := time.Now().Add(-time.Hour)
 	user := deletionFixture(t, &at)
 	users := &mocks.MockUserRepository{FindByPhoneHashFunc: func(context.Context, string) (*entity.User, error) { return user, nil }}
-	s := NewService(users, &mocks.MockRefreshTokenRepository{}, testSecret, time.Minute, 24*time.Hour, testRegisterOTPService())
+	s := NewService(users, &mocks.MockRefreshTokenRepository{}, testKeys, time.Minute, 24*time.Hour, testRegisterOTPService())
 	in := validRegistrationMaterial()
 	in.PhoneNumber, in.AuthSecret, in.DeviceID, in.OTPChallengeID, in.OTPCode = "+989121234567", testAuthSecret, "d", "challenge-1", "123456"
 	_, err := s.Register(context.Background(), in)

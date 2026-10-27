@@ -12,12 +12,22 @@ import (
 
 type Config struct {
 	Env, HTTPPort, MongoURI, MongoDBName, JWTSecret string
-	JWTAccessTTL, JWTRefreshTTL, OTPExpiry          time.Duration
-	SMSWebhookURL, SMSAuthToken                     string
-	SMSFromNumber, SMSPatternCode                   string
-	DevLogOTP                                       bool
-	TrustedProxyCIDRs, CORSAllowedOrigins           string
-	TLSCertFile, TLSKeyFile                         string
+	// Independent server-side keys. JWTSecret only signs access tokens; each of the keys below
+	// has a single purpose (see usecase/auth.Keys) and must be a different value.
+	PhoneHashKey, OTPCodeKey, DecoySaltKey string
+	// Resource limits. Zero means "use the built-in default".
+	//
+	// Argon2MaxConcurrent bounds simultaneous password hashes (each holds 64 MiB) and
+	// Argon2MaxWaiting how many more may queue for a slot before requests are refused.
+	// SyncMaxRecords / SyncMaxBytes are the per-account storage quota (see repository.SyncQuota).
+	Argon2MaxConcurrent, Argon2MaxWaiting  int
+	SyncMaxRecords, SyncMaxBytes           int64
+	JWTAccessTTL, JWTRefreshTTL, OTPExpiry time.Duration
+	SMSWebhookURL, SMSAuthToken            string
+	SMSFromNumber, SMSPatternCode          string
+	DevLogOTP                              bool
+	TrustedProxyCIDRs, CORSAllowedOrigins  string
+	TLSCertFile, TLSKeyFile                string
 	// TLSTerminatedByProxy means a reverse proxy on the same host (e.g. Caddy)
 	// terminates HTTPS and the API itself listens on plain HTTP.
 	// ServeTLS is derived: true only when the API must terminate TLS itself.
@@ -39,7 +49,7 @@ func Load() (*Config, error) {
 	if env != "dev" && env != "test" && env != "prod" {
 		return nil, fmt.Errorf("ENV must be one of: dev, test, prod")
 	}
-	c := &Config{Env: env, HTTPPort: os.Getenv("HTTP_PORT"), MongoURI: secretValue("MONGO_URI"), MongoDBName: os.Getenv("MONGO_DB_NAME"), JWTSecret: secretValue("JWT_SECRET"), SMSWebhookURL: os.Getenv("SMS_WEBHOOK_URL"), SMSAuthToken: secretValue("SMS_AUTH_TOKEN"), SMSFromNumber: strings.TrimSpace(os.Getenv("SMS_FROM_NUMBER")), SMSPatternCode: strings.TrimSpace(os.Getenv("SMS_PATTERN_CODE")), TrustedProxyCIDRs: os.Getenv("TRUSTED_PROXY_CIDRS"), CORSAllowedOrigins: os.Getenv("CORS_ALLOWED_ORIGINS"), TLSCertFile: os.Getenv("TLS_CERT_FILE"), TLSKeyFile: os.Getenv("TLS_KEY_FILE"), DevLogOTP: strings.EqualFold(get("DEV_LOG_OTP", "false"), "true"), TLSTerminatedByProxy: envBool("TLS_TERMINATED_BY_PROXY"), MongoAllowPlaintext: envBool("MONGO_ALLOW_PLAINTEXT")}
+	c := &Config{Env: env, HTTPPort: os.Getenv("HTTP_PORT"), MongoURI: secretValue("MONGO_URI"), MongoDBName: os.Getenv("MONGO_DB_NAME"), JWTSecret: secretValue("JWT_SECRET"), PhoneHashKey: secretValue("PHONE_HASH_KEY"), OTPCodeKey: secretValue("OTP_HMAC_KEY"), DecoySaltKey: secretValue("LOGIN_DECOY_KEY"), SMSWebhookURL: os.Getenv("SMS_WEBHOOK_URL"), SMSAuthToken: secretValue("SMS_AUTH_TOKEN"), SMSFromNumber: strings.TrimSpace(os.Getenv("SMS_FROM_NUMBER")), SMSPatternCode: strings.TrimSpace(os.Getenv("SMS_PATTERN_CODE")), TrustedProxyCIDRs: os.Getenv("TRUSTED_PROXY_CIDRS"), CORSAllowedOrigins: os.Getenv("CORS_ALLOWED_ORIGINS"), TLSCertFile: os.Getenv("TLS_CERT_FILE"), TLSKeyFile: os.Getenv("TLS_KEY_FILE"), DevLogOTP: strings.EqualFold(get("DEV_LOG_OTP", "false"), "true"), TLSTerminatedByProxy: envBool("TLS_TERMINATED_BY_PROXY"), MongoAllowPlaintext: envBool("MONGO_ALLOW_PLAINTEXT")}
 	for _, k := range []string{"HTTP_PORT", "MONGO_DB_NAME", "JWT_ACCESS_TTL_MINUTES", "JWT_REFRESH_TTL_DAYS"} {
 		if strings.TrimSpace(os.Getenv(k)) == "" {
 			return nil, fmt.Errorf("configuration incomplete: missing %s", k)
@@ -66,12 +76,43 @@ func Load() (*Config, error) {
 			return nil, e
 		}
 	}
+	for _, l := range []struct {
+		env string
+		dst *int
+		max int
+	}{{"ARGON2_MAX_CONCURRENCY", &c.Argon2MaxConcurrent, 64}, {"ARGON2_MAX_WAITING", &c.Argon2MaxWaiting, 100000}} {
+		if v := strings.TrimSpace(os.Getenv(l.env)); v != "" {
+			n, err := pos(l.env, v)
+			if err != nil {
+				return nil, err
+			}
+			if n > l.max {
+				return nil, fmt.Errorf("%s must be at most %d", l.env, l.max)
+			}
+			*l.dst = n
+		}
+	}
+	for _, l := range []struct {
+		env string
+		dst *int64
+	}{{"SYNC_MAX_RECORDS_PER_ACCOUNT", &c.SyncMaxRecords}, {"SYNC_MAX_BYTES_PER_ACCOUNT", &c.SyncMaxBytes}} {
+		if v := strings.TrimSpace(os.Getenv(l.env)); v != "" {
+			n, err := strconv.ParseInt(v, 10, 64)
+			if err != nil || n <= 0 {
+				return nil, fmt.Errorf("%s must be a positive integer", l.env)
+			}
+			*l.dst = n
+		}
+	}
 	port, e := strconv.Atoi(os.Getenv("HTTP_PORT"))
 	if e != nil || port < 1 || port > 65535 {
 		return nil, fmt.Errorf("invalid HTTP_PORT")
 	}
 	if len(c.JWTSecret) < 32 {
 		return nil, fmt.Errorf("JWT_SECRET must be at least 32 characters")
+	}
+	if err := validateKeys(c, 32); err != nil {
+		return nil, err
 	}
 	if a > 24*60 {
 		return nil, fmt.Errorf("JWT_ACCESS_TTL_MINUTES must be at most 1440")
@@ -88,6 +129,9 @@ func Load() (*Config, error) {
 	if c.Env == "prod" {
 		if len(c.JWTSecret) < 64 {
 			return nil, fmt.Errorf("JWT_SECRET must be at least 64 characters in production")
+		}
+		if err := validateKeys(c, 64); err != nil {
+			return nil, err
 		}
 		if c.TLSTerminatedByProxy {
 			// HTTPS is terminated by a reverse proxy on the same host. Without a trusted
@@ -119,8 +163,35 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("SMS_AUTH_TOKEN, SMS_FROM_NUMBER and SMS_PATTERN_CODE are required in production")
 		}
 	}
-	return &Config{Env: c.Env, HTTPPort: c.HTTPPort, MongoURI: c.MongoURI, MongoDBName: c.MongoDBName, JWTSecret: c.JWTSecret, TrustedProxyCIDRs: c.TrustedProxyCIDRs, CORSAllowedOrigins: c.CORSAllowedOrigins, TLSCertFile: c.TLSCertFile, TLSKeyFile: c.TLSKeyFile, TLSTerminatedByProxy: c.TLSTerminatedByProxy, ServeTLS: c.ServeTLS, MongoAllowPlaintext: c.MongoAllowPlaintext, JWTAccessTTL: time.Duration(a) * time.Minute, JWTRefreshTTL: time.Duration(d) * 24 * time.Hour, OTPExpiry: time.Duration(o) * time.Minute, SMSWebhookURL: c.SMSWebhookURL, SMSAuthToken: c.SMSAuthToken, SMSFromNumber: c.SMSFromNumber, SMSPatternCode: c.SMSPatternCode, DevLogOTP: c.DevLogOTP}, nil
+	return &Config{Env: c.Env, HTTPPort: c.HTTPPort, MongoURI: c.MongoURI, MongoDBName: c.MongoDBName, JWTSecret: c.JWTSecret, PhoneHashKey: c.PhoneHashKey, OTPCodeKey: c.OTPCodeKey, DecoySaltKey: c.DecoySaltKey, Argon2MaxConcurrent: c.Argon2MaxConcurrent, Argon2MaxWaiting: c.Argon2MaxWaiting, SyncMaxRecords: c.SyncMaxRecords, SyncMaxBytes: c.SyncMaxBytes, TrustedProxyCIDRs: c.TrustedProxyCIDRs, CORSAllowedOrigins: c.CORSAllowedOrigins, TLSCertFile: c.TLSCertFile, TLSKeyFile: c.TLSKeyFile, TLSTerminatedByProxy: c.TLSTerminatedByProxy, ServeTLS: c.ServeTLS, MongoAllowPlaintext: c.MongoAllowPlaintext, JWTAccessTTL: time.Duration(a) * time.Minute, JWTRefreshTTL: time.Duration(d) * 24 * time.Hour, OTPExpiry: time.Duration(o) * time.Minute, SMSWebhookURL: c.SMSWebhookURL, SMSAuthToken: c.SMSAuthToken, SMSFromNumber: c.SMSFromNumber, SMSPatternCode: c.SMSPatternCode, DevLogOTP: c.DevLogOTP}, nil
 }
+
+// validateKeys checks the dedicated keys: all present, at least minLen characters, and pairwise
+// different from each other and from JWT_SECRET. Reusing one value for two purposes would
+// recreate the coupling that the separate keys exist to remove.
+func validateKeys(c *Config, minLen int) error {
+	keys := []struct{ env, value, hint string }{
+		{"JWT_SECRET", c.JWTSecret, ""},
+		{"PHONE_HASH_KEY", c.PhoneHashKey, " (to keep existing accounts, set it to the value JWT_SECRET had before the keys were split, then give JWT_SECRET a new value)"},
+		{"OTP_HMAC_KEY", c.OTPCodeKey, ""},
+		{"LOGIN_DECOY_KEY", c.DecoySaltKey, ""},
+	}
+	seen := make(map[string]string, len(keys))
+	for _, k := range keys {
+		if k.value == "" {
+			return fmt.Errorf("configuration incomplete: missing %s or %s_FILE%s", k.env, k.env, k.hint)
+		}
+		if len(k.value) < minLen {
+			return fmt.Errorf("%s must be at least %d characters", k.env, minLen)
+		}
+		if other, dup := seen[k.value]; dup {
+			return fmt.Errorf("%s must not have the same value as %s: every key needs its own independent random value", k.env, other)
+		}
+		seen[k.value] = k.env
+	}
+	return nil
+}
+
 func secretValue(name string) string {
 	if v := strings.TrimSpace(os.Getenv(name)); v != "" {
 		return v

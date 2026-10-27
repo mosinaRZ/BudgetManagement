@@ -3,8 +3,6 @@ package main
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
 	"encoding/base64"
 	"flag"
 	"fmt"
@@ -84,12 +82,10 @@ func run(identifier, password string) error {
 		return err
 	}
 	now := time.Now().UTC()
-	h := hmac.New(sha256.New, []byte(cfg.JWTSecret))
-	_, _ = h.Write([]byte(strings.ToLower(identifier)))
 	user := &entity.User{
 		Role:          entity.RoleAdmin,
 		PhoneNumber:   identifier,
-		PhoneHash:     base64.RawURLEncoding.EncodeToString(h.Sum(nil)),
+		PhoneHash:     authusecase.IdentifierHashForCLI(identifier, cfg.PhoneHashKey),
 		PhoneVerified: true,
 		PasswordHash:  passwordHash,
 		AuthSalt:      base64.RawStdEncoding.EncodeToString(salt),
@@ -127,9 +123,4 @@ func decodeMaterial(m infraauth.ClientKeyMaterial) (pe, pn, rh, re, rn []byte, e
 	}
 	rn, err = dec(m.RecoveryNonce)
 	return
-}
-
-// Keep the seed tool consistent with the current authentication identifier-hash format.
-func authHash(identifier, secret string) string {
-	return authusecase.IdentifierHashForCLI(identifier, secret)
 }

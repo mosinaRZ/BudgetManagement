@@ -23,6 +23,13 @@ const (
 	syncRecordsCollectionName          = "sync_records"
 	syncOperationsCollectionName       = "sync_operations"
 	syncRevisionCountersCollectionName = "sync_revision_counters"
+	// syncUsageCollectionName holds one {_id: userId, records, bytes} document per account: the
+	// running totals the storage quota is enforced against, maintained inside the sync transaction.
+	syncUsageCollectionName = "sync_usage"
+	// maxRetainedSyncOperationsPerUser bounds the replay log. Every sync request stores a copy of
+	// the page it returned (up to ~4 MiB) so that a retried request id gets the same answer; without
+	// a per-account bound, repeated pulls would turn a small account into unbounded disk usage.
+	maxRetainedSyncOperationsPerUser = 16
 	// Revisions are allocated per user. This prevents unrelated users from
 	// contending on one global counter and keeps cursors scoped to a user.
 	maxPullBatchSize    = 100
@@ -33,10 +40,18 @@ type syncRepositoryImpl struct {
 	client     *mongo.Client
 	db         *mongo.Database
 	collection *mongo.Collection
+	quota      repository.SyncQuota
 }
 
+// NewSyncRepository returns a repository enforcing repository.DefaultSyncQuota per account.
 func NewSyncRepository(client *mongo.Client, db *mongo.Database) *syncRepositoryImpl {
-	return &syncRepositoryImpl{client: client, db: db, collection: db.Collection(syncRecordsCollectionName)}
+	return &syncRepositoryImpl{client: client, db: db, collection: db.Collection(syncRecordsCollectionName), quota: repository.DefaultSyncQuota()}
+}
+
+// WithQuota replaces the per-account storage quota (zero fields disable that limit).
+func (r *syncRepositoryImpl) WithQuota(q repository.SyncQuota) *syncRepositoryImpl {
+	r.quota = q
+	return r
 }
 
 func (r *syncRepositoryImpl) Sync(ctx context.Context, req repository.SyncRequest) (repository.SyncResult, error) {
@@ -81,6 +96,9 @@ func (r *syncRepositoryImpl) Sync(ctx context.Context, req repository.SyncReques
 		op.Conflicts = toModels(conflicts)
 		if _, err = r.db.Collection(syncOperationsCollectionName).InsertOne(sc, op); err != nil {
 			return nil, apperror.ErrInternal("failed to record sync operation", err)
+		}
+		if err := r.trimOperations(sc, req.UserID); err != nil {
+			return nil, err
 		}
 		return nil, nil
 	}, options.Transaction().SetReadPreference(readpref.Primary()))
@@ -165,6 +183,8 @@ func (r *syncRepositoryImpl) applyRecords(ctx mongo.SessionContext, req reposito
 	}
 	conflicts := make([]*entity.SyncRecord, 0)
 	toWrite := make([]*entity.SyncRecord, 0, len(req.Records))
+	// Net growth of the account's stored data caused by toWrite (see reserveStorage).
+	var deltaRecords, deltaBytes int64
 	for _, original := range req.Records {
 		// Work on a copy: the caller's request must never be mutated (it can be
 		// shared across goroutines or replayed when a transaction is retried).
@@ -179,11 +199,14 @@ func (r *syncRepositoryImpl) applyRecords(ctx mongo.SessionContext, req reposito
 		}
 		if existing == nil {
 			toWrite = append(toWrite, incoming)
+			deltaRecords++
+			deltaBytes += recordBytes(incoming.Ciphertext, incoming.Nonce)
 			continue
 		}
 		switch {
 		case incoming.Version > existing.Version:
 			toWrite = append(toWrite, incoming)
+			deltaBytes += recordBytes(incoming.Ciphertext, incoming.Nonce) - recordBytes(existing.Ciphertext, existing.Nonce)
 		case incoming.Version < existing.Version:
 			conflicts = append(conflicts, existing.ToEntity())
 		case samePayload(existing, incoming):
@@ -194,6 +217,11 @@ func (r *syncRepositoryImpl) applyRecords(ctx mongo.SessionContext, req reposito
 	}
 	if len(toWrite) == 0 {
 		return conflicts, nil
+	}
+	// Enforce the storage quota before anything is written. The whole request is rejected if it
+	// would push the account over a limit; the transaction rolls back, so nothing is half-applied.
+	if err := r.reserveStorage(ctx, req.UserID, deltaRecords, deltaBytes); err != nil {
+		return nil, err
 	}
 
 	start, err := r.allocateRevisions(ctx, req.UserID, len(toWrite))
@@ -215,6 +243,121 @@ func (r *syncRepositoryImpl) applyRecords(ctx mongo.SessionContext, req reposito
 		return nil, apperror.ErrInternal("failed to write sync records", err)
 	}
 	return conflicts, nil
+}
+
+// recordBytes is what a record counts against the byte quota: its ciphertext and nonce.
+func recordBytes(ciphertext, nonce []byte) int64 { return int64(len(ciphertext)) + int64(len(nonce)) }
+
+// reserveStorage adds a request's net growth (deltaRecords, deltaBytes) to the account's usage
+// totals, or fails with a quota error if that would exceed a limit. It runs inside the sync
+// transaction, so the check and the write it protects are atomic and a rejected request leaves
+// no trace.
+//
+// A request that does not grow a total is always accepted for that total: this is what lets an
+// account that is full (or was over a newly introduced limit) delete or shrink data to recover.
+func (r *syncRepositoryImpl) reserveStorage(ctx mongo.SessionContext, userID string, deltaRecords, deltaBytes int64) error {
+	if deltaRecords == 0 && deltaBytes == 0 {
+		return nil
+	}
+	if err := r.ensureUsage(ctx, userID); err != nil {
+		return err
+	}
+	filter := bson.M{"_id": userID}
+	if deltaRecords > 0 && r.quota.MaxRecords > 0 {
+		filter["records"] = bson.M{"$lte": r.quota.MaxRecords - deltaRecords}
+	}
+	if deltaBytes > 0 && r.quota.MaxBytes > 0 {
+		filter["bytes"] = bson.M{"$lte": r.quota.MaxBytes - deltaBytes}
+	}
+	res, err := r.db.Collection(syncUsageCollectionName).UpdateOne(ctx, filter, bson.M{"$inc": bson.M{"records": deltaRecords, "bytes": deltaBytes}})
+	if err != nil {
+		return apperror.ErrInternal("failed to update storage usage", err)
+	}
+	if res.MatchedCount == 0 {
+		return apperror.ErrStorageQuotaExceeded("storage quota exceeded for this account")
+	}
+	return nil
+}
+
+// ensureUsage creates the account's usage document on first use. Installations that already hold
+// records are seeded from what is actually stored, inside the same transaction, so no migration
+// step is needed (the same approach as the lazily seeded revision counters).
+func (r *syncRepositoryImpl) ensureUsage(ctx mongo.SessionContext, userID string) error {
+	usage := r.db.Collection(syncUsageCollectionName)
+	err := usage.FindOne(ctx, bson.M{"_id": userID}, options.FindOne().SetProjection(bson.M{"_id": 1})).Err()
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, mongo.ErrNoDocuments) {
+		return apperror.ErrInternal("failed to read storage usage", err)
+	}
+	cur, err := r.collection.Aggregate(ctx, mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"userId": userID}}},
+		{{Key: "$group", Value: bson.M{
+			"_id":     nil,
+			"records": bson.M{"$sum": 1},
+			"bytes": bson.M{"$sum": bson.M{"$add": bson.A{
+				bson.M{"$ifNull": bson.A{bson.M{"$binarySize": "$ciphertext"}, 0}},
+				bson.M{"$ifNull": bson.A{bson.M{"$binarySize": "$nonce"}, 0}},
+			}}},
+		}}},
+	})
+	if err != nil {
+		return apperror.ErrInternal("failed to measure storage usage", err)
+	}
+	defer cur.Close(ctx)
+	var totals struct {
+		Records int64 `bson:"records"`
+		Bytes   int64 `bson:"bytes"`
+	}
+	if cur.Next(ctx) {
+		if err := cur.Decode(&totals); err != nil {
+			return apperror.ErrInternal("failed to decode storage usage", err)
+		}
+	}
+	if err := cur.Err(); err != nil {
+		return apperror.ErrInternal("failed to measure storage usage", err)
+	}
+	if _, err := usage.UpdateOne(ctx, bson.M{"_id": userID}, bson.M{"$setOnInsert": bson.M{"records": totals.Records, "bytes": totals.Bytes}}, options.Update().SetUpsert(true)); err != nil {
+		return apperror.ErrInternal("failed to initialise storage usage", err)
+	}
+	return nil
+}
+
+// trimOperations keeps only the newest maxRetainedSyncOperationsPerUser replay entries of the
+// account. A request whose entry was trimmed and is retried is simply applied again, which is
+// idempotent for records (same version and payload is a no-op), so only very old replays lose
+// their cached answer.
+func (r *syncRepositoryImpl) trimOperations(ctx mongo.SessionContext, userID string) error {
+	ops := r.db.Collection(syncOperationsCollectionName)
+	cur, err := ops.Find(ctx, bson.M{"userId": userID}, options.Find().
+		SetSort(bson.D{{Key: "createdAt", Value: -1}, {Key: "_id", Value: -1}}).
+		SetSkip(maxRetainedSyncOperationsPerUser).
+		SetProjection(bson.M{"_id": 1}))
+	if err != nil {
+		return apperror.ErrInternal("failed to list sync operations", err)
+	}
+	defer cur.Close(ctx)
+	var stale bson.A
+	for cur.Next(ctx) {
+		var doc struct {
+			ID interface{} `bson:"_id"`
+		}
+		if err := cur.Decode(&doc); err != nil {
+			return apperror.ErrInternal("failed to decode sync operation", err)
+		}
+		stale = append(stale, doc.ID)
+	}
+	if err := cur.Err(); err != nil {
+		return apperror.ErrInternal("failed to list sync operations", err)
+	}
+	if len(stale) == 0 {
+		return nil
+	}
+	if _, err := ops.DeleteMany(ctx, bson.M{"_id": bson.M{"$in": stale}}); err != nil {
+		return apperror.ErrInternal("failed to trim sync operations", err)
+	}
+	return nil
 }
 
 func (r *syncRepositoryImpl) findExisting(ctx mongo.SessionContext, userID string, typ entity.EntityType, id string) (*models.SyncRecordModel, error) {

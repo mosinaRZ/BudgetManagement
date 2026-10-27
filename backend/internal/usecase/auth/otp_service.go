@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -22,24 +23,28 @@ type OTPDelivery interface {
 type otpService struct {
 	repo        repository.OTPRepository
 	delivery    OTPDelivery
-	secret      string
+	keys        Keys
 	ttl         time.Duration
 	maxAttempts int
 }
 
-func NewOTPService(repo repository.OTPRepository, d OTPDelivery, secret string, ttl time.Duration) *otpService {
-	return &otpService{repo: repo, delivery: d, secret: secret, ttl: ttl, maxAttempts: 5}
+// NewOTPService needs Keys.PhoneHashKey (the destination hash must equal the account's phone
+// hash) and Keys.OTPCodeKey (code hashes). It never uses the JWT secret.
+func NewOTPService(repo repository.OTPRepository, d OTPDelivery, keys Keys, ttl time.Duration) *otpService {
+	return &otpService{repo: repo, delivery: d, keys: keys, ttl: ttl, maxAttempts: 5}
 }
 
-func hashDestination(v, secret string) string { return hashIdentifier(v, secret) }
+func hashDestination(v, phoneHashKey string) string { return hashIdentifier(v, phoneHashKey) }
 
-func hashOTP(id, code, secret string) string {
-	h := sha256.Sum256([]byte(secret + ":" + id + ":" + code))
-	return base64.RawURLEncoding.EncodeToString(h[:])
+// hashOTP is HMAC-SHA256 under the dedicated OTP key, bound to the challenge id.
+func hashOTP(id, code, otpKey string) string {
+	mac := hmac.New(sha256.New, []byte(otpKey))
+	_, _ = mac.Write([]byte("cidna/v1/otp|" + id + "|" + code))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
 func (s *otpService) Request(ctx context.Context, in RequestOTPInput) (RequestOTPOutput, error) {
-	if strings.TrimSpace(s.secret) == "" || s.ttl <= 0 {
+	if strings.TrimSpace(s.keys.PhoneHashKey) == "" || strings.TrimSpace(s.keys.OTPCodeKey) == "" || s.ttl <= 0 {
 		return RequestOTPOutput{}, apperror.ErrInternal("OTP service is not configured")
 	}
 
@@ -60,7 +65,7 @@ func (s *otpService) Request(ctx context.Context, in RequestOTPInput) (RequestOT
 		return RequestOTPOutput{}, apperror.ErrValidation("OTP purpose is required")
 	}
 
-	dh := hashDestination(d, s.secret)
+	dh := hashDestination(d, s.keys.PhoneHashKey)
 	n, err := s.repo.RecentCount(ctx, dh, ch, in.Purpose, 10)
 	if err != nil {
 		return RequestOTPOutput{}, err
@@ -84,7 +89,7 @@ func (s *otpService) Request(ctx context.Context, in RequestOTPInput) (RequestOT
 	now := time.Now().UTC()
 	o := &entity.OTPChallenge{
 		ID: id, DestinationHash: dh, Channel: ch, Purpose: in.Purpose,
-		CodeHash: hashOTP(id, code, s.secret), CreatedAt: now, ExpiresAt: now.Add(s.ttl),
+		CodeHash: hashOTP(id, code, s.keys.OTPCodeKey), CreatedAt: now, ExpiresAt: now.Add(s.ttl),
 	}
 	if err := s.repo.Create(ctx, o); err != nil {
 		return RequestOTPOutput{}, err
@@ -111,7 +116,7 @@ func (s *otpService) Verify(ctx context.Context, in VerifyOTPInput) (string, err
 		return "", apperror.ErrUnauthorized("invalid OTP")
 	}
 
-	ok, err := s.repo.VerifyAndConsume(ctx, o.ID, hashOTP(o.ID, strings.TrimSpace(in.Code), s.secret), now, s.maxAttempts)
+	ok, err := s.repo.VerifyAndConsume(ctx, o.ID, hashOTP(o.ID, strings.TrimSpace(in.Code), s.keys.OTPCodeKey), now, s.maxAttempts)
 	if err != nil {
 		return "", err
 	}
