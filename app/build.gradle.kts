@@ -54,7 +54,7 @@ android {
         targetSdk = 36
         // Play rejects an upload whose versionCode was already used: bump with -PversionCode=N.
         versionCode = providers.gradleProperty("versionCode").map { it.toInt() }.getOrElse(1)
-        versionName = providers.gradleProperty("versionName").getOrElse("1.1.3")
+        versionName = providers.gradleProperty("versionName").getOrElse("1.1.4")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
