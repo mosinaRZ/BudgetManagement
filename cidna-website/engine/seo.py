@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 import config as C
-from engine.ui import url
+from engine.ui import url, store_names
 
 def sitemap(pages):
     out = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">']
@@ -23,7 +23,7 @@ def llms(guides):
 ## Key pages
 - [Home]({url('en','')}): overview
 - [Features]({url('en','features')})
-- [Download]({url('en','download')}): Myket, Cafe Bazaar, direct file
+- [Download]({url('en','download')}): {store_names('en')}
 - [Security model & honest limits]({url('en','security')})
 - [Privacy policy]({url('en','privacy')})
 - [Terms]({url('en','terms')})

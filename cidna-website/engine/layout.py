@@ -92,6 +92,7 @@ def page(L, slug, title, desc, body, schema=None, crumbs=None, og_type="website"
 <link rel="preload" href="/assets/fonts/{font_pre}.woff2" as="font" type="font/woff2" crossorigin>
 <script src="{asset('js/theme.js')}"></script>
 <link rel="stylesheet" href="{asset('css/site.css')}">
+<link rel="stylesheet" href="{asset('css/liquid-glass.css')}">
 <script type="application/ld+json">{ld}</script>
 </head>
 <body class="lang-{L}">
@@ -120,4 +121,5 @@ def page(L, slug, title, desc, body, schema=None, crumbs=None, og_type="website"
 </div></footer>
 <nav class="dock" aria-label="{t('ناوبری موبایل','Mobile navigation')}"><div class="dock-pill">{dock}</div><a class="fab" href="{href(L,'download')}" aria-label="{t('دریافت برنامه','Download the app')}">{svg('download',26)}</a></nav>
 <script src="{asset('js/site.js')}" defer></script>
+<script src="{asset('js/glass.js')}" defer></script>
 </body></html>"""

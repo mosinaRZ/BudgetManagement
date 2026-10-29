@@ -6,18 +6,20 @@ Single place for everything that changes: domain, store links, socials, versions
 
 # ── ۱) دامنه ─────────────────────────────────────────────────────────────
 DOMAIN = "https://cidna.ir"          # ← دامنهٔ واقعی (بدون / انتهایی). canonical، hreflang، sitemap و nginx خودکار ساخته می‌شوند.
-TODAY  = "2026-10-24"                 # ← تاریخ آخرین تغییر محتوا (برای sitemap و schema)
+TODAY  = "2026-10-29"                 # ← تاریخ آخرین تغییر محتوا (برای sitemap و schema)
 
 # ── ۲) لینک‌های دریافت ───────────────────────────────────────────────────
-# تا وقتی url=None است، دکمه به شکل «به‌زودی» نمایش داده می‌شود. لینک را که گذاشتید، همان لحظه فعال می‌شود.
+# فروشگاهی که url=None دارد در سایت اصلاً نمایش داده نمی‌شود (نه دکمه، نه متن «به‌زودی»).
 STORES = [
-    dict(id="myket",  fa="مایکت",       en="Myket",       url=None),
-    dict(id="bazaar", fa="کافه‌بازار",   en="Cafe Bazaar", url=None),
-    dict(id="direct", fa="دانلود مستقیم", en="Direct download", url=None,   # مثلاً "/downloads/cidna-1.1.2.apk"
-         sha256=None,                    # ← پس از ساخت APK، هش SHA-256 را اینجا بگذارید؛ در صفحهٔ دریافت نمایش داده می‌شود
-         size=None),                     # ← مثلاً "18 MB"
+    dict(id="bazaar", fa="کافه‌بازار",   en="Cafe Bazaar",
+         url="https://cafebazaar.ir/app/?id=ir.hamedan.budgetmanagement&ref=share"),
+    dict(id="direct", fa="دانلود مستقیم", en="Direct download",
+         url="/downloads/budget-app.apk",   # فایل روی سرور: /var/www/cidna/downloads/budget-app.apk
+         sha256="acee32d1e36c15d32dba733353acb738b20235773dbfa02b75dceb6f68c11462",                    # ← خروجی `sha256sum budget-app.apk` را اینجا بگذارید؛ در صفحهٔ دریافت نمایش داده می‌شود
+         size="17 MB"),
+    dict(id="myket",  fa="مایکت",       en="Myket",       url=None),       # ← لینک مایکت را که گذاشتید، دکمه خودکار ظاهر می‌شود
 ]
-APP_VERSION  = "1.1.2"                   # از app/build.gradle.kts (versionName)
+APP_VERSION  = "1.1.4"                   # از app/build.gradle.kts (versionName)
 MIN_ANDROID  = "8.0"                     # minSdk 26
 SOURCE_URL   = None                      # ← لینک کد منبع (AGPL-3.0 §13 اجبار می‌کند برای نسخهٔ اصلاح‌شدهٔ سرویس شبکه‌ای، سورس در دسترس باشد)
 

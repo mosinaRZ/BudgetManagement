@@ -40,6 +40,7 @@ for root,_,fs in os.walk(D):
         for l in p.links:
             if l=="!!img-without-alt": err.append(f"{rel}: img w/o alt"); continue
             if l.startswith(("http","mailto:","#","data:")): continue
+            if l.startswith("/downloads/"): continue        # فایل APK روی سرور است (/var/www/cidna/downloads)، نه داخل dist
             tgt=l.split("#")[0].split("?")[0]
             if not tgt: continue
             fp=os.path.join(D,tgt.lstrip("/"))

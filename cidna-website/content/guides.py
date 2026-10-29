@@ -25,8 +25,8 @@ def body(L, slug):
     lnk = lambda s, fa, en: f"<a href='{href(L,s)}'>{t(fa,en)}</a>"
     if slug == "getting-started":
         return [
-         ("install", t("نصب","Install"), P(t(f"سیدنا برای اندروید {fad(C.MIN_ANDROID)} و بالاتر است. از صفحهٔ {chr(171)}دریافت{chr(187)} یکی از سه راه مایکت، کافه‌بازار یا فایل مستقیم را انتخاب کنید و فقط از لینک‌های رسمی دانلود کنید.",
-            f"Cidna needs Android {C.MIN_ANDROID} or later. On the Download page pick Myket, Cafe Bazaar or the direct file — and only use the official links.")) + P(lnk("download","به صفحهٔ دریافت بروید","Go to the Download page"))),
+         ("install", t("نصب","Install"), P(t(f"سیدنا برای اندروید {fad(C.MIN_ANDROID)} و بالاتر است. از صفحهٔ {chr(171)}دریافت{chr(187)} یکی از راه‌ها ({store_names('fa')}) را انتخاب کنید و فقط از لینک‌های رسمی دانلود کنید.",
+            f"Cidna needs Android {C.MIN_ANDROID} or later. On the Download page pick {store_names('en')} — and only use the official links.")) + P(lnk("download","به صفحهٔ دریافت بروید","Go to the Download page"))),
          ("start", t("مهمان یا حساب؟","Guest or account?"), ul(t("<b>مهمان:</b> بدون شماره موبایل و بدون حساب؛ همه‌چیز فقط روی گوشی شما می‌ماند.","<b>Guest:</b> no phone number, no account — everything stays on your phone."),
             t("<b>حساب:</b> با شماره موبایل و کد پیامکی؛ برای همگام‌سازی چنددستگاهی و پشتیبان رمزشده.","<b>Account:</b> phone number and SMS code — for multi-device sync and an encrypted backup."))
             + P(t("می‌توانید به‌عنوان مهمان شروع کنید و بعداً حساب بسازید. اگر اطلاعات مهمان دارید، هنگام ثبت‌نام می‌پرسیم: به حساب جدید منتقل شود یا از صفر شروع کنید.","You can start as a guest and create an account later. If you already have guest data, sign-up asks once whether to move it into the account or start fresh."))),

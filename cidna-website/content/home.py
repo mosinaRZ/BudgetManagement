@@ -94,7 +94,7 @@ def home(L):
 </div><p class='more'><a href='{href(L,'security')}'>{t('مدل امنیتی کامل را بخوانید','Read the full security model')}</a></p>""", "")
 
     dl = section(f"""<div class='band glass'><div><h2>{t('سیدنا را همین حالا بگیرید','Get Cidna now')}</h2>
-<p>{t('برای اندروید ۸ و بالاتر. لینک‌های دریافت به‌محض انتشار در همین‌جا فعال می‌شوند.','For Android 8 and up. Download links go live here the moment they’re published.')}</p></div>{store_buttons(L)}</div>""", "")
+<p>{t('برای اندروید ۸ و بالاتر؛ رایگان و بدون تبلیغ.','For Android 8 and up — free and ad-free.')}</p></div>{store_buttons(L)}</div>""", "")
 
     faq = section(f"""{head(t('پرسش‌های پرتکرار','Frequently asked questions'))}{faq_html(faqs)}
 <p class='more'><a href='{href(L,'faq')}'>{t('همه‌ی پرسش‌ها','All questions')}</a></p>""", "")
@@ -107,7 +107,7 @@ def home(L):
       "license":"https://www.gnu.org/licenses/agpl-3.0.html","screenshot":C.DOMAIN+"/assets/img/app-home.webp","image":C.DOMAIN+"/assets/img/og-cover-"+L+".png",
       "description":t("اپلیکیشن رایگان مدیریت مالی شخصی برای اندروید با رمزنگاری سرتاسری، تقویم جلالی، تومان/ریال و امکان استفاده آفلاین پس از ورود.","Free personal finance app for Android with end-to-end encryption, Jalali calendar, Toman/Rial and offline use after sign-in."),
       "featureList":["Income and expense tracking","Budgets per category","Savings goals","Debts and receivables","Jalali and Gregorian calendars","Toman and Rial","PDF and XLSX export","Guest mode","End-to-end encrypted sync","Offline use after sign-in","Light and dark theme"]}
-    dl_urls = [s["url"] for s in C.STORES if s["url"]]
+    dl_urls = [(C.DOMAIN + s["url"]) if s["url"].startswith("/") else s["url"] for s in C.STORES if s["url"]]
     if dl_urls: app["downloadUrl"] = dl_urls[0]
     return page(L, "", t("سیدنا؛ اپ مدیریت مالی شخصی رایگان با رمزنگاری سرتاسری","Cidna — free personal finance app with end-to-end encryption"),
         t("سیدنا اپلیکیشن رایگان مدیریت مالی شخصی برای اندروید: ثبت هزینه، بودجه، قلک و بدهی با تقویم جلالی و تومان؛ رمزنگاری سرتاسری و کار آفلاین پس از ورود.",

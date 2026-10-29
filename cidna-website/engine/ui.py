@@ -69,21 +69,27 @@ LOGO_T = ("<svg class='logo' viewBox='0 0 512 512' aria-hidden='true' focusable=
 
 # ── مؤلفه‌های مشترک ────────────────────────────────────────────────────
 def store_buttons(L, compact=False):
-    """سه دکمهٔ دریافت. اگر url خالی باشد 'به‌زودی' است."""
+    """دکمهٔ دریافت برای هر فروشگاهِ دارای لینک."""
     t = T(L)
     out = []
     icons = {"myket":"bag", "bazaar":"bag", "direct":"package"}
     for s in C.STORES:
+        if not s["url"]: continue          # لینک ندارد → اصلاً نمایش داده نمی‌شود
         label = t(("دریافت از " + s["fa"]) if s["id"] != "direct" else "دریافت فایل مستقیم",
                   ("Get it on " + s["en"]) if s["id"] != "direct" else "Direct download (APK)")
         inner = f"{svg(icons[s['id']], 22)}<span class='st-txt'><b>{label}</b>"
-        if s["url"]:
-            inner += f"<small>{t('نسخهٔ','Version')} {fad(C.APP_VERSION) if L=='fa' else C.APP_VERSION}</small></span>"
-            out.append(f"<a class='store' data-store='{s['id']}' href='{e(s['url'])}' rel='noopener'>{inner}</a>")
+        inner += f"<small>{t('نسخهٔ','Version')} {fad(C.APP_VERSION) if L=='fa' else C.APP_VERSION}</small></span>"
+        if s["id"] == "direct":
+            out.append(f"<a class='store' data-store='direct' href='{e(s['url'])}' download rel='noopener'>{inner}</a>")
         else:
-            inner += f"<small>{t('به‌زودی','Coming soon')}</small></span>"
-            out.append(f"<span class='store soon' data-store='{s['id']}' role='link' aria-disabled='true'>{inner}</span>")
-    return f"<div class='stores{' compact' if compact else ''}'>{''.join(out)}</div>"
+            out.append(f"<a class='store' data-store='{s['id']}' href='{e(s['url'])}' rel='noopener'>{inner}</a>")
+    return f"<div class='stores{' compact' if compact else ''}'>{''.join(out)}</div>" if out else ""
+
+def store_names(L):
+    """نام فروشگاه‌های فعال، برای متن‌ها و متادیتا (مثلاً «کافه‌بازار یا فایل مستقیم»)"""
+    names = [(s["fa"] if L == "fa" else s["en"]) for s in C.STORES if s["url"]]
+    j = " یا " if L == "fa" else " or "
+    return j.join(names) if len(names) < 3 else ("، " if L == "fa" else ", ").join(names[:-1]) + j + names[-1]
 
 def faq_html(items):
     return "<div class='faq'>" + "".join(f"<details><summary>{q}</summary><div class='ans'>{a}</div></details>" for q, a, *_ in items) + "</div>"

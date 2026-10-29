@@ -208,8 +208,6 @@ body{padding-bottom:104px}
 a.store:hover{filter:brightness(1.07)}a.store:active{transform:scale(.98)}
 .store svg{width:26px;height:26px}
 .st-txt{display:grid;line-height:1.45}.st-txt b{font-size:.98rem}.st-txt small{font-size:.8rem;opacity:.85}
-.store.soon{background:var(--glass-strong);color:var(--text);border:1px dashed var(--stroke2);cursor:not-allowed}
-.store.soon small{opacity:1;color:var(--faint)}
 .stores.compact .store{min-height:54px}
 .band{padding:clamp(26px,4vw,52px);border-radius:var(--r-xl);display:grid;gap:22px;align-items:center}
 @media (min-width:900px){.band{grid-template-columns:1fr auto}}
@@ -283,13 +281,10 @@ a.card:hover{border-color:var(--stroke2)}
 [dir="rtl"] .progress{transform-origin:right}
 .tile,.card,.panel{position:relative;overflow:hidden}
 .tile>*,.card>*,.panel>*{position:relative;z-index:1}
-.tile::before,.card::before,.panel::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;opacity:0;transition:opacity .35s;
-  background:radial-gradient(320px circle at var(--mx,50%) var(--my,0%),color-mix(in srgb,var(--mint) 24%,transparent),transparent 70%)}
-@media (hover:hover){.tile:hover::before,.card:hover::before,.panel:hover::before{opacity:1}}
 
 @media (prefers-reduced-motion:no-preference){
   /* aurora drifts slowly with scroll */
-  body::before{inset:-12% 0;transform:translate3d(0,calc(var(--sy,0) * -.06px),0)}
+  body::before{inset:-110px 0;transform:translate3d(0,clamp(-100px,calc(var(--sy,0) * -.06px),0px),0)}
 
   /* scroll reveals: hidden from first paint (theme.js adds .js), released by IntersectionObserver */
   html.js:not(.rv-off) main :is(.sec-head,.page-hero h1,.page-hero .lead,.prose,.toc,.faq details,.linklist li,.band,.panel,.tile,.card,.journey li):not(.hero *):not(.rv-done),
@@ -330,7 +325,6 @@ a.card:hover{border-color:var(--stroke2)}
 
   /* cross-page transitions (Chromium / Safari 18+): header & dock stay put, content cross-fades */
   @view-transition{navigation:auto}
-  .topbar{view-transition-name:topbar}.dock{view-transition-name:dock}
   ::view-transition-old(root){animation:vt-out .22s ease-in both}
   ::view-transition-new(root){animation:vt-in .38s cubic-bezier(.2,.8,.2,1) both}
   @keyframes vt-out{to{opacity:0;transform:translateY(-8px)}}
@@ -338,5 +332,4 @@ a.card:hover{border-color:var(--stroke2)}
   /* theme switch: circular reveal from the toggle button */
   html.theme-vt::view-transition-old(root),html.theme-vt::view-transition-new(root){animation:none;mix-blend-mode:normal}
   html.theme-vt::view-transition-old(root){z-index:1}html.theme-vt::view-transition-new(root){z-index:2}
-  html.theme-vt .topbar,html.theme-vt .dock{view-transition-name:none}
-}
+  }

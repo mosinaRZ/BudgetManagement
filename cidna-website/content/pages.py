@@ -60,13 +60,13 @@ def download(L):
     rows = [(t("قیمت","Price"), t("رایگان","Free")), (t("نسخه","Version"), fad(C.APP_VERSION) if L == "fa" else C.APP_VERSION),
             (t("اندروید","Android"), t(f"{fad(C.MIN_ANDROID)} یا بالاتر", f"{C.MIN_ANDROID} or later")), (t("زبان","Languages"), t("فارسی، انگلیسی","Persian, English")),
             (t("مجوز","License"), "AGPL-3.0-or-later")]
-    if d.get("size"): rows.insert(3, (t("حجم فایل مستقیم","Direct file size"), d["size"]))
+    if d.get("size"): rows.insert(3, (t("حجم فایل مستقیم","Direct file size"), f"<span class='ltr'>{d['size']}</span>"))
     kv = "<ul class='kv'>" + "".join(f"<li><b>{k}:</b> <span>{v}</span></li>" for k, v in rows) + "</ul>"
     sha = ""
     if d.get("sha256"):
         sha = f"<h2 id='verify'>{t('بررسی سلامت فایل مستقیم','Verify the direct file')}</h2><p>{t('هش SHA-256 فایل را با مقدار زیر مقایسه کنید:','Compare the file’s SHA-256 hash with this value:')}</p><p class='hash'>{d['sha256']}</p><p><button class='btn btn-ghost btn-sm' type='button' data-copy='{d['sha256']}' data-ok='{t('کپی شد','Copied')}'>{t('کپی هش','Copy hash')}</button></p>"
     secs = f"""<article class='prose'>
-<h2 id='get'>{t('دریافت','Get the app')}</h2>{store_buttons(L)}<p class='mt'>{t('برای خبر انتشار، ما را در <a href="'+C.X_URL+'" rel="noopener">ایکس</a> یا <a href="'+C.INSTAGRAM+'" rel="noopener">اینستاگرام</a> دنبال کنید.','For release news, follow us on <a href="'+C.X_URL+'" rel="noopener">X</a> or <a href="'+C.INSTAGRAM+'" rel="noopener">Instagram</a>.')}</p>
+<h2 id='get'>{t('دریافت','Get the app')}</h2>{store_buttons(L)}<p class='mt'>{t('برای خبر نسخه‌های تازه، ما را در <a href="'+C.X_URL+'" rel="noopener">ایکس</a> یا <a href="'+C.INSTAGRAM+'" rel="noopener">اینستاگرام</a> دنبال کنید.','For news about new versions, follow us on <a href="'+C.X_URL+'" rel="noopener">X</a> or <a href="'+C.INSTAGRAM+'" rel="noopener">Instagram</a>.')}</p>
 <h2 id='info'>{t('مشخصات','Details')}</h2>{kv}
 <h2 id='safe'>{t('فقط از لینک‌های رسمی دریافت کنید','Only download from official links')}</h2>
 <p>{t('سیدنا متن‌باز است و هر کسی می‌تواند نسخهٔ خودش را بسازد؛ اما نسخه‌های غیررسمی ممکن است داده‌های شما را ببینند. اگر فایلی را از جای دیگری گرفته‌اید، دوباره از همین صفحه دریافت کنید. تغییردهندگان باید نام و نشان دیگری انتخاب کنند.','Cidna is open source, so anyone can build their own copy — but unofficial builds could see your data. If you got a file from somewhere else, download it again from this page. Forks must use a different name and icon.')}</p>
@@ -74,12 +74,12 @@ def download(L):
 <ol><li>{t('فایل را دریافت کنید.','Download the file.')}</li><li>{t('هنگام باز کردن، اندروید برای مرورگر یا مدیر فایل اجازهٔ «نصب برنامه‌های ناشناس» را می‌خواهد؛ فقط برای همین یک‌بار اجازه دهید.','When you open it, Android asks to allow “install unknown apps” for your browser or file manager — allow it just for this install.')}</li><li>{t('در صورت تمایل، هش فایل را با مقدار پایین همین صفحه مقایسه کنید.','Optionally compare the file’s hash with the value below on this page.')}</li><li>{t('نصب کنید و برنامه را باز کنید.','Install and open the app.')}</li></ol>
 <div class='callout'><p>{t('قابلیت تشخیص پیامک بانکی فقط در نسخهٔ مستقیم (direct) وجود دارد و فقط پس از اجازهٔ شما فعال می‌شود.','Bank-SMS detection exists only in the direct build, and only after you grant the permission.')}</p></div>
 {sha}</article>"""
-    body = f"""<section class='page-hero'><div class='wrap'>{{{{CRUMBS}}}}<h1>{t('دریافت سیدنا','Download Cidna')}</h1><p class='lead'>{t('رایگان، بدون تبلیغ، برای اندروید. از هر کدام از سه راه زیر که برایتان راحت‌تر است.','Free, ad-free, for Android — choose whichever of the three routes suits you.')}</p></div></section>
+    body = f"""<section class='page-hero'><div class='wrap'>{{{{CRUMBS}}}}<h1>{t('دریافت سیدنا','Download Cidna')}</h1><p class='lead'>{t('رایگان، بدون تبلیغ، برای اندروید. از هر راهی که برایتان راحت‌تر است.','Free, ad-free, for Android — choose whichever route suits you.')}</p></div></section>
 <div class='wrap doc'><aside class='toc glass'><b>{t('در این صفحه','On this page')}</b><a href='#get'>{t('دریافت','Get the app')}</a><a href='#info'>{t('مشخصات','Details')}</a><a href='#safe'>{t('امنیت دریافت','Safe download')}</a><a href='#direct'>{t('نصب مستقیم','Direct install')}</a></aside>{secs}</div>"""
     cr = [(t("خانه","Home"), url(L,"")), (t("دریافت برنامه","Download"), url(L,"download"))]
     return page(L, "download", t("دریافت سیدنا برای اندروید","Download Cidna for Android"),
-        t("دریافت رایگان سیدنا از مایکت، کافه‌بازار یا فایل مستقیم؛ برنامهٔ مدیریت مالی شخصی با رمزنگاری سرتاسری برای اندروید ۸ و بالاتر.","Download Cidna free from Myket, Cafe Bazaar or as a direct file — an end-to-end encrypted personal finance app for Android 8+."),
-        body, crumbs=cr, keywords=t("دانلود سیدنا, دانلود برنامه مدیریت مالی, سیدنا مایکت, سیدنا کافه بازار","download Cidna, Cidna APK, Cidna Myket, Cidna Cafe Bazaar"))
+        t(f"دریافت رایگان سیدنا از {store_names('fa')}؛ برنامهٔ مدیریت مالی شخصی با رمزنگاری سرتاسری برای اندروید ۸ و بالاتر.",f"Download Cidna free from {store_names('en')} — an end-to-end encrypted personal finance app for Android 8+."),
+        body, crumbs=cr, keywords=t("دانلود سیدنا, دانلود برنامه مدیریت مالی, سیدنا کافه بازار, دانلود مستقیم سیدنا","download Cidna, Cidna APK, Cidna Cafe Bazaar, Cidna direct download"))
 
 # ── FAQ page ───────────────────────────────────────────────────────────
 def faq(L):

@@ -1,0 +1,153 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   LIQUID GLASS
+   A material, not a blur: translucent fill + vibrancy, specular rim that
+   catches light from the top-start corner, inner luminance, soft contact
+   shadow, light that follows the pointer, and (Chromium) real edge
+   refraction with chromatic dispersion — see js/glass.js.
+   Loaded after site.css; every surface falls back gracefully.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── tokens ─────────────────────────────────────────────────────────── */
+:root,:root[data-theme="light"]{
+  --lg-fill-a:rgba(255,255,255,.30);--lg-fill-bar-a:rgba(255,255,255,.46);--lg-fill-read-a:rgba(255,255,255,.64);
+  --lg-solid:rgba(240,249,244,.97);
+  --lg-tint:rgba(176,228,204,.34);--lg-spot:rgba(255,255,255,.62);--lg-lens-sheen:rgba(255,255,255,.55);
+  --lg-rim-a:rgba(255,255,255,1);--lg-rim-b:rgba(255,255,255,.16);--lg-rim-c:rgba(255,255,255,.78);
+  --lg-hi:rgba(255,255,255,.95);--lg-lo:rgba(255,255,255,.38);--lg-inner:rgba(255,255,255,.30);
+  --lg-ink:rgba(9,40,28,.10);--lg-drop:rgba(9,40,28,.34);
+  --lg-bf:blur(16px) saturate(1.9) brightness(1.04);--lg-bf-ref:saturate(1.9) brightness(1.04);
+  --orb-a:rgba(100,200,165,.34);--orb-b:rgba(255,196,150,.30);--orb-c:rgba(120,180,235,.26);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --lg-fill-a:rgba(30,56,50,.30);--lg-fill-bar-a:rgba(18,34,31,.50);--lg-fill-read-a:rgba(14,28,26,.64);
+    --lg-solid:rgba(18,34,31,.97);
+    --lg-tint:rgba(64,138,113,.24);--lg-spot:rgba(176,228,204,.20);--lg-lens-sheen:rgba(255,255,255,.14);
+    --lg-rim-a:rgba(255,255,255,.82);--lg-rim-b:rgba(255,255,255,.05);--lg-rim-c:rgba(255,255,255,.46);
+    --lg-hi:rgba(255,255,255,.56);--lg-lo:rgba(255,255,255,.12);--lg-inner:rgba(255,255,255,.07);
+    --lg-ink:rgba(0,0,0,.35);--lg-drop:rgba(0,0,0,.62);
+    --lg-bf:blur(16px) saturate(1.7) brightness(1.12);--lg-bf-ref:saturate(1.7) brightness(1.12);
+    --orb-a:rgba(64,138,113,.40);--orb-b:rgba(214,150,96,.16);--orb-c:rgba(70,110,190,.26);
+  }
+}
+:root[data-theme="dark"]{
+  --lg-fill-a:rgba(30,56,50,.30);--lg-fill-bar-a:rgba(18,34,31,.50);--lg-fill-read-a:rgba(14,28,26,.64);
+  --lg-solid:rgba(18,34,31,.97);
+  --lg-tint:rgba(64,138,113,.24);--lg-spot:rgba(176,228,204,.20);--lg-lens-sheen:rgba(255,255,255,.14);
+  --lg-rim-a:rgba(255,255,255,.82);--lg-rim-b:rgba(255,255,255,.05);--lg-rim-c:rgba(255,255,255,.46);
+  --lg-hi:rgba(255,255,255,.56);--lg-lo:rgba(255,255,255,.12);--lg-inner:rgba(255,255,255,.07);
+  --lg-ink:rgba(0,0,0,.35);--lg-drop:rgba(0,0,0,.62);
+  --lg-bf:blur(16px) saturate(1.7) brightness(1.12);--lg-bf-ref:saturate(1.7) brightness(1.12);
+  --orb-a:rgba(64,138,113,.40);--orb-b:rgba(214,150,96,.16);--orb-c:rgba(70,110,190,.26);
+}
+:root{
+  --lg-fill:var(--lg-fill-a);--lg-fill-bar:var(--lg-fill-bar-a);--lg-fill-read:var(--lg-fill-read-a);
+  /* edge light: bright top-start rim, dim bottom-end rim, inner luminance, contact + ambient shadow */
+  --lg-edge:inset 1.5px 2px 2px -1.5px var(--lg-hi),inset -1.5px -2px 2px -1.5px var(--lg-lo),
+            inset 0 0 22px 0 var(--lg-inner),0 1px 1px var(--lg-ink),0 16px 34px -18px var(--lg-drop);
+}
+/* users who ask for less transparency, and browsers without backdrop-filter, get calm solid surfaces */
+@media (prefers-reduced-transparency:reduce){
+  :root{--lg-fill:var(--lg-solid);--lg-fill-bar:var(--lg-solid);--lg-fill-read:var(--lg-solid);--lg-bf:none;--lg-bf-ref:none}
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  :root{--lg-fill:var(--lg-solid);--lg-fill-bar:var(--lg-solid);--lg-fill-read:var(--lg-solid);--lg-bf:none;--lg-bf-ref:none}
+}
+
+/* ── ambient light behind the glass (gives it something to bend) ────── */
+body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(30vmax 30vmax at 10% 16%,var(--orb-a),transparent 70%),
+    radial-gradient(26vmax 26vmax at 90% 58%,var(--orb-b),transparent 70%),
+    radial-gradient(24vmax 24vmax at 36% 104%,var(--orb-c),transparent 70%)}
+@media (prefers-reduced-motion:no-preference){
+  body::after{inset:-130px 0;transform:translate3d(0,clamp(-120px,calc(var(--sy,0) * -.1px),0px),0)}
+}
+
+/* ── the material ───────────────────────────────────────────────────── */
+.panel,.tile,.card,.band,.toc,.btn-ghost,.pill,.tag,.faq details,.linklist a,.journey li,.glass{
+  background:
+    radial-gradient(240px circle at var(--mx,-999px) var(--my,-999px),var(--lg-spot),transparent 70%),
+    linear-gradient(155deg,var(--lg-tint),transparent 52%),
+    var(--lg-fill);
+  border-color:transparent;
+  -webkit-backdrop-filter:var(--lg-bf);backdrop-filter:var(--lg-bf);
+  box-shadow:var(--lg-edge);
+}
+/* bars: a little denser so labels stay readable over scrolling content */
+.bar,.dock-pill{
+  background:linear-gradient(155deg,var(--lg-tint),transparent 60%),var(--lg-fill-bar);
+  border-color:transparent;
+  -webkit-backdrop-filter:var(--lg-bf);backdrop-filter:var(--lg-bf);
+  box-shadow:var(--lg-edge);
+  --lg-ang:calc(135deg + var(--sy,0) * .035deg);   /* the rim catches the light as you scroll */
+}
+/* long-form reading surface */
+.prose{
+  background:linear-gradient(155deg,var(--lg-tint),transparent 40%),var(--lg-fill-read);
+  border-color:transparent;
+  -webkit-backdrop-filter:var(--lg-bf);backdrop-filter:var(--lg-bf);
+  box-shadow:var(--lg-edge);
+}
+.tile:hover,.card:hover,.panel:hover,.linklist a:hover,.btn-ghost:hover,.pill:hover{border-color:transparent}
+.tile.accent{background:linear-gradient(160deg,color-mix(in srgb,var(--container),#fff 20%),var(--container))}
+
+/* glass nested inside glass can't sample the page (it'd only see its parent), so it stays a quiet tint */
+.bar .pill,.panel .node,.prose .callout,.prose .tbl{-webkit-backdrop-filter:none;backdrop-filter:none}
+.bar .pill{background:linear-gradient(155deg,rgba(255,255,255,.30),transparent 70%),var(--lg-fill);box-shadow:inset 1.5px 2px 2px -1.5px var(--lg-hi),inset -1.5px -2px 2px -1.5px var(--lg-lo)}
+.panel .node{background:linear-gradient(155deg,var(--lg-tint),transparent 60%),var(--lg-fill-bar);border-color:transparent;
+  box-shadow:inset 1.5px 2px 2px -1.5px var(--lg-hi),inset -1.5px -2px 2px -1.5px var(--lg-lo),inset 0 0 16px 0 var(--lg-inner)}
+.callout{background:linear-gradient(155deg,rgba(255,255,255,.22),transparent 60%),color-mix(in srgb,var(--container) 52%,transparent);
+  border-block-color:transparent;border-inline-end-color:transparent;
+  box-shadow:inset 1.5px 2px 2px -1.5px var(--lg-hi),inset 0 0 18px 0 var(--lg-inner)}
+.chips li{background:linear-gradient(155deg,rgba(255,255,255,.34),transparent 70%),color-mix(in srgb,var(--container) 76%,transparent);
+  -webkit-backdrop-filter:blur(10px) saturate(1.5);backdrop-filter:blur(10px) saturate(1.5);
+  box-shadow:inset 1.5px 2px 2px -1.5px var(--lg-hi),inset -1.5px -2px 2px -1.5px var(--lg-lo)}
+
+/* tinted glass: primary buttons and the dock's action button */
+.btn-primary,.store,.fab{
+  background:linear-gradient(168deg,color-mix(in srgb,var(--primary),#fff 28%) 0%,var(--primary) 52%,color-mix(in srgb,var(--primary),#000 14%) 100%);
+  box-shadow:inset 1.5px 2px 1.5px -1px rgba(255,255,255,.78),inset -1.5px -2px 2px -1px rgba(255,255,255,.26),
+             inset 0 0 14px rgba(255,255,255,.10),0 1px 1px var(--lg-ink),0 14px 26px -12px color-mix(in srgb,var(--primary) 78%,transparent)}
+.fab{box-shadow:inset 1.5px 2px 1.5px -1px rgba(255,255,255,.78),inset -1.5px -2px 2px -1px rgba(255,255,255,.26),
+             inset 0 0 18px rgba(255,255,255,.12),0 1px 1px var(--lg-ink),0 18px 30px -12px color-mix(in srgb,var(--primary) 82%,transparent)}
+
+/* ── specular rim: a 1px edge of light, brightest toward the top-start corner ── */
+.bar,.pill,.btn-ghost,.band,.prose,.faq details,.linklist a,.journey li,.fab,.btn-primary,.store,.dock-pill{position:relative}
+.bar::before,.dock-pill::before,.pill::before,.btn-ghost::before,.tag::before,.band::before,.panel::before,.tile::before,.card::before,
+.prose::before,.faq details::before,.linklist a::before,.fab::before,.btn-primary::before,.store::before,.journey li::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;padding:1.25px;pointer-events:none;z-index:2;
+  background:linear-gradient(var(--lg-ang,135deg),var(--lg-rim-a) 0%,var(--lg-rim-b) 26%,var(--lg-rim-b) 60%,var(--lg-rim-c) 100%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude}
+[dir="rtl"] .bar,[dir="rtl"] .dock-pill{--lg-ang:calc(225deg - var(--sy,0) * .035deg)}   /* the light comes from the start side in RTL too */
+[dir="rtl"] .panel::before,[dir="rtl"] .tile::before,[dir="rtl"] .card::before,[dir="rtl"] .band::before,[dir="rtl"] .prose::before,
+[dir="rtl"] .faq details::before,[dir="rtl"] .linklist a::before,[dir="rtl"] .tag::before,[dir="rtl"] .pill::before,
+[dir="rtl"] .btn-ghost::before,[dir="rtl"] .btn-primary::before,[dir="rtl"] .store::before,[dir="rtl"] .fab::before,[dir="rtl"] .journey li::after{--lg-ang:225deg}
+
+/* ── glass lens: the selection slides between nav items like a drop of glass ── */
+.primary,.dock-pill{position:relative}
+.primary a,.tab{position:relative;z-index:1;transition:color .25s}
+.lens{position:absolute;left:0;top:0;width:var(--lw,0px);height:var(--lh,0px);transform:translate3d(var(--lx,0px),var(--ly,0px),0);
+  border-radius:999px;pointer-events:none;z-index:0;opacity:0;
+  background:linear-gradient(165deg,var(--lg-lens-sheen),transparent 58%),color-mix(in srgb,var(--container) 90%,transparent);
+  box-shadow:inset 1.5px 2px 2px -1px var(--lg-hi),inset -1.5px -2px 2px -1px var(--lg-lo),0 8px 16px -8px var(--lg-drop);
+  transition:transform .6s cubic-bezier(.3,1.4,.5,1),width .6s cubic-bezier(.3,1.4,.5,1),height .6s cubic-bezier(.3,1.4,.5,1),opacity .25s}
+.lens.on{opacity:1}
+.lens.snap{transition:none}
+html.lens-on .primary a[aria-current=page],html.lens-on .tab[aria-current=page]{background:transparent}
+html.lens-on .primary a[aria-current=page]:not([data-lens]),html.lens-on .tab[aria-current=page]:not([data-lens]){color:var(--muted)}
+html.lens-on .primary a[data-lens],html.lens-on .tab[data-lens]{color:var(--on-container)}
+@media (prefers-reduced-motion:reduce){.lens{transition:none}}
+
+/* ── real refraction, injected by glass.js on Chromium ───────────────── */
+.lg-defs{position:absolute;width:0;height:0;overflow:hidden;pointer-events:none}
+html.lg-svg .lg-ref{-webkit-backdrop-filter:var(--lg-ref) var(--lg-bf-ref);backdrop-filter:var(--lg-ref) var(--lg-bf-ref)}
+
+/* ── a touch of pressure ─────────────────────────────────────────────── */
+@media (prefers-reduced-motion:no-preference){
+  .pill,.btn-ghost,.btn-primary,.store,.fab{transition:transform .2s cubic-bezier(.3,1.5,.5,1),filter .2s}
+  .pill:active,.btn-ghost:active{transform:scale(.94)}
+}
+@media print{body::after{display:none}}
