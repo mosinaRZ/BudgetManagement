@@ -7,8 +7,10 @@ import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
+import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
+import ir.hamedan.budgetmanagement.utils.CategoryRules
 import kotlinx.coroutines.flow.first
 import java.util.Calendar
 
@@ -24,23 +26,6 @@ class MonthlyGoalDepositWorker(
         val categoryRepository = app.container.categoryRepository
         val isPersian = LocaleHelper.getLanguage(applicationContext) == "fa"
 
-        // Resolve the canonical system category before mutating any goal.
-        // The previous code deposited first and looked up SAVING_GOAL afterwards;
-        // during first-launch seeding this could make the deposit succeed while
-        // the transaction was silently skipped by `?: continue`.
-        //
-        // Self-heal the category if it is temporarily missing. The title is the
-        // same stable key used by BudgetApp, so existing seeded categories are
-        // always reused rather than replaced.
-        val savingGoalCategory = categoryRepository.getAllCategories().first()
-            .firstOrNull { it.title == "SAVING_GOAL" }
-            ?: CategoryEntity(
-                title = "SAVING_GOAL",
-                iconEmoji = "🐷",
-                isExpense = true,
-                isSystem = true
-            ).also { categoryRepository.insertCategory(it) }
-
         val goals = goalRepository.getAllGoals().first()
         var currentBalance = transactionRepository.getCurrentBalance()
         val now = System.currentTimeMillis()
@@ -49,6 +34,13 @@ class MonthlyGoalDepositWorker(
         val year = today.get(Calendar.YEAR)
         val month = today.get(Calendar.MONTH)
         val dayOfMonth = today.get(Calendar.DAY_OF_MONTH)
+
+        // The SAVING_GOAL category is resolved lazily, only when a deposit is actually
+        // about to happen. Right after a logout/account switch the local database is
+        // wiped (categories AND goals), and the worker may run before the default
+        // categories are seeded or synced. With no goals there is nothing to deposit,
+        // so the worker must not touch categories at all in that window.
+        var savingGoalCategory: CategoryEntity? = null
 
         for (goal in goals) {
             if (goal.monthlyAmount <= 0L) continue
@@ -82,13 +74,18 @@ class MonthlyGoalDepositWorker(
             }
 
             try {
+                // Resolve the category BEFORE mutating the goal, so a failure here can
+                // never leave a deposit without its matching transaction.
+                val category = savingGoalCategory
+                    ?: resolveSavingGoalCategory(categoryRepository).also { savingGoalCategory = it }
+
                 goalRepository.depositToGoal(goal.id, goal.monthlyAmount)
                 transactionRepository.insertTransaction(
                     TransactionEntity(
                         title = if (isPersian) "واریز خودکار ماهانه به قلک: ${goal.title}"
                         else "Auto Monthly Deposit to: ${goal.title}",
                         amount = goal.monthlyAmount,
-                        categoryId = savingGoalCategory.id,
+                        categoryId = category.id,
                         type = "EXPENSE",
                         note = if (isPersian) "واریز خودکار ماهانه" else "Automatic monthly deposit"
                     )
@@ -122,5 +119,34 @@ class MonthlyGoalDepositWorker(
         }
 
         return Result.success()
+    }
+
+    /**
+     * Returns the single canonical SAVING_GOAL category.
+     *
+     * - If one or more rows with this key exist (e.g. legacy duplicates), the canonical
+     *   one is chosen deterministically (stable id first, then oldest), so every caller
+     *   agrees on the same row.
+     * - If none exists, it is created with the SAME stable id that
+     *   BudgetApp.seedDefaultCategoriesIfNeeded() uses. The insert is a REPLACE on that
+     *   id, so it converges with seeding and with other devices instead of creating a
+     *   second category with a random UUID (the cause of the duplicated "قلک" category).
+     */
+    private suspend fun resolveSavingGoalCategory(
+        categoryRepository: CategoryRepository
+    ): CategoryEntity {
+        val existing = categoryRepository.getAllCategories().first()
+            .filter { it.title.trim().equals(CategoryRules.SAVING_GOAL_TITLE, ignoreCase = true) }
+        if (existing.isNotEmpty()) return CategoryRules.pickCanonical(existing)
+
+        val category = CategoryEntity(
+            id = CategoryRules.stableDefaultId(CategoryRules.SAVING_GOAL_TITLE),
+            title = CategoryRules.SAVING_GOAL_TITLE,
+            iconEmoji = "🐷",
+            isExpense = true,
+            isSystem = true
+        )
+        categoryRepository.insertCategory(category)
+        return category
     }
 }

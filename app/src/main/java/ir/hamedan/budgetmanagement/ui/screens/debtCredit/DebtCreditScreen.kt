@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.debtCredit
 
+import ir.hamedan.budgetmanagement.ui.components.WheelDatePickerDialog
+
 import android.widget.Toast
 import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
 import ir.hamedan.budgetmanagement.ui.components.showError
@@ -1182,42 +1184,16 @@ fun AddOrEditDebtCreditDialog(
     else (if (currencyUnit == "IRR") "Monthly Installment (Rial)" else "Monthly Installment (Toman)")
 
     if (showDatePickerDialog) {
-        val todayStartMillis = remember {
-            Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-        }
-
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = oneTimeDueDateMillis.coerceAtLeast(todayStartMillis),
-            selectableDates = object : SelectableDates {
-                override fun isSelectableDate(utcTimeMillis: Long): Boolean {
-                    return utcTimeMillis >= todayStartMillis
-                }
-            }
-        )
-
-        DatePickerDialog(
-            onDismissRequest = { showDatePickerDialog = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { oneTimeDueDateMillis = it }
-                    showDatePickerDialog = false
-                }) {
-                    Text(if (isPersian) "تایید" else "OK")
-                }
+        WheelDatePickerDialog(
+            isPersian = isPersian,
+            title = if (isPersian) "مهلت تسویه" else "Due date",
+            initialMillis = oneTimeDueDateMillis,
+            onConfirm = { picked ->
+                oneTimeDueDateMillis = picked
+                showDatePickerDialog = false
             },
-            dismissButton = {
-                TextButton(onClick = { showDatePickerDialog = false }) {
-                    Text(if (isPersian) "انصراف" else "Cancel")
-                }
-            }
-        ) {
-            DatePicker(state = datePickerState)
-        }
+            onDismiss = { showDatePickerDialog = false }
+        )
     }
 
     var detectedPersonName by remember { mutableStateOf<String?>(null) }

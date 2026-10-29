@@ -140,15 +140,15 @@ fun RegisterScreen(
     ).count { it }
 
     fun requestSmsCode(destination: String) {
+        if (loading) return
         loading = true
         error = null
+        // The cooldown starts now, so a timed-out request cannot be re-sent straight away.
+        phoneSentAt = System.currentTimeMillis()
+        now = phoneSentAt
         scope.launch {
             authRepository.requestOtp(destination, "sms", "REGISTER")
-                .onSuccess {
-                    phoneChallenge = it.challengeId
-                    phoneSentAt = System.currentTimeMillis()
-                    now = phoneSentAt
-                }
+                .onSuccess { phoneChallenge = it.challengeId }
                 .onFailure { error = authErrorMessage(it, isPersian, AuthContext.OTP_REQUEST) }
             loading = false
         }
@@ -261,7 +261,7 @@ fun RegisterScreen(
                 shape = RoundedCornerShape(16.dp),
                 textStyle = credentialTextStyle(),
                 isError = phone.isNotBlank() && normalizedPhone == null,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
                 keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -291,8 +291,8 @@ fun RegisterScreen(
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
                     textStyle = credentialTextStyle(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Next),
-                    keyboardActions = KeyboardActions(onNext = { focusManager.clearFocus() }),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
+                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                     modifier = Modifier.fillMaxWidth()
                 )
             }

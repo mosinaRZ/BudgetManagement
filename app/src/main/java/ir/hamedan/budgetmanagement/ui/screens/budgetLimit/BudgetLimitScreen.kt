@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.budgetLimit
 
+import ir.hamedan.budgetmanagement.ui.components.WheelDatePickerDialog
+
 import androidx.compose.animation.core.Animatable
 import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
 import ir.hamedan.budgetmanagement.ui.components.showError
@@ -730,38 +732,32 @@ fun AddOrEditLimitDialog(
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
 
-    val startDatePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = startDateMillis,
-        selectableDates = object : SelectableDates {
-            override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis >= todayStartMillis
-        }
-    )
-    val endDatePickerState = rememberDatePickerState(initialSelectedDateMillis = endDateMillis)
-
     if (showStartDatePicker) {
-        DatePickerDialog(
-            onDismissRequest = { showStartDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    startDatePickerState.selectedDateMillis?.let {
-                        startDateMillis = it.coerceAtLeast(todayStartMillis)
-                    }
-                    showStartDatePicker = false
-                }) { Text(if (isPersian) "تایید" else "OK") }
-            }
-        ) { DatePicker(state = startDatePickerState) }
+        WheelDatePickerDialog(
+            isPersian = isPersian,
+            title = if (isPersian) "تاریخ شروع" else "Start date",
+            initialMillis = startDateMillis,
+            minDate = java.time.LocalDate.now(),
+            onConfirm = { picked ->
+                startDateMillis = picked.coerceAtLeast(todayStartMillis)
+                showStartDatePicker = false
+            },
+            onDismiss = { showStartDatePicker = false }
+        )
     }
 
     if (showEndDatePicker) {
-        DatePickerDialog(
-            onDismissRequest = { showEndDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    endDatePickerState.selectedDateMillis?.let { endDateMillis = it }
-                    showEndDatePicker = false
-                }) { Text(if (isPersian) "تایید" else "OK") }
-            }
-        ) { DatePicker(state = endDatePickerState) }
+        WheelDatePickerDialog(
+            isPersian = isPersian,
+            title = if (isPersian) "تاریخ پایان" else "End date",
+            initialMillis = endDateMillis,
+            minDate = java.time.LocalDate.now(),
+            onConfirm = { picked ->
+                endDateMillis = picked
+                showEndDatePicker = false
+            },
+            onDismiss = { showEndDatePicker = false }
+        )
     }
 
     Dialog(onDismissRequest = onDismiss) {

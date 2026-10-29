@@ -86,6 +86,7 @@ fun PasswordResetScreen(
     val normalizedIdentifier = AuthInputNormalizer.identifier(identifier)
 
     fun requestOtp() {
+        if (loading) return
         val destination = normalizedIdentifier
         if (destination == null) {
             error = if (isPersian) "شماره موبایل معتبر نیست" else "Enter a valid phone number"
@@ -96,13 +97,16 @@ fun PasswordResetScreen(
         code = ""
         error = null
         loading = true
+        // The cooldown starts now, so a timed-out request cannot be re-sent straight away.
+        sentAt = System.currentTimeMillis()
+        now = sentAt
         scope.launch {
             authRepository.requestOtp(
                 destination = destination,
                 channel = "sms",
                 purpose = "PASSWORD_RESET"
             )
-                .onSuccess { response -> challengeId = response.challengeId; sentAt = System.currentTimeMillis(); now = sentAt }
+                .onSuccess { response -> challengeId = response.challengeId }
                 .onFailure { error = authErrorMessage(it, isPersian, AuthContext.OTP_REQUEST) }
             loading = false
         }
@@ -213,7 +217,7 @@ fun PasswordResetScreen(
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
                         textStyle = credentialTextStyle(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
                         keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                         modifier = Modifier.fillMaxWidth()
                     )
