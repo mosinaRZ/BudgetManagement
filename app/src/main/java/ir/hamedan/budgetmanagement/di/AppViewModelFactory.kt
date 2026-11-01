@@ -12,6 +12,7 @@ import ir.hamedan.budgetmanagement.domain.usecase.SavingGoalUseCase
 import ir.hamedan.budgetmanagement.domain.usecase.DebtCreditUseCase
 import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitViewModel
 import ir.hamedan.budgetmanagement.ui.screens.home.PendingTransactionViewModel
+import ir.hamedan.budgetmanagement.ui.screens.home.ProfileCompletionViewModel
 import ir.hamedan.budgetmanagement.ui.screens.notification.NotificationViewModel
 import ir.hamedan.budgetmanagement.ui.screens.profile.ProfileViewModel
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
@@ -33,6 +34,13 @@ class AppViewModelFactory(
                 ProfileViewModel(
                     repository = container.profileRepository,
                     context = appContext
+                ) as T
+            }
+            modelClass.isAssignableFrom(ProfileCompletionViewModel::class.java) -> {
+                ProfileCompletionViewModel(
+                    repository = container.profileRepository,
+                    authSessionStore = container.authSessionStore,
+                    guestModeStore = container.guestModeStore
                 ) as T
             }
             modelClass.isAssignableFrom(TransactionViewModel::class.java) -> {

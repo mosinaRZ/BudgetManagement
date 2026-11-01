@@ -10,19 +10,28 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.Home
@@ -61,6 +70,7 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -71,6 +81,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -315,6 +326,12 @@ private class GlassShader {
 /** Uniform gap between the bar's outer edge and the lens → lens stays concentric with the bar. */
 private val LensInset = 4.dp
 
+/** Height shared by the navigation capsule and the add capsule so both always line up. */
+val BottomBarHeight = 64.dp
+
+/** Widest a tab may be; on narrow screens tabs shrink so the bar never overflows. */
+private val MaxItemWidth = 76.dp
+
 @Composable
 fun CapsuleBottomNavigation(
     currentRoute: String?,
@@ -322,7 +339,9 @@ fun CapsuleBottomNavigation(
     modifier: Modifier = Modifier,
     backdrop: GlassBackdrop? = null,
     /** Frost amount. Lower = crisper refraction. */
-    blurRadius: Dp = 1.5.dp
+    blurRadius: Dp = 1.5.dp,
+    /** False when the bar sits inside [BottomDock], which already casts the shadow. */
+    elevated: Boolean = true
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -372,13 +391,15 @@ fun CapsuleBottomNavigation(
 
     Box(
         modifier = modifier
-            .fillMaxWidth()
-            .shadow(
-                elevation = 18.dp,
-                shape = shape,
-                clip = false,
-                ambientColor = Color.Black.copy(alpha = if (isDark) 0.45f else 0.12f),
-                spotColor = Color.Black.copy(alpha = if (isDark) 0.55f else 0.18f)
+            .height(BottomBarHeight)
+            .then(
+                if (elevated) Modifier.shadow(
+                    elevation = 18.dp,
+                    shape = shape,
+                    clip = false,
+                    ambientColor = Color.Black.copy(alpha = if (isDark) 0.45f else 0.12f),
+                    spotColor = Color.Black.copy(alpha = if (isDark) 0.55f else 0.18f)
+                ) else Modifier
             )
             .clip(shape)
             .onGloballyPositioned { barOrigin = it.positionInRoot() }
@@ -471,26 +492,151 @@ fun CapsuleBottomNavigation(
                 shape = shape
             )
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(LensInset),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            bottomNavItems.forEachIndexed { index, item ->
-                NavigationBarItemCustom(
-                    item = item,
-                    isSelected = index == selectedIndex,
-                    isPersian = isPersian,
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        if (index != selectedIndex) {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        // The capsule hugs its tabs: every tab has the same width (capped on wide screens,
+        // shrunk on narrow ones), so there is no empty stretch of bar around the items and the
+        // lens (which is computed as size / count) stays exactly over the selected tab.
+        BoxWithConstraints {
+            val itemWidth = minOf(MaxItemWidth, (maxWidth - LensInset * 2) / bottomNavItems.size)
+            Row(
+                modifier = Modifier
+                    .height(BottomBarHeight)
+                    .padding(LensInset),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                bottomNavItems.forEachIndexed { index, item ->
+                    NavigationBarItemCustom(
+                        item = item,
+                        isSelected = index == selectedIndex,
+                        isPersian = isPersian,
+                        modifier = Modifier
+                            .width(itemWidth)
+                            .fillMaxHeight(),
+                        onClick = {
+                            if (index != selectedIndex) {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
+                            onItemSelected(item)
                         }
-                        onItemSelected(item)
-                    }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** The round primary "add" button. It has no container of its own: [BottomDock] provides it. */
+@Composable
+private fun AddActionButton(
+    onClick: () -> Unit,
+    contentDescription: String,
+    modifier: Modifier = Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+    val haptic = LocalHapticFeedback.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium),
+        label = "addScale"
+    )
+
+    Box(
+        modifier = modifier
+            .size(BottomBarHeight)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(CircleShape)
+            .background(colors.primary)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.Button,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onClick()
+                }
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Add,
+            contentDescription = contentDescription,
+            tint = colors.onPrimary,
+            modifier = Modifier.size(28.dp)
+        )
+    }
+}
+
+/**
+ * The bottom dock: one **opaque**, theme-matched outer capsule that wraps both the glass
+ * navigation capsule and the add button. Everything inside is separated by the same [LensInset]
+ * (outer padding = gap between the two = lens inset), so the spacing is uniform.
+ *
+ * The add button sits on the right in both languages, as before.
+ */
+@Composable
+fun BottomDock(
+    currentRoute: String?,
+    onItemSelected: (BottomNavItem) -> Unit,
+    onAddClick: () -> Unit,
+    addContentDescription: String,
+    isPersian: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+    val isDark = colors.surface.luminance() < 0.5f
+    val shape = RoundedCornerShape(percent = 50)
+    // Flattened onto the page background so the dock is fully opaque yet follows the theme.
+    val dockColor = colors.surfaceVariant.copy(alpha = 0.55f).compositeOver(colors.background)
+
+    Row(
+        modifier = modifier
+            .shadow(
+                elevation = 18.dp,
+                shape = shape,
+                clip = false,
+                ambientColor = Color.Black.copy(alpha = if (isDark) 0.45f else 0.12f),
+                spotColor = Color.Black.copy(alpha = if (isDark) 0.55f else 0.18f)
+            )
+            .clip(shape)
+            .background(dockColor)
+            .border(
+                width = 1.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = if (isDark) 0.40f else 0.80f),
+                        Color.White.copy(alpha = if (isDark) 0.05f else 0.16f),
+                        Color.White.copy(alpha = if (isDark) 0.20f else 0.45f)
+                    )
+                ),
+                shape = shape
+            )
+            .padding(LensInset),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(LensInset)
+    ) {
+        val bar = @Composable {
+            // fill = false → the capsule hugs its tabs instead of stretching.
+            Box(modifier = Modifier.weight(1f, fill = false)) {
+                CapsuleBottomNavigation(
+                    currentRoute = currentRoute,
+                    onItemSelected = onItemSelected,
+                    elevated = false
                 )
             }
+        }
+        val add = @Composable {
+            AddActionButton(onClick = onAddClick, contentDescription = addContentDescription)
+        }
+        if (isPersian) {
+            add()
+            bar()
+        } else {
+            bar()
+            add()
         }
     }
 }
@@ -610,8 +756,7 @@ private fun NavigationBarItemCustom(
                 indication = null,
                 role = Role.Tab,
                 onClick = onClick
-            )
-            .padding(vertical = 6.dp),
+            ),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -635,7 +780,8 @@ private fun NavigationBarItemCustom(
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                 color = contentColor,
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

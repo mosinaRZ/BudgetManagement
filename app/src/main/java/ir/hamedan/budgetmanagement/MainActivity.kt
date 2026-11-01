@@ -21,8 +21,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -60,7 +58,7 @@ import ir.hamedan.budgetmanagement.data.preferences.PermissionReminderPreference
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.getThemeMode
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.saveThemeMode
-import ir.hamedan.budgetmanagement.ui.components.CapsuleBottomNavigation
+import ir.hamedan.budgetmanagement.ui.components.BottomDock
 import ir.hamedan.budgetmanagement.ui.components.InAppNotificationHint
 import ir.hamedan.budgetmanagement.ui.components.OnboardingDialog
 import ir.hamedan.budgetmanagement.ui.components.OnboardingPermission
@@ -761,6 +759,9 @@ class MainActivity : FragmentActivity() {
                                 },
                                 onCategoriesClick = {
                                     navController.navigate(AppRoute.Categories)
+                                },
+                                onProfileClick = {
+                                    navController.navigate(AppRoute.Profile)
                                 }
                             )
                         }
@@ -847,61 +848,31 @@ class MainActivity : FragmentActivity() {
                         blockedByOtherSheet = showPermissionSheet
                     )
 
-                    // ===== Bottom Bar + FAB =====
-                    Row(
+                    // ===== Bottom dock: nav bar + add button inside one opaque capsule =====
+                    // The 24.dp side inset matches the screens' content padding.
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .align(Alignment.BottomCenter)
                             .navigationBarsPadding()
-                            .padding(bottom = 5.dp, start = 16.dp, end = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            .padding(bottom = 8.dp, start = 24.dp, end = 24.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        val bottomBarItem = @Composable {
-                            Box(modifier = Modifier.weight(1f)) {
-                                CapsuleBottomNavigation(
-                                    currentRoute = appCurrentRoute,
-                                    onItemSelected = { selectedItem ->
-                                        // فعلاً هنوز از BottomNavItem قدیمی استفاده می‌کنیم
-                                        // در مرحله بعد آن را هم Type-safe می‌کنیم
-                                        appNavController.navigate(selectedItem.route) {
-                                            popUpTo(appNavController.graph.startDestinationId) {
-                                                saveState = true
-                                            }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
+                        BottomDock(
+                            currentRoute = appCurrentRoute,
+                            onItemSelected = { selectedItem ->
+                                appNavController.navigate(selectedItem.route) {
+                                    popUpTo(appNavController.graph.startDestinationId) {
+                                        saveState = true
                                     }
-                                )
-                            }
-                        }
-
-                        val fabItem = @Composable {
-                            FloatingActionButton(
-                                onClick = {
-                                    navController.navigate(AppRoute.AddScreen())
-                                },
-                                containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
-                                contentColor = MaterialTheme.colorScheme.onPrimary,
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
-                                modifier = Modifier.size(56.dp),
-                                elevation = FloatingActionButtonDefaults.elevation(0.dp)
-                            ) {
-                                Icon(
-                                    imageVector = androidx.compose.material.icons.Icons.Default.Add,
-                                    contentDescription = if (isPersian) "افزودن" else "Add",
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
-                        }
-
-                        if (isPersian) {
-                            fabItem()
-                            bottomBarItem()
-                        } else {
-                            bottomBarItem()
-                            fabItem()
-                        }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            onAddClick = { navController.navigate(AppRoute.AddScreen()) },
+                            addContentDescription = if (isPersian) "افزودن" else "Add",
+                            isPersian = isPersian
+                        )
                     }
                 }
             }
