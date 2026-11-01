@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -43,6 +44,10 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.luminance
+import ir.hamedan.budgetmanagement.ui.components.BottomBarHeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -377,7 +382,7 @@ fun TransactionsScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 80.dp),
+                    .padding(start = 24.dp, end = 24.dp, top = 85.dp, bottom = 92.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -415,7 +420,11 @@ fun TransactionsScreen(
                     }
                 }
 
-                val searchShape = RoundedCornerShape(20.dp)
+                val searchShape = RoundedCornerShape(percent = 50)
+                val isDarkSearch = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+                val searchBackground = MaterialTheme.colorScheme.surfaceVariant
+                    .copy(alpha = 0.55f)
+                    .compositeOver(MaterialTheme.colorScheme.background)
                 TextField(
                     value = searchQuery,
                     onValueChange = { newValue ->
@@ -425,15 +434,26 @@ fun TransactionsScreen(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                            searchShape
+                        .height(BottomBarHeight + 8.dp)
+                        .shadow(
+                            elevation = 18.dp,
+                            shape = searchShape,
+                            clip = false,
+                            ambientColor = Color.Black.copy(alpha = if (isDarkSearch) 0.45f else 0.12f),
+                            spotColor = Color.Black.copy(alpha = if (isDarkSearch) 0.55f else 0.18f)
                         )
+                        .clip(searchShape)
+                        .background(searchBackground)
                         .border(
-                            1.dp,
-                            MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                            searchShape
+                            width = 1.dp,
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = if (isDarkSearch) 0.40f else 0.80f),
+                                    Color.White.copy(alpha = if (isDarkSearch) 0.05f else 0.16f),
+                                    Color.White.copy(alpha = if (isDarkSearch) 0.20f else 0.45f)
+                                )
+                            ),
+                            shape = searchShape
                         ),
                     placeholder = {
                         Text(
@@ -493,7 +513,7 @@ fun TransactionsScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 140.dp, start = 16.dp, end = 16.dp)
+                .padding(bottom = 172.dp, start = 24.dp, end = 24.dp)
         )
 
         // ۱. باتم شیت شناور فیلترینگ
