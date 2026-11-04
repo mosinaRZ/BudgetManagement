@@ -97,10 +97,14 @@ func run() error {
 	deviceEventRepo := mongodb.NewDeviceEventRepository(db)
 	authUC.SetDeviceEventRepository(deviceEventRepo)
 	authUC.SetRecoverySessionRepository(recoverySessionRepo)
+	securityRepo := mongodb.NewSecurityEventRepository(db)
+	authUC.SetSecurityEventRepository(securityRepo)
 	auditRepo := mongodb.NewAuditLogRepository(db)
 	roleUC := adminUsecase.NewRoleService(userRepo, auditRepo)
 	deviceUC := deviceUsecase.NewService(deviceRepo, refreshRepo)
 	deviceUC.SetEventRepository(deviceEventRepo)
+	deviceUC.SetSecurityEventRepository(securityRepo)
+	panelUC := adminUsecase.NewPanelService(userRepo, mongodb.NewAdminQueryRepository(db), securityRepo, refreshRepo, auditRepo)
 	authHandler := handler.NewAuthHandler(authUC, validate, otpUC)
 
 	trustedProxies, err := parseCIDRs(cfg.TrustedProxyCIDRs)
@@ -112,6 +116,7 @@ func run() error {
 	corsOrigins := splitCSV(cfg.CORSAllowedOrigins)
 	router := httpiface.NewRouter(httpiface.RouterDependencies{
 		AuthHandler: authHandler, SyncHandler: syncHandler, AdminHandler: handler.NewAdminHandler(roleUC, validate),
+		AdminPanelHandler: handler.NewAdminPanelHandler(panelUC), AdminGate: panelUC,
 		DeviceHandler: handler.NewDeviceHandler(deviceUC), LegalHandler: handler.NewLegalHandler(""), JWTSecret: cfg.JWTSecret, UserRepository: userRepo, DeviceRepository: deviceRepo, Env: cfg.Env,
 		TrustedProxyCIDRs: trustedProxies, CORSAllowedOrigins: corsOrigins, RateLimitStore: rateStore,
 	})
