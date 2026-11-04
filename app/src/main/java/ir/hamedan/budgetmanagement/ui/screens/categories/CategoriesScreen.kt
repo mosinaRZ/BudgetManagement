@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.categories
 
+import ir.hamedan.budgetmanagement.ui.components.CountUpText
+import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
 import androidx.compose.animation.core.Animatable
 import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
 import ir.hamedan.budgetmanagement.ui.components.showError
@@ -732,8 +734,11 @@ fun CategoryItemCard(
                         } else {
                             if (currencyUnit == "IRR") "Rial" else "Toman"
                         }
-                        Text(
-                            text = "${numberFormatter.format(displayAmount)} $currencyText",
+                        CountUpText(
+                            target = displayAmount,
+                            key = "category.${category.id}.total.$currencyUnit",
+                            format = { "${numberFormatter.format(it)} $currencyText" },
+                            durationScale = 0.8f,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface

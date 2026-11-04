@@ -264,6 +264,8 @@ class AuthRepositoryImpl(
                 syncStateRepository.markSyncRequired()
             }
             sessionStore.clear()
+            // مبلغ‌های حساب قبلی نباید «مقدار قبلی» شمارنده‌ی حساب بعدی شوند.
+            ir.hamedan.budgetmanagement.ui.components.AmountCountMemory.clear()
         }
     }
 

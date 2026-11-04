@@ -95,6 +95,20 @@ import ir.hamedan.budgetmanagement.ui.screens.debtCredit.DebtCreditViewModel
 import ir.hamedan.budgetmanagement.utils.StringMapper
 import ir.hamedan.budgetmanagement.utils.SystemTransactionText
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.LayoutDirection
+import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
+import ir.hamedan.budgetmanagement.ui.components.CountUpState
+import ir.hamedan.budgetmanagement.ui.components.CountUpText
+import ir.hamedan.budgetmanagement.ui.components.countUpEffect
+import ir.hamedan.budgetmanagement.ui.components.rememberCountUpAmount
 import java.text.NumberFormat
 import java.util.*
 import kotlin.math.abs
@@ -139,7 +153,10 @@ private fun compactAmount(value: Long, isPersian: Boolean): String {
  * متن مبلغِ تک‌خطی که خودش را با عرض موجود تنظیم می‌کند:
  * ۱) اندازه‌ی فونت تا حداقل مجاز کوچک می‌شود،
  * ۲) اگر هنوز جا نشد، متن فشرده (fallbackText) نمایش داده می‌شود.
- * تا زمان نهایی شدن اندازه، متن رسم نمی‌شود تا پرش/چشمک دیده نشود.
+ *
+ * اندازه‌گیری با TextMeasurer و روی «متن نهایی» انجام می‌شود، نه متن در حال شمارش؛
+ * پس هنگام شمارش اندازه‌ی فونت ثابت می‌ماند و هیچ پرش/چشمکی دیده نمی‌شود.
+ * اگر [countUp] داده شود، متن نمایشی از روی مقدار لحظه‌ای با [formatFull]/[formatCompact] ساخته می‌شود.
  */
 @Composable
 private fun AutoFitAmountText(
@@ -151,34 +168,81 @@ private fun AutoFitAmountText(
     minFontSize: Float,
     modifier: Modifier = Modifier,
     textAlign: TextAlign = TextAlign.Center,
-    letterSpacing: TextUnit = TextUnit.Unspecified
+    letterSpacing: TextUnit = TextUnit.Unspecified,
+    countUp: CountUpState? = null,
+    formatFull: ((Long) -> String)? = null,
+    formatCompact: ((Long) -> String)? = null
 ) {
-    var fontSize by remember(text, fallbackText, maxFontSize) { mutableFloatStateOf(maxFontSize) }
-    var useFallback by remember(text, fallbackText, maxFontSize) { mutableStateOf(false) }
-    var isReady by remember(text, fallbackText, maxFontSize) { mutableStateOf(false) }
+    val measurer = rememberTextMeasurer()
+    val live = countUp != null && formatFull != null
 
-    Text(
-        text = if (useFallback && fallbackText != null) fallbackText else text,
-        modifier = modifier.drawWithContent { if (isReady) drawContent() },
-        style = style.copy(fontSize = fontSize.sp, letterSpacing = letterSpacing),
-        color = color,
-        textAlign = textAlign,
-        maxLines = 1,
-        softWrap = false,
-        overflow = TextOverflow.Clip,
-        onTextLayout = { result ->
-            if (!result.didOverflowWidth) {
-                isReady = true
-            } else if (fontSize > minFontSize + 0.1f) {
-                fontSize = maxOf(minFontSize, fontSize * 0.92f)
-            } else if (!useFallback && fallbackText != null) {
-                useFallback = true
-                fontSize = maxFontSize
-            } else {
-                isReady = true
+    // عریض‌ترین حالت (مقدار شروع یا نهایی) مبنای اندازه‌گیری است تا در شمارش رو به پایین هم برش نخورد.
+    val fitText = remember(text) {
+        if (live) {
+            val start = Snapshot.withoutReadObservation { formatFull!!(countUp!!.value) }
+            if (start.length > text.length) start else text
+        } else text
+    }
+    val fitFallback = remember(fallbackText, text) {
+        if (live && fallbackText != null && formatCompact != null) {
+            val start = Snapshot.withoutReadObservation { formatCompact(countUp!!.value) }
+            if (start.length > fallbackText.length) start else fallbackText
+        } else fallbackText
+    }
+
+    // BoxWithConstraints (SubcomposeLayout) داخل IntrinsicSize.Max کرش می‌کند؛ پس عرض را با onSizeChanged می‌گیریم.
+    var maxWidthPx by remember { mutableIntStateOf(0) }
+    Box(modifier = modifier.onSizeChanged { maxWidthPx = it.width }) {
+        val fit = remember(fitText, fitFallback, maxFontSize, minFontSize, style, letterSpacing, maxWidthPx) {
+            fun widthOf(t: String, fs: Float): Int = measurer.measure(
+                text = t,
+                style = style.copy(fontSize = fs.sp, letterSpacing = letterSpacing),
+                softWrap = false,
+                maxLines = 1
+            ).size.width
+
+            var fontSize = maxFontSize
+            var useFallback = false
+            while (true) {
+                val current = if (useFallback && fitFallback != null) fitFallback else fitText
+                if (maxWidthPx <= 0 || widthOf(current, fontSize) <= maxWidthPx) break
+                if (fontSize > minFontSize + 0.1f) {
+                    fontSize = maxOf(minFontSize, fontSize * 0.92f)
+                } else if (!useFallback && fitFallback != null) {
+                    useFallback = true
+                    fontSize = maxFontSize
+                } else break
             }
+            fontSize to useFallback
         }
-    )
+        val (fontSize, useFallback) = fit
+
+        val shown = if (live) {
+            val v = countUp!!.value
+            if (useFallback && formatCompact != null) formatCompact(v) else formatFull!!(v)
+        } else {
+            if (useFallback && fallbackText != null) fallbackText else text
+        }
+        val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+        val pivot = when (textAlign) {
+            TextAlign.Center -> TransformOrigin(0.5f, 0.5f)
+            else -> TransformOrigin(if (isRtl) 1f else 0f, 0.5f)
+        }
+
+        Text(
+            text = shown,
+            modifier = Modifier
+                .fillMaxWidth()
+                .drawWithContent { if (maxWidthPx > 0) drawContent() }
+                .then(if (countUp != null) Modifier.countUpEffect(countUp, pivot) else Modifier),
+            style = style.copy(fontSize = fontSize.sp, letterSpacing = letterSpacing, fontFeatureSettings = if (live) "tnum" else style.fontFeatureSettings),
+            color = color,
+            textAlign = textAlign,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Clip
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -566,6 +630,7 @@ fun HomeScreen(
 
                             val compactBalanceText = "$sign${compactAmount(displayBalance, isPersian)} $currencyText"
 
+                            val balanceCount = rememberCountUpAmount(displayBalance, "home.balance.$currencyUnit")
                             AnimatedContent(
                                 targetState = isAmountsHidden,
                                 modifier = Modifier.fillMaxWidth(),
@@ -584,7 +649,10 @@ fun HomeScreen(
                                     minFontSize = 16f,
                                     modifier = Modifier.fillMaxWidth(),
                                     textAlign = TextAlign.Start,
-                                    letterSpacing = if (hidden) 2.sp else 0.sp
+                                    letterSpacing = if (hidden) 2.sp else 0.sp,
+                                    countUp = if (hidden) null else balanceCount,
+                                    formatFull = { v -> "${if (v < 0) "-" else ""}${numberFormatter.format(abs(v))} $currencyText" },
+                                    formatCompact = { v -> "${if (v < 0) "-" else ""}${compactAmount(v, isPersian)} $currencyText" }
                                 )
                             }
                         }
@@ -623,6 +691,7 @@ fun HomeScreen(
                                 val displayIncome = if (currencyUnit == "IRR") income * 10L else income
                                 val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "R" else "T")
                                 val formattedIncome = numberFormatter.format(displayIncome)
+                                val incomeCount = rememberCountUpAmount(displayIncome, "home.income.$currencyUnit")
                                 AnimatedContent(
                                     targetState = isAmountsHidden,
                                     modifier = Modifier.fillMaxWidth(),
@@ -640,7 +709,10 @@ fun HomeScreen(
                                         maxFontSize = 16f,
                                         minFontSize = 10f,
                                         modifier = Modifier.fillMaxWidth(),
-                                        letterSpacing = if (hidden) 1.5.sp else 0.sp
+                                        letterSpacing = if (hidden) 1.5.sp else 0.sp,
+                                        countUp = if (hidden) null else incomeCount,
+                                        formatFull = { v -> "${numberFormatter.format(v)} $currencyText" },
+                                        formatCompact = { v -> "${compactAmount(v, isPersian)} $currencyText" }
                                     )
                                 }
                             }
@@ -666,6 +738,7 @@ fun HomeScreen(
                                 val displayExpense = if (currencyUnit == "IRR") expense * 10L else expense
                                 val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "R" else "T")
                                 val formattedExpense = numberFormatter.format(displayExpense)
+                                val expenseCount = rememberCountUpAmount(displayExpense, "home.expense.$currencyUnit")
                                 AnimatedContent(
                                     targetState = isAmountsHidden,
                                     modifier = Modifier.fillMaxWidth(),
@@ -683,7 +756,10 @@ fun HomeScreen(
                                         maxFontSize = 16f,
                                         minFontSize = 10f,
                                         modifier = Modifier.fillMaxWidth(),
-                                        letterSpacing = if (hidden) 1.5.sp else 0.sp
+                                        letterSpacing = if (hidden) 1.5.sp else 0.sp,
+                                        countUp = if (hidden) null else expenseCount,
+                                        formatFull = { v -> "${numberFormatter.format(v)} $currencyText" },
+                                        formatCompact = { v -> "${compactAmount(v, isPersian)} $currencyText" }
                                     )
                                 }
                             }
@@ -749,7 +825,13 @@ fun HomeScreen(
                                     ) {
                                         Text(text = "${goal.icon} ${goal.title} (${(progress * 100).toInt()}%)", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
                                         val curr = if (currencyUnit == "IRR") 10L else 1L
-                                        Text(text = "${numberFormatter.format(goal.currentAmount * curr)} / ${numberFormatter.format(goal.targetAmount * curr)} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                        val goalUnit = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")
+                                        CountUpPairText(
+                                            first = goal.currentAmount * curr, firstKey = "home.goal.${goal.id}.cur.$currencyUnit",
+                                            second = goal.targetAmount * curr, secondKey = "home.goal.${goal.id}.tgt.$currencyUnit",
+                                            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold,
+                                            format = { a, b -> "${numberFormatter.format(a)} / ${numberFormatter.format(b)} $goalUnit" }
+                                        )
                                     }
                                     Spacer(Modifier.height(8.dp))
                                     LinearProgressIndicator(
@@ -847,7 +929,13 @@ fun HomeScreen(
                                             fontWeight = FontWeight.Medium
                                         )
                                         val curr = if (currencyUnit == "IRR") 10L else 1L
-                                        Text(text = "${numberFormatter.format(limit.currentSpent * curr)} / ${numberFormatter.format(limit.entity.maxLimit * curr)} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}", style = MaterialTheme.typography.labelMedium, color = if (progress > 0.8f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                        val limitUnit = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")
+                                        CountUpPairText(
+                                            first = (limit.currentSpent * curr).toLong(), firstKey = "home.limit.${limit.entity.id}.cur.$currencyUnit",
+                                            second = limit.entity.maxLimit * curr, secondKey = "home.limit.${limit.entity.id}.max.$currencyUnit",
+                                            style = MaterialTheme.typography.labelMedium, color = if (progress > 0.8f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold,
+                                            format = { a, b -> "${numberFormatter.format(a)} / ${numberFormatter.format(b)} $limitUnit" }
+                                        )
                                     }
                                     Spacer(Modifier.height(8.dp))
                                     LinearProgressIndicator(
@@ -968,13 +1056,15 @@ fun HomeScreen(
                                                 )
                                             }
                                             Spacer(Modifier.height(6.dp))
-                                            Text(
-                                                text = numberFormatter.format(remaining * curr),
+                                            CountUpText(
+                                                target = remaining * curr,
+                                                key = "home.debtTile.${if (isDebtTile) "debt" else "credit"}.$currencyUnit",
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold,
                                                 color = tileColor,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
+                                                overflow = TextOverflow.Ellipsis,
+                                                pivot = TransformOrigin(0.5f, 0.5f),
+                                                format = { numberFormatter.format(it) }
                                             )
                                             Text(
                                                 text = if (isPersian) "$currencyText • ${numberFormatter.format(count.toLong())} مورد" else "$currencyText • $count item${if (count == 1) "" else "s"}",
@@ -1052,20 +1142,20 @@ fun HomeScreen(
                                                 Spacer(Modifier.height(8.dp))
 
                                                 Text(text = if (isPersian) "باقی‌مانده" else "Remaining", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                                Text(
-                                                    text = "${numberFormatter.format(remaining * curr)} $currencyText",
+                                                CountUpText(
+                                                    target = remaining * curr, key = "home.debt.${debt.id}.rem.$currencyUnit",
                                                     style = MaterialTheme.typography.titleSmall,
                                                     color = typeColor,
                                                     fontWeight = FontWeight.Bold,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    format = { v -> "${numberFormatter.format(v)} $currencyText" }
                                                 )
-                                                Text(
-                                                    text = if (isPersian) "از ${numberFormatter.format(debt.totalAmount * curr)}" else "of ${numberFormatter.format(debt.totalAmount * curr)}",
+                                                CountUpText(
+                                                    target = debt.totalAmount * curr, key = "home.debt.${debt.id}.tot.$currencyUnit",
                                                     style = MaterialTheme.typography.labelSmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    format = { v -> if (isPersian) "از ${numberFormatter.format(v)}" else "of ${numberFormatter.format(v)}" }
                                                 )
 
                                                 Spacer(Modifier.height(10.dp))
@@ -1189,11 +1279,15 @@ fun HomeScreen(
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                                 )
                             }
-                            Text(
-                                text = "${if (isExpense) "-" else "+"}${numberFormatter.format(abs(displayAmount))} ${if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")}",
+                            val recentUnit = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")
+                            CountUpText(
+                                target = abs(displayAmount),
+                                key = "home.tx.${transaction.id}.$currencyUnit",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isExpense) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                color = if (isExpense) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                durationScale = 0.8f,
+                                format = { v -> "${if (isExpense) "-" else "+"}${numberFormatter.format(v)} $recentUnit" }
                             )
                         }
                     }
@@ -1964,7 +2058,11 @@ private fun DueReminderTile(
             )
         }
         Spacer(Modifier.height(6.dp))
+        val tileCount = rememberCountUpAmount(amount, "home.dueTile.$label.$currencyText")
         AutoFitAmountText(
+            countUp = tileCount,
+            formatFull = { v -> numberFormatter.format(v) },
+            formatCompact = { v -> compactAmount(v, isPersian) },
             text = formatted,
             fallbackText = compactAmount(amount, isPersian),
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),

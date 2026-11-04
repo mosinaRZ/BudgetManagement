@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.analytics
 
+import ir.hamedan.budgetmanagement.ui.components.CountUpText
+import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
 import androidx.compose.animation.AnimatedVisibility
 import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
 import ir.hamedan.budgetmanagement.ui.components.showError
@@ -243,7 +245,7 @@ fun AnalyticsScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 72.dp, start = 16.dp, end = 16.dp)
+                .padding(bottom = 84.dp, start = 16.dp, end = 16.dp)
         )
     }
 }
@@ -1531,13 +1533,15 @@ private fun ExpenseCategoryPieChartCard(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Text(
-                                text = numberFormatter.format(displayTotal),
+                            CountUpText(
+                                target = displayTotal,
+                                key = "analytics.donutTotal.$currencyUnit",
+                                format = { numberFormatter.format(it) },
+                                overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                maxLines = 1
                             )
                             Text(
                                 text = currencyText,
@@ -1714,8 +1718,11 @@ private fun TopExpensesCard(
                             }
 
                             Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = "${numberFormatter.format(displayAmount)} $currencyText",
+                                CountUpText(
+                                    target = displayAmount.toLong(),
+                                    key = "analytics.item.${item.id}.$currencyUnit",
+                                    format = { "${numberFormatter.format(it)} $currencyText" },
+                                    durationScale = 0.8f,
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface

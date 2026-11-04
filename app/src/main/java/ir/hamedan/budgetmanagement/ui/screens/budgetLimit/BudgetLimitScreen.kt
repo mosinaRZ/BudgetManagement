@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.budgetLimit
 
+import ir.hamedan.budgetmanagement.ui.components.CountUpText
+import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
 import ir.hamedan.budgetmanagement.ui.components.WheelDatePickerDialog
 
 import androidx.compose.animation.core.Animatable
@@ -659,8 +661,10 @@ fun BudgetLimitItemCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "${numberFormatter.format(spentDisp.toLong())} / ${numberFormatter.format(maxDisp.toLong())} $currencyText",
+                CountUpPairText(
+                    first = spentDisp.toLong(), firstKey = "limit.${item.entity.id}.spent.$currencyUnit",
+                    second = maxDisp.toLong(), secondKey = "limit.${item.entity.id}.max.$currencyUnit",
+                    format = { a, b -> "${numberFormatter.format(a)} / ${numberFormatter.format(b)} $currencyText" },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface

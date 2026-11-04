@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.debtCredit
 
+import ir.hamedan.budgetmanagement.ui.components.CountUpText
+import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
 import ir.hamedan.budgetmanagement.ui.components.WheelDatePickerDialog
 
 import android.widget.Toast
@@ -329,8 +331,10 @@ fun DebtCreditScreen(
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Text(
-                                text = formatDebtCreditAmount(remaining, currencyUnit, isPersian),
+                            CountUpText(
+                                target = remaining,
+                                key = "debt.${item.id}.detailRemaining.$currencyUnit",
+                                format = { formatDebtCreditAmount(it, currencyUnit, isPersian) },
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = accent,
@@ -1014,18 +1018,20 @@ fun DebtCreditItemCard(
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(text = if (isPersian) "مبلغ کل:" else "Total Amount:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(text = formatDebtCreditAmount(item.totalAmount, currencyUnit, isPersian), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                CountUpText(target = item.totalAmount, key = "debt.${item.id}.total.$currencyUnit", format = { formatDebtCreditAmount(it, currencyUnit, isPersian) }, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
             }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(text = if (isPersian) "پرداخت/دریافت شده:" else "Paid/Received:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(text = formatDebtCreditAmount(item.paidAmount, currencyUnit, isPersian), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                CountUpText(target = item.paidAmount, key = "debt.${item.id}.paid.$currencyUnit", format = { formatDebtCreditAmount(it, currencyUnit, isPersian) }, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(text = if (isPersian) "باقی‌مانده:" else "Remaining:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(
-                    text = formatDebtCreditAmount(remainingAmount, currencyUnit, isPersian),
+                CountUpText(
+                    target = remainingAmount,
+                    key = "debt.${item.id}.remaining.$currencyUnit",
+                    format = { formatDebtCreditAmount(it, currencyUnit, isPersian) },
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold,
                     color = if (remainingAmount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary

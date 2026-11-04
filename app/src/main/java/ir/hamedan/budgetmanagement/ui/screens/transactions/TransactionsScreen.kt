@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.transactions
 
+import ir.hamedan.budgetmanagement.ui.components.CountUpText
+import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
 import ir.hamedan.budgetmanagement.ui.components.showError
@@ -434,7 +436,7 @@ fun TransactionsScreen(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(BottomBarHeight + 8.dp)
+                        .height(BottomBarHeight)
                         .shadow(
                             elevation = 18.dp,
                             shape = searchShape,
@@ -1572,11 +1574,8 @@ private fun TransactionRow(
     )
 
     // \u200E (LRM) keeps the sign on the left of the digits in both RTL and LTR layouts
-    val formattedAmount = remember(transaction.amount, isPersian, currencyUnit) {
-        val calculatedAmount = if (currencyUnit == "IRR") transaction.amount.toLong() * 10 else transaction.amount.toLong()
-        val sign = if (isExpense) "-" else "+"
-        "\u200E$sign${numberFormatter.format(calculatedAmount)}"
-    }
+    val displayedAmount = if (currencyUnit == "IRR") transaction.amount.toLong() * 10 else transaction.amount.toLong()
+    val amountSign = if (isExpense) "-" else "+"
 
     val currencySuffix = if (isPersian) {
         if (currencyUnit == "IRR") "ریال" else "تومان"
@@ -1748,13 +1747,14 @@ private fun TransactionRow(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Text(
-                    text = formattedAmount,
+                CountUpText(
+                    target = displayedAmount,
+                    key = "tx.${transaction.id}.$currencyUnit",
+                    format = { v -> "\u200E$amountSign${numberFormatter.format(v)}" },
+                    durationScale = 0.75f,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.ExtraBold,
-                    color = accent,
-                    maxLines = 1,
-                    softWrap = false
+                    color = accent
                 )
                 Text(
                     text = currencySuffix,

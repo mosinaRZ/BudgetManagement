@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.goals
 
+import ir.hamedan.budgetmanagement.ui.components.CountUpText
+import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
 import androidx.compose.animation.core.Animatable
 import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
 import ir.hamedan.budgetmanagement.ui.components.showError
@@ -206,10 +208,13 @@ fun SavingGoalsScreen(
                             val displayedSaved = if (currencyUnit == "IRR") totalSaved * 10 else totalSaved
                             val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "Toman")
 
-                            Text(
-                                text = "${numberFormatter.format(displayedSaved.toLong())} $currencyText",
+                            CountUpText(
+                                target = displayedSaved.toLong(),
+                                key = "goals.totalSaved.$currencyUnit",
                                 style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.primary
+                                color = MaterialTheme.colorScheme.primary,
+                                pivot = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f),
+                                format = { "${numberFormatter.format(it)} $currencyText" }
                             )
 
                             Spacer(Modifier.height(12.dp))
@@ -239,8 +244,10 @@ fun SavingGoalsScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 val displayedTarget = if (currencyUnit == "IRR") totalTarget * 10 else totalTarget
-                                Text(
-                                    text = "${numberFormatter.format(displayedTarget.toLong())} $currencyText",
+                                CountUpText(
+                                    target = displayedTarget.toLong(),
+                                    key = "goals.totalTarget.$currencyUnit",
+                                    format = { "${numberFormatter.format(it)} $currencyText" },
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -563,8 +570,10 @@ fun SavingGoalsScreen(
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    Text(
-                                        text = "${numberFormatter.format(displayBalance)} $currencyText",
+                                    CountUpText(
+                                        target = displayBalance.toLong(),
+                                        key = "goals.balance.${goal.id}.$currencyUnit",
+                                        format = { "${numberFormatter.format(it)} $currencyText" },
                                         style = MaterialTheme.typography.titleLarge,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = MaterialTheme.colorScheme.primary,
@@ -827,8 +836,10 @@ fun SavingGoalItemCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "${numberFormatter.format(currentDisp.toLong())} / ${numberFormatter.format(targetDisp.toLong())} $currencyText",
+                CountUpPairText(
+                    first = currentDisp.toLong(), firstKey = "goals.card.${goal.id}.cur.$currencyUnit",
+                    second = targetDisp.toLong(), secondKey = "goals.card.${goal.id}.tgt.$currencyUnit",
+                    format = { a, b -> "${numberFormatter.format(a)} / ${numberFormatter.format(b)} $currencyText" },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -853,11 +864,13 @@ fun SavingGoalItemCard(
 
             if (goal.monthlyAmount > 0) {
                 val monthlyDisp = if (currencyUnit == "IRR") goal.monthlyAmount * 10 else goal.monthlyAmount
-                Text(
-                    text = if (isPersian)
-                        "مبلغ ماهانه: ${numberFormatter.format(monthlyDisp.toLong())} $currencyText"
-                    else
-                        "Monthly: ${numberFormatter.format(monthlyDisp.toLong())} $currencyText",
+                CountUpText(
+                    target = monthlyDisp.toLong(),
+                    key = "goals.card.${goal.id}.monthly.$currencyUnit",
+                    format = { v ->
+                        if (isPersian) "مبلغ ماهانه: ${numberFormatter.format(v)} $currencyText"
+                        else "Monthly: ${numberFormatter.format(v)} $currencyText"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
