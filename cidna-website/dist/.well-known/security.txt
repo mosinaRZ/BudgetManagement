@@ -1,0 +1,5 @@
+Contact: mailto:cidna.app@gmail.com
+Expires: 2027-10-24T00:00:00.000Z
+Preferred-Languages: fa, en
+Canonical: https://cidna.ir/.well-known/security.txt
+Policy: https://cidna.ir/en/security/
