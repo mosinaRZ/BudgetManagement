@@ -15,9 +15,10 @@ import (
 const maxEventsPerPoll = 50
 
 type Service struct {
-	devices repository.DeviceRepository
-	refresh repository.RefreshTokenRepository
-	events  repository.DeviceEventRepository
+	devices  repository.DeviceRepository
+	refresh  repository.RefreshTokenRepository
+	events   repository.DeviceEventRepository
+	security repository.SecurityEventRepository
 }
 
 func NewService(devices repository.DeviceRepository, refresh repository.RefreshTokenRepository) *Service {
@@ -27,6 +28,9 @@ func NewService(devices repository.DeviceRepository, refresh repository.RefreshT
 // SetEventRepository enables the device activity feed. Without it removals still work; they
 // just leave no trace for the other devices to be notified about.
 func (s *Service) SetEventRepository(events repository.DeviceEventRepository) { s.events = events }
+
+// SetSecurityEventRepository adds device removals to the admin console's security trail.
+func (s *Service) SetSecurityEventRepository(r repository.SecurityEventRepository) { s.security = r }
 
 // Overview is the device list together with the id of the account's primary device.
 type Overview struct {
@@ -113,6 +117,14 @@ func (s *Service) Revoke(ctx context.Context, userID, callerDeviceID, targetDevi
 	if !removingSelf {
 		// Signing yourself out is not something the other devices need to be alerted about.
 		s.recordRemoval(ctx, userID, targetDeviceID, target, callerDeviceID, caller)
+		if s.security != nil {
+			rec, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+			_ = s.security.Record(rec, &entity.SecurityEvent{
+				Type: entity.SecDeviceRemoved, UserID: userID, DeviceID: targetDeviceID,
+				DeviceName: target.DisplayName(), CreatedAt: time.Now().UTC(),
+			})
+			cancel()
+		}
 	}
 	return nil
 }

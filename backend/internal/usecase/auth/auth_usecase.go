@@ -37,6 +37,7 @@ type ServiceImpl struct {
 	refresh               repository.RefreshTokenRepository
 	devices               repository.DeviceRepository
 	deviceEvents          repository.DeviceEventRepository
+	securityEvents        repository.SecurityEventRepository
 	recoverySessions      repository.RecoverySessionRepository
 	otp                   OTPService
 	keys                  Keys
@@ -174,6 +175,7 @@ func (s *ServiceImpl) Register(ctx context.Context, in RegisterInput) (RegisterO
 		}
 	}
 
+	s.recordSecurity(ctx, entity.SecRegistered, user.ID, in.DeviceID, in.Device, "")
 	return s.issueSession(ctx, user, in.DeviceID)
 }
 
@@ -280,10 +282,12 @@ func (s *ServiceImpl) Login(ctx context.Context, in LoginInput) (LoginOutput, er
 		if _, verr := infraauth.VerifyPasswordContext(ctx, authSecret, dummyAuthSalt, dummyAuthHash); infraauth.IsCapacityError(verr) {
 			return LoginOutput{}, passwordWorkError(verr, "")
 		}
+		s.recordSecurity(ctx, entity.SecLoginFailed, "", in.DeviceID, in.Device, "unknown_identifier")
 		return LoginOutput{}, apperror.ErrUnauthorized("invalid credentials")
 	}
 	if u.LockedUntil != nil && u.LockedUntil.After(time.Now().UTC()) {
 		// Do not reveal account-lock state; preserve the same public login error.
+		s.recordSecurity(ctx, entity.SecLoginFailed, u.ID, in.DeviceID, in.Device, "account_locked")
 		return LoginOutput{}, apperror.ErrUnauthorized("invalid credentials")
 	}
 	ok, verr := infraauth.VerifyPasswordContext(ctx, authSecret, u.AuthSalt, u.PasswordHash)
@@ -295,6 +299,10 @@ func (s *ServiceImpl) Login(ctx context.Context, in LoginInput) (LoginOutput, er
 	if !ok {
 		if err := s.users.RecordFailedLogin(ctx, u.ID, time.Now().UTC(), loginLockThreshold, loginLockDuration); err != nil {
 			return LoginOutput{}, err
+		}
+		s.recordSecurity(ctx, entity.SecLoginFailed, u.ID, in.DeviceID, in.Device, "wrong_password")
+		if u.FailedLoginAttempts+1 >= loginLockThreshold {
+			s.recordSecurity(ctx, entity.SecAccountLocked, u.ID, in.DeviceID, in.Device, "too_many_failed_logins")
 		}
 		return LoginOutput{}, apperror.ErrUnauthorized("invalid credentials")
 	}
@@ -315,6 +323,7 @@ func (s *ServiceImpl) Login(ctx context.Context, in LoginInput) (LoginOutput, er
 			return LoginOutput{}, err
 		}
 		u.IsDeleted, u.DeletedAt, u.SessionVersion = false, nil, version
+		s.recordSecurity(ctx, entity.SecAccountRestored, u.ID, in.DeviceID, in.Device, "self_restore")
 	}
 	if err := validDevice(in.DeviceID); err != nil {
 		return LoginOutput{}, err
@@ -329,6 +338,7 @@ func (s *ServiceImpl) Login(ctx context.Context, in LoginInput) (LoginOutput, er
 	if err != nil {
 		return LoginOutput{}, err
 	}
+	s.recordSecurity(ctx, entity.SecLoginSuccess, u.ID, in.DeviceID, in.Device, string(u.Role))
 	return LoginOutput{AccessToken: sess.AccessToken, RefreshToken: sess.RefreshToken, Role: u.Role, KdfSalt: u.KdfSalt, UserID: u.ID, PasswordKeyEnvelope: u.PasswordKeyEnvelope, PasswordKeyNonce: u.PasswordKeyNonce, RecoveryKeyEnvelope: u.RecoveryKeyEnvelope, RecoveryKeyNonce: u.RecoveryKeyNonce}, nil
 }
 func (s *ServiceImpl) Refresh(ctx context.Context, in RefreshInput) (RefreshOutput, error) {
@@ -531,6 +541,7 @@ func (s *ServiceImpl) ResetPassword(ctx context.Context, in ResetPasswordInput) 
 	if err != nil {
 		return ResetPasswordOutput{}, err
 	}
+	s.recordSecurity(ctx, entity.SecPasswordReset, u.ID, in.DeviceID, in.Device, "recovery_key")
 	return ResetPasswordOutput{AccessToken: sess.AccessToken, RefreshToken: sess.RefreshToken, Role: u.Role, KdfSalt: u.KdfSalt, UserID: u.ID, PasswordKeyEnvelope: u.PasswordKeyEnvelope, PasswordKeyNonce: u.PasswordKeyNonce, RecoveryKeyEnvelope: u.RecoveryKeyEnvelope, RecoveryKeyNonce: u.RecoveryKeyNonce}, nil
 }
 
@@ -650,6 +661,7 @@ func (s *ServiceImpl) ChangePassword(ctx context.Context, in ChangePasswordInput
 	if err != nil {
 		return ChangePasswordOutput{}, err
 	}
+	s.recordSecurity(ctx, entity.SecPasswordChanged, u.ID, in.DeviceID, in.Device, "")
 	return ChangePasswordOutput{AccessToken: sess.AccessToken, RefreshToken: sess.RefreshToken, Role: u.Role, KdfSalt: u.KdfSalt, UserID: u.ID, PasswordKeyEnvelope: u.PasswordKeyEnvelope, PasswordKeyNonce: u.PasswordKeyNonce, RecoveryKeyEnvelope: u.RecoveryKeyEnvelope, RecoveryKeyNonce: u.RecoveryKeyNonce}, nil
 }
 
@@ -702,6 +714,7 @@ func (s *ServiceImpl) DeleteAccount(ctx context.Context, in DeleteAccountInput) 
 	if err := s.refresh.RevokeAllForUser(ctx, u.ID); err != nil {
 		slog.Warn("failed to revoke refresh tokens of deleted account", "user_id", u.ID, "error", err)
 	}
+	s.recordSecurity(ctx, entity.SecAccountDeleted, u.ID, "", DeviceInfo{}, "self_delete")
 	return DeleteAccountOutput{DeletedAt: now, RestorableUntil: now.Add(s.restoreWindow)}, nil
 }
 
@@ -1000,3 +1013,30 @@ func IdentifierHashForCLI(identifier, phoneHashKey string) string {
 
 // NormalizePhoneForCLI exposes the same validation used by login/register to maintenance tooling.
 func NormalizePhoneForCLI(identifier string) (string, error) { return normalizePhone(identifier) }
+
+// SetSecurityEventRepository enables the security trail shown in the admin console. Without it the
+// service behaves exactly as before.
+func (s *ServiceImpl) SetSecurityEventRepository(r repository.SecurityEventRepository) {
+	s.securityEvents = r
+}
+
+// recordSecurity appends one event to the security trail. It is best-effort and detached from the
+// request's cancellation: a slow client must not lose the trail, and a logging failure must never
+// turn a sign-in outcome into an error. Client-supplied descriptive values are sanitised the same
+// way as stored devices because the admin console renders them.
+func (s *ServiceImpl) recordSecurity(ctx context.Context, t entity.SecurityEventType, userID, deviceID string, info DeviceInfo, detail string) {
+	if s == nil || s.securityEvents == nil {
+		return
+	}
+	clean := &entity.Device{}
+	clean.ApplyMetadata(info.Name, info.Model, info.Platform, info.OSVersion, info.AppVersion, info.IP)
+	ev := &entity.SecurityEvent{
+		Type: t, UserID: userID, DeviceID: deviceID, DeviceName: clean.DisplayName(), Platform: clean.Platform,
+		AppVersion: clean.AppVersion, IP: clean.LastIP, Detail: detail, CreatedAt: time.Now().UTC(),
+	}
+	rec, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+	defer cancel()
+	if err := s.securityEvents.Record(rec, ev); err != nil {
+		slog.Warn("failed to record security event", "type", string(t), "error", err)
+	}
+}

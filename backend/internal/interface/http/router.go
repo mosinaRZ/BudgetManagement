@@ -19,9 +19,12 @@ import (
 // RouterDependencies contains all HTTP-layer dependencies created by startup.
 // The router owns no application state and does not construct repositories or usecases.
 type RouterDependencies struct {
-	AuthHandler        *handler.AuthHandler
-	SyncHandler        *handler.SyncHandler
-	AdminHandler       *handler.AdminHandler
+	AuthHandler       *handler.AuthHandler
+	SyncHandler       *handler.SyncHandler
+	AdminHandler      *handler.AdminHandler
+	AdminPanelHandler *handler.AdminPanelHandler
+	// AdminGate re-checks the caller's role in the database for every admin request.
+	AdminGate          middleware.AdminGate
 	DeviceHandler      *handler.DeviceHandler
 	LegalHandler       *handler.LegalHandler
 	JWTSecret          string
@@ -53,6 +56,10 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 	publicRateLimiter := middleware.NewRateLimiterWithStoreAndProxies("public", store, rate.Every(3*time.Second), 20, deps.TrustedProxyCIDRs)
 	protectedRateLimiter := middleware.NewRateLimiterWithStoreAndProxies("protected", store, rate.Every(6*time.Second), 10, deps.TrustedProxyCIDRs)
 	otpRateLimiter := middleware.NewRateLimiterWithStoreAndProxies("otp", store, rate.Every(30*time.Second), 3, deps.TrustedProxyCIDRs)
+	// The admin console loads several panels at once and refreshes them, so it gets its own, more
+	// generous per-user budget instead of the tight one that protects ordinary client traffic.
+	adminRateLimiter := middleware.NewRateLimiterWithStoreAndProxies("admin", store, rate.Every(250*time.Millisecond), 40, deps.TrustedProxyCIDRs)
+	presence := middleware.Presence(deps.DeviceRepository, 45*time.Second)
 
 	r.Group(func(r chi.Router) {
 		r.Use(publicRateLimiter.LimitByIP)
@@ -83,6 +90,7 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthWithDevices(deps.JWTSecret, deps.UserRepository, deps.DeviceRepository))
 		r.Use(protectedRateLimiter.LimitByUser)
+		r.Use(presence)
 
 		if deps.AuthHandler != nil {
 			r.Post("/api/v1/auth/password/change", deps.AuthHandler.ChangePassword)
@@ -100,13 +108,37 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 			r.Get("/api/v1/devices/events", deps.DeviceHandler.Events)
 			r.Delete("/api/v1/devices/{deviceID}", deps.DeviceHandler.Revoke)
 		}
-		if deps.AdminHandler != nil {
+	})
+
+	if deps.AdminHandler != nil || deps.AdminPanelHandler != nil {
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.AuthWithDevices(deps.JWTSecret, deps.UserRepository, deps.DeviceRepository))
+			r.Use(adminRateLimiter.LimitByUser)
+			r.Use(presence)
 			r.Route("/api/v1/admin", func(r chi.Router) {
 				r.Use(middleware.RequireRoles(entity.RoleAdmin))
-				r.Put("/users/{userID}/role", deps.AdminHandler.UpdateUserRole)
+				if deps.AdminGate != nil {
+					r.Use(middleware.RequireActiveAdmin(deps.AdminGate))
+				}
+				if deps.AdminHandler != nil {
+					r.Put("/users/{userID}/role", deps.AdminHandler.UpdateUserRole)
+				}
+				if p := deps.AdminPanelHandler; p != nil {
+					r.Get("/me", p.Me)
+					r.Get("/users", p.ListUsers)
+					r.Get("/users/{userID}", p.GetUser)
+					// PUT (not PATCH): Android's HttpURLConnection cannot send PATCH.
+					r.Put("/users/{userID}", p.UpdateUser)
+					r.Delete("/users/{userID}", p.DeleteUser)
+					r.Post("/users/{userID}/restore", p.RestoreUser)
+					r.Post("/users/{userID}/unlock", p.UnlockUser)
+					r.Post("/users/{userID}/revoke-sessions", p.RevokeSessions)
+					r.Get("/events", p.Events)
+					r.Get("/analytics", p.Analytics)
+				}
 			})
-		}
-	})
+		})
+	}
 
 	return r
 }
