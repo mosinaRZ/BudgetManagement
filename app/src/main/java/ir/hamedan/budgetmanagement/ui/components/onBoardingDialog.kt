@@ -169,7 +169,7 @@ data class OnboardingPermission(
     val reasonEn: String,
     /**
      * آیا این مجوز مستحق یادآوریِ دوره‌ای است؟ مجوزهایی که فقط هنگام استفادهٔ آگاهانه از یک قابلیت لازم‌اند
-     * (مثل میکروفون) مزاحم کاربر نمی‌شوند و همان لحظه درخواست می‌شوند.
+     * مزاحم کاربر نمی‌شوند و همان لحظه درخواست می‌شوند.
      */
     val remindable: Boolean = true
 )
@@ -202,18 +202,6 @@ fun onboardingPermissions(sdkInt: Int): List<OnboardingPermission> = buildList {
             )
         )
     }
-    add(
-        OnboardingPermission(
-            key = "mic",
-            permissions = listOf(Manifest.permission.RECORD_AUDIO),
-            emoji = "🎙️",
-            titleFa = "میکروفون",
-            titleEn = "Microphone",
-            reasonFa = "برای ثبت تراکنش با گفتار به متن، فقط وقتی خودت این گزینه رو انتخاب کنی.",
-            reasonEn = "To record a transaction via voice-to-text, only when you choose that option.",
-            remindable = false
-        )
-    )
 }
 
 /**
@@ -549,7 +537,6 @@ private fun FeatureCard(icon: ImageVector, title: String, description: String) {
 internal fun permissionIcon(key: String): ImageVector = when (key) {
     "sms" -> Icons.Rounded.Sms
     "notifications" -> Icons.Rounded.Notifications
-    "mic" -> Icons.Rounded.Mic
     else -> Icons.Rounded.Security
 }
 
@@ -583,15 +570,26 @@ private fun PermissionsPage(
         Spacer(Modifier.height(6.dp))
         Text(
             text = if (isPersian)
-                "این دسترسی‌ها اختیاری‌اند و هر زمان از تنظیمات گوشی قابل تغییرند. اطلاعات پیامک و صدای شما از دستگاه خارج نمی‌شود."
+                "این دسترسی‌ها اختیاری‌اند و هر زمان از تنظیمات گوشی قابل تغییرند. اطلاعات پیامک شما از دستگاه خارج نمی‌شود."
             else
-                "These are optional and can be changed anytime in your phone settings. Your SMS and voice never leave the device.",
+                "These are optional and can be changed anytime in your phone settings. Your SMS data never leaves the device.",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = colors.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 8.dp)
         )
         Spacer(Modifier.height(18.dp))
+
+        if (permissions.isEmpty()) {
+            Text(
+                text = if (isPersian) "این نسخه از برنامه به هیچ دسترسی ویژه‌ای نیاز ندارد."
+                else "This version of the app doesn't need any special permissions.",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = colors.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+        }
 
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             permissions.forEach { perm ->

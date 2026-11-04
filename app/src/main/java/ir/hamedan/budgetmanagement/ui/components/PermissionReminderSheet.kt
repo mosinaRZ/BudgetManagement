@@ -235,8 +235,8 @@ fun PermissionReminderSheet(
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = if (isPersian) "پیامک و صدای شما فقط روی همین دستگاه پردازش می‌شود و هر زمان از تنظیمات گوشی قابل تغییر است."
-                    else "Your SMS and voice are processed only on this device, and you can change this anytime in phone settings.",
+                    text = if (isPersian) "پیامک شما فقط روی همین دستگاه پردازش می‌شود و هر زمان از تنظیمات گوشی قابل تغییر است."
+                    else "Your SMS is processed only on this device, and you can change this anytime in phone settings.",
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.onSurfaceVariant
                 )
