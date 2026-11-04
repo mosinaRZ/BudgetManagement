@@ -88,8 +88,27 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	}); err != nil {
 		return fmt.Errorf("device_events indexes: %w", err)
 	}
+	// Admin console: presence lookups scan devices by recency, the user list sorts by sign-up date and
+	// the security trail is queried by account, type and time. The trail is kept for 90 days.
+	if _, err := db.Collection(devicesCollectionName).Indexes().CreateOne(ctx, mongo.IndexModel{Keys: bson.D{{Key: "lastSeenAt", Value: -1}}, Options: options.Index().SetName("idx_device_last_seen_global")}); err != nil {
+		return fmt.Errorf("devices presence index: %w", err)
+	}
+	if _, err := db.Collection(usersCollectionName).Indexes().CreateOne(ctx, mongo.IndexModel{Keys: bson.D{{Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_user_created")}); err != nil {
+		return fmt.Errorf("users created index: %w", err)
+	}
+	if _, err := db.Collection(securityEventsCollectionName).Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_sec_user_created")},
+		{Keys: bson.D{{Key: "type", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_sec_type_created")},
+		{Keys: bson.D{{Key: "severity", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("idx_sec_severity_created")},
+		{Keys: bson.D{{Key: "createdAt", Value: 1}}, Options: options.Index().SetName("ttl_security_events").SetExpireAfterSeconds(int32(securityEventTTL / time.Second))},
+	}); err != nil {
+		return fmt.Errorf("security_events indexes: %w", err)
+	}
 	return nil
 }
+
+// securityEventTTL is how long the admin security trail is retained.
+const securityEventTTL = 90 * 24 * time.Hour
 
 // isMissingIndexOrNamespace reports whether a DropOne error only means there is
 // nothing to drop: IndexNotFound (27), or NamespaceNotFound (26) on a fresh database.
