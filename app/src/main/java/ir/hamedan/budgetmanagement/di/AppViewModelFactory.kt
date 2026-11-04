@@ -8,6 +8,8 @@ import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsViewModel
 import ir.hamedan.budgetmanagement.ui.screens.categories.CategoriesViewModel
 import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsViewModel
 import ir.hamedan.budgetmanagement.ui.screens.devices.DevicesViewModel
+import ir.hamedan.budgetmanagement.ui.screens.admin.AdminAnalyticsViewModel
+import ir.hamedan.budgetmanagement.ui.screens.admin.AdminUsersViewModel
 import ir.hamedan.budgetmanagement.domain.usecase.SavingGoalUseCase
 import ir.hamedan.budgetmanagement.domain.usecase.DebtCreditUseCase
 import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitViewModel
@@ -109,6 +111,12 @@ class AppViewModelFactory(
                     guestModeStore = container.guestModeStore,
                     context = appContext
                 ) as T
+            }
+            modelClass.isAssignableFrom(AdminUsersViewModel::class.java) -> {
+                AdminUsersViewModel(adminApi = container.adminApi, context = appContext) as T
+            }
+            modelClass.isAssignableFrom(AdminAnalyticsViewModel::class.java) -> {
+                AdminAnalyticsViewModel(adminApi = container.adminApi, context = appContext) as T
             }
             modelClass.isAssignableFrom(DebtCreditViewModel::class.java) -> {
                 DebtCreditViewModel(

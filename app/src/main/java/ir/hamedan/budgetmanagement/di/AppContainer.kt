@@ -8,6 +8,7 @@ import ir.hamedan.budgetmanagement.data.local.SyncLocalDataSource
 import ir.hamedan.budgetmanagement.data.local.SyncLocalDataSourceImpl
 import ir.hamedan.budgetmanagement.data.notification.DeviceSecurityNotifier
 import ir.hamedan.budgetmanagement.data.network.AccountApi
+import ir.hamedan.budgetmanagement.data.network.AdminApi
 import ir.hamedan.budgetmanagement.data.network.ApiHttpClient
 import ir.hamedan.budgetmanagement.data.network.AuthenticatedApiClient
 import ir.hamedan.budgetmanagement.data.network.AuthApi
@@ -62,6 +63,7 @@ class AppContainer(context: Context) {
         )
     }
     val deviceApi: DeviceApi by lazy { DeviceApi(authenticatedApiClient) }
+    val adminApi: AdminApi by lazy { AdminApi(authenticatedApiClient) }
     val profileApi: ProfileApi by lazy { ProfileApi(authenticatedApiClient) }
     val accountApi: AccountApi by lazy { AccountApi(authenticatedApiClient) }
     val deviceInfoProvider: DeviceInfoProvider by lazy { DeviceInfoProvider(appContext) }

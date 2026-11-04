@@ -23,6 +23,10 @@ sealed interface AppRoute {
     @Serializable
     data object MainStructure : AppRoute
 
+    /** The administrator's separate console (user management + analytics). Admin accounts only. */
+    @Serializable
+    data object AdminRoot : AppRoute
+
     @Serializable
     data object Profile : AppRoute
 

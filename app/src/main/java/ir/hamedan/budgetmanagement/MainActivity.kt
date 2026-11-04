@@ -68,6 +68,7 @@ import ir.hamedan.budgetmanagement.ui.components.PermissionReminderSheet
 import ir.hamedan.budgetmanagement.ui.components.onboardingPermissions
 import ir.hamedan.budgetmanagement.ui.navigation.AppRoute
 import ir.hamedan.budgetmanagement.ui.navigation.MainTabRoute
+import ir.hamedan.budgetmanagement.ui.screens.admin.AdminRootScreen
 import ir.hamedan.budgetmanagement.ui.screens.profile.ProfileScreen
 import ir.hamedan.budgetmanagement.ui.screens.add.AddScreen
 import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsScreen
@@ -211,7 +212,10 @@ class MainActivity : FragmentActivity() {
                 val app = applicationContext as BudgetApp
                 while (true) {
                     if (app.container.authRepository.isAuthenticated()) {
-                        app.container.syncScheduler.enqueueNow()
+                        // The admin console is separate from the budget app and has no local
+                        // budget data to synchronise.
+                        val isAdminSession = app.container.authSessionStore.role().equals("admin", ignoreCase = true)
+                        if (!isAdminSession) app.container.syncScheduler.enqueueNow()
                         // Sign-ins and removals on the account's other devices are read from the
                         // activity feed directly, so they are announced within about a minute while
                         // the app is open, instead of waiting for the next background sync.
@@ -485,6 +489,26 @@ class MainActivity : FragmentActivity() {
                 return@LaunchedEffect
             }
 
+            // Keep each account type in its own app: admins live in the admin console, everyone
+            // else in the budget app. This also covers a role change picked up by a token refresh.
+            if (sessionAuthenticated && route.isNotBlank()) {
+                val isAdminAccount = app.container.authSessionStore.role().equals("admin", ignoreCase = true)
+                if (isAdminAccount && route.contains("MainStructure")) {
+                    navController.navigate(AppRoute.AdminRoot) {
+                        popUpTo(navController.graph.id) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                    return@LaunchedEffect
+                }
+                if (!isAdminAccount && route.contains("AdminRoot")) {
+                    navController.navigate(AppRoute.MainStructure) {
+                        popUpTo(navController.graph.id) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                    return@LaunchedEffect
+                }
+            }
+
             if (!hasSession &&
                 route.isNotBlank() &&
                 !route.contains("Login") &&
@@ -573,8 +597,18 @@ class MainActivity : FragmentActivity() {
                     localUnlockOnly = loginRoute.localUnlockOnly,
                     onLoginSuccess = {
                         appLockPreferences.clearLock()
-                        navController.navigate(AppRoute.MainStructure) {
-                            popUpTo(AppRoute.Login()) { inclusive = true }
+                        // The role comes from the server's login response and is checked here, once,
+                        // to decide which app the user lands in. Concrete routes in each branch (see
+                        // the note on the splash screen about typed navigation).
+                        if (app.container.authSessionStore.role().equals("admin", ignoreCase = true)) {
+                            navController.navigate(AppRoute.AdminRoot) {
+                                popUpTo(AppRoute.Login()) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        } else {
+                            navController.navigate(AppRoute.MainStructure) {
+                                popUpTo(AppRoute.Login()) { inclusive = true }
+                            }
                         }
                     },
                     onRegister = {
@@ -655,6 +689,21 @@ class MainActivity : FragmentActivity() {
                 ProfileScreen(
                     onBack = { navController.popBackStack() },
                     onForgotPassword = { navController.navigate(AppRoute.PasswordReset) }
+                )
+            }
+
+            // Administrator console: separate from the budget screens, reachable only for admins.
+            composable<AppRoute.AdminRoot> {
+                AdminRootScreen(
+                    selfUserId = app.container.authSessionStore.userId().orEmpty(),
+                    onSignOut = {
+                        authScope.launch {
+                            app.container.authRepository.logout()
+                            navController.navigate(AppRoute.Login()) {
+                                popUpTo(AppRoute.AdminRoot) { inclusive = true }
+                            }
+                        }
+                    }
                 )
             }
 
