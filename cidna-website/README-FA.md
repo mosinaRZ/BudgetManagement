@@ -36,7 +36,6 @@ python3 build.py && python3 tools/check.py     # ساخت و بررسی لینک
 2. پچ اندروید را اعمال کنید: `cd app && patch -p1 < ../app-patches/app-links-to-website.patch` (اگر دامنه فرق دارد `SITE_URL` را اصلاح کنید).
 3. **`SOURCE_URL`** را پر کنید: بر اساس AGPL بند ۱۳ باید کد منبع برای کاربران سرویس در دسترس باشد.
 4. متن‌های حقوقی را وکیل بازبینی کند؛ مخصوصاً ادعای «رایگان» که فعلاً در قوانین (Terms) بک‌اند ذکر نشده — یک بند کوتاه اضافه کنید.
-5. تعیین کنید فروشگاه‌ها کدام نسخه (play/direct) را می‌گیرند: متن سایت می‌گوید تشخیص پیامک بانکی «فقط در نسخهٔ direct» است.
 
 ## راه‌اندازی سئو — چه کنید
 **فنی (سایت این‌ها را از قبل دارد):** canonical، hreflang فا/EN، sitemap با alternates، robots، JSON-LD (Organization, WebSite, SoftwareApplication با `price 0`, FAQPage, Article, BreadcrumbList)، OG/Twitter با کاور جدا برای هر زبان، `llms.txt`، فونت woff2 و تصویر webp سبک، بدون JS/CSS بیرونی.

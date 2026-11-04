@@ -17,10 +17,9 @@ def features(L):
         ("device", t("چنددستگاهی","Multi-device"), t("با یک حساب روی چند گوشی همگام شوید؛ فهرست دستگاه‌ها، خروج از راه دور و اعلان ورود از دستگاه جدید.","Sync across phones with one account; device list, remote sign-out and new-device alerts.")),
      ]),
      (t("ثبت و دسته‌بندی","Record & categorise"), [
-        ("wallet", t("تراکنش‌ها","Transactions"), t("ثبت درآمد و هزینه، مرور سوابق، بررسی تراکنش‌های در انتظار و میان‌بر ثبت سریع.","Record income and expenses, browse history, review pending transactions and use the quick-add shortcut.")),
+        ("wallet", t("تراکنش‌ها","Transactions"), t("ثبت درآمد و هزینه، مرور سوابق و میان‌بر ثبت سریع.","Record income and expenses, browse history and use the quick-add shortcut.")),
         ("mic", t("ورود صوتی","Voice entry"), t("عنوان تراکنش را بگویید و پیش از ذخیره بررسی کنید.","Say the transaction title and check it before saving.")),
         ("tag", t("دسته‌بندی‌ها","Categories"), t("دسته‌های آماده، دسته‌های سفارشی و پیشنهاد دسته‌بندی.","Predefined and custom categories, plus category suggestions.")),
-        ("sms", t("پیامک بانکی (نسخهٔ مستقیم)","Bank SMS (direct build)"), t("پیامک‌های بانکی تشخیص داده و به‌صورت تراکنش در انتظار پیشنهاد می‌شوند؛ پردازش فقط روی گوشی. فقط در نسخهٔ direct.","Bank SMS are detected and offered as pending transactions, processed on the phone only. Direct build only.")),
      ]),
      (t("برنامه‌ریزی","Plan"), [
         ("pie", t("بودجه و سقف هزینه","Budgets & limits"), t("سقف هزینه برای هر دسته، با نوار پیشرفت و هشدار.","A spending limit per category, with progress bars and alerts.")),
@@ -72,7 +71,6 @@ def download(L):
 <p>{t('سیدنا متن‌باز است و هر کسی می‌تواند نسخهٔ خودش را بسازد؛ اما نسخه‌های غیررسمی ممکن است داده‌های شما را ببینند. اگر فایلی را از جای دیگری گرفته‌اید، دوباره از همین صفحه دریافت کنید. تغییردهندگان باید نام و نشان دیگری انتخاب کنند.','Cidna is open source, so anyone can build their own copy — but unofficial builds could see your data. If you got a file from somewhere else, download it again from this page. Forks must use a different name and icon.')}</p>
 <h2 id='direct'>{t('نصب فایل مستقیم (APK)','Installing the direct file (APK)')}</h2>
 <ol><li>{t('فایل را دریافت کنید.','Download the file.')}</li><li>{t('هنگام باز کردن، اندروید برای مرورگر یا مدیر فایل اجازهٔ «نصب برنامه‌های ناشناس» را می‌خواهد؛ فقط برای همین یک‌بار اجازه دهید.','When you open it, Android asks to allow “install unknown apps” for your browser or file manager — allow it just for this install.')}</li><li>{t('در صورت تمایل، هش فایل را با مقدار پایین همین صفحه مقایسه کنید.','Optionally compare the file’s hash with the value below on this page.')}</li><li>{t('نصب کنید و برنامه را باز کنید.','Install and open the app.')}</li></ol>
-<div class='callout'><p>{t('قابلیت تشخیص پیامک بانکی فقط در نسخهٔ مستقیم (direct) وجود دارد و فقط پس از اجازهٔ شما فعال می‌شود.','Bank-SMS detection exists only in the direct build, and only after you grant the permission.')}</p></div>
 {sha}</article>"""
     body = f"""<section class='page-hero'><div class='wrap'>{{{{CRUMBS}}}}<h1>{t('دریافت سیدنا','Download Cidna')}</h1><p class='lead'>{t('رایگان، بدون تبلیغ، برای اندروید. از هر راهی که برایتان راحت‌تر است.','Free, ad-free, for Android — choose whichever route suits you.')}</p></div></section>
 <div class='wrap doc'><aside class='toc glass'><b>{t('در این صفحه','On this page')}</b><a href='#get'>{t('دریافت','Get the app')}</a><a href='#info'>{t('مشخصات','Details')}</a><a href='#safe'>{t('امنیت دریافت','Safe download')}</a><a href='#direct'>{t('نصب مستقیم','Direct install')}</a></aside>{secs}</div>"""
@@ -86,7 +84,7 @@ def faq(L):
     t = T(L); items = FAQ.items(L)
     inner = section(faq_html(items))
     return simple_page(L, "faq", t("پرسش‌های متداول","Frequently asked questions"),
-        t("پاسخ پرسش‌های متداول دربارهٔ سیدنا: رایگان بودن، رمزنگاری سرتاسری، استفاده آفلاین، حذف حساب، پیامک بانکی و پشتیبانی.","Answers about Cidna: being free, end-to-end encryption, offline use, account deletion, bank SMS and support."),
+        t("پاسخ پرسش‌های متداول دربارهٔ سیدنا: رایگان بودن، رمزنگاری سرتاسری، استفاده آفلاین، حذف حساب و پشتیبانی.","Answers about Cidna: being free, end-to-end encryption, offline use, account deletion and support."),
         t("پاسخ‌های روشن و صادقانه؛ اگر چیزی جا مانده بود، بنویسید.","Clear, honest answers — and if something’s missing, write to us."), inner,
         schema=[faq_schema(items)])
 

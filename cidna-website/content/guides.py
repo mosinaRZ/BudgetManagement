@@ -43,7 +43,6 @@ def body(L, slug):
             t("اگر خواستید، <b>یادداشت</b> اختیاری بنویسید.","Add an optional <b>note</b>."),
             t("برای ذخیره، دکمه را <b>بکشید</b>؛ این کار جلوی ثبت اتفاقی را می‌گیرد.","<b>Swipe</b> to save — it prevents accidental entries."))),
          ("voice", t("ورود صوتی","Voice entry"), P(t("تشخیص گفتار را سرویس گفتار خود گوشی انجام می‌دهد و ممکن است برای پردازش، صدا را به ارائه‌دهندهٔ همان سرویس بفرستد؛ سیدنا صدای شما را ضبط یا ذخیره نمی‌کند. نتیجه را پیش از ذخیره بخوانید.","Speech recognition is done by your phone’s speech service, which may send audio to its provider; Cidna does not record or store your voice. Check the result before saving."))),
-         ("pending", t("تراکنش‌های در انتظار","Pending transactions"), P(t("تراکنش‌های پیشنهادی (مثلاً از پیامک بانکی در نسخهٔ مستقیم) ابتدا «در انتظار» می‌مانند تا شما تأیید یا ردشان کنید. متن پیامک فقط روی گوشی پردازش می‌شود.","Suggested transactions (for example from bank SMS in the direct build) wait as “pending” until you confirm or reject them. SMS text is processed on the phone only."))),
         ]
     if slug == "limits-and-piggy-banks":
         return [
@@ -89,8 +88,7 @@ def body(L, slug):
     if slug == "track-expenses":
         return [
          ("habit", t("عادت ۳۰ ثانیه‌ای","The 30-second habit"), P(t("ثبت هزینه وقتی ماندگار می‌شود که سریع باشد. هزینه را همان لحظه یا آخر روز، در یک زمان ثابت ثبت کنید.","Tracking sticks when it’s fast. Log an expense right away, or at a fixed time at the end of each day."))),
-         ("tips", t("پنج ترفند","Five tricks"), ul(t("از میان‌بر افزودن سریع استفاده کنید.","Use the quick-add shortcut."), t("هزینه را با صدا ثبت کنید و پیش از تأیید بررسی کنید.","Speak the expense and review before confirming."), t("دسته‌ها را کم و ساده نگه دارید.","Keep categories few and simple."), t("تراکنش‌های در انتظار را هفتگی مرور کنید.","Review pending transactions weekly."), t("هر هفته پنج دقیقه نمودار را ببینید.","Spend five minutes a week on the charts."))),
-         ("sms", t("پیامک بانکی","Bank SMS"), P(t("در نسخهٔ مستقیم (direct)، پیامک‌های بانکی تشخیص داده و به‌صورت تراکنش در انتظار پیشنهاد می‌شوند؛ پردازش فقط روی دستگاه است.","In the direct build, bank SMS are detected and offered as pending transactions; processing happens on the device only."))),
+         ("tips", t("پنج ترفند","Five tricks"), ul(t("از میان‌بر افزودن سریع استفاده کنید.","Use the quick-add shortcut."), t("هزینه را با صدا ثبت کنید و پیش از تأیید بررسی کنید.","Speak the expense and review before confirming."), t("دسته‌ها را کم و ساده نگه دارید.","Keep categories few and simple."), t("هر هفته پنج دقیقه نمودار را ببینید.","Spend five minutes a week on the charts."))),
         ]
     if slug == "savings-goals":
         return [

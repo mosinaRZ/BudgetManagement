@@ -31,7 +31,6 @@ ICONS = {
  "phone":"<rect x='6.5' y='2.5' width='11' height='19' rx='2.5'/><path d='M10.5 18.5h3'/>",
  "device":"<rect x='3' y='5' width='13' height='10' rx='1.5'/><rect x='14' y='9' width='7' height='11' rx='1.5'/>",
  "user":"<circle cx='12' cy='8' r='4'/><path d='M4 21a8 8 0 0 1 16 0'/>",
- "sms":"<path d='M4 5h16v11H9l-5 4z'/><path d='M8 9.5h8M8 12.5h5'/>",
  "shield":"<path d='M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z'/><path d='M8.5 12l2.5 2.5L16 9.5'/>",
  "eye":"<path d='M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z'/><circle cx='12' cy='12' r='3'/>",
  "eye-off":"<path d='M3 3l18 18'/><path d='M10.6 6.2A9.8 9.8 0 0 1 12 6c6.4 0 10 6 10 6a17 17 0 0 1-3.2 3.8M6.5 7.6C3.9 9.3 2 12 2 12s3.6 7 10 7c1.6 0 3-.4 4.3-1'/><path d='M9.9 10a3 3 0 0 0 4.1 4.2'/>",

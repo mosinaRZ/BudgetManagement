@@ -30,10 +30,10 @@ X_URL      = "https://twitter.com/CidnaApp"
 INSTAGRAM  = "https://www.instagram.com/cidnaapp"
 
 # ── ۴) متن‌های حقوقی (باید با legal_handler.go بک‌اند یکی باشد) ───────────
-LEGAL_VERSION     = "1.0"
-LEGAL_UPDATED_FA  = "۲۶ مهر ۱۴۰۵"
-LEGAL_UPDATED_EN  = "18 October 2026"
-LEGAL_UPDATED_ISO = "2026-10-18"
+LEGAL_VERSION     = "1.1"
+LEGAL_UPDATED_FA  = "۱۳ آبان ۱۴۰۵"
+LEGAL_UPDATED_EN  = "4 November 2026"
+LEGAL_UPDATED_ISO = "2026-11-04"
 
 PROVIDER_FA = "محمدسینا رمضانی عهدیه"
 PROVIDER_EN = "Muhammed Cenna Ramezani Ahdieh"

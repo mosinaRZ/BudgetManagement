@@ -61,7 +61,7 @@ def home(L):
   t('از ثبت یک خرج ساده تا هدف‌گذاری برای پس‌انداز؛ سریع، فارسی و خصوصی.','From logging a coffee to saving for a goal — fast, Persian-first and private.'))}
 <div class='bento'>
 {tile('user',t('شروع بدون حساب','Start without an account'),t('حالت مهمان با رمز یا اثر انگشت. بعداً اطلاعات را به حساب جدید منتقل کنید یا از صفر شروع کنید.','Guest mode with a passcode or fingerprint. Later, move your data into a new account or start fresh.'),'w3 accent')}
-{tile('mic',t('ثبت سریع','Fast entry'),t('میان‌بر ثبت سریع، ورود صوتی و مرور تراکنش‌های در انتظار؛ هزینه‌ی روزانه شود کار ۳۰ ثانیه‌ای.','Quick-add shortcut, voice entry and a pending-transaction review — logging takes seconds.'),'w3')}
+{tile('mic',t('ثبت سریع','Fast entry'),t('میان‌بر ثبت سریع، ورود صوتی و مرور تراکنش‌ها؛ هزینه‌ی روزانه شود کار ۳۰ ثانیه‌ای.','Quick-add shortcut, voice entry and a clear transaction history — logging takes seconds.'),'w3')}
 {tile('target',t('قلک‌های پس‌انداز','Savings piggy banks'),t('برای هر هدف یک قلک بسازید، واریز و برداشت کنید و واریز ماهانه زمان‌بندی کنید.','One piggy bank per goal, with deposits, withdrawals and scheduled monthly deposits.'))}
 {tile('pie',t('سقف هزینه','Spending limits'),t('برای هر دسته سقف تعیین کنید و با نوار پیشرفت و هشدار، از آن عبور نکنید.','Set a limit per category and stay under it with progress bars and alerts.'))}
 {tile('swap',t('بدهی و طلب','Debts & receivables'),t('طرف حساب، پرداخت‌های جزئی، سررسید و یادآور؛ دیگر لای چت‌ها گم نمی‌شوند.','Counterparties, partial payments, due dates and reminders — no more debts lost in chats.'))}
