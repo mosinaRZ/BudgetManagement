@@ -309,7 +309,7 @@ fun ProfileScreen(
         listOf(
             !user?.firstName.isNullOrBlank(),
             !user?.lastName.isNullOrBlank(),
-            user?.gender?.let { it == GenderOption.MALE.value || it == GenderOption.FEMALE.value } == true,
+            ProfileCompletion.isGenderAnswered(user?.gender),
             !user?.birthDate.isNullOrBlank(),
         ).let { all -> if (viewModel.isGuest) all.dropLast(1) else all }
     }
@@ -887,7 +887,7 @@ private fun PersonalInfoSheet(
             )
         }
         SheetDivider()
-        val genderChosen = form.gender != GenderOption.PREFER_NOT_TO_SAY.value
+        val genderChosen = ProfileCompletion.isGenderAnswered(form.gender)
         ProfileRow(
             icon = genderIcon(form.gender),
             label = if (isPersian) "جنسیت" else "Gender",

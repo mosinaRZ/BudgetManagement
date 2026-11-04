@@ -21,21 +21,23 @@ data class BiometricReminderState(
  *
  *  - It waits until the user has actually used the app on [MIN_ACTIVE_DAYS] different days, so a
  *    new user is never asked about a shortcut before they have a reason to want one.
- *  - Each time it is shown, the next one is pushed further away (7 -> 14 -> 30 days), and it is
- *    shown at most [MAX_REMINDERS] times in total; closing it counts as "later".
+ *  - Each time it is shown, the next one comes after a short, slowly growing delay
+ *    (2 -> 3 -> 5 -> 7 days), and it is shown at most [MAX_REMINDERS] times in total; closing it
+ *    counts as "later".
  *  - Enabling fingerprint login or choosing "don't ask again" stops it for good.
  */
 object BiometricReminderPolicy {
-    const val MIN_ACTIVE_DAYS = 3
-    const val MAX_REMINDERS = 3
+    const val MIN_ACTIVE_DAYS = 2
+    const val MAX_REMINDERS = 8
 
     private const val DAY_MILLIS = 24L * 60 * 60 * 1000
 
     /** Delay before the reminder that follows the [shownCount]-th one. */
     fun intervalAfter(shownCount: Int): Long = when {
-        shownCount <= 1 -> 7 * DAY_MILLIS
-        shownCount == 2 -> 14 * DAY_MILLIS
-        else -> 30 * DAY_MILLIS
+        shownCount <= 1 -> 2 * DAY_MILLIS
+        shownCount == 2 -> 3 * DAY_MILLIS
+        shownCount == 3 -> 5 * DAY_MILLIS
+        else -> 7 * DAY_MILLIS
     }
 
     fun recordActiveDay(state: BiometricReminderState, epochDay: Long): BiometricReminderState =
@@ -51,6 +53,17 @@ object BiometricReminderPolicy {
     fun markShown(state: BiometricReminderState, nowMillis: Long): BiometricReminderState {
         val count = state.shownCount + 1
         return state.copy(shownCount = count, nextDueAt = nowMillis + intervalAfter(count))
+    }
+
+    /**
+     * One-time catch-up for installs that scheduled their next reminder under the old, longer
+     * delays (7/14/30 days): a due date further away than the current interval is pulled in.
+     * A due date that is already within the interval is left untouched, so this is idempotent.
+     */
+    fun capNextDue(state: BiometricReminderState, nowMillis: Long): BiometricReminderState {
+        if (state.shownCount == 0) return state
+        val latestAllowed = nowMillis + intervalAfter(state.shownCount)
+        return if (state.nextDueAt > latestAllowed) state.copy(nextDueAt = latestAllowed) else state
     }
 
     fun stop(state: BiometricReminderState): BiometricReminderState = state.copy(stopped = true)
@@ -92,7 +105,9 @@ object BiometricReminderPreferences {
     /** Counts today as a day of real use (once per calendar day). */
     fun recordActiveDay(context: Context, today: LocalDate = LocalDate.now()) {
         val state = load(context)
-        val updated = BiometricReminderPolicy.recordActiveDay(state, today.toEpochDay())
+        val updated = BiometricReminderPolicy
+            .recordActiveDay(state, today.toEpochDay())
+            .let { BiometricReminderPolicy.capNextDue(it, System.currentTimeMillis()) }
         if (updated != state) save(context, updated)
     }
 

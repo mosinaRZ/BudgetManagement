@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Message
@@ -73,6 +74,9 @@ import ir.hamedan.budgetmanagement.data.local.models.DebtCreditEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.preferences.AmountPrivacyPreferences
 import ir.hamedan.budgetmanagement.data.preferences.DueReminderPreferences
+import ir.hamedan.budgetmanagement.data.preferences.WidgetPromptPreferences
+import ir.hamedan.budgetmanagement.ui.screens.profile.MissingProfileField
+import ir.hamedan.budgetmanagement.ui.screens.profile.ProfileCompletion
 import ir.hamedan.budgetmanagement.ui.components.SwipeToConfirmButton
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
@@ -189,13 +193,15 @@ fun HomeScreen(
     onAddScreenClickPiggy: () -> Unit = {},
     onAddScreenClickLimit: () -> Unit = {},
     onCategoriesClick: () -> Unit = {},
+    onProfileClick: () -> Unit = {},
     transactionViewModel: TransactionViewModel = appViewModel(),
     goalsViewModel: SavingGoalsViewModel = appViewModel(),
     budgetViewModel: BudgetLimitViewModel = appViewModel(),
     pendingViewModel: PendingTransactionViewModel = appViewModel(),
     notificationViewModel: NotificationViewModel = appViewModel(),
     debtCreditViewModel: DebtCreditViewModel = appViewModel(),
-    categoriesViewModel: CategoriesViewModel = appViewModel()
+    categoriesViewModel: CategoriesViewModel = appViewModel(),
+    profileCompletionViewModel: ProfileCompletionViewModel = appViewModel()
 ) {
     val context = LocalContext.current
     val isPersian = LocaleHelper.getLanguage(context) == "fa"
@@ -308,6 +314,15 @@ fun HomeScreen(
         }
     }
 
+    // ===== ریمایندر ویجت: قابل بستن، با پیشنهاد مجدد زمان‌بندی‌شده =====
+    // اهلیت فقط یک بار هنگام ورود به صفحه سنجیده می‌شود؛ با بستن، فوراً مخفی می‌شود و
+    // زمان‌بندی بعدی (۳ → ۷ → ۱۴ → ۳۰ روز) ذخیره می‌شود.
+    var widgetPromptEligible by remember { mutableStateOf(WidgetPromptPreferences.shouldShow(context)) }
+    val showWidgetPrompt = !isWidgetAdded && widgetPromptEligible
+
+    // ===== CTA تکمیل پروفایل (غیرقابل بستن؛ با کامل شدن پروفایل خودبه‌خود حذف می‌شود) =====
+    val profileCompletion by profileCompletionViewModel.completion.collectAsState()
+
     // تراز کلی حساب
     val totalAllIncome = transactionsList.filter { it.type == "INCOME" }.sumOf { it.amount }
     val totalAllExpense = transactionsList.filter { it.type == "EXPENSE" }.sumOf { it.amount }
@@ -368,6 +383,12 @@ fun HomeScreen(
         }
     }
 
+    val headerSpacerHeight by animateDpAsState(
+        targetValue = if (showWidgetPrompt) 110.dp else 55.dp,
+        animationSpec = tween(250, easing = FastOutSlowInEasing),
+        label = "header_spacer"
+    )
+
     Box(modifier = Modifier.fillMaxSize()) {
         AuroraBackground()
 
@@ -381,7 +402,7 @@ fun HomeScreen(
                 Spacer(
                     modifier = Modifier
                         .statusBarsPadding()
-                        .height(if (isWidgetAdded) 55.dp else 110.dp)
+                        .height(headerSpacerHeight)
                 )
             }
 
@@ -686,6 +707,21 @@ fun HomeScreen(
                                 }
                             }
                         }
+                    }
+                }
+
+                // CTA تکمیل پروفایل
+                profileCompletion?.let { completion ->
+                    item(key = "profile_completion_cta") {
+                        ProfileCompletionCard(
+                            completion = completion,
+                            isPersian = isPersian,
+                            numberFormatter = numberFormatter,
+                            onClick = {
+                                haptic.perform(AppHapticType.Click)
+                                onProfileClick()
+                            }
+                        )
                     }
                 }
 
@@ -1305,24 +1341,34 @@ fun HomeScreen(
         }
 
         // CTA ویجت
-        if (!isWidgetAdded) {
-            Box(
+        AnimatedVisibility(
+            visible = showWidgetPrompt,
+            enter = fadeIn(tween(250)) + scaleIn(initialScale = 0.96f, animationSpec = tween(250)),
+            exit = fadeOut(tween(180)) + scaleOut(targetScale = 0.96f, animationSpec = tween(180)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 72.dp)
+                .padding(horizontal = 24.dp)
+        ) {
+            val capsuleShape = RoundedCornerShape(50)
+            val widgetHint = if (isPersian) "لطفاً از منوی ویجت‌ها، ویجت سیدنا را اضافه کنید" else "Please add Cidna widget from the widget menu"
+
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(top = 72.dp)
-                    .padding(horizontal = 24.dp)
+                    .height(44.dp)
+                    .background(color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f), shape = capsuleShape)
+                    .border(width = 1.dp, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), shape = capsuleShape)
+                    .clip(capsuleShape),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                val capsuleShape = RoundedCornerShape(50)
-
+                // ناحیهٔ اصلی: افزودن ویجت
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp)
-                        .background(color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f), shape = capsuleShape)
-                        .border(width = 1.dp, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), shape = capsuleShape)
-                        .clip(capsuleShape)
+                        .weight(1f)
+                        .fillMaxHeight()
                         .clickable {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                                 val appWidgetManager = AppWidgetManager.getInstance(context)
@@ -1331,19 +1377,38 @@ fun HomeScreen(
                                 if (appWidgetManager.isRequestPinAppWidgetSupported) {
                                     appWidgetManager.requestPinAppWidget(provider, null, null)
                                 } else {
-                                    Toast.makeText(context, if (isPersian) "لطفاً از منوی ویجت‌ها، ویجت سیدنا را اضافه کنید" else "Please add Cidna widget from the widget menu", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, widgetHint, Toast.LENGTH_LONG).show()
                                 }
                             } else {
-                                Toast.makeText(context, if (isPersian) "لطفاً از منوی ویجت‌ها، ویجت سیدنا را اضافه کنید" else "Please add Cidna widget from the widget menu", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, widgetHint, Toast.LENGTH_LONG).show()
                             }
                         }
-                        .padding(horizontal = 16.dp),
+                        .padding(start = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Icon(painterResource(R.drawable.ic_widget), contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(text = if (isPersian) "ویجت موجودی را اضافه کنید" else "Add Balance Widget", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+
+                // ضربدر: بستن و پیشنهاد مجدد در زمان بعدی
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clickable {
+                            haptic.perform(AppHapticType.Tick)
+                            WidgetPromptPreferences.dismiss(context)
+                            widgetPromptEligible = false
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = if (isPersian) "بستن" else "Dismiss",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
         }
@@ -2057,6 +2122,93 @@ private fun ChangeDueDateDialog(
         }
     ) {
         DatePicker(state = datePickerState)
+    }
+}
+
+private fun missingFieldLabel(field: MissingProfileField, isPersian: Boolean): String = when (field) {
+    MissingProfileField.FIRST_NAME -> if (isPersian) "نام" else "first name"
+    MissingProfileField.LAST_NAME -> if (isPersian) "نام خانوادگی" else "last name"
+    MissingProfileField.GENDER -> if (isPersian) "جنسیت" else "gender"
+    MissingProfileField.BIRTH_DATE -> if (isPersian) "تاریخ تولد" else "date of birth"
+}
+
+/**
+ * Non-dismissible but unobtrusive profile-completion prompt: it scrolls with the content (never
+ * pinned over it), takes one compact row, and disappears on its own once the profile is complete.
+ */
+@Composable
+private fun ProfileCompletionCard(
+    completion: ProfileCompletion,
+    isPersian: Boolean,
+    numberFormatter: NumberFormat,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(24.dp)
+    val colors = MaterialTheme.colorScheme
+    val progress by animateFloatAsState(
+        targetValue = completion.percent / 100f,
+        animationSpec = tween(700, easing = FastOutSlowInEasing),
+        label = "profile_completion_progress"
+    )
+    val percentText = numberFormatter.format(completion.percent) + if (isPersian) "٪" else "%"
+    val next = completion.missing.firstOrNull()?.let { missingFieldLabel(it, isPersian) }
+    val remaining = completion.missing.size - 1
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colors.primaryContainer.copy(alpha = 0.35f), shape)
+            .border(1.dp, colors.primary.copy(alpha = 0.25f), shape)
+            .clip(shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Box(modifier = Modifier.size(52.dp), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxSize(),
+                color = colors.primary,
+                trackColor = colors.primary.copy(alpha = 0.15f),
+                strokeWidth = 5.dp
+            )
+            Text(
+                text = percentText,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = colors.onSurface,
+                maxLines = 1
+            )
+        }
+
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = if (isPersian) "پروفایلت را کامل کن" else "Complete your profile",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = colors.onSurface
+            )
+            if (next != null) {
+                val extra = if (remaining > 0) {
+                    if (isPersian) " و ${numberFormatter.format(remaining)} مورد دیگر" else " and $remaining more"
+                } else ""
+                Text(
+                    text = if (isPersian) "مرحلهٔ بعد: $next$extra" else "Next: $next$extra",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = null,
+            tint = colors.primary,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 
