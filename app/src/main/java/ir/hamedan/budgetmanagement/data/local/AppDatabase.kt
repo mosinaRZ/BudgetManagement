@@ -5,13 +5,14 @@ import android.util.Log
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.TypeConverters
 import ir.hamedan.budgetmanagement.data.local.dao.BudgetLimitDao
 import ir.hamedan.budgetmanagement.data.local.dao.CategoryDao
 import ir.hamedan.budgetmanagement.data.local.dao.DebtCreditDao
 import ir.hamedan.budgetmanagement.data.local.dao.DebtPaymentDao
 import ir.hamedan.budgetmanagement.data.local.dao.NotificationDao
-import ir.hamedan.budgetmanagement.data.local.dao.PendingTransactionDao
 import ir.hamedan.budgetmanagement.data.local.dao.SavingGoalDao
 import ir.hamedan.budgetmanagement.data.local.dao.SavingGoalOperationDao
 import ir.hamedan.budgetmanagement.data.local.dao.SyncMetadataDao
@@ -23,7 +24,6 @@ import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.DebtCreditEntity
 import ir.hamedan.budgetmanagement.data.local.models.DebtPaymentEntity
 import ir.hamedan.budgetmanagement.data.local.models.NotificationEntity
-import ir.hamedan.budgetmanagement.data.local.models.PendingTransactionEntity
 import ir.hamedan.budgetmanagement.data.local.models.SavingGoalEntity
 import ir.hamedan.budgetmanagement.data.local.models.SavingGoalOperationEntity
 import ir.hamedan.budgetmanagement.data.local.models.SyncMetadataEntity
@@ -41,7 +41,6 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         SavingGoalEntity::class,
         BudgetLimitEntity::class,
         NotificationEntity::class,
-        PendingTransactionEntity::class,
         DebtCreditEntity::class,
         SavingGoalOperationEntity::class,
         DebtPaymentEntity::class,
@@ -50,7 +49,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         SyncMetadataEntity::class,
         SyncStateEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -61,6 +60,13 @@ abstract class AppDatabase : RoomDatabase() {
         const val DATABASE_NAME = "budget_management.db"
 
         private const val TAG = "AppDatabase"
+
+        /** v2 removed the device-local bank-SMS inbox; its table is dropped, nothing else changes. */
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS pending_transactions")
+            }
+        }
 
         @Volatile
         private var INSTANCE: AppDatabase? = null
@@ -93,6 +99,7 @@ abstract class AppDatabase : RoomDatabase() {
                 DATABASE_NAME
             )
                 .openHelperFactory(factory)
+                .addMigrations(MIGRATION_1_2)
                 .build()
         }
 
@@ -136,8 +143,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun budgetLimitDao(): BudgetLimitDao
 
     abstract fun notificationDao(): NotificationDao
-
-    abstract fun pendingTransactionDao(): PendingTransactionDao
 
     abstract fun debtCreditDao(): DebtCreditDao
 

@@ -62,22 +62,6 @@ android {
         buildConfigField("String", "BASE_URL", "\"https://api.example.com/\"")
     }
 
-    flavorDimensions += "store"
-    productFlavors {
-        // Google Play: no SMS permissions (restricted by Play policy).
-        create("play") {
-            dimension = "store"
-            buildConfigField("Boolean", "SMS_IMPORT_ENABLED", "false")
-            manifestPlaceholders["smsReceiverEnabled"] = "false"
-        }
-        // Bazaar / Myket / direct APK: SMS-based transaction detection enabled.
-        create("direct") {
-            dimension = "store"
-            buildConfigField("Boolean", "SMS_IMPORT_ENABLED", "true")
-            manifestPlaceholders["smsReceiverEnabled"] = "true"
-        }
-    }
-
     signingConfigs {
         val storePath = signingValue("storeFile", "RELEASE_STORE_FILE")
         if (storePath != null) {

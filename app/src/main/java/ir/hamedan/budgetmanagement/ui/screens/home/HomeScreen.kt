@@ -38,7 +38,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Visibility
@@ -84,7 +83,6 @@ import ir.hamedan.budgetmanagement.ui.components.appSkeletonShimmer
 import ir.hamedan.budgetmanagement.ui.components.BalanceWidgetReceiver
 import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitViewModel
 import ir.hamedan.budgetmanagement.ui.screens.categories.CategoriesViewModel
-import ir.hamedan.budgetmanagement.utils.CategoryRules
 import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsViewModel
 import ir.hamedan.budgetmanagement.ui.screens.notification.NotificationViewModel
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionViewModel
@@ -192,12 +190,10 @@ fun HomeScreen(
     onAddScreenClickDebt: () -> Unit = {},
     onAddScreenClickPiggy: () -> Unit = {},
     onAddScreenClickLimit: () -> Unit = {},
-    onCategoriesClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
     transactionViewModel: TransactionViewModel = appViewModel(),
     goalsViewModel: SavingGoalsViewModel = appViewModel(),
     budgetViewModel: BudgetLimitViewModel = appViewModel(),
-    pendingViewModel: PendingTransactionViewModel = appViewModel(),
     notificationViewModel: NotificationViewModel = appViewModel(),
     debtCreditViewModel: DebtCreditViewModel = appViewModel(),
     categoriesViewModel: CategoriesViewModel = appViewModel(),
@@ -209,9 +205,6 @@ fun HomeScreen(
 
     // One snackbar for every failure raised by actions started on the home screen.
     val errorSnackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(Unit) {
-        pendingViewModel.errorMessage.collect { errorSnackbarHostState.showError(it) }
-    }
     LaunchedEffect(Unit) {
         transactionViewModel.errorMessage.collect { errorSnackbarHostState.showError(it) }
     }
@@ -255,11 +248,6 @@ fun HomeScreen(
         }
     }
 
-    val pendingTransactions by pendingViewModel.pendingTransactions.collectAsState()
-    val pendingCount by pendingViewModel.pendingCount.collectAsState()
-
-    var showPendingSheet by remember { mutableStateOf(false) }
-
     val numberFormatter = remember(isPersian) {
         NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
     }
@@ -274,13 +262,6 @@ fun HomeScreen(
 
     val notifications by notificationViewModel.notifications.collectAsState()
     val unreadCount by notificationViewModel.unreadCount.collectAsState()
-
-    val expensePendingCategories by pendingViewModel.expenseCategories.collectAsState()
-    val incomePendingCategories by pendingViewModel.incomeCategories.collectAsState()
-    val allPendingCategories = remember(expensePendingCategories, incomePendingCategories) {
-        // دسته‌ی «قلک» برای تراکنش پیامکی هم قابل انتخاب نیست.
-        CategoryRules.userSelectable(expensePendingCategories + incomePendingCategories)
-    }
 
     // بررسی وضعیت بارگذاری کلی (اگر یکی از لیست‌های اصلی null باشد، در حالت Loading قرار می‌گیرد)
     val isLoading = categoriesList == null || goalsList == null || limitsList == null
@@ -1289,32 +1270,6 @@ fun HomeScreen(
                 Box(
                     modifier = Modifier
                         .size(56.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), RoundedCornerShape(24.dp))
-                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), RoundedCornerShape(24.dp))
-                        .clip(RoundedCornerShape(24.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    IconButton(onClick = { showPendingSheet = true }) {
-                        Icon(imageVector = Icons.Default.Message, contentDescription = if (isPersian) "تراکنش‌های در انتظار" else "Pending Transactions", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-
-                    if (pendingCount > 0) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(6.dp)
-                                .size(18.dp)
-                                .background(MaterialTheme.colorScheme.primary, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(text = if (pendingCount > 9) "9+" else pendingCount.toString(), style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = Color.White, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), smallShape)
                         .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), smallShape)
                         .clip(smallShape),
@@ -1615,30 +1570,6 @@ fun HomeScreen(
                     }
                 }
             }
-        }
-
-        if (showPendingSheet) {
-            PendingTransactionsBottomSheet(
-                pendingList = pendingTransactions,
-                categories = allPendingCategories,
-                isPersian = isPersian,
-                currencyUnit = currencyUnit,
-                onDismiss = { showPendingSheet = false },
-                onConfirmFinal = { pending, title, amount, category, isExpense, note ->
-                    pendingViewModel.confirmTransaction(
-                        pending = pending,
-                        title = title,
-                        amount = amount,
-                        category = category,
-                        isExpense = isExpense,
-                        note = note
-                    )
-                },
-                onIgnore = { pending ->
-                    pendingViewModel.ignoreTransaction(pending)
-                },
-                onCategoriesClick = onCategoriesClick
-            )
         }
 
         currentDueReminder?.let { reminder ->

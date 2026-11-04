@@ -105,7 +105,6 @@ class SyncLocalDataSourceImpl(
             database.savingGoalOperationDao().clearAll()
             database.debtPaymentDao().clearAll()
             database.notificationDao().clearAll()
-            database.pendingTransactionDao().clearAll()
             database.userDao().clearAll()
             database.syncStateDao().resetCursor()
         }

@@ -806,9 +806,6 @@ class MainActivity : FragmentActivity() {
                                 onAddScreenClickPiggy = {
                                     navController.navigate(AppRoute.AddScreen(highlightId = "piggy"))
                                 },
-                                onCategoriesClick = {
-                                    navController.navigate(AppRoute.Categories)
-                                },
                                 onProfileClick = {
                                     navController.navigate(AppRoute.Profile)
                                 }

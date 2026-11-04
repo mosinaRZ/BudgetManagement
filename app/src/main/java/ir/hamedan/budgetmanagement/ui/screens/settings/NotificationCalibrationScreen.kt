@@ -267,7 +267,6 @@ private fun NotificationTypeToggleRow(
 
 private fun categoryIcon(category: NotificationCategory): ImageVector = when (category) {
     NotificationCategory.TRANSACTIONS -> Icons.Default.ReceiptLong
-    NotificationCategory.SMS -> Icons.Default.Sms
     NotificationCategory.CATEGORIES -> Icons.Default.Category
     NotificationCategory.BUDGET -> Icons.Default.Speed
     NotificationCategory.GOALS -> Icons.Default.Savings

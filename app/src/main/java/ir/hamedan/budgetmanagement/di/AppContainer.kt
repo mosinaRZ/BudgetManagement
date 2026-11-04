@@ -25,8 +25,6 @@ import ir.hamedan.budgetmanagement.data.repository.DebtCreditRepository
 import ir.hamedan.budgetmanagement.data.repository.DebtCreditRepositoryImpl
 import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import ir.hamedan.budgetmanagement.data.repository.NotificationRepositoryImpl
-import ir.hamedan.budgetmanagement.data.repository.PendingTransactionRepository
-import ir.hamedan.budgetmanagement.data.repository.PendingTransactionRepositoryImpl
 import ir.hamedan.budgetmanagement.data.repository.ProfileRepository
 import ir.hamedan.budgetmanagement.data.repository.ProfileRepositoryImpl
 import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepository
@@ -139,10 +137,6 @@ class AppContainer(context: Context) {
 
     val notificationRepository: NotificationRepository by lazy {
         NotificationRepositoryImpl(database.notificationDao())
-    }
-
-    val pendingTransactionRepository: PendingTransactionRepository by lazy {
-        PendingTransactionRepositoryImpl(database.pendingTransactionDao())
     }
 
     val debtCreditRepository: DebtCreditRepository by lazy {

@@ -13,7 +13,6 @@ import ir.hamedan.budgetmanagement.ui.screens.admin.AdminUsersViewModel
 import ir.hamedan.budgetmanagement.domain.usecase.SavingGoalUseCase
 import ir.hamedan.budgetmanagement.domain.usecase.DebtCreditUseCase
 import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitViewModel
-import ir.hamedan.budgetmanagement.ui.screens.home.PendingTransactionViewModel
 import ir.hamedan.budgetmanagement.ui.screens.home.ProfileCompletionViewModel
 import ir.hamedan.budgetmanagement.ui.screens.notification.NotificationViewModel
 import ir.hamedan.budgetmanagement.ui.screens.profile.ProfileViewModel
@@ -88,14 +87,6 @@ class AppViewModelFactory(
                 NotificationViewModel(
                     repository = container.notificationRepository,
                     context = appContext
-                ) as T
-            }
-            modelClass.isAssignableFrom(PendingTransactionViewModel::class.java) -> {
-                PendingTransactionViewModel(
-                    context = appContext,
-                    pendingRepository = container.pendingTransactionRepository,
-                    transactionRepository = container.transactionRepository,
-                    categoryRepository = container.categoryRepository
                 ) as T
             }
             modelClass.isAssignableFrom(AnalyticsViewModel::class.java) -> {

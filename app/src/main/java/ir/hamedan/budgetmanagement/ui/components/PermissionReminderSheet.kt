@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -214,32 +213,6 @@ fun PermissionReminderSheet(
                         onAllow = { onAllow(item.permission) }
                     )
                 }
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            // ---------- یادداشت حریم خصوصی ----------
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(colors.primaryContainer.copy(alpha = 0.35f))
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Lock,
-                    contentDescription = null,
-                    tint = colors.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    text = if (isPersian) "پیامک شما فقط روی همین دستگاه پردازش می‌شود و هر زمان از تنظیمات گوشی قابل تغییر است."
-                    else "Your SMS is processed only on this device, and you can change this anytime in phone settings.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.onSurfaceVariant
-                )
             }
 
             Spacer(Modifier.height(18.dp))

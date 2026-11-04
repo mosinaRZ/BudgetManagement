@@ -5,7 +5,6 @@ enum class NotificationCategory(
     val titleEn: String
 ) {
     TRANSACTIONS("تراکنش‌ها", "Transactions"),
-    SMS("پیامک بانکی", "Bank SMS"),
     CATEGORIES("دسته‌بندی‌ها", "Categories"),
     BUDGET("محدودیت بودجه", "Budget Limits"),
     GOALS("اهداف پس‌انداز", "Saving Goals"),
@@ -53,31 +52,6 @@ enum class NotificationType(
         "Transactions Category Changed",
         "وقتی حذف دسته‌بندی، تراکنش‌ها را جابه‌جا می‌کند.",
         "When deleting a category moves its transactions.",
-        defaultEnabled = false
-    ),
-
-    SMS_PARSED(
-        NotificationCategory.SMS,
-        "تراکنش پیامکی جدید",
-        "New SMS Transaction",
-        "وقتی پیامک بانکی دریافت و پردازش می‌شود.",
-        "When a bank SMS is received and parsed.",
-        defaultEnabled = true
-    ),
-    SMS_PENDING(
-        NotificationCategory.SMS,
-        "تراکنش پیامکی معلق",
-        "Pending SMS Transaction",
-        "وقتی پیامک بانکی منتظر تأیید شماست.",
-        "When a bank SMS is waiting for your confirmation.",
-        defaultEnabled = true
-    ),
-    SMS_CONFIRMED(
-        NotificationCategory.SMS,
-        "تأیید تراکنش پیامکی",
-        "SMS Transaction Confirmed",
-        "وقتی تراکنش پیامکی را تأیید و ثبت می‌کنید.",
-        "When you confirm and save an SMS transaction.",
         defaultEnabled = false
     ),
 

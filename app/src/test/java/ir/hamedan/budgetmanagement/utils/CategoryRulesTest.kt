@@ -16,15 +16,6 @@ class CategoryRulesTest {
             .forEach { assertThat(CategoryRules.isUserSelectable(it)).isTrue() }
     }
 
-    @Test fun userSelectableRemovesOnlySavingGoal() {
-        val all = listOf(
-            CategoryEntity(title = "FOOD"),
-            CategoryEntity(title = "SAVING_GOAL", isSystem = true),
-            CategoryEntity(title = "SALARY", isExpense = false)
-        )
-        assertThat(CategoryRules.userSelectable(all).map { it.title }).containsExactly("FOOD", "SALARY").inOrder()
-    }
-
     @Test fun builtInCategoriesMatchByKeyRegardlessOfIdOrType() {
         val local = CategoryEntity(id = "a", title = "SAVING_GOAL", isExpense = true)
         val fromBackup = CategoryEntity(id = "b", title = "saving_goal", isExpense = false)

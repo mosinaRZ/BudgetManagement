@@ -22,8 +22,7 @@ import java.util.UUID
  *   server record is applied and the local pending version is acknowledged.
  * - Saving-goal/debt balances are derived from immutable operation records,
  *   preventing concurrent devices from overwriting aggregate changes.
- * - Notifications and raw pending SMS transactions are device-local and are
- *   deliberately excluded from cloud sync.
+ * - Notifications are device-local and are deliberately excluded from cloud sync.
  */
 class SyncEngine(
     private val database: AppDatabase,

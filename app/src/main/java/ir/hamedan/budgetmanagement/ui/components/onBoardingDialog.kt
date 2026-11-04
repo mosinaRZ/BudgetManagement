@@ -45,7 +45,6 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Savings
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.Sms
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.Translate
@@ -85,12 +84,6 @@ private data class OnboardingFeature(
 
 /** امکانات اصلی برنامه؛ هر مورد یک قابلیت واقعی و فعال است. */
 private val coreFeatures = listOf(
-    OnboardingFeature(
-        Icons.Rounded.Sms,
-        "ثبت خودکار از پیامک بانکی", "Auto-capture from bank SMS",
-        "تراکنش را از پیامک بانک شناسایی می‌کند و برای تأیید شما آماده می‌سازد.",
-        "Detects the transaction in your bank SMS and prepares it for you to confirm."
-    ),
     OnboardingFeature(
         Icons.Rounded.Mic,
         "ثبت با صدا", "Voice entry",
@@ -175,20 +168,6 @@ data class OnboardingPermission(
 )
 
 fun onboardingPermissions(sdkInt: Int): List<OnboardingPermission> = buildList {
-    // The Google Play flavor ships without SMS permissions (restricted by Play policy).
-    if (ir.hamedan.budgetmanagement.BuildConfig.SMS_IMPORT_ENABLED) {
-        add(
-            OnboardingPermission(
-                key = "sms",
-                permissions = listOf(Manifest.permission.RECEIVE_SMS),
-                emoji = "💬",
-                titleFa = "پیامک بانکی",
-                titleEn = "Bank SMS",
-                reasonFa = "برای تشخیص خودکار تراکنش‌های بانکی از پیامک و ثبت سریع‌تر بدون تایپ دستی.",
-                reasonEn = "To automatically detect bank transactions from SMS and log them faster."
-            )
-        )
-    }
     if (sdkInt >= Build.VERSION_CODES.TIRAMISU) {
         add(
             OnboardingPermission(
@@ -423,7 +402,6 @@ private fun WelcomePage(isPersian: Boolean) {
         Spacer(Modifier.height(24.dp))
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            HighlightChip(Icons.Rounded.Sms, if (isPersian) "ثبت خودکار از پیامک" else "Auto-capture from SMS")
             HighlightChip(Icons.Rounded.Sync, if (isPersian) "همگام‌سازی رمزنگاری‌شده" else "Encrypted sync")
             HighlightChip(Icons.Rounded.Translate, if (isPersian) "فارسی و English" else "Persian & English")
         }
@@ -535,7 +513,6 @@ private fun FeatureCard(icon: ImageVector, title: String, description: String) {
 // ---------- مرحلهٔ ۴: دسترسی‌ها ----------
 
 internal fun permissionIcon(key: String): ImageVector = when (key) {
-    "sms" -> Icons.Rounded.Sms
     "notifications" -> Icons.Rounded.Notifications
     else -> Icons.Rounded.Security
 }
@@ -570,9 +547,9 @@ private fun PermissionsPage(
         Spacer(Modifier.height(6.dp))
         Text(
             text = if (isPersian)
-                "این دسترسی‌ها اختیاری‌اند و هر زمان از تنظیمات گوشی قابل تغییرند. اطلاعات پیامک شما از دستگاه خارج نمی‌شود."
+                "این دسترسی‌ها اختیاری‌اند و هر زمان از تنظیمات گوشی قابل تغییرند."
             else
-                "These are optional and can be changed anytime in your phone settings. Your SMS data never leaves the device.",
+                "These are optional and can be changed anytime in your phone settings.",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = colors.onSurfaceVariant,

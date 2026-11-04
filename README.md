@@ -22,7 +22,7 @@
 
 ## 1. Executive summary
 
-**Cidna** (Persian: **سیدنا**) turns scattered receipts, bank texts and mental arithmetic into one clear picture of where your money goes — in your language, in your calendar, in your currency, on the phone you already carry.
+**Cidna** (Persian: **سیدنا**) turns scattered receipts and mental arithmetic into one clear picture of where your money goes — in your language, in your calendar, in your currency, on the phone you already carry.
 
 **The 30-second pitch.** Most finance apps are built for English, Gregorian-calendar, dollar-thinking users and ask you to hand over your data before they give you any value. Cidna flips that: start in seconds as a guest, record income and expenses in Persian or English, see Jalali dates and Toman or Rial amounts natively, and keep your records in an encrypted database on your own device. Create an account only when you want multi-device sync.
 
@@ -40,7 +40,7 @@
 
 | What people tell us | How Cidna answers |
 |---|---|
-| "I never know where my money went." | Fast entry: quick-add shortcut, voice entry, pending-transaction review, and (direct build only) bank-SMS suggestions |
+| "I never know where my money went." | Fast entry: quick-add shortcut and voice entry |
 | "Finance apps don't speak my language or use my calendar." | Full Persian/English, RTL/LTR, Jalali dates, Toman/Rial |
 | "I don't want to hand my financial data to a stranger." | Local-first storage, and records are encrypted on the device before any sync upload |
 | "I have to sign up before I can even try it." | Guest mode — start now, decide on an account later |
@@ -51,7 +51,7 @@
 
 1. **Local-first.** Your records live in an encrypted on-device database. Day-to-day use is fast and works offline; the backend is only needed for accounts and sync.
 2. **Private by design.** Financial records are **end-to-end encrypted** on the device *before* upload, and your password never leaves the phone; the sync server stores only ciphertext it cannot read (exact scope and limits are stated in [Security model](#9-security-model)).
-3. **Made for Persian and English speakers.** Full RTL/LTR, Jalali calendar, Toman/Rial display and Persian bank-SMS recognition.
+3. **Made for Persian and English speakers.** Full RTL/LTR, Jalali calendar and Toman/Rial display.
 
 > **Naming.** The product name is **Cidna** in English and **سیدنا** in Persian. "Budget Management" is only a descriptive phrase for what the app does, and the Kotlin package (`ir.hamedan.budgetmanagement`) is a historical identifier that is kept unchanged because it is the Android application ID.
 
@@ -60,7 +60,7 @@
 | Area | What you get |
 |---|---|
 | **Guest mode** | Start with no account, protected by a passcode or fingerprint. Later, move the data into a new account or start fresh |
-| **Transactions** | Record income and expenses, browse history, pending-transaction review, quick-add shortcut, voice entry |
+| **Transactions** | Record income and expenses, browse history, quick-add shortcut, voice entry |
 | **Categories** | Predefined categories, custom categories, category suggestions |
 | **Budgets** | Per-category spending limits with progress tracking and alerts |
 | **Savings goals** | Piggy banks, deposits and withdrawals, scheduled monthly deposits |
@@ -70,7 +70,6 @@
 | **Security** | App lock, optional biometric sign-in, encrypted local database, device list with remote sign-out, new-device alerts |
 | **Accounts** | Phone-based registration with OTP, password recovery with a recovery key, soft account deletion with a 30-day restore window |
 | **Convenience** | Light/dark theme, home-screen balance widget, amount-hiding mode, notifications and reminders |
-| **Bank-SMS import** | Detects bank SMS messages and offers them as pending transactions. **Only in the `direct` distribution**; the Google Play build contains no SMS permissions |
 
 Amounts are stored as integers (Toman) and converted at the UI boundary, so floating-point rounding never reaches the database or the API.
 
@@ -86,7 +85,7 @@ Amounts are stored as integers (Toman) and converted at the UI boundary, so floa
 
 We say what we can prove: financial records are end-to-end encrypted before upload; your password and recovery key are never sent to our servers (we store only an Argon2id hash of a password-derived sign-in value); there is no advertising, analytics or third-party tracking; and account deletion is soft for 30 days, then permanent. We claim end-to-end encryption of financial records only, not "zero-knowledge" of everything: account details such as phone number are visible to the service — [section 8](#8-security-model) explains the exact scope.
 
-**Call to action.** Install Cidna from Google Play (or the direct build), try it as a guest today, and create an account when you want your records on more than one device. Questions, partnerships or press: **cidna.app@gmail.com**.
+**Call to action.** Install Cidna from Google Play (or the APK), try it as a guest today, and create an account when you want your records on more than one device. Questions, partnerships or press: **cidna.app@gmail.com**.
 
 ## 7. Architecture
 
@@ -132,7 +131,7 @@ To report a vulnerability, use a private security report. Please do not open a p
 | Area | Technology |
 |---|---|
 | Android | Kotlin 2.2, Jetpack Compose (Material 3), Navigation, Glance (widget), WorkManager, Room, SQLCipher, AndroidX Security Crypto, Biometric, Lottie, fastexcel |
-| Android SDK | `minSdk 26`, `targetSdk 36`, two product flavors: `play` and `direct` |
+| Android SDK | `minSdk 26`, `targetSdk 36`, a single release variant (no product flavors) |
 | Dependency wiring | Manual `AppContainer` (no Hilt) |
 | Backend | Go 1.26, chi, golang-jwt, validator, MongoDB driver, `x/crypto` (Argon2) |
 | Data store | MongoDB 7 (single-node replica set) |
@@ -146,7 +145,6 @@ To report a vulnerability, use a private security report. Please do not open a p
 cidna/
 ├── app/
 │   ├── src/main/        # Android client (Kotlin, Compose)
-│   ├── src/play/        # Google Play flavor manifest (no SMS permissions)
 │   ├── src/debug/       # Debug-only network configuration
 │   ├── src/test/        # Local unit tests
 │   ├── src/androidTest/ # Instrumentation tests
@@ -189,14 +187,13 @@ Follow `backend/deployments/README.md` (Persian). In short: point a DNS name at 
 
 ```bash
 # Debug (backend URL: -PdebugBackendBaseUrl=http://<LAN-IP>:8080/)
-./gradlew assemblePlayDebug
+./gradlew assembleDebug
 
 # Unit tests
-./gradlew testPlayDebugUnitTest
+./gradlew testDebugUnitTest
 
 # Release (HTTPS backend URL is mandatory; bump versionCode for every upload)
-./gradlew bundlePlayRelease -PbackendBaseUrl=https://api.example.com/ -PversionCode=2
-./gradlew assembleDirectRelease -PbackendBaseUrl=https://api.example.com/
+./gradlew bundleRelease -PbackendBaseUrl=https://api.example.com/ -PversionCode=2
 ```
 
 Release signing is read from `keystore.properties` (git-ignored) or `RELEASE_*` environment variables. A phone cannot reach `localhost` on your computer: use the computer's LAN address for debug builds on a physical device.
@@ -304,12 +301,12 @@ The Privacy Policy, Terms of Service, open-source notices and account-deletion i
 | Device name/model, OS and app version, IP (shown masked), installation hash | Device list and new-device alerts | Device activity ≤ 30 days |
 | Temporary sync operations | Sync reliability | ≤ 7 days |
 
-Account deletion is a **soft delete**: sessions are revoked immediately, the account can be restored by signing in within **30 days**, and after that the `purge-deleted` job erases it permanently (run it daily from cron). The app does not include advertising, analytics or third-party trackers. SMS text is processed on the device only, and only in the `direct` distribution.
+Account deletion is a **soft delete**: sessions are revoked immediately, the account can be restored by signing in within **30 days**, and after that the `purge-deleted` job erases it permanently (run it daily from cron). The app does not include advertising, analytics or third-party trackers.
 
 ### 13.7 Disclaimers
 
 - Cidna is a record-keeping tool. It is **not** financial, accounting, legal or tax advice, and it is not connected to any bank account or payment system.
-- Automatic SMS detection, voice input and calculations may be wrong. Verify important figures against your bank records.
+- Voice input and calculations may be wrong. Verify important figures against your bank records.
 - The software is provided **"as is", without warranty** of any kind, as stated in the AGPL (sections 15 and 16).
 - The Terms of Service are governed by the laws of the Islamic Republic of Iran.
 
@@ -333,7 +330,7 @@ Project and legal contact: **cidna.app@gmail.com**
 
 ## ۱. خلاصه مدیریتی
 
-**سیدنا (Cidna)** رسیدهای پراکنده، پیامک‌های بانکی و حساب‌وکتاب‌های ذهنی را به یک تصویر روشن از مسیر پولتان تبدیل می‌کند — به زبان خودتان، با تقویم خودتان، به واحد پول خودتان و روی همان گوشی‌ای که همیشه همراه دارید.
+**سیدنا (Cidna)** رسیدهای پراکنده و حساب‌وکتاب‌های ذهنی را به یک تصویر روشن از مسیر پولتان تبدیل می‌کند — به زبان خودتان، با تقویم خودتان، به واحد پول خودتان و روی همان گوشی‌ای که همیشه همراه دارید.
 
 **معرفی ۳۰ ثانیه‌ای.** بیشتر اپلیکیشن‌های مالی برای کاربر انگلیسی‌زبان، تقویم میلادی و ذهنیت دلاری ساخته شده‌اند و پیش از آنکه ارزشی بدهند، اطلاعاتتان را می‌خواهند. سیدنا این رابطه را برعکس می‌کند: در چند ثانیه به‌عنوان مهمان شروع کنید، درآمد و هزینه را فارسی یا انگلیسی ثبت کنید، تاریخ جلالی و مبلغ تومان یا ریال را بومی ببینید و سوابقتان را در پایگاه داده رمزنگاری‌شده روی گوشی خودتان نگه دارید. فقط وقتی همگام‌سازی چنددستگاهی خواستید، حساب بسازید.
 
@@ -351,7 +348,7 @@ Project and legal contact: **cidna.app@gmail.com**
 
 | مشتری چه می‌گوید | سیدنا چه پاسخی دارد |
 |---|---|
-| «هیچ‌وقت نمی‌دانم پولم کجا رفت.» | ثبت سریع: میان‌بر ثبت سریع، ورود صوتی، بررسی تراکنش‌های در انتظار و (فقط نسخه direct) پیشنهاد از پیامک بانکی |
+| «هیچ‌وقت نمی‌دانم پولم کجا رفت.» | ثبت سریع: میان‌بر ثبت سریع و ورود صوتی |
 | «اپ‌های مالی نه زبان مرا می‌فهمند نه تقویم مرا.» | فارسی و انگلیسی کامل، RTL/LTR، تاریخ جلالی، تومان/ریال |
 | «نمی‌خواهم اطلاعات مالی‌ام را به یک غریبه بدهم.» | ذخیره‌سازی محلی‌محور و رمزنگاری سوابق روی دستگاه پیش از هر ارسال برای همگام‌سازی |
 | «حتی برای امتحان کردن هم باید ثبت‌نام کنم.» | حالت مهمان — همین حالا شروع کنید، درباره حساب بعداً تصمیم بگیرید |
@@ -362,7 +359,7 @@ Project and legal contact: **cidna.app@gmail.com**
 
 1. **محلی‌محور (Local-first).** سوابق شما در پایگاه داده رمزنگاری‌شده روی خود گوشی است. استفاده روزمره سریع است و آفلاین هم کار می‌کند؛ بک‌اند فقط برای حساب کاربری و همگام‌سازی لازم است.
 2. **حریم خصوصی از ابتدا.** اطلاعات مالی پیش از ارسال روی دستگاه **به‌صورت سرتاسری (End-to-End) رمزنگاری** می‌شوند و گذرواژه‌ی شما هرگز از گوشی خارج نمی‌شود؛ سرور فقط داده‌ی رمزشده‌ای را نگه می‌دارد که نمی‌تواند بخواند (دامنه دقیق و محدودیت‌ها در [مدل امنیتی](#۹-مدل-امنیتی) آمده است).
-3. **ساخته‌شده برای فارسی‌زبان و انگلیسی‌زبان.** پشتیبانی کامل از راست‌به‌چپ و چپ‌به‌راست، تقویم جلالی، نمایش تومان/ریال و تشخیص پیامک‌های بانکی ایران.
+3. **ساخته‌شده برای فارسی‌زبان و انگلیسی‌زبان.** پشتیبانی کامل از راست‌به‌چپ و چپ‌به‌راست، تقویم جلالی و نمایش تومان/ریال.
 
 > **درباره نام.** نام محصول در فارسی **سیدنا** و در انگلیسی **Cidna** است. عبارت «مدیریت بودجه» صرفاً توصیف کارکرد برنامه است و نام پکیج کاتلین (`ir.hamedan.budgetmanagement`) یک شناسه تاریخی است که چون همان Application ID اندروید است، عمداً تغییر نکرده است.
 
@@ -371,7 +368,7 @@ Project and legal contact: **cidna.app@gmail.com**
 | بخش | امکانات |
 |---|---|
 | **حالت مهمان** | شروع بدون حساب، با رمز یا اثر انگشت. بعداً می‌توانید اطلاعات را به حساب جدید منتقل کنید یا از صفر شروع کنید |
-| **تراکنش‌ها** | ثبت درآمد و هزینه، مرور سوابق، بررسی تراکنش‌های در انتظار، میان‌بر ثبت سریع، ورود صوتی |
+| **تراکنش‌ها** | ثبت درآمد و هزینه، مرور سوابق، میان‌بر ثبت سریع، ورود صوتی |
 | **دسته‌بندی‌ها** | دسته‌بندی‌های آماده، دسته‌بندی سفارشی، پیشنهاد دسته‌بندی |
 | **بودجه** | سقف هزینه برای هر دسته، پیگیری پیشرفت و هشدار |
 | **اهداف پس‌انداز** | قلک‌ها، واریز و برداشت، واریز ماهانه زمان‌بندی‌شده |
@@ -381,7 +378,6 @@ Project and legal contact: **cidna.app@gmail.com**
 | **امنیت** | قفل برنامه، ورود زیست‌سنجی اختیاری، پایگاه داده رمزنگاری‌شده، فهرست دستگاه‌ها با امکان خروج از راه دور، اعلان ورود از دستگاه جدید |
 | **حساب کاربری** | ثبت‌نام با شماره موبایل و OTP، بازیابی گذرواژه با کلید بازیابی، حذف نرم حساب با مهلت ۳۰ روزه بازیابی |
 | **امکانات تکمیلی** | تم روشن و تیره، ویجت موجودی، حالت مخفی‌کردن مبالغ، اعلان‌ها و یادآورها |
-| **دریافت از پیامک بانکی** | تشخیص پیامک بانکی و پیشنهاد آن به‌صورت تراکنش در انتظار. **فقط در نسخه `direct`**؛ نسخه گوگل‌پلی هیچ مجوز پیامکی ندارد |
 
 مبالغ به‌صورت عدد صحیح (تومان) ذخیره و فقط در مرز رابط کاربری تبدیل می‌شوند؛ بنابراین خطای ممیز شناور هرگز به پایگاه داده یا API نمی‌رسد.
 
@@ -397,7 +393,7 @@ Project and legal contact: **cidna.app@gmail.com**
 
 آنچه می‌توانیم ثابت کنیم را می‌گوییم: سوابق مالی پیش از ارسال به‌صورت سرتاسری رمزنگاری می‌شوند؛ گذرواژه و کلید بازیابی هرگز به سرور ارسال نمی‌شوند (فقط هش Argon2id یک مقدار ورودِ مشتق‌شده از گذرواژه نگهداری می‌شود)؛ هیچ تبلیغ، تحلیل رفتار یا ردیاب شخص ثالثی وجود ندارد؛ و حذف حساب تا ۳۰ روز نرم است و پس از آن دائمی. رمزنگاری سرتاسری را فقط برای سوابق مالی ادعا می‌کنیم، نه «zero-knowledge» برای همه چیز: اطلاعات حساب مانند شماره موبایل برای سرویس قابل‌مشاهده است — دامنه دقیق در [بخش ۸](#۸-مدل-امنیتی) آمده است.
 
-**دعوت به اقدام.** سیدنا را از گوگل‌پلی (یا نسخه direct) نصب کنید، همین امروز به‌عنوان مهمان امتحانش کنید و وقتی خواستید سوابقتان روی بیش از یک دستگاه باشد، حساب بسازید. سؤال، همکاری یا رسانه: **cidna.app@gmail.com**.
+**دعوت به اقدام.** سیدنا را از گوگل‌پلی (یا فایل APK) نصب کنید، همین امروز به‌عنوان مهمان امتحانش کنید و وقتی خواستید سوابقتان روی بیش از یک دستگاه باشد، حساب بسازید. سؤال، همکاری یا رسانه: **cidna.app@gmail.com**.
 
 ## ۷. معماری
 
@@ -447,7 +443,7 @@ Project and legal contact: **cidna.app@gmail.com**
 | بخش | فناوری |
 |---|---|
 | اندروید | Kotlin 2.2، Jetpack Compose (Material 3)، Navigation، Glance (ویجت)، WorkManager، Room، SQLCipher، AndroidX Security Crypto، Biometric، Lottie، fastexcel |
-| SDK اندروید | `minSdk 26`، `targetSdk 36`، دو flavor: `play` و `direct` |
+| SDK اندروید | `minSdk 26`، `targetSdk 36`، بدون product flavor (یک نسخهٔ انتشار) |
 | تزریق وابستگی | `AppContainer` دستی (بدون Hilt) |
 | بک‌اند | Go 1.26، chi، golang-jwt، validator، درایور MongoDB، `x/crypto` (Argon2) |
 | پایگاه داده | MongoDB 7 (replica set تک‌نودی) |
@@ -463,7 +459,6 @@ Project and legal contact: **cidna.app@gmail.com**
 cidna/
 ├── app/
 │   ├── src/main/        # Android client (Kotlin, Compose)
-│   ├── src/play/        # مانیفست flavor گوگل‌پلی (بدون مجوز پیامک)
 │   ├── src/debug/       # تنظیمات شبکه مخصوص debug
 │   ├── src/test/        # تست‌های واحد
 │   ├── src/androidTest/ # تست‌های instrumentation
@@ -514,14 +509,13 @@ curl http://localhost:8080/health
 
 ```bash
 # Debug (آدرس بک‌اند: -PdebugBackendBaseUrl=http://<LAN-IP>:8080/)
-./gradlew assemblePlayDebug
+./gradlew assembleDebug
 
 # تست‌های واحد
-./gradlew testPlayDebugUnitTest
+./gradlew testDebugUnitTest
 
 # Release (آدرس HTTPS اجباری است؛ برای هر آپلود versionCode را افزایش دهید)
-./gradlew bundlePlayRelease -PbackendBaseUrl=https://api.example.com/ -PversionCode=2
-./gradlew assembleDirectRelease -PbackendBaseUrl=https://api.example.com/
+./gradlew bundleRelease -PbackendBaseUrl=https://api.example.com/ -PversionCode=2
 ```
 
 </div>
@@ -639,12 +633,12 @@ GET /privacy-policy   GET /terms   GET /licenses   GET /account-deletion
 | نام/مدل دستگاه، نسخه سیستم‌عامل و برنامه، IP (ماسک‌شده نمایش داده می‌شود)، هش نصب | فهرست دستگاه‌ها و اعلان دستگاه جدید | فعالیت دستگاه‌ها حداکثر ۳۰ روز |
 | عملیات موقت همگام‌سازی | پایداری همگام‌سازی | حداکثر ۷ روز |
 
-حذف حساب **حذف نرم** است: نشست‌ها فوراً باطل می‌شوند، حساب تا **۳۰ روز** با ورود دوباره قابل بازیابی است و پس از آن ابزار `purge-deleted` آن را برای همیشه پاک می‌کند (آن را روزانه با cron اجرا کنید). برنامه ابزار تبلیغاتی، تحلیل رفتار یا ردیاب شخص ثالث ندارد. متن پیامک فقط روی خود دستگاه و فقط در نسخه `direct` پردازش می‌شود.
+حذف حساب **حذف نرم** است: نشست‌ها فوراً باطل می‌شوند، حساب تا **۳۰ روز** با ورود دوباره قابل بازیابی است و پس از آن ابزار `purge-deleted` آن را برای همیشه پاک می‌کند (آن را روزانه با cron اجرا کنید). برنامه ابزار تبلیغاتی، تحلیل رفتار یا ردیاب شخص ثالث ندارد.
 
 ### ۱۳.۷ سلب مسئولیت‌ها
 
 - سیدنا ابزار ثبت و نگهداری سوابق است و **مشاوره مالی، حسابداری، حقوقی یا مالیاتی نیست**؛ همچنین به هیچ حساب بانکی یا سامانه پرداختی متصل نیست.
-- تشخیص خودکار پیامک، ورود صوتی و محاسبات ممکن است نادرست باشند. ارقام مهم را با سوابق بانکی خود تطبیق دهید.
+- ورود صوتی و محاسبات ممکن است نادرست باشند. ارقام مهم را با سوابق بانکی خود تطبیق دهید.
 - نرم‌افزار مطابق بندهای ۱۵ و ۱۶ مجوز AGPL **«همان‌گونه که هست» و بدون هیچ‌گونه ضمانتی** ارائه می‌شود.
 - قوانین و مقررات استفاده تابع قوانین جمهوری اسلامی ایران است.
 

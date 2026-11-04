@@ -11,7 +11,7 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
-/** Everything a backup carries: the user's data, not notifications, SMS queue or sync state. */
+/** Everything a backup carries: the user's data, not notifications or sync state. */
 data class BackupContent(
     val categories: List<CategoryEntity>,
     val transactions: List<TransactionEntity>,

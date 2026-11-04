@@ -6,8 +6,7 @@ import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
  * قواعد مرکزی دسته‌بندی‌ها.
  *
  * دسته‌بندی «قلک» (SAVING_GOAL) فقط توسط خودِ سیستم (واریز/برداشت قلک، واریز ماهانه و
- * حذف قلک) استفاده می‌شود و کاربر نباید بتواند آن را برای تراکنش دستی، ویرایش تراکنش یا
- * تراکنش پیامکی انتخاب کند. همه‌ی صفحه‌ها باید از همین‌جا فیلتر کنند تا قاعده فقط یک منبع داشته باشد.
+ * حذف قلک) استفاده می‌شود و کاربر نباید بتواند آن را برای تراکنش دستی یا ویرایش تراکنش انتخاب کند. همه‌ی صفحه‌ها باید از همین‌جا فیلتر کنند تا قاعده فقط یک منبع داشته باشد.
  */
 object CategoryRules {
 
@@ -18,10 +17,6 @@ object CategoryRules {
         !title.trim().equals(SAVING_GOAL_TITLE, ignoreCase = true)
 
     fun isUserSelectable(category: CategoryEntity): Boolean = isUserSelectable(category.title)
-
-    /** لیست دسته‌هایی که کاربر اجازه‌ی انتخابشان را دارد. */
-    fun userSelectable(categories: List<CategoryEntity>): List<CategoryEntity> =
-        categories.filter { isUserSelectable(it) }
 
     /** کلیدهای دسته‌بندی‌های داخلی برنامه؛ هر کدام در هر حساب فقط یک نمونه می‌تواند داشته باشد. */
     private val BUILT_IN_KEYS = setOf(
