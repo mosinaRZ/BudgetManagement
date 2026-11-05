@@ -59,7 +59,7 @@ import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.getThemeMode
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.saveThemeMode
 import ir.hamedan.budgetmanagement.ui.components.BottomDock
-import ir.hamedan.budgetmanagement.ui.components.InAppNotificationHint
+import ir.hamedan.budgetmanagement.ui.components.InAppNotificationHost
 import ir.hamedan.budgetmanagement.ui.components.OnboardingDialog
 import ir.hamedan.budgetmanagement.ui.components.OnboardingPermission
 import ir.hamedan.budgetmanagement.ui.components.PermissionReminderItem
@@ -360,20 +360,14 @@ class MainActivity : FragmentActivity() {
                     }
 
 
-                    inAppNotification?.let { notification ->
-                        InAppNotificationHint(
-                            isPersian = LocaleHelper.getLanguage(context) == "fa",
-                            titleFa = notification.titleFa,
-                            titleEn = notification.titleEn,
-                            bodyFa = notification.bodyFa,
-                            bodyEn = notification.bodyEn,
-                            visible = true,
-                            onDismiss = { inAppNotification = null },
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(top = 150.dp)
-                        )
-                    }
+                    // One host for every screen: always above dialogs/sheets, same spot everywhere.
+                    InAppNotificationHost(
+                        isPersian = LocaleHelper.getLanguage(context) == "fa",
+                        notification = inAppNotification,
+                        onDismiss = { id ->
+                            if (inAppNotification?.id == id) inAppNotification = null
+                        }
+                    )
                 }
             }
         }

@@ -17,7 +17,9 @@ object NotificationHelper {
         val titleFa: String,
         val titleEn: String,
         val bodyFa: String,
-        val bodyEn: String
+        val bodyEn: String,
+        // Unique per notification, so two identical messages in a row still count as two events.
+        val id: Long = System.nanoTime()
     )
 
     // Queue foreground notifications so they survive Activity/Compose startup.
