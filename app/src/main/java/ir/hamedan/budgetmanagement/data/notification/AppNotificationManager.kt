@@ -4,10 +4,13 @@ import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
+import android.media.AudioAttributes
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -23,34 +26,54 @@ object AppNotificationManager {
     // شناسه‌ی کانال عوض شد (v2) چون NotificationChannel بعد از ساخته‌شدن
     // غیرقابل‌تغییره؛ کاربرانی که نسخه‌ی قبلی رو نصب داشتن با importance
     // قدیمی (DEFAULT) گیر می‌کردن و صرفاً عوض‌کردن این مقدار در کد براشون اثر نمی‌کرد.
-    private const val CHANNEL_ID = "budget_channel_v2"
+    private const val CHANNEL_ID = "budget_channel_v3"
     private const val CHANNEL_NAME = "Cidna Notifications"
 
     // Account-security alerts (new device, device removed) get their own channel so the user can
     // tune them separately in system settings, and so they always interrupt.
-    private const val SECURITY_CHANNEL_ID = "budget_security_v1"
+    private const val SECURITY_CHANNEL_ID = "budget_security_v2"
+
+    // صدای کانال بعد از ساخته‌شدن غیرقابل‌تغییره؛ برای اعمال صدای اختصاصی (res/raw/notif.wav)
+    // شناسه‌ی کانال‌ها عوض شد و کانال‌های قدیمی حذف می‌شن.
+    private val LEGACY_CHANNEL_IDS = listOf("budget_channel_v2", "budget_security_v1")
 
     /** Intent extra telling MainActivity which screen a tapped notification should open. */
     const val EXTRA_OPEN_ROUTE = "open_route"
     const val ROUTE_DEVICES = "devices"
     const val ROUTE_DEBT = "debt"
 
+    /** Uri of the custom notification sound bundled in res/raw/notif.wav. */
+    private fun soundUri(context: Context): Uri =
+        Uri.parse("${ContentResolver.SCHEME_ANDROID_RESOURCE}://${context.packageName}/raw/notif")
+
     fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val audioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+
+            LEGACY_CHANNEL_IDS.forEach { manager.deleteNotificationChannel(it) }
+
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_HIGH // برای نمایش پاپ‌آپ (heads-up) لازم است
-            ).apply { description = "Cidna alerts" }
-
-            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            ).apply {
+                description = "Cidna alerts"
+                setSound(soundUri(context), audioAttributes)
+            }
             manager.createNotificationChannel(channel)
 
             val security = NotificationChannel(
                 SECURITY_CHANNEL_ID,
                 context.getString(R.string.notification_channel_security),
                 NotificationManager.IMPORTANCE_HIGH
-            ).apply { description = context.getString(R.string.notification_channel_security_desc) }
+            ).apply {
+                description = context.getString(R.string.notification_channel_security_desc)
+                setSound(soundUri(context), audioAttributes)
+            }
             manager.createNotificationChannel(security)
         }
     }

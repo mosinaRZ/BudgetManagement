@@ -6,4 +6,4 @@
 -->
 <resources
     xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@drawable/share_bg_*" />
+    tools:keep="@drawable/share_bg_*,@raw/notif" />
