@@ -101,6 +101,9 @@ class MainActivity : FragmentActivity() {
 
     companion object {
         const val ACTION_ADD_TRANSACTION = "ir.hamedan.budgetmanagement.action.ADD_TRANSACTION"
+        const val ACTION_OPEN_GOALS = "ir.hamedan.budgetmanagement.action.OPEN_GOALS"
+        const val ACTION_OPEN_DEBT = "ir.hamedan.budgetmanagement.action.OPEN_DEBT"
+        const val ACTION_OPEN_LIMITS = "ir.hamedan.budgetmanagement.action.OPEN_LIMITS"
         private const val SESSION_CHECK_INTERVAL_MS = 60_000L
     }
 
@@ -134,11 +137,24 @@ class MainActivity : FragmentActivity() {
     // Set when the user taps a due-date reminder: open the Debt/Credit screen.
     private var openDebtRequested by mutableStateOf(false)
 
+    // Launcher shortcuts (long-press on the app icon): open the savings goals / budget limits lists.
+    private var shortcutOpenGoals by mutableStateOf(false)
+    private var shortcutOpenLimits by mutableStateOf(false)
+
     private fun handleShortcutIntent(intent: Intent?) {
-        shortcutOpenAddTransaction = intent?.action == ACTION_ADD_TRANSACTION
+        val action = intent?.action
+        shortcutOpenAddTransaction = action == ACTION_ADD_TRANSACTION
+        shortcutOpenGoals = action == ACTION_OPEN_GOALS
+        shortcutOpenLimits = action == ACTION_OPEN_LIMITS
         val requestedRoute = intent?.getStringExtra(AppNotificationManager.EXTRA_OPEN_ROUTE)
         openDevicesRequested = requestedRoute == AppNotificationManager.ROUTE_DEVICES
-        openDebtRequested = requestedRoute == AppNotificationManager.ROUTE_DEBT
+        // The debts shortcut reuses the same path as a tapped due-date reminder.
+        openDebtRequested = requestedRoute == AppNotificationManager.ROUTE_DEBT || action == ACTION_OPEN_DEBT
+        // Consume the new shortcut actions so a configuration change (rotation, theme, language)
+        // does not re-open the screen the user already left.
+        if (action == ACTION_OPEN_GOALS || action == ACTION_OPEN_LIMITS || action == ACTION_OPEN_DEBT) {
+            intent?.action = null
+        }
         // Consume it so a configuration change does not re-open the screen.
         intent?.removeExtra(AppNotificationManager.EXTRA_OPEN_ROUTE)
     }
@@ -287,6 +303,10 @@ class MainActivity : FragmentActivity() {
                         onDevicesConsumed = { openDevicesRequested = false },
                         openDebtRequested = openDebtRequested,
                         onDebtConsumed = { openDebtRequested = false },
+                        openGoalsRequested = shortcutOpenGoals,
+                        onGoalsConsumed = { shortcutOpenGoals = false },
+                        openLimitsRequested = shortcutOpenLimits,
+                        onLimitsConsumed = { shortcutOpenLimits = false },
                         onThemeToggle = {
                             // جابه‌جایی سریع و بدون دردسر تم
                             val newMode = when (themeMode) {
@@ -369,6 +389,10 @@ class MainActivity : FragmentActivity() {
         onDevicesConsumed: () -> Unit = {},
         openDebtRequested: Boolean = false,
         onDebtConsumed: () -> Unit = {},
+        openGoalsRequested: Boolean = false,
+        onGoalsConsumed: () -> Unit = {},
+        openLimitsRequested: Boolean = false,
+        onLimitsConsumed: () -> Unit = {},
         onThemeToggle: () -> Unit = {}
     ) {
 
@@ -425,6 +449,38 @@ class MainActivity : FragmentActivity() {
             ) {
                 if (!route.contains("Debt")) navController.navigate(AppRoute.Debt)
                 onDebtConsumed()
+            }
+        }
+
+        // Launcher shortcut "Savings goals": go straight to the goals list.
+        LaunchedEffect(openGoalsRequested, hasSession, currentRouteEntry?.destination?.route) {
+            val route = currentRouteEntry?.destination?.route.orEmpty()
+            if (openGoalsRequested &&
+                hasSession &&
+                route.isNotBlank() &&
+                !route.contains("Login") &&
+                !route.contains("Register") &&
+                !route.contains("PasswordReset") &&
+                !route.contains("Splash")
+            ) {
+                if (!route.contains("Goals")) navController.navigate(AppRoute.Goals)
+                onGoalsConsumed()
+            }
+        }
+
+        // Launcher shortcut "Budget limits": go straight to the limits list.
+        LaunchedEffect(openLimitsRequested, hasSession, currentRouteEntry?.destination?.route) {
+            val route = currentRouteEntry?.destination?.route.orEmpty()
+            if (openLimitsRequested &&
+                hasSession &&
+                route.isNotBlank() &&
+                !route.contains("Login") &&
+                !route.contains("Register") &&
+                !route.contains("PasswordReset") &&
+                !route.contains("Splash")
+            ) {
+                if (!route.contains("Limits")) navController.navigate(AppRoute.Limits)
+                onLimitsConsumed()
             }
         }
 

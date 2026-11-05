@@ -1,0 +1,19 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M18,8 L90,8 C95.5,8 100,12.5 100,18 L100,90 C100,95.5 95.5,100 90,100 L18,100 C12.5,100 8,95.5 8,90 L8,18 C8,12.5 12.5,8 18,8 Z" />
+    <!-- Glyph: the in-app icon (960-unit grid) scaled to ~56dp and centred on the tile. -->
+    <group
+        android:translateX="25"
+        android:translateY="25"
+        android:scaleX="0.0625"
+        android:scaleY="0.0625">
+        <path
+            android:fillColor="#FF408A71"
+            android:pathData="M80,760v-560h800v560L80,760ZM200,560h120q17,0 28.5,-11.5T360,520v-70q0,-17 -11.5,-28.5T320,410h-60v-30h100v-60L200,320v150h100v30L200,500v60ZM440,640h320v-22q0,-45 -44,-71.5T600,520q-72,0 -116,26.5T440,618v22ZM600,480q33,0 56.5,-23.5T680,400q0,-33 -23.5,-56.5T600,320q-33,0 -56.5,23.5T520,400q0,33 23.5,56.5T600,480ZM160,680h640v-400L160,280v400ZM160,680v-400,400Z" />
+    </group>
+</vector>

@@ -7,6 +7,12 @@
 
     <string name="shortcut_add_transaction_short">ثبت تراکنش</string>
     <string name="shortcut_add_transaction_long">ثبت تراکنش جدید</string>
+    <string name="shortcut_goals_short">قلک‌ها</string>
+    <string name="shortcut_goals_long">قلک‌های پس‌انداز</string>
+    <string name="shortcut_debt_short">بدهی و طلب</string>
+    <string name="shortcut_debt_long">بدهی‌ها و بستانکاری‌ها</string>
+    <string name="shortcut_limits_short">محدودیت‌ها</string>
+    <string name="shortcut_limits_long">محدودیت‌های بودجه</string>
     <string name="widget_balance_description">موجودی کل، درآمد و هزینه‌ها یک‌جا</string>
     <string name="widget_preview_title">موجودی کل</string>
     <string name="widget_preview_amount">۱۲٬۵۰۰٬۰۰۰</string>

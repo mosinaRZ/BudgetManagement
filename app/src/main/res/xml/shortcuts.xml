@@ -11,4 +11,37 @@
             android:targetPackage="ir.hamedan.budgetmanagement"
             android:targetClass="ir.hamedan.budgetmanagement.MainActivity" />
     </shortcut>
+    <shortcut
+        android:shortcutId="open_goals"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_goals"
+        android:shortcutShortLabel="@string/shortcut_goals_short"
+        android:shortcutLongLabel="@string/shortcut_goals_long">
+        <intent
+            android:action="ir.hamedan.budgetmanagement.action.OPEN_GOALS"
+            android:targetPackage="ir.hamedan.budgetmanagement"
+            android:targetClass="ir.hamedan.budgetmanagement.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="open_debt"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_debt"
+        android:shortcutShortLabel="@string/shortcut_debt_short"
+        android:shortcutLongLabel="@string/shortcut_debt_long">
+        <intent
+            android:action="ir.hamedan.budgetmanagement.action.OPEN_DEBT"
+            android:targetPackage="ir.hamedan.budgetmanagement"
+            android:targetClass="ir.hamedan.budgetmanagement.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="open_limits"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_limits"
+        android:shortcutShortLabel="@string/shortcut_limits_short"
+        android:shortcutLongLabel="@string/shortcut_limits_long">
+        <intent
+            android:action="ir.hamedan.budgetmanagement.action.OPEN_LIMITS"
+            android:targetPackage="ir.hamedan.budgetmanagement"
+            android:targetClass="ir.hamedan.budgetmanagement.MainActivity" />
+    </shortcut>
 </shortcuts>
