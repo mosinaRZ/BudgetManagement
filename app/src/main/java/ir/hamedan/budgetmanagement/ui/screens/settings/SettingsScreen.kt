@@ -337,6 +337,7 @@ fun SettingsScreen(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 LocaleHelper.setLocale(context, "fa")
+                                ir.hamedan.budgetmanagement.platform.locale.ShortcutsHelper.update(context)
                                 (context as? Activity)?.recreate()
 
                                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
@@ -349,6 +350,7 @@ fun SettingsScreen(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 LocaleHelper.setLocale(context, "en")
+                                ir.hamedan.budgetmanagement.platform.locale.ShortcutsHelper.update(context)
                                 (context as? Activity)?.recreate()
 
                                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {

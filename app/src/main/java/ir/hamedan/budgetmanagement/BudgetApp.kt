@@ -13,6 +13,7 @@ import ir.hamedan.budgetmanagement.data.preferences.AppUsagePreferences
 import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
 import ir.hamedan.budgetmanagement.di.AppContainer
 import ir.hamedan.budgetmanagement.data.notification.AppNotificationManager
+import ir.hamedan.budgetmanagement.platform.locale.ShortcutsHelper
 import ir.hamedan.budgetmanagement.worker.DebtDueReminderWorker
 import ir.hamedan.budgetmanagement.worker.InactivityReminderWorker
 import ir.hamedan.budgetmanagement.worker.MonthlyGoalDepositWorker
@@ -37,6 +38,8 @@ class BudgetApp : Application() {
         NotificationPreferences.ensureDefaultsInitialized(this)
         AppNotificationManager.createChannel(this)
         AppUsagePreferences.updateLastOpen(this)
+        // Launcher shortcuts follow the in-app language, not the system language.
+        CoroutineScope(Dispatchers.IO).launch { ShortcutsHelper.update(this@BudgetApp) }
         if (container.authRepository.isAuthenticated()) {
             CoroutineScope(Dispatchers.IO).launch {
                 runCatching {
