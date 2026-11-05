@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -50,9 +49,11 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -64,8 +65,13 @@ import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
-data class LineSeries(val name: String, val values: List<Float>, val color: Color)
-data class DonutSlice(val label: String, val value: Float, val color: Color)
+internal data class LineSeries(val name: String, val values: List<Float>, val color: Color)
+internal data class DonutSlice(val label: String, val value: Float, val color: Color)
+
+private val ChartLeft = 34.dp
+private val ChartRight = 8.dp
+private val ChartTop = 10.dp
+private val ChartBottom = 22.dp
 
 /** Rounds up to a "nice" axis maximum (at least 4 so the four grid lines are never fractional). */
 internal fun niceCeil(v: Float): Float {
@@ -90,15 +96,14 @@ private fun DrawScope.drawGrid(
     h: Float,
     niceMax: Float,
     gridColor: Color,
-    labelColor: Color,
+    labelStyle: TextStyle,
     isPersian: Boolean
 ) {
-    val style = TextStyle(fontSize = 9.sp, color = labelColor)
     for (k in 0..4) {
         val y = top + h * (1f - k / 4f)
         drawLine(gridColor, Offset(left, y), Offset(left + w, y), strokeWidth = 1.dp.toPx())
         val text = fmtCompact((niceMax * k / 4f).toLong(), isPersian)
-        val layout = measurer.measure(text, style)
+        val layout = measurer.measure(text, labelStyle)
         drawText(layout, topLeft = Offset(left - layout.size.width - 6.dp.toPx(), y - layout.size.height / 2f))
     }
 }
@@ -108,14 +113,13 @@ private fun DrawScope.drawXLabels(
     labels: List<String>,
     xOf: (Int) -> Float,
     baseY: Float,
-    labelColor: Color
+    labelStyle: TextStyle
 ) {
     if (labels.isEmpty()) return
-    val style = TextStyle(fontSize = 9.sp, color = labelColor)
     val step = max(1, (labels.size - 1) / 4)
     var i = 0
     while (i < labels.size) {
-        val layout = measurer.measure(labels[i], style)
+        val layout = measurer.measure(labels[i], labelStyle)
         val x = (xOf(i) - layout.size.width / 2f).coerceIn(0f, size.width - layout.size.width)
         drawText(layout, topLeft = Offset(x, baseY))
         i += step
@@ -127,10 +131,16 @@ private fun DrawScope.drawTooltip(
     lines: List<Pair<String, Color>>,
     anchorX: Float,
     top: Float,
-    background: Color
+    background: Color,
+    fontFamily: FontFamily?
 ) {
     val styleFor = { color: Color, bold: Boolean ->
-        TextStyle(fontSize = 10.sp, color = color, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
+        TextStyle(
+            fontFamily = fontFamily,
+            fontSize = 10.sp,
+            color = color,
+            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal
+        )
     }
     val layouts = lines.mapIndexed { i, (text, color) -> measurer.measure(text, styleFor(color, i == 0)) }
     val pad = 8.dp.toPx()
@@ -147,7 +157,7 @@ private fun DrawScope.drawTooltip(
 
 /** Smooth multi-series area chart with a touch tooltip (drag a finger across it to scrub). */
 @Composable
-fun LineAreaChart(
+internal fun LineAreaChart(
     labels: List<String>,
     series: List<LineSeries>,
     isPersian: Boolean,
@@ -156,7 +166,9 @@ fun LineAreaChart(
 ) {
     val measurer = rememberTextMeasurer()
     val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
-    val labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+    val labelColor = adminMuted()
+    val labelStyle = MaterialTheme.typography.chartLabel(labelColor)
+    val tooltipFont = MaterialTheme.typography.bodyMedium.fontFamily
     val tooltipBg = MaterialTheme.colorScheme.surfaceVariant
     val tooltipText = MaterialTheme.colorScheme.onSurface
     var selected by remember(labels.size) { mutableIntStateOf(-1) }
@@ -175,8 +187,8 @@ fun LineAreaChart(
                     .fillMaxWidth()
                     .height(height)
                     .pointerInput(n) {
-                        val left = 34.dp.toPx()
-                        val right = 8.dp.toPx()
+                        val left = ChartLeft.toPx()
+                        val right = ChartRight.toPx()
                         awaitEachGesture {
                             val down = awaitFirstDown()
                             val w = size.width - left - right
@@ -192,17 +204,17 @@ fun LineAreaChart(
                         }
                     }
             ) {
-                val left = 34.dp.toPx()
-                val right = 8.dp.toPx()
-                val top = 10.dp.toPx()
-                val bottom = 22.dp.toPx()
+                val left = ChartLeft.toPx()
+                val right = ChartRight.toPx()
+                val top = ChartTop.toPx()
+                val bottom = ChartBottom.toPx()
                 val w = size.width - left - right
                 val h = size.height - top - bottom
                 fun xOf(i: Int) = if (n <= 1) left + w / 2f else left + w * i / (n - 1)
                 fun yOf(v: Float) = top + h - (v / niceMax) * h * progress.value
 
-                drawGrid(measurer, left, top, w, h, niceMax, gridColor, labelColor, isPersian)
-                drawXLabels(measurer, labels, ::xOf, top + h + 6.dp.toPx(), labelColor)
+                drawGrid(measurer, left, top, w, h, niceMax, gridColor, labelStyle, isPersian)
+                drawXLabels(measurer, labels, ::xOf, top + h + 6.dp.toPx(), labelStyle)
 
                 series.forEach { s ->
                     val pts = s.values.mapIndexed { i, v -> Offset(xOf(i), yOf(v)) }
@@ -242,7 +254,7 @@ fun LineAreaChart(
                         add(labels[sel] to tooltipText)
                         series.forEach { s -> add("${s.name}: ${fmtNumber((s.values.getOrNull(sel) ?: 0f).toLong(), isPersian)}" to s.color) }
                     }
-                    drawTooltip(measurer, lines, sx, top, tooltipBg)
+                    drawTooltip(measurer, lines, sx, top, tooltipBg, tooltipFont)
                 }
             }
             if (series.size > 1) {
@@ -256,7 +268,7 @@ fun LineAreaChart(
 
 /** Per-day stacked columns (e.g. normal / warning / dangerous events). */
 @Composable
-fun StackedBarChart(
+internal fun StackedBarChart(
     labels: List<String>,
     stacks: List<List<Float>>,
     names: List<String>,
@@ -267,9 +279,11 @@ fun StackedBarChart(
 ) {
     val measurer = rememberTextMeasurer()
     val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
-    val labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+    val labelStyle = MaterialTheme.typography.chartLabel(adminMuted())
+    val tooltipFont = MaterialTheme.typography.bodyMedium.fontFamily
     val tooltipBg = MaterialTheme.colorScheme.surfaceVariant
     val tooltipText = MaterialTheme.colorScheme.onSurface
+    val fallback = MaterialTheme.colorScheme.outline
     var selected by remember(labels.size) { mutableIntStateOf(-1) }
     val progress = remember { Animatable(0f) }
     LaunchedEffect(stacks) {
@@ -287,8 +301,8 @@ fun StackedBarChart(
                     .fillMaxWidth()
                     .height(height)
                     .pointerInput(n) {
-                        val left = 34.dp.toPx()
-                        val right = 8.dp.toPx()
+                        val left = ChartLeft.toPx()
+                        val right = ChartRight.toPx()
                         detectTapGestures { offset ->
                             val w = size.width - left - right
                             if (n > 0) {
@@ -299,16 +313,16 @@ fun StackedBarChart(
                         }
                     }
             ) {
-                val left = 34.dp.toPx()
-                val right = 8.dp.toPx()
-                val top = 10.dp.toPx()
-                val bottom = 22.dp.toPx()
+                val left = ChartLeft.toPx()
+                val right = ChartRight.toPx()
+                val top = ChartTop.toPx()
+                val bottom = ChartBottom.toPx()
                 val w = size.width - left - right
                 val h = size.height - top - bottom
                 val slot = if (n > 0) w / n else w
                 fun centerX(i: Int) = left + slot * i + slot / 2f
-                drawGrid(measurer, left, top, w, h, niceMax, gridColor, labelColor, isPersian)
-                drawXLabels(measurer, labels, ::centerX, top + h + 6.dp.toPx(), labelColor)
+                drawGrid(measurer, left, top, w, h, niceMax, gridColor, labelStyle, isPersian)
+                drawXLabels(measurer, labels, ::centerX, top + h + 6.dp.toPx(), labelStyle)
 
                 val barW = (slot * 0.62f).coerceAtMost(26.dp.toPx())
                 stacks.forEachIndexed { i, parts ->
@@ -318,7 +332,7 @@ fun StackedBarChart(
                         if (segH > 0.5f) {
                             val x = centerX(i) - barW / 2f
                             drawRoundRect(
-                                colors.getOrElse(k) { Color.Gray }.copy(alpha = if (selected == -1 || selected == i) 1f else 0.35f),
+                                colors.getOrElse(k) { fallback }.copy(alpha = if (selected == -1 || selected == i) 1f else 0.35f),
                                 Offset(x, yBottom - segH),
                                 Size(barW, segH),
                                 CornerRadius(2.dp.toPx())
@@ -332,30 +346,34 @@ fun StackedBarChart(
                     val lines = buildList<Pair<String, Color>> {
                         add(labels[sel] to tooltipText)
                         stacks[sel].forEachIndexed { k, v ->
-                            add("${names.getOrElse(k) { "" }}: ${fmtNumber(v.toLong(), isPersian)}" to colors.getOrElse(k) { Color.Gray })
+                            add("${names.getOrElse(k) { "" }}: ${fmtNumber(v.toLong(), isPersian)}" to colors.getOrElse(k) { fallback })
                         }
                     }
-                    drawTooltip(measurer, lines, centerX(sel), top, tooltipBg)
+                    drawTooltip(measurer, lines, centerX(sel), top, tooltipBg, tooltipFont)
                 }
             }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)) {
-                names.forEachIndexed { i, name -> LegendDot(colors.getOrElse(i) { Color.Gray }, name) }
+                names.forEachIndexed { i, name -> LegendDot(colors.getOrElse(i) { fallback }, name) }
             }
         }
     }
 }
 
 @Composable
-fun LegendDot(color: Color, label: String) {
+internal fun LegendDot(color: Color, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Box(Modifier.size(8.dp).background(color, CircleShape))
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        )
     }
 }
 
 /** Ring chart with a legend that shows value and share for each slice. */
 @Composable
-fun DonutWithLegend(
+internal fun DonutWithLegend(
     slices: List<DonutSlice>,
     centerTitle: String,
     centerSubtitle: String,
@@ -390,8 +408,8 @@ fun DonutWithLegend(
                 }
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(centerTitle, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(centerSubtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                Text(centerTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(centerSubtitle, style = MaterialTheme.typography.labelSmall, color = adminMuted())
             }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -399,12 +417,12 @@ fun DonutWithLegend(
                 val pct = if (total > 0f) (s.value / total * 100f) else 0f
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.size(10.dp).background(s.color, CircleShape))
-                    Text(s.label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    Text(s.label, style = MaterialTheme.typography.adminCaption, modifier = Modifier.weight(1f))
                     Text(
-                        "${fmtNumber(s.value.toLong(), isPersian)} · ${numberFormat(isPersian).format(pct.roundToInt())}%",
-                        style = MaterialTheme.typography.labelMedium,
+                        "${fmtNumber(s.value.toLong(), isPersian)} · ${fmtPercent(pct.roundToInt(), isPersian)}",
+                        style = MaterialTheme.typography.adminCaption,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = AdminAlpha.Strong)
                     )
                 }
             }
@@ -414,7 +432,7 @@ fun DonutWithLegend(
 
 /** 7 weekdays x 24 hours activity grid. [matrix] rows are Sunday..Saturday, as sent by the server. */
 @Composable
-fun HeatmapGrid(
+internal fun HeatmapGrid(
     matrix: List<List<Long>>,
     isPersian: Boolean,
     unitLabel: String,
@@ -423,12 +441,15 @@ fun HeatmapGrid(
     val measurer = rememberTextMeasurer()
     val accent = MaterialTheme.colorScheme.primary
     val empty = MaterialTheme.colorScheme.outline.copy(alpha = 0.10f)
-    val labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+    val labelStyle = MaterialTheme.typography.chartLabel(adminMuted())
+    // Persian weeks start on Saturday. Axis labels are one letter; the tooltip spells the day out.
     val order = if (isPersian) listOf(6, 0, 1, 2, 3, 4, 5) else listOf(0, 1, 2, 3, 4, 5, 6)
-    val dayNames = if (isPersian) listOf("یک", "دو", "سه", "چهار", "پنج", "جمعه", "شنبه") else listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+    val shortNames = if (isPersian) listOf("ی", "د", "س", "چ", "پ", "ج", "ش") else listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+    val fullNames = if (isPersian) listOf("یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه", "شنبه") else shortNames
     val maxV = (matrix.maxOfOrNull { row -> row.maxOrNull() ?: 0L } ?: 0L).coerceAtLeast(1L)
     var selected by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     val cellH = 20.dp
+    val axisWidth = 30.dp
 
     LtrBox {
         Column(modifier) {
@@ -437,7 +458,7 @@ fun HeatmapGrid(
                     .fillMaxWidth()
                     .height(cellH * 7 + 20.dp)
                     .pointerInput(Unit) {
-                        val left = 30.dp.toPx()
+                        val left = axisWidth.toPx()
                         val ch = cellH.toPx()
                         detectTapGestures { offset ->
                             val cw = (size.width - left) / 24f
@@ -447,13 +468,12 @@ fun HeatmapGrid(
                         }
                     }
             ) {
-                val left = 30.dp.toPx()
+                val left = axisWidth.toPx()
                 val cw = (size.width - left) / 24f
                 val ch = cellH.toPx()
-                val labelStyle = TextStyle(fontSize = 9.sp, color = labelColor)
                 for (r in 0 until 7) {
                     val src = order[r]
-                    val name = measurer.measure(dayNames[src], labelStyle)
+                    val name = measurer.measure(shortNames[src], labelStyle)
                     drawText(name, topLeft = Offset(0f, r * ch + (ch - name.size.height) / 2f))
                     for (c in 0 until 24) {
                         val v = matrix.getOrNull(src)?.getOrNull(c) ?: 0L
@@ -473,7 +493,7 @@ fun HeatmapGrid(
             val text = if (sel != null) {
                 val src = order[sel.first]
                 val v = matrix.getOrNull(src)?.getOrNull(sel.second) ?: 0L
-                "${dayNames[src]} ${"%02d".format(sel.second)}:00 — ${fmtNumber(v, isPersian)} $unitLabel"
+                "${fullNames[src]} ${"%02d".format(sel.second)}:00 — ${fmtNumber(v, isPersian)} $unitLabel"
             } else ""
             Text(
                 text,
@@ -488,7 +508,7 @@ fun HeatmapGrid(
 
 /** Ranked horizontal bars with animated fill. */
 @Composable
-fun HorizontalBars(
+internal fun HorizontalBars(
     items: List<Pair<String, Long>>,
     colors: List<Color>,
     isPersian: Boolean,
@@ -508,8 +528,8 @@ private fun BarRow(label: String, valueText: String, fraction: Float, color: Col
     val animated by animateFloatAsState(fraction.coerceIn(0f, 1f), tween(700, easing = FastOutSlowInEasing), label = "bar")
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f), maxLines = 1)
-            Text(valueText, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            Text(label, style = MaterialTheme.typography.adminCaption, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(valueText, style = MaterialTheme.typography.adminCaption, fontWeight = FontWeight.SemiBold)
         }
         Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))) {
             Box(Modifier.fillMaxHeight().fillMaxWidth(animated.coerceAtLeast(0.02f)).clip(RoundedCornerShape(4.dp)).background(color))
@@ -519,12 +539,8 @@ private fun BarRow(label: String, valueText: String, fraction: Float, color: Col
 
 /** Half-circle gauge for the 0-100 security risk score. */
 @Composable
-fun RiskGauge(score: Int, level: String, levelLabel: String, caption: String, isPersian: Boolean, modifier: Modifier = Modifier) {
-    val color = when (level) {
-        "high" -> MaterialTheme.colorScheme.error
-        "medium" -> MaterialTheme.colorScheme.tertiary
-        else -> MaterialTheme.colorScheme.primary
-    }
+internal fun RiskGauge(score: Int, level: String, levelLabel: String, caption: String, isPersian: Boolean, modifier: Modifier = Modifier) {
+    val color = riskColor(level)
     val track = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
     val animated by animateFloatAsState(score.coerceIn(0, 100) / 100f, tween(1000, easing = FastOutSlowInEasing), label = "risk")
     Box(modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.BottomCenter) {
@@ -540,16 +556,16 @@ fun RiskGauge(score: Int, level: String, levelLabel: String, caption: String, is
             )
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(bottom = 2.dp)) {
-            Text(numberFormat(isPersian).format(score), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = color)
-            Text(levelLabel, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = color)
-            Text(caption, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+            Text(fmtNumber(score, isPersian), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = color)
+            Text(levelLabel, style = MaterialTheme.typography.adminCaption, fontWeight = FontWeight.SemiBold, color = color)
+            Text(caption, style = MaterialTheme.typography.labelSmall, color = adminMuted())
         }
     }
 }
 
 /** Tiny trend line for KPI cards. */
 @Composable
-fun Sparkline(values: List<Float>, color: Color, modifier: Modifier = Modifier) {
+internal fun Sparkline(values: List<Float>, color: Color, modifier: Modifier = Modifier) {
     Canvas(modifier) {
         if (values.size < 2) return@Canvas
         val maxV = max(values.maxOrNull() ?: 1f, 1f)

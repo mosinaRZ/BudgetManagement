@@ -1,31 +1,27 @@
 package ir.hamedan.budgetmanagement.ui.screens.admin
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudSync
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.GppMaybe
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Lock
@@ -33,21 +29,12 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.automirrored.filled.Login
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -69,13 +56,7 @@ import ir.hamedan.budgetmanagement.ui.screens.auth.AuthErrorBanner
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
 import kotlinx.coroutines.delay
 
-private val PanelShape = RoundedCornerShape(24.dp)
-
-private val AllEventTypes = listOf(
-    "login_success", "login_failed", "account_locked", "registered", "password_changed", "password_reset",
-    "account_deleted", "account_restored", "device_removed", "admin_user_edited", "admin_role_changed",
-    "admin_user_deleted", "admin_user_restored", "admin_user_unlocked", "admin_sessions_revoked", "admin_access_denied"
-)
+private val AnalyticsRanges = listOf(7, 30, 90)
 
 @Composable
 fun AdminAnalyticsScreen(
@@ -111,32 +92,21 @@ fun AdminAnalyticsScreen(
         contentPadding = PaddingValues(
             start = 20.dp, end = 20.dp,
             top = contentPadding.calculateTopPadding() + 8.dp,
-            bottom = contentPadding.calculateBottomPadding() + 32.dp
+            bottom = contentPadding.calculateBottomPadding() + 16.dp
         ),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(7, 30, 90).forEach { d ->
+                AnalyticsRanges.forEach { d ->
                     FilterChip(
                         selected = f.days == d,
                         onClick = { vm.setDays(d) },
-                        label = { Text(if (isPersian) "${fmtNumber(d.toLong(), true)} روز" else "${d}d") }
+                        label = { Text(if (isPersian) "${fmtNumber(d, true)} روز" else "${d}d") }
                     )
                 }
                 Box(Modifier.weight(1f))
-                Box {
-                    IconButton(
-                        onClick = { showFilters = true },
-                        modifier = Modifier.size(44.dp).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
-                    ) { Icon(Icons.Default.FilterList, if (isPersian) "فیلتر" else "Filters", tint = MaterialTheme.colorScheme.primary) }
-                    if (f.activeCount > 0) {
-                        Box(
-                            Modifier.align(Alignment.TopEnd).size(18.dp).background(MaterialTheme.colorScheme.error, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) { Text(numberFormat(isPersian).format(f.activeCount), style = MaterialTheme.typography.labelSmall, color = Color.White) }
-                    }
-                }
+                AdminFilterButton(activeCount = f.activeCount, isPersian = isPersian, onClick = { showFilters = true })
             }
         }
 
@@ -147,22 +117,17 @@ fun AdminAnalyticsScreen(
         state.error?.let { message -> item { AuthErrorBanner(message = message) } }
 
         if (data == null) {
-            if (state.isLoading) {
-                item {
-                    Box(Modifier.fillMaxWidth().padding(vertical = 64.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                    }
-                }
-            }
+            if (state.isLoading) item { AdminLoading(vertical = 64.dp) }
         } else {
             item { RiskCard(data, isPersian) }
             item { KpiGrid(data, isPersian) }
             if (data.eventsTruncated) {
                 item {
                     Text(
-                        if (isPersian) "تعداد رویدادها بسیار زیاد است؛ نمودارها فقط جدیدترین ${fmtNumber(data.eventsConsidered.toLong(), true)} رویداد را نشان می‌دهند."
-                        else "There are a lot of events; charts only cover the newest ${fmtNumber(data.eventsConsidered.toLong(), false)}.",
-                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary
+                        if (isPersian) "تعداد رویدادها بسیار زیاد است؛ نمودارها فقط جدیدترین ${fmtNumber(data.eventsConsidered, true)} رویداد را نشان می‌دهند."
+                        else "There are a lot of events; charts only cover the newest ${fmtNumber(data.eventsConsidered, false)}.",
+                        style = MaterialTheme.typography.adminCaption,
+                        color = MaterialTheme.colorScheme.tertiary
                     )
                 }
             }
@@ -184,13 +149,14 @@ fun AdminAnalyticsScreen(
                 if (state.events.isEmpty()) {
                     Text(
                         if (isPersian) "رویدادی با این فیلترها پیدا نشد." else "No events match these filters.",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        style = MaterialTheme.typography.adminCaption,
+                        color = adminMuted()
                     )
                 }
             }
         }
         items(state.events, key = { it.id }) { event ->
-            EventRow(event, isPersian, onUserClick = { e -> vm.filterUser(e.userId, e.userLabel.ifBlank { e.userId.takeLast(6) }) })
+            AdminEventRow(event, isPersian, onUserClick = { e -> vm.filterUser(e.userId, e.userLabel.ifBlank { e.userId.takeLast(6) }) })
         }
         if (state.canLoadMoreEvents) {
             item {
@@ -198,7 +164,7 @@ fun AdminAnalyticsScreen(
                     onClick = vm::loadMoreEvents,
                     enabled = !state.eventsLoadingMore,
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = AdminShapes.Button
                 ) {
                     if (state.eventsLoadingMore) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     else Text(if (isPersian) "نمایش بیشتر" else "Show more")
@@ -212,6 +178,8 @@ fun AdminAnalyticsScreen(
     }
 }
 
+// ------------------------------------------------------------------ cards
+
 @Composable
 private fun SectionCard(
     title: String,
@@ -220,127 +188,139 @@ private fun SectionCard(
     tint: Color = MaterialTheme.colorScheme.primary,
     content: @Composable () -> Unit
 ) {
-    Surface(
-        shape = PanelShape,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(Modifier.size(36.dp).background(tint.copy(alpha = 0.14f), CircleShape), contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
-                }
-                Column {
-                    Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
-                }
+    AdminCard(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            AdminIconBadge(icon, tint)
+            Column {
+                Text(title, style = MaterialTheme.typography.adminTitleSmall, fontWeight = FontWeight.Bold)
+                if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.labelSmall, color = adminMuted())
             }
-            content()
         }
+        content()
     }
 }
 
 @Composable
 private fun RiskCard(data: AdminApi.Analytics, isPersian: Boolean) {
-    val levelLabel = when (data.riskLevel) {
-        "high" -> if (isPersian) "ریسک بالا" else "High risk"
-        "medium" -> if (isPersian) "ریسک متوسط" else "Medium risk"
-        else -> if (isPersian) "ریسک پایین" else "Low risk"
-    }
     SectionCard(
         title = if (isPersian) "وضعیت امنیت" else "Security posture",
-        subtitle = if (isPersian) "بر پایه رویدادهای ${fmtNumber(data.days.toLong(), true)} روز اخیر" else "Based on the last ${data.days} days",
+        subtitle = if (isPersian) "بر پایه رویدادهای ${fmtNumber(data.days, true)} روز اخیر" else "Based on the last ${data.days} days",
         icon = Icons.Default.GppMaybe,
-        tint = when (data.riskLevel) {
-            "high" -> MaterialTheme.colorScheme.error
-            "medium" -> MaterialTheme.colorScheme.tertiary
-            else -> MaterialTheme.colorScheme.primary
-        }
+        tint = riskColor(data.riskLevel)
     ) {
         RiskGauge(
-            score = data.riskScore, level = data.riskLevel, levelLabel = levelLabel,
-            caption = if (isPersian) "از ۱۰۰" else "out of 100", isPersian = isPersian
+            score = data.riskScore,
+            level = data.riskLevel,
+            levelLabel = riskLabel(data.riskLevel, isPersian),
+            caption = if (isPersian) "از ${fmtNumber(100, true)}" else "out of 100",
+            isPersian = isPersian
         )
         Text(
             if (isPersian) "امتیاز از روی رویدادهای خطرناک، قفل شدن حساب‌ها و نسبت ورودهای ناموفق حساب می‌شود؛ یک شاخص راهنماست نه حکم قطعی."
             else "The score combines dangerous events, account lockouts and the share of failed sign-ins. It is a guide, not a verdict.",
-            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+            style = MaterialTheme.typography.labelSmall,
+            color = adminMuted()
         )
     }
 }
 
+private data class KpiSpec(
+    val title: String,
+    val value: String,
+    val icon: ImageVector,
+    val tint: Color,
+    val spark: List<Float>? = null,
+    val caption: String? = null
+)
+
 @Composable
 private fun KpiGrid(data: AdminApi.Analytics, isPersian: Boolean) {
     val k = data.kpis
-    val success = data.loginsByDay.map { it.success.toFloat() }
-    val failed = data.loginsByDay.map { it.failed.toFloat() }
-    val signups = data.signupsByDay.map { it.count.toFloat() }
-    val syncRecs = data.syncByDay.map { it.records.toFloat() }
-    val ok = Color(0xFF2FB872)
+    val primary = MaterialTheme.colorScheme.primary
+    val tertiary = MaterialTheme.colorScheme.tertiary
+    val error = MaterialTheme.colorScheme.error
+    val success = adminSuccess()
+    val info = adminInfo()
+    val violet = adminViolet()
+    fun n(value: Long) = fmtNumber(value, isPersian)
+    fun word(fa: String, en: String) = if (isPersian) fa else en
+
+    val specs = listOf(
+        KpiSpec(
+            word("کل کاربران", "Total users"), fmtCompact(k.totalUsers, isPersian), Icons.Default.Group, primary,
+            caption = "${n(k.activeUsers)} ${word("فعال", "active")}"
+        ),
+        KpiSpec(
+            word("آنلاین اکنون", "Online now"), n(k.onlineNow), Icons.Default.Sensors, success,
+            caption = word("${fmtNumber(data.onlineWindowSec / 60, true)} دقیقه اخیر", "last ${data.onlineWindowSec / 60} min")
+        ),
+        KpiSpec(
+            word("ورود موفق", "Sign-ins"), fmtCompact(k.loginsSuccess, isPersian), Icons.AutoMirrored.Filled.Login, primary,
+            spark = data.loginsByDay.map { it.success.toFloat() }
+        ),
+        KpiSpec(
+            word("ورود ناموفق", "Failed sign-ins"), fmtCompact(k.loginsFailed, isPersian), Icons.Default.Block, tertiary,
+            spark = data.loginsByDay.map { it.failed.toFloat() }
+        ),
+        KpiSpec(
+            word("رویداد خطرناک", "Dangerous events"), n(k.dangerEvents), Icons.Default.Shield, error,
+            caption = word("${n(k.lockedUsers)} حساب قفل", "${n(k.lockedUsers)} locked now")
+        ),
+        KpiSpec(
+            word("کاربر جدید", "New users"), n(k.newUsers), Icons.Default.PersonAdd, info,
+            spark = data.signupsByDay.map { it.count.toFloat() }
+        ),
+        KpiSpec(
+            word("رکورد سینک‌شده", "Synced records"), fmtCompact(k.syncRecords, isPersian), Icons.Default.CloudSync, violet,
+            spark = data.syncByDay.map { it.records.toFloat() }
+        ),
+        KpiSpec(
+            word("حساب قفل‌شده", "Locked accounts"), n(k.lockedUsers), Icons.Default.Lock, tertiary,
+            caption = word("${n(k.lockedEvents)} قفل در بازه", "${n(k.lockedEvents)} lockouts in range")
+        )
+    )
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Kpi(Modifier.weight(1f), if (isPersian) "کل کاربران" else "Total users", fmtCompact(k.totalUsers, isPersian), Icons.Default.Group, MaterialTheme.colorScheme.primary, null,
-                if (isPersian) "${fmtNumber(k.activeUsers, true)} فعال" else "${fmtNumber(k.activeUsers, false)} active")
-            Kpi(Modifier.weight(1f), if (isPersian) "آنلاین اکنون" else "Online now", fmtNumber(k.onlineNow, isPersian), Icons.Default.Sensors, ok, null,
-                if (isPersian) "${fmtNumber(data.onlineWindowSec / 60, true)} دقیقه اخیر" else "last ${data.onlineWindowSec / 60} min")
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Kpi(Modifier.weight(1f), if (isPersian) "ورود موفق" else "Sign-ins", fmtCompact(k.loginsSuccess, isPersian), Icons.AutoMirrored.Filled.Login, MaterialTheme.colorScheme.primary, success,
-                if (isPersian) "${fmtNumber(k.uniqueLoginUsers, true)} کاربر یکتا" else "${fmtNumber(k.uniqueLoginUsers, false)} unique users")
-            Kpi(Modifier.weight(1f), if (isPersian) "ورود ناموفق" else "Failed sign-ins", fmtCompact(k.loginsFailed, isPersian), Icons.Default.Block, MaterialTheme.colorScheme.tertiary, failed, null)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Kpi(Modifier.weight(1f), if (isPersian) "رویداد خطرناک" else "Dangerous events", fmtNumber(k.dangerEvents, isPersian), Icons.Default.Shield, MaterialTheme.colorScheme.error, null,
-                if (isPersian) "${fmtNumber(k.lockedUsers, true)} حساب قفل" else "${fmtNumber(k.lockedUsers, false)} locked now")
-            Kpi(Modifier.weight(1f), if (isPersian) "کاربر جدید" else "New users", fmtNumber(k.newUsers, isPersian), Icons.Default.PersonAdd, Color(0xFF4F9DB8), signups, null)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Kpi(Modifier.weight(1f), if (isPersian) "رکورد سینک‌شده" else "Synced records", fmtCompact(k.syncRecords, isPersian), Icons.Default.CloudSync, Color(0xFF9B7EDB), syncRecs,
-                fmtBytes(k.syncBytes, isPersian))
-            Kpi(Modifier.weight(1f), if (isPersian) "حساب قفل‌شده" else "Locked accounts", fmtNumber(k.lockedUsers, isPersian), Icons.Default.Lock, MaterialTheme.colorScheme.tertiary, null,
-                if (isPersian) "${fmtNumber(k.lockedEvents, true)} قفل در بازه" else "${fmtNumber(k.lockedEvents, false)} lockouts in range")
+        specs.chunked(2).forEach { pair ->
+            // Equal height inside a row, whether a tile shows a sparkline or a caption.
+            Row(Modifier.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                pair.forEach { Kpi(it, Modifier.weight(1f).fillMaxHeight()) }
+            }
         }
     }
 }
 
 @Composable
-private fun Kpi(modifier: Modifier, title: String, value: String, icon: ImageVector, tint: Color, spark: List<Float>?, caption: String?) {
-    Surface(
+private fun Kpi(spec: KpiSpec, modifier: Modifier = Modifier) {
+    AdminCard(
         modifier = modifier,
-        shape = RoundedCornerShape(22.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+        contentPadding = PaddingValues(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.size(28.dp).background(tint.copy(alpha = 0.14f), CircleShape), contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = tint, modifier = Modifier.size(16.dp))
-                }
-                Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            if (spark != null && spark.size >= 2) {
-                Sparkline(spark, tint, Modifier.fillMaxWidth().height(28.dp))
-            } else if (caption != null) {
-                Text(caption, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AdminIconBadge(spec.icon, spec.tint, size = 28.dp, iconSize = 16.dp)
+            Text(spec.title, style = MaterialTheme.typography.adminCaption, color = adminMuted(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Text(spec.value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        if (spec.spark != null && spec.spark.size >= 2) {
+            Sparkline(spec.spark, spec.tint, Modifier.fillMaxWidth().height(28.dp))
+        } else if (spec.caption != null) {
+            Text(spec.caption, style = MaterialTheme.typography.labelSmall, color = adminMuted(), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
 @Composable
 private fun LoginsCard(data: AdminApi.Analytics, isPersian: Boolean) {
-    val labels = data.loginsByDay.map { dayLabel(it.day, isPersian) }
     val total = data.kpis.loginsSuccess + data.kpis.loginsFailed
-    val rate = if (total > 0) data.kpis.loginsSuccess * 100 / total else 100
+    val rate = if (total > 0) (data.kpis.loginsSuccess * 100 / total).toInt() else 100
     SectionCard(
         title = if (isPersian) "ورود کاربران" else "User sign-ins",
-        subtitle = if (isPersian) "نرخ موفقیت ${numberFormat(true).format(rate)}٪" else "Success rate $rate%",
+        subtitle = if (isPersian) "نرخ موفقیت ${fmtPercent(rate, true)}" else "Success rate ${fmtPercent(rate, false)}",
         icon = Icons.AutoMirrored.Filled.Login
     ) {
         LineAreaChart(
-            labels = labels,
+            labels = data.loginsByDay.map { dayLabel(it.day, isPersian) },
             series = listOf(
                 LineSeries(if (isPersian) "موفق" else "Successful", data.loginsByDay.map { it.success.toFloat() }, MaterialTheme.colorScheme.primary),
                 LineSeries(if (isPersian) "ناموفق" else "Failed", data.loginsByDay.map { it.failed.toFloat() }, MaterialTheme.colorScheme.error)
@@ -356,7 +336,7 @@ private fun RhythmCard(data: AdminApi.Analytics, isPersian: Boolean) {
         title = if (isPersian) "ساعت‌های شلوغ ورود" else "Peak sign-in hours",
         subtitle = if (isPersian) "روز هفته × ساعت (به وقت دستگاه شما)" else "Weekday × hour (your device time)",
         icon = Icons.Default.Sensors,
-        tint = Color(0xFF4F9DB8)
+        tint = adminInfo()
     ) {
         HeatmapGrid(data.heatmap, isPersian, unitLabel = if (isPersian) "ورود" else "sign-ins")
     }
@@ -364,35 +344,28 @@ private fun RhythmCard(data: AdminApi.Analytics, isPersian: Boolean) {
 
 @Composable
 private fun SecurityCard(data: AdminApi.Analytics, isPersian: Boolean) {
-    val info = MaterialTheme.colorScheme.primary
-    val warn = MaterialTheme.colorScheme.tertiary
-    val danger = MaterialTheme.colorScheme.error
     SectionCard(
         title = if (isPersian) "اکشن‌ها و رویدادهای خطرناک" else "Dangerous actions & events",
         subtitle = if (isPersian) "تفکیک روزانه بر اساس شدت" else "Daily breakdown by severity",
         icon = Icons.Default.Shield,
-        tint = danger
+        tint = MaterialTheme.colorScheme.error
     ) {
         StackedBarChart(
             labels = data.severityByDay.map { dayLabel(it.day, isPersian) },
             stacks = data.severityByDay.map { listOf(it.info.toFloat(), it.warning.toFloat(), it.danger.toFloat()) },
-            names = listOf(severityLabel("info", isPersian), severityLabel("warning", isPersian), severityLabel("danger", isPersian)),
-            colors = listOf(info, warn, danger),
+            names = listOf("info", "warning", "danger").map { severityLabel(it, isPersian) },
+            colors = listOf("info", "warning", "danger").map { severityColor(it) },
             isPersian = isPersian
         )
         if (data.eventTypes.isNotEmpty()) {
-            SectionLabel(if (isPersian) "پرتکرارترین رویدادها" else "Most frequent events")
+            AdminSectionLabel(if (isPersian) "پرتکرارترین رویدادها" else "Most frequent events")
             HorizontalBars(
                 items = data.eventTypes.take(6).map { eventLabel(it.key, isPersian) to it.count },
-                colors = chartPalette(), isPersian = isPersian
+                colors = chartPalette(),
+                isPersian = isPersian
             )
         }
     }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
 }
 
 @Composable
@@ -407,11 +380,19 @@ private fun SuspiciousCard(data: AdminApi.Analytics, isPersian: Boolean) {
             data.suspicious.forEach { s ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        s.ip, modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Ltr), fontWeight = FontWeight.SemiBold
+                        s.ip,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Ltr),
+                        fontWeight = FontWeight.SemiBold
                     )
-                    StatusPill(if (isPersian) "${fmtNumber(s.accounts, true)} حساب" else "${s.accounts} accounts", MaterialTheme.colorScheme.outline)
-                    StatusPill(if (isPersian) "${fmtNumber(s.failed, true)} ناموفق" else "${s.failed} failed", MaterialTheme.colorScheme.error)
+                    StatusPill(
+                        if (isPersian) "${fmtNumber(s.accounts, true)} حساب" else "${s.accounts} accounts",
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    StatusPill(
+                        if (isPersian) "${fmtNumber(s.failed, true)} ناموفق" else "${s.failed} failed",
+                        MaterialTheme.colorScheme.error
+                    )
                 }
             }
         }
@@ -425,9 +406,9 @@ private fun UsersCard(data: AdminApi.Analytics, isPersian: Boolean) {
         title = if (isPersian) "کاربران و دستگاه‌ها" else "Users & devices",
         subtitle = if (isPersian) "توزیع نقش، پلتفرم و نسخه برنامه" else "Role, platform and app-version mix",
         icon = Icons.Default.Group,
-        tint = Color(0xFF9B7EDB)
+        tint = adminViolet()
     ) {
-        SectionLabel(if (isPersian) "نقش‌ها" else "Roles")
+        AdminSectionLabel(if (isPersian) "نقش‌ها" else "Roles")
         DonutWithLegend(
             slices = data.roles.mapIndexed { i, b -> DonutSlice(roleLabel(b.key, isPersian), b.count.toFloat(), palette[i % palette.size]) },
             centerTitle = fmtCompact(data.kpis.activeUsers, isPersian),
@@ -435,7 +416,7 @@ private fun UsersCard(data: AdminApi.Analytics, isPersian: Boolean) {
             isPersian = isPersian
         )
         if (data.platforms.isNotEmpty()) {
-            SectionLabel(if (isPersian) "پلتفرم دستگاه‌ها" else "Device platforms")
+            AdminSectionLabel(if (isPersian) "پلتفرم دستگاه‌ها" else "Device platforms")
             DonutWithLegend(
                 slices = data.platforms.mapIndexed { i, b -> DonutSlice(platformLabel(b.key, isPersian), b.count.toFloat(), palette[(i + 2) % palette.size]) },
                 centerTitle = fmtCompact(data.platforms.sumOf { it.count }, isPersian),
@@ -444,50 +425,62 @@ private fun UsersCard(data: AdminApi.Analytics, isPersian: Boolean) {
             )
         }
         if (data.appVersions.isNotEmpty()) {
-            SectionLabel(if (isPersian) "نسخه‌های برنامه" else "App versions")
-            HorizontalBars(items = data.appVersions.map { (if (it.key == "unknown") platformLabel("unknown", isPersian) else "v${it.key}") to it.count }, colors = palette, isPersian = isPersian)
+            AdminSectionLabel(if (isPersian) "نسخه‌های برنامه" else "App versions")
+            HorizontalBars(
+                items = data.appVersions.map { (if (it.key == "unknown") platformLabel("unknown", isPersian) else "v${it.key}") to it.count },
+                colors = palette,
+                isPersian = isPersian
+            )
         }
-        SectionLabel(if (isPersian) "ثبت‌نام‌های روزانه" else "Daily sign-ups")
+        AdminSectionLabel(if (isPersian) "ثبت‌نام‌های روزانه" else "Daily sign-ups")
         LineAreaChart(
             labels = data.signupsByDay.map { dayLabel(it.day, isPersian) },
-            series = listOf(LineSeries(if (isPersian) "ثبت‌نام" else "Sign-ups", data.signupsByDay.map { it.count.toFloat() }, Color(0xFF4F9DB8))),
-            isPersian = isPersian, height = 150.dp
+            series = listOf(LineSeries(if (isPersian) "ثبت‌نام" else "Sign-ups", data.signupsByDay.map { it.count.toFloat() }, adminInfo())),
+            isPersian = isPersian,
+            height = 150.dp
         )
     }
 }
 
 @Composable
 private fun SyncCard(data: AdminApi.Analytics, isPersian: Boolean, onUserClick: (String, String) -> Unit) {
-    val palette = chartPalette()
     SectionCard(
         title = if (isPersian) "داده‌های سینک‌شده" else "Synced data",
-        subtitle = if (isPersian) "${fmtNumber(data.kpis.syncRecords, true)} رکورد · ${fmtBytes(data.kpis.syncBytes, true)} (رمزنگاری‌شده)" else "${fmtNumber(data.kpis.syncRecords, false)} records · ${fmtBytes(data.kpis.syncBytes, false)} (encrypted)",
+        subtitle = "${fmtNumber(data.kpis.syncRecords, isPersian)} ${if (isPersian) "رکورد" else "records"} · " +
+                "${fmtBytes(data.kpis.syncBytes, isPersian)} ${if (isPersian) "(رمزنگاری‌شده)" else "(encrypted)"}",
         icon = Icons.Default.CloudSync,
-        tint = Color(0xFF9B7EDB)
+        tint = adminViolet()
     ) {
         LineAreaChart(
             labels = data.syncByDay.map { dayLabel(it.day, isPersian) },
-            series = listOf(LineSeries(if (isPersian) "رکورد" else "Records", data.syncByDay.map { it.records.toFloat() }, Color(0xFF9B7EDB))),
-            isPersian = isPersian, height = 160.dp
+            series = listOf(LineSeries(if (isPersian) "رکورد" else "Records", data.syncByDay.map { it.records.toFloat() }, adminViolet())),
+            isPersian = isPersian,
+            height = 160.dp
         )
         if (data.syncByEntity.isNotEmpty()) {
-            SectionLabel(if (isPersian) "نوع داده" else "By data type")
-            HorizontalBars(items = data.syncByEntity.take(7).map { entityLabel(it.key, isPersian) to it.count }, colors = palette, isPersian = isPersian)
+            AdminSectionLabel(if (isPersian) "نوع داده" else "By data type")
+            HorizontalBars(
+                items = data.syncByEntity.take(7).map { entityLabel(it.key, isPersian) to it.count },
+                colors = chartPalette(),
+                isPersian = isPersian
+            )
         }
         if (data.topSyncUsers.isNotEmpty()) {
-            SectionLabel(if (isPersian) "بیشترین حجم سینک" else "Heaviest syncers")
+            AdminSectionLabel(if (isPersian) "بیشترین حجم سینک" else "Heaviest syncers")
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 data.topSyncUsers.forEach { u ->
                     val label = u.label.ifBlank { u.userId.takeLast(6) }
                     Row(
                         Modifier.fillMaxWidth().clickable { onUserClick(u.userId, label) }.padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(
                             "${fmtCompact(u.records, isPersian)} · ${fmtBytes(u.bytes, isPersian)}",
-                            style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                            style = MaterialTheme.typography.adminCaption,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = AdminAlpha.Strong)
                         )
                     }
                 }
@@ -496,69 +489,59 @@ private fun SyncCard(data: AdminApi.Analytics, isPersian: Boolean, onUserClick: 
     }
 }
 
+// ------------------------------------------------------------------ filters
+
+@Composable
+private fun RemovableChip(label: String, onRemove: () -> Unit) {
+    FilterChip(
+        selected = true,
+        onClick = onRemove,
+        label = { Text(label) },
+        trailingIcon = { Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp)) }
+    )
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ActiveFilters(f: AnalyticsFilters, isPersian: Boolean, vm: AdminAnalyticsViewModel) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (f.userId.isNotEmpty()) {
-            FilterChip(selected = true, onClick = vm::clearUser, label = { Text(f.userLabel.ifBlank { f.userId.takeLast(6) }) }, trailingIcon = { Icon(Icons.Default.Close, null, Modifier.size(16.dp)) })
-        }
-        if (f.severity.isNotEmpty()) {
-            FilterChip(selected = true, onClick = { vm.setSeverity("") }, label = { Text(severityLabel(f.severity, isPersian)) }, trailingIcon = { Icon(Icons.Default.Close, null, Modifier.size(16.dp)) })
-        }
-        if (f.platform.isNotEmpty()) {
-            FilterChip(selected = true, onClick = { vm.setPlatform("") }, label = { Text(platformLabel(f.platform, isPersian)) }, trailingIcon = { Icon(Icons.Default.Close, null, Modifier.size(16.dp)) })
-        }
+        if (f.userId.isNotEmpty()) RemovableChip(f.userLabel.ifBlank { f.userId.takeLast(6) }, vm::clearUser)
+        if (f.severity.isNotEmpty()) RemovableChip(severityLabel(f.severity, isPersian)) { vm.setSeverity("") }
+        if (f.platform.isNotEmpty()) RemovableChip(platformLabel(f.platform, isPersian)) { vm.setPlatform("") }
         if (f.types.isNotEmpty()) {
-            FilterChip(
-                selected = true, onClick = { vm.setTypes(emptySet()) },
-                label = { Text(if (isPersian) "${fmtNumber(f.types.size.toLong(), true)} نوع رویداد" else "${f.types.size} event types") },
-                trailingIcon = { Icon(Icons.Default.Close, null, Modifier.size(16.dp)) }
-            )
+            RemovableChip(
+                if (isPersian) "${fmtNumber(f.types.size, true)} نوع رویداد" else "${f.types.size} event types"
+            ) { vm.setTypes(emptySet()) }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun AnalyticsFiltersSheet(f: AnalyticsFilters, isPersian: Boolean, vm: AdminAnalyticsViewModel, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(
-            Modifier.fillMaxWidth().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
-        ) {
-            Text(if (isPersian) "فیلتر اطلاعات" else "Filter data", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            SectionLabel(if (isPersian) "شدت" else "Severity")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("", "info", "warning", "danger").forEach { s ->
-                    FilterChip(selected = f.severity == s, onClick = { vm.setSeverity(s) }, label = { Text(severityLabel(s, isPersian)) })
-                }
-            }
-            SectionLabel(if (isPersian) "پلتفرم دستگاه" else "Device platform")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("" to (if (isPersian) "همه" else "All"), "android" to "Android", "ios" to "iOS").forEach { (v, label) ->
-                    FilterChip(selected = f.platform == v, onClick = { vm.setPlatform(v) }, label = { Text(label) })
-                }
-            }
-            SectionLabel(if (isPersian) "نوع رویداد" else "Event type")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                AllEventTypes.forEach { type ->
-                    val on = type in f.types
-                    FilterChip(
-                        selected = on,
-                        onClick = { vm.setTypes(if (on) f.types - type else f.types + type) },
-                        label = { Text(eventLabel(type, isPersian)) }
-                    )
-                }
-            }
-            Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick = { vm.clearFilters() }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp)) {
-                    Text(if (isPersian) "بازنشانی" else "Reset")
-                }
-                Button(onClick = onDismiss, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp)) {
-                    Text(if (isPersian) "تمام" else "Done")
-                }
-            }
-        }
+    AdminBottomSheet(onDismiss = onDismiss, title = if (isPersian) "فیلتر اطلاعات" else "Filter data") {
+        AdminChipGroup(
+            title = if (isPersian) "شدت" else "Severity",
+            options = listOf("", "info", "warning", "danger").map { it to severityLabel(it, isPersian) },
+            selected = f.severity,
+            onSelect = vm::setSeverity
+        )
+        AdminChipGroup(
+            title = if (isPersian) "پلتفرم دستگاه" else "Device platform",
+            options = listOf("" to (if (isPersian) "همه" else "All"), "android" to "Android", "ios" to "iOS"),
+            selected = f.platform,
+            onSelect = vm::setPlatform
+        )
+        AdminMultiChipGroup(
+            title = if (isPersian) "نوع رویداد" else "Event type",
+            options = AllEventTypes.map { it to eventLabel(it, isPersian) },
+            selected = f.types,
+            onToggle = { type -> vm.setTypes(if (type in f.types) f.types - type else f.types + type) }
+        )
+        AdminSheetActions(
+            secondary = if (isPersian) "بازنشانی" else "Reset",
+            onSecondary = vm::clearFilters,
+            primary = if (isPersian) "تمام" else "Done",
+            onPrimary = onDismiss
+        )
     }
 }
