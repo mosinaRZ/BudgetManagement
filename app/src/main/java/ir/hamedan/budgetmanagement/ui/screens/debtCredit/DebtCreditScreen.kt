@@ -59,6 +59,9 @@ import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AppLogoIcon
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.StatusBarAuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.SuccessBottomSheet
+import ir.hamedan.budgetmanagement.ui.components.SuccessSheetContent
+import ir.hamedan.budgetmanagement.ui.components.formatSuccessAmountFromToman
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.ui.screens.add.ThousandsSeparatorTransformation
 import ir.hamedan.budgetmanagement.ui.screens.goals.AmountActionDialog
@@ -103,6 +106,9 @@ fun DebtCreditScreen(
 
     var pendingSaveData by remember { mutableStateOf<PendingSaveData?>(null) }
     var pendingDuplicateData by remember { mutableStateOf<PendingSaveData?>(null) }
+
+    // محتوای شیت موفقیت؛ null یعنی شیت نمایش داده نمی‌شود
+    var successSheet by remember { mutableStateOf<SuccessSheetContent?>(null) }
 
     Box(
         modifier = Modifier
@@ -290,7 +296,17 @@ fun DebtCreditScreen(
                 isDeposit = true,
                 onDismiss = { itemForDeposit = null },
                 onConfirm = { amount ->
-                    viewModel.deposit(item.id, amount)
+                    viewModel.deposit(item.id, amount) { saved ->
+                        if (saved) {
+                            successSheet = debtCreditPaymentContent(
+                                type = item.type,
+                                personName = item.personName,
+                                amountToman = amount,
+                                currencyUnit = currencyUnit,
+                                isPersian = isPersian
+                            )
+                        }
+                    }
                     itemForDeposit = null
                 }
             )
@@ -393,7 +409,17 @@ fun DebtCreditScreen(
                 isDeposit = false,
                 onDismiss = { itemForWithdraw = null },
                 onConfirm = { amount ->
-                    viewModel.withdraw(item.id, amount)
+                    viewModel.withdraw(item.id, amount) { saved ->
+                        if (saved) {
+                            successSheet = debtCreditAdjustmentContent(
+                                type = item.type,
+                                personName = item.personName,
+                                amountToman = amount,
+                                currencyUnit = currencyUnit,
+                                isPersian = isPersian
+                            )
+                        }
+                    }
                     itemForWithdraw = null
                 }
             )
@@ -421,7 +447,12 @@ fun DebtCreditScreen(
                             dueDay = dueDay,
                             oneTimeDueDateMillis = oneTimeDueDateMillis,
                             note = note,
-                            addToBalance = false
+                            addToBalance = false,
+                            onResult = { saved ->
+                                if (saved) {
+                                    successSheet = debtCreditUpdatedContent(personName.trim(), isPersian)
+                                }
+                            }
                         )
                         selectedItemForEdit = null
                     } else {
@@ -653,7 +684,18 @@ fun DebtCreditScreen(
                                         oneTimeDueDateMillis = data.oneTimeDueDateMillis,
                                         note = data.note,
                                         addToBalance = true,
-                                        forceDuplicateName = data.confirmedDuplicateName
+                                        forceDuplicateName = data.confirmedDuplicateName,
+                                        onResult = { saved ->
+                                            if (saved) {
+                                                successSheet = debtCreditAddedContent(
+                                                    type = data.type,
+                                                    personName = data.personName.trim(),
+                                                    totalAmountToman = MoneyContract.fromInput(data.totalAmount),
+                                                    currencyUnit = currencyUnit,
+                                                    isPersian = isPersian
+                                                )
+                                            }
+                                        }
                                     )
                                     pendingSaveData = null
                                     selectedItemForEdit = null
@@ -683,7 +725,18 @@ fun DebtCreditScreen(
                                         oneTimeDueDateMillis = data.oneTimeDueDateMillis,
                                         note = data.note,
                                         addToBalance = false,
-                                        forceDuplicateName = data.confirmedDuplicateName
+                                        forceDuplicateName = data.confirmedDuplicateName,
+                                        onResult = { saved ->
+                                            if (saved) {
+                                                successSheet = debtCreditAddedContent(
+                                                    type = data.type,
+                                                    personName = data.personName.trim(),
+                                                    totalAmountToman = MoneyContract.fromInput(data.totalAmount),
+                                                    currencyUnit = currencyUnit,
+                                                    isPersian = isPersian
+                                                )
+                                            }
+                                        }
                                     )
                                     pendingSaveData = null
                                     selectedItemForEdit = null
@@ -699,6 +752,15 @@ fun DebtCreditScreen(
                     }
                 }
             }
+        }
+
+        // ------------------ شیت موفقیت (تمام‌صفحه) ------------------
+        successSheet?.let { content ->
+            SuccessBottomSheet(
+                content = content,
+                isPersian = isPersian,
+                onDismiss = { successSheet = null }
+            )
         }
 
         itemToDelete?.let { item ->
@@ -880,6 +942,103 @@ fun DebtCreditScreen(
                 }
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// متن شیت‌های موفقیت
+// ---------------------------------------------------------------------------
+
+private fun debtCreditAddedContent(
+    type: String,
+    personName: String,
+    totalAmountToman: Long,
+    currencyUnit: String,
+    isPersian: Boolean
+): SuccessSheetContent {
+    val amount = formatSuccessAmountFromToman(totalAmountToman, currencyUnit, isPersian)
+    val isDebt = type == "DEBT"
+    return if (isPersian) {
+        SuccessSheetContent(
+            title = if (isDebt) "بدهی ثبت شد" else "طلب ثبت شد",
+            message = if (isDebt) "بدهی شما به «$personName» به مبلغ $amount با موفقیت ثبت شد."
+            else "طلب شما از «$personName» به مبلغ $amount با موفقیت ثبت شد.",
+            hint = if (isDebt) "هر زمان پرداختی انجام دادید، از همین صفحه ثبتش کنید."
+            else "هر زمان مبلغی دریافت کردید، از همین صفحه ثبتش کنید."
+        )
+    } else {
+        SuccessSheetContent(
+            title = if (isDebt) "Debt recorded" else "Receivable recorded",
+            message = if (isDebt) "Your debt to “$personName” of $amount was recorded successfully."
+            else "Your receivable from “$personName” of $amount was recorded successfully.",
+            hint = if (isDebt) "Record each payment from this page whenever you make one."
+            else "Record each amount you receive from this page."
+        )
+    }
+}
+
+private fun debtCreditUpdatedContent(personName: String, isPersian: Boolean): SuccessSheetContent =
+    if (isPersian) {
+        SuccessSheetContent(
+            title = "تغییرات ذخیره شد",
+            message = "اطلاعات «$personName» با موفقیت به‌روزرسانی شد."
+        )
+    } else {
+        SuccessSheetContent(
+            title = "Changes saved",
+            message = "The details for “$personName” were updated successfully."
+        )
+    }
+
+private fun debtCreditPaymentContent(
+    type: String,
+    personName: String,
+    amountToman: Long,
+    currencyUnit: String,
+    isPersian: Boolean
+): SuccessSheetContent {
+    val amount = formatSuccessAmountFromToman(amountToman, currencyUnit, isPersian)
+    val isDebt = type == "DEBT"
+    return if (isPersian) {
+        SuccessSheetContent(
+            title = if (isDebt) "پرداخت ثبت شد" else "دریافتی ثبت شد",
+            message = if (isDebt) "پرداخت مبلغ $amount به «$personName» با موفقیت ثبت شد."
+            else "دریافت مبلغ $amount از «$personName» با موفقیت ثبت شد.",
+            hint = "موجودی حساب و مانده‌ی این مورد به‌روز است."
+        )
+    } else {
+        SuccessSheetContent(
+            title = if (isDebt) "Payment recorded" else "Amount received",
+            message = if (isDebt) "Your payment of $amount to “$personName” was recorded successfully."
+            else "The $amount received from “$personName” was recorded successfully.",
+            hint = "Your account balance and the remaining amount are up to date."
+        )
+    }
+}
+
+private fun debtCreditAdjustmentContent(
+    type: String,
+    personName: String,
+    amountToman: Long,
+    currencyUnit: String,
+    isPersian: Boolean
+): SuccessSheetContent {
+    val amount = formatSuccessAmountFromToman(amountToman, currencyUnit, isPersian)
+    val isDebt = type == "DEBT"
+    return if (isPersian) {
+        SuccessSheetContent(
+            title = "اصلاح ثبت شد",
+            message = if (isDebt) "مبلغ $amount از پرداخت‌های ثبت‌شده برای «$personName» کسر شد."
+            else "مبلغ $amount از دریافتی‌های ثبت‌شده از «$personName» کسر شد.",
+            hint = "موجودی حساب و مانده‌ی این مورد به‌روز است."
+        )
+    } else {
+        SuccessSheetContent(
+            title = "Adjustment recorded",
+            message = if (isDebt) "$amount was deducted from the payments recorded for “$personName”."
+            else "$amount was deducted from the amounts recorded as received from “$personName”.",
+            hint = "Your account balance and the remaining amount are up to date."
+        )
     }
 }
 

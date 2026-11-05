@@ -5,7 +5,11 @@ import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
 import ir.hamedan.budgetmanagement.ui.components.WheelDatePickerDialog
 
 import androidx.compose.animation.core.Animatable
+import ir.hamedan.budgetmanagement.data.money.MoneyContract
 import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
+import ir.hamedan.budgetmanagement.ui.components.SuccessBottomSheet
+import ir.hamedan.budgetmanagement.ui.components.SuccessSheetContent
+import ir.hamedan.budgetmanagement.ui.components.formatSuccessAmountFromToman
 import ir.hamedan.budgetmanagement.ui.components.showError
 import ir.hamedan.budgetmanagement.ui.components.showInfo
 import androidx.compose.animation.core.LinearEasing
@@ -136,6 +140,8 @@ fun BudgetLimitScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var limitToEdit by remember { mutableStateOf<BudgetLimitUiModel?>(null) }
     var limitToDelete by remember { mutableStateOf<BudgetLimitUiModel?>(null) }
+    // محتوای شیت موفقیت؛ null یعنی شیت نمایش داده نمی‌شود
+    var successSheet by remember { mutableStateOf<SuccessSheetContent?>(null) }
 
     val limitsList = limitsListState ?: emptyList()
 
@@ -321,16 +327,37 @@ fun BudgetLimitScreen(
                 },
                 onCategoriesClick = onCategoriesClick,
                 onConfirm = { categoryName, maxLimit, startDate, endDate ->
+                    val editingLimitId = limitToEdit?.entity?.id
                     viewModel.saveBudgetLimit(
                         categoryName = categoryName,
                         maxLimit = maxLimit,
                         startDate = startDate,
                         endDate = endDate,
-                        limitId = limitToEdit?.entity?.id
+                        limitId = editingLimitId,
+                        onResult = { saved ->
+                            if (saved) {
+                                successSheet = budgetLimitSavedContent(
+                                    isEdit = editingLimitId != null,
+                                    categoryTitle = StringMapper.getCategoryName(categoryName, isPersian),
+                                    maxLimitToman = MoneyContract.fromInput(maxLimit),
+                                    currencyUnit = currencyUnit,
+                                    isPersian = isPersian
+                                )
+                            }
+                        }
                     )
                     showAddDialog = false
                     limitToEdit = null
                 }
+            )
+        }
+
+        // ------------------ شیت موفقیت (تمام‌صفحه) ------------------
+        successSheet?.let { content ->
+            SuccessBottomSheet(
+                content = content,
+                isPersian = isPersian,
+                onDismiss = { successSheet = null }
             )
         }
 
@@ -1046,6 +1073,47 @@ fun AddOrEditLimitDialog(
                     }
                 }
             }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// متن شیت موفقیت
+// ---------------------------------------------------------------------------
+
+private fun budgetLimitSavedContent(
+    isEdit: Boolean,
+    categoryTitle: String,
+    maxLimitToman: Long,
+    currencyUnit: String,
+    isPersian: Boolean
+): SuccessSheetContent {
+    val limit = formatSuccessAmountFromToman(maxLimitToman, currencyUnit, isPersian)
+    return if (isPersian) {
+        if (isEdit) {
+            SuccessSheetContent(
+                title = "محدودیت مالی به‌روزرسانی شد",
+                message = "تغییرات محدودیت دسته‌بندی «$categoryTitle» با سقف $limit با موفقیت ذخیره شد."
+            )
+        } else {
+            SuccessSheetContent(
+                title = "محدودیت مالی ثبت شد",
+                message = "سقف $limit برای دسته‌بندی «$categoryTitle» با موفقیت تعیین شد.",
+                hint = "پیشرفت خرج خود را در همین صفحه دنبال کنید."
+            )
+        }
+    } else {
+        if (isEdit) {
+            SuccessSheetContent(
+                title = "Budget limit updated",
+                message = "Your changes to the “$categoryTitle” limit (now $limit) were saved successfully."
+            )
+        } else {
+            SuccessSheetContent(
+                title = "Budget limit set",
+                message = "A limit of $limit was set for “$categoryTitle” successfully.",
+                hint = "Track your spending against it right on this page."
+            )
         }
     }
 }

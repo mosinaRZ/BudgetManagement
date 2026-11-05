@@ -230,7 +230,8 @@ class TransactionViewModel(
         }
     }
 
-    fun updateTransaction(transaction: TransactionEntity) {
+    /** [onResult] با `true` فقط بعد از ذخیره‌ی واقعی ویرایش صدا زده می‌شود (برای شیت موفقیت). */
+    fun updateTransaction(transaction: TransactionEntity, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch(errorHandler) {
             // انتقال تراکنش به دسته‌ی «قلک» ممنوع است؛ فقط تراکنش‌های خودِ قلک می‌توانند در آن بمانند.
             val target = categoryRepository.getAllCategories().first()
@@ -238,10 +239,14 @@ class TransactionViewModel(
             if (target != null && !CategoryRules.isUserSelectable(target)) {
                 val existing = transactionRepository.getAllTransactions().first()
                     .firstOrNull { it.id == transaction.id }
-                if (existing?.categoryId != transaction.categoryId) return@launch
+                if (existing?.categoryId != transaction.categoryId) {
+                    onResult(false)
+                    return@launch
+                }
             }
 
             transactionRepository.insertTransaction(transaction)
+            onResult(true)
             BalanceWidget().updateAll(context)
 
             NotificationHelper.send(

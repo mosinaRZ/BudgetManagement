@@ -4,6 +4,9 @@ import ir.hamedan.budgetmanagement.ui.components.CountUpText
 import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
 import androidx.compose.animation.core.Animatable
 import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
+import ir.hamedan.budgetmanagement.ui.components.SuccessBottomSheet
+import ir.hamedan.budgetmanagement.ui.components.SuccessSheetContent
+import ir.hamedan.budgetmanagement.ui.components.formatSuccessAmountFromToman
 import ir.hamedan.budgetmanagement.ui.components.showError
 import ir.hamedan.budgetmanagement.ui.components.showInfo
 import androidx.compose.animation.core.LinearEasing
@@ -141,6 +144,8 @@ fun SavingGoalsScreen(
     var goalToDelete by remember { mutableStateOf<SavingGoalEntity?>(null) }
     var goalForDeposit by remember { mutableStateOf<SavingGoalEntity?>(null) }
     var goalForWithdraw by remember { mutableStateOf<SavingGoalEntity?>(null) }
+    // محتوای شیت موفقیت؛ null یعنی شیت نمایش داده نمی‌شود
+    var successSheet by remember { mutableStateOf<SuccessSheetContent?>(null) }
 
     val goalsList = goalsListState ?: emptyList()
     val totalSaved = goalsList.sumOf { it.currentAmount }
@@ -413,17 +418,24 @@ fun SavingGoalsScreen(
                     goalToEdit = null
                 },
                 onConfirm = { title, targetAmount, monthlyAmount, icon ->
-                    if (goalToEdit != null) {
+                    val editingGoal = goalToEdit
+                    if (editingGoal != null) {
                         viewModel.updateGoal(
-                            goalToEdit!!.copy(
+                            editingGoal.copy(
                                 title = title,
                                 targetAmount = targetAmount,
                                 monthlyAmount = monthlyAmount,
                                 icon = icon
                             )
-                        )
+                        ) { saved ->
+                            if (saved) successSheet = goalUpdatedContent(title.trim(), isPersian)
+                        }
                     } else {
-                        viewModel.addGoal(title, targetAmount, monthlyAmount, icon)
+                        viewModel.addGoal(title, targetAmount, monthlyAmount, icon) { saved ->
+                            if (saved) {
+                                successSheet = goalCreatedContent(title.trim(), targetAmount, currencyUnit, isPersian)
+                            }
+                        }
                     }
                     showAddDialog = false
                     goalToEdit = null
@@ -441,7 +453,9 @@ fun SavingGoalsScreen(
                 initialAmount = goal.monthlyAmount,
                 onDismiss = { goalForDeposit = null },
                 onConfirm = { amount ->
-                    viewModel.deposit(goal.id, amount)
+                    viewModel.deposit(goal.id, amount) { saved ->
+                        if (saved) successSheet = goalDepositContent(goal.title, amount, currencyUnit, isPersian)
+                    }
                     goalForDeposit = null
                 }
             )
@@ -456,9 +470,20 @@ fun SavingGoalsScreen(
                 isDeposit = false,
                 onDismiss = { goalForWithdraw = null },
                 onConfirm = { amount ->
-                    viewModel.withdraw(goal.id, amount)
+                    viewModel.withdraw(goal.id, amount) { saved ->
+                        if (saved) successSheet = goalWithdrawContent(goal.title, amount, currencyUnit, isPersian)
+                    }
                     goalForWithdraw = null
                 }
+            )
+        }
+
+        // ------------------ شیت موفقیت (تمام‌صفحه) ------------------
+        successSheet?.let { content ->
+            SuccessBottomSheet(
+                content = content,
+                isPersian = isPersian,
+                onDismiss = { successSheet = null }
             )
         }
 
@@ -1269,5 +1294,88 @@ fun AmountActionDialog(
                 }
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// متن شیت‌های موفقیت
+// ---------------------------------------------------------------------------
+
+private fun goalCreatedContent(
+    title: String,
+    targetAmountToman: Long,
+    currencyUnit: String,
+    isPersian: Boolean
+): SuccessSheetContent {
+    val target = formatSuccessAmountFromToman(targetAmountToman, currencyUnit, isPersian)
+    return if (isPersian) {
+        SuccessSheetContent(
+            title = "قلک ساخته شد",
+            message = "قلک «$title» با هدف $target ساخته شد و آماده‌ی پس‌انداز است.",
+            hint = "از همین حالا می‌توانید به آن واریز کنید."
+        )
+    } else {
+        SuccessSheetContent(
+            title = "Savings goal created",
+            message = "“$title” was created with a target of $target and is ready for saving.",
+            hint = "You can start depositing right away."
+        )
+    }
+}
+
+private fun goalUpdatedContent(title: String, isPersian: Boolean): SuccessSheetContent =
+    if (isPersian) {
+        SuccessSheetContent(
+            title = "قلک به‌روزرسانی شد",
+            message = "تغییرات قلک «$title» با موفقیت ذخیره شد."
+        )
+    } else {
+        SuccessSheetContent(
+            title = "Savings goal updated",
+            message = "Your changes to “$title” were saved successfully."
+        )
+    }
+
+private fun goalDepositContent(
+    title: String,
+    amountToman: Long,
+    currencyUnit: String,
+    isPersian: Boolean
+): SuccessSheetContent {
+    val amount = formatSuccessAmountFromToman(amountToman, currencyUnit, isPersian)
+    return if (isPersian) {
+        SuccessSheetContent(
+            title = "واریز ثبت شد",
+            message = "مبلغ $amount با موفقیت به قلک «$title» واریز شد.",
+            hint = "موجودی حساب و قلک شما به‌روز است."
+        )
+    } else {
+        SuccessSheetContent(
+            title = "Deposit recorded",
+            message = "$amount was deposited into “$title” successfully.",
+            hint = "Your account and goal balances are up to date."
+        )
+    }
+}
+
+private fun goalWithdrawContent(
+    title: String,
+    amountToman: Long,
+    currencyUnit: String,
+    isPersian: Boolean
+): SuccessSheetContent {
+    val amount = formatSuccessAmountFromToman(amountToman, currencyUnit, isPersian)
+    return if (isPersian) {
+        SuccessSheetContent(
+            title = "برداشت ثبت شد",
+            message = "مبلغ $amount از قلک «$title» برداشت و به موجودی حساب شما اضافه شد.",
+            hint = "موجودی حساب و قلک شما به‌روز است."
+        )
+    } else {
+        SuccessSheetContent(
+            title = "Withdrawal recorded",
+            message = "$amount was withdrawn from “$title” and added back to your account balance.",
+            hint = "Your account and goal balances are up to date."
+        )
     }
 }

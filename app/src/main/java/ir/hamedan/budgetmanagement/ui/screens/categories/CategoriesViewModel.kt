@@ -69,11 +69,18 @@ class CategoriesViewModel(
         }
     }
 
-    fun addCategory(title: String, iconEmoji: String, isExpense: Boolean) {
+    /** [onResult] با `true` فقط بعد از ذخیره‌ی واقعی دسته‌بندی صدا زده می‌شود (برای شیت موفقیت). */
+    fun addCategory(
+        title: String,
+        iconEmoji: String,
+        isExpense: Boolean,
+        onResult: (Boolean) -> Unit = {}
+    ) {
         viewModelScope.launch(Dispatchers.IO + errorHandler) {
             val normalizedTitle = title.trim()
             if (categories.value.orEmpty().any { it.title.trim().equals(normalizedTitle, ignoreCase = true) }) {
                 _errorMessage.emit(if (LocaleHelper.getLanguage(context) == "fa") "این نام دسته‌بندی قبلاً استفاده شده است. نام دیگری انتخاب کنید." else "This category name is already in use. Choose another name.")
+                onResult(false)
                 return@launch
             }
             categoryRepository.insertCategory(
@@ -83,6 +90,7 @@ class CategoriesViewModel(
                     isExpense = isExpense
                 )
             )
+            onResult(true)
 
             val typeTextFa = if (isExpense) "هزینه" else "درآمد"
             val typeTextEn = if (isExpense) "expense" else "income"
@@ -100,14 +108,22 @@ class CategoriesViewModel(
         }
     }
 
-    fun updateCategory(category: CategoryEntity, newTitle: String, newEmoji: String) {
+    /** [onResult] مثل [addCategory]: `true` فقط بعد از ذخیره‌ی واقعی تغییرات. */
+    fun updateCategory(
+        category: CategoryEntity,
+        newTitle: String,
+        newEmoji: String,
+        onResult: (Boolean) -> Unit = {}
+    ) {
         viewModelScope.launch(Dispatchers.IO + errorHandler) {
             val normalizedTitle = newTitle.trim()
             if (categories.value.orEmpty().any { it.id != category.id && it.title.trim().equals(normalizedTitle, ignoreCase = true) }) {
                 _errorMessage.emit(if (LocaleHelper.getLanguage(context) == "fa") "این نام دسته‌بندی قبلاً استفاده شده است. نام دیگری انتخاب کنید." else "This category name is already in use. Choose another name.")
+                onResult(false)
                 return@launch
             }
             categoryRepository.updateCategory(category, normalizedTitle, newEmoji)
+            onResult(true)
 
             NotificationHelper.send(
                 context = context,

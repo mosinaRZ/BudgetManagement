@@ -79,8 +79,16 @@ private fun DrawScope.auroraBlob(
     }
 }
 
+/**
+ * @param intensity ضریب شدت نور شفق؛ ۱ یعنی همان ظاهر پیش‌فرض برنامه. مقدارهای بزرگ‌تر لکه‌های نور را پررنگ‌تر می‌کنند.
+ * @param drawBase اگر false باشد رنگ زمینه‌ی مات رسم نمی‌شود و فقط خود نورها روی هر چیزی که پشتشان است
+ *   (مثلاً یک سطح نیمه‌شفاف) کشیده می‌شوند.
+ */
 @Composable
-fun AuroraBackground() {
+fun AuroraBackground(
+    intensity: Float = 1f,
+    drawBase: Boolean = true
+) {
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondaryContainer
     val backgroundColor = MaterialTheme.colorScheme.background
@@ -98,27 +106,27 @@ fun AuroraBackground() {
         val w = size.width
         val h = size.height
 
-        drawRect(color = backgroundColor)
+        if (drawBase) drawRect(color = backgroundColor)
 
         // ۱) هاله‌ی اصلی (سبز نعنایی)
         auroraBlob(
             center = Offset(w * (0.40f + 0.16f * wave(t, 23.0)), h * (0.35f + 0.08f * waveCos(t, 17.0))),
             radius = w * 0.8f, color = primary,
-            alpha = 0.30f * (0.70f + 0.60f * breath(t, 9.0))
+            alpha = intensity * 0.30f * (0.70f + 0.60f * breath(t, 9.0))
         )
 
         // ۲) هاله‌ی دوم (مریم‌گلی)، خلاف جهت اولی
         auroraBlob(
             center = Offset(w * (0.60f + 0.18f * waveCos(t, 29.0, 0.2)), h * (0.50f + 0.10f * wave(t, 21.0, 0.4))),
             radius = w * 0.7f, color = secondary,
-            alpha = 0.24f * (0.65f + 0.70f * breath(t, 13.0, 0.33))
+            alpha = intensity * 0.24f * (0.65f + 0.70f * breath(t, 13.0, 0.33))
         )
 
         // ۳) پرده‌ی عمودی سبز-آبی (بالا)
         auroraBlob(
             center = Offset(w * (0.50f + 0.30f * wave(t, 31.0, 0.6)), h * (0.20f + 0.06f * waveCos(t, 19.0, 0.1))),
             radius = w * 0.55f, color = teal,
-            alpha = 0.26f * (0.35f + 0.95f * breath(t, 11.0, 0.7)),
+            alpha = intensity * 0.26f * (0.35f + 0.95f * breath(t, 11.0, 0.7)),
             scaleX = 0.55f, scaleY = 1.7f, tilt = 14f * wave(t, 27.0, 0.15)
         )
 
@@ -126,7 +134,7 @@ fun AuroraBackground() {
         auroraBlob(
             center = Offset(w * (0.18f + 0.14f * waveCos(t, 25.0, 0.3)), h * (0.30f + 0.10f * wave(t, 18.0, 0.55))),
             radius = w * 0.50f, color = mint,
-            alpha = 0.22f * (0.30f + 1.00f * breath(t, 8.0, 0.15)),
+            alpha = intensity * 0.22f * (0.30f + 1.00f * breath(t, 8.0, 0.15)),
             scaleX = 0.45f, scaleY = 1.9f, tilt = -18f * wave(t, 22.0, 0.45)
         )
 
@@ -134,7 +142,7 @@ fun AuroraBackground() {
         auroraBlob(
             center = Offset(w * (0.82f + 0.12f * wave(t, 27.0, 0.8)), h * (0.26f + 0.08f * waveCos(t, 16.0, 0.65))),
             radius = w * 0.48f, color = violet,
-            alpha = 0.16f * (0.25f + 1.05f * breath(t, 14.0, 0.5)),
+            alpha = intensity * 0.16f * (0.25f + 1.05f * breath(t, 14.0, 0.5)),
             scaleX = 0.50f, scaleY = 1.8f, tilt = 20f * waveCos(t, 24.0, 0.2)
         )
 
@@ -142,7 +150,7 @@ fun AuroraBackground() {
         auroraBlob(
             center = Offset(w * (0.55f + 0.30f * waveCos(t, 35.0, 0.1)), h * (0.58f + 0.10f * wave(t, 26.0, 0.9))),
             radius = w * 0.60f, color = teal,
-            alpha = 0.15f * (0.30f + 1.00f * breath(t, 12.0, 0.85)),
+            alpha = intensity * 0.15f * (0.30f + 1.00f * breath(t, 12.0, 0.85)),
             scaleX = 1.3f, scaleY = 0.7f, tilt = -10f * wave(t, 30.0, 0.35)
         )
 
@@ -150,7 +158,7 @@ fun AuroraBackground() {
         auroraBlob(
             center = Offset(w * (0.30f + 0.25f * wave(t, 20.0, 0.7)), h * (0.80f + 0.06f * waveCos(t, 15.0, 0.4))),
             radius = w * 0.55f, color = mint,
-            alpha = 0.12f * (0.20f + 1.10f * breath(t, 7.0, 0.6)),
+            alpha = intensity * 0.12f * (0.20f + 1.10f * breath(t, 7.0, 0.6)),
             scaleX = 1.2f, scaleY = 0.8f
         )
     }

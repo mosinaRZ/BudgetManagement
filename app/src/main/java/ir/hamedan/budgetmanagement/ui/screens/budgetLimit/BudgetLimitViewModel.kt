@@ -108,12 +108,14 @@ class BudgetLimitViewModel(
         initialValue = emptyList()
     )
 
+    /** [onResult] با `true` فقط بعد از ذخیره‌ی واقعی محدودیت صدا زده می‌شود (برای شیت موفقیت). */
     fun saveBudgetLimit(
         categoryName: String,
         maxLimit: Double,
         startDate: Long,
         endDate: Long,
-        limitId: String? = null
+        limitId: String? = null,
+        onResult: (Boolean) -> Unit = {}
     ) {
         viewModelScope.launch(errorHandler) {
             // برای ویرایش، رکورد قبلی باید با شناسه (id) پیدا شود، نه با نام دسته‌بندی؛
@@ -129,6 +131,7 @@ class BudgetLimitViewModel(
             val category = expenseCategories.value.firstOrNull { it.title == categoryName }
             if (category == null) {
                 _errorMessage.emit(if (LocaleHelper.getLanguage(context) == "fa") "دسته‌بندی انتخاب‌شده معتبر نیست." else "The selected category is not valid.")
+                onResult(false)
                 return@launch
             }
             val duplicate = budgetLimitsWithSpent.value.any { existing ->
@@ -138,6 +141,7 @@ class BudgetLimitViewModel(
             if (duplicate) {
                 val isPersian = LocaleHelper.getLanguage(context) == "fa"
                 _errorMessage.emit(if (isPersian) "برای این دسته‌بندی یک محدودیت با بازه هم‌پوشان از قبل وجود دارد." else "An overlapping budget limit already exists for this category.")
+                onResult(false)
                 return@launch
             }
             val limit = BudgetLimitEntity(
@@ -150,6 +154,7 @@ class BudgetLimitViewModel(
                 createdAt = existingLimit?.createdAt ?: System.currentTimeMillis()
             )
             budgetLimitRepository.saveLimit(limit)
+            onResult(true)
 
             NotificationHelper.send(
                 context = context,

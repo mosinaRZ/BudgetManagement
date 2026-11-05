@@ -66,10 +66,15 @@ class DebtCreditViewModel(
         }
     }
 
+    /**
+     * [onResult] با `true` فقط وقتی صدا زده می‌شود که مورد واقعاً ذخیره شده باشد (برای شیت موفقیت)،
+     * و با `false` وقتی ذخیره به‌خاطر خطای شناخته‌شده انجام نشده است.
+     */
     fun saveOrUpdate(
         id: String? = null, type: String, personName: String, totalAmount: Double,
         isMonthly: Boolean, monthlyAmount: Double, dueDay: Int, oneTimeDueDateMillis: Long,
-        note: String?, addToBalance: Boolean = true, forceDuplicateName: Boolean = false
+        note: String?, addToBalance: Boolean = true, forceDuplicateName: Boolean = false,
+        onResult: (Boolean) -> Unit = {}
     ) {
         viewModelScope.launch(ioDispatcher + errorHandler) {
             val isEdit = id != null
@@ -94,6 +99,7 @@ class DebtCreditViewModel(
                     if (isPersian) "یک بدهی/طلب با همین نام و اطلاعات از قبل ثبت شده است."
                     else "A debt/receivable with the same name and details already exists."
                 )
+                onResult(false)
                 return@launch
             }
             if (!isEdit && type == "CREDIT" && addToBalance) {
@@ -104,6 +110,7 @@ class DebtCreditViewModel(
                 ) {
                     val isPersian = LocaleHelper.getLanguage(context) == "fa"
                     _errorMessage.emit(if (isPersian) "موجودی کافی نیست! موجودی فعلی: ${currentBalance.toLong()}" else "Insufficient balance! Current balance: ${currentBalance.toLong()}")
+                    onResult(false)
                     return@launch
                 }
             }
@@ -122,6 +129,7 @@ class DebtCreditViewModel(
                 )
             }
                 .onSuccess { entity ->
+                    onResult(true)
                     NotificationHelper.send(
                         context,
                         NotificationType.DEBT_ADD,
@@ -134,13 +142,21 @@ class DebtCreditViewModel(
                     )
                     if (!isEdit && addToBalance) BalanceWidget().updateAll(context)
                 }
-                .onFailure { it.rethrowIfCancelled(); _errorMessage.emit(ErrorMessages.of(it, LocaleHelper.getLanguage(context) == "fa")) }
+                .onFailure {
+                    it.rethrowIfCancelled()
+                    _errorMessage.emit(ErrorMessages.of(it, LocaleHelper.getLanguage(context) == "fa"))
+                    onResult(false)
+                }
         }
     }
 
-    fun deposit(id: String, amount: Long) {
+    /** [onResult] `true` یعنی پرداخت/دریافت واقعاً ثبت شده است. */
+    fun deposit(id: String, amount: Long, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch(ioDispatcher + errorHandler) {
-            val item = debtCreditList.value.find { it.id == id } ?: return@launch
+            val item = debtCreditList.value.find { it.id == id } ?: run {
+                onResult(false)
+                return@launch
+            }
             val isPersian = LocaleHelper.getLanguage(context) == "fa"
             val remaining = (item.totalAmount - item.paidAmount).coerceAtLeast(0L)
             if (amount > remaining) {
@@ -153,21 +169,34 @@ class DebtCreditViewModel(
                         else "Received amount cannot exceed the remaining receivable."
                     }
                 )
+                onResult(false)
                 return@launch
             }
             if (item.type == "DEBT" && transactionRepository.getCurrentBalance() < amount) {
                 _errorMessage.emit(if (isPersian) "موجودی حساب برای پرداخت این بدهی کافی نیست." else "Insufficient balance for debt payment.")
+                onResult(false)
                 return@launch
             }
             runCatching { useCase.deposit(item, amount) }
-                .onSuccess { BalanceWidget().updateAll(context) }
-                .onFailure { it.rethrowIfCancelled(); _errorMessage.emit(ErrorMessages.of(it, LocaleHelper.getLanguage(context) == "fa")) }
+                .onSuccess {
+                    onResult(true)
+                    BalanceWidget().updateAll(context)
+                }
+                .onFailure {
+                    it.rethrowIfCancelled()
+                    _errorMessage.emit(ErrorMessages.of(it, LocaleHelper.getLanguage(context) == "fa"))
+                    onResult(false)
+                }
         }
     }
 
-    fun withdraw(id: String, amount: Long) {
+    /** [onResult] `true` یعنی اصلاح مبلغ واقعاً ثبت شده است. */
+    fun withdraw(id: String, amount: Long, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch(ioDispatcher + errorHandler) {
-            val item = debtCreditList.value.find { it.id == id } ?: return@launch
+            val item = debtCreditList.value.find { it.id == id } ?: run {
+                onResult(false)
+                return@launch
+            }
             val isPersian = LocaleHelper.getLanguage(context) == "fa"
             if (amount > item.paidAmount) {
                 _errorMessage.emit(
@@ -179,6 +208,7 @@ class DebtCreditViewModel(
                         else "Adjustment cannot exceed the amount already received for this receivable."
                     }
                 )
+                onResult(false)
                 return@launch
             }
             if (item.type == "CREDIT" && transactionRepository.getCurrentBalance() < amount) {
@@ -186,11 +216,19 @@ class DebtCreditViewModel(
                     if (isPersian) "موجودی حساب برای اصلاح و برگشت این مبلغ از طلب کافی نیست."
                     else "Insufficient balance to reverse this received receivable amount."
                 )
+                onResult(false)
                 return@launch
             }
             runCatching { useCase.withdraw(item, amount) }
-                .onSuccess { BalanceWidget().updateAll(context) }
-                .onFailure { it.rethrowIfCancelled(); _errorMessage.emit(ErrorMessages.of(it, LocaleHelper.getLanguage(context) == "fa")) }
+                .onSuccess {
+                    onResult(true)
+                    BalanceWidget().updateAll(context)
+                }
+                .onFailure {
+                    it.rethrowIfCancelled()
+                    _errorMessage.emit(ErrorMessages.of(it, LocaleHelper.getLanguage(context) == "fa"))
+                    onResult(false)
+                }
         }
     }
 

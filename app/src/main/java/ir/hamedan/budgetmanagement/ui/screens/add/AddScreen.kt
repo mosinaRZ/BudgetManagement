@@ -40,17 +40,15 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.airbnb.lottie.compose.LottieAnimation
-import com.airbnb.lottie.compose.LottieCompositionSpec
-import com.airbnb.lottie.compose.animateLottieCompositionAsState
-import com.airbnb.lottie.compose.rememberLottieComposition
 import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.SuccessBottomSheet
+import ir.hamedan.budgetmanagement.ui.components.SuccessSheetContent
 import ir.hamedan.budgetmanagement.ui.components.SwipeToConfirmButton
+import ir.hamedan.budgetmanagement.ui.components.formatSuccessAmount
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.utils.CategoryRules
 import ir.hamedan.budgetmanagement.utils.CategorySuggestionHelper
@@ -158,8 +156,8 @@ fun AddScreen(
     var amountError by remember { mutableStateOf(false) }
     var categoryError by remember { mutableStateOf(false) }
 
-    // وضعیت انیمیشن موفقیت
-    var showSuccessAnimation by remember { mutableStateOf(false) }
+    // محتوای شیت موفقیت؛ null یعنی شیت نمایش داده نمی‌شود
+    var successSheet by remember { mutableStateOf<SuccessSheetContent?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
@@ -181,6 +179,23 @@ fun AddScreen(
         if (suggested != null) {
             selectedCategoryKey = suggested
             categoryError = false
+        }
+    }
+
+    // بستن و پاک‌کردن فرم ثبت تراکنش؛ بعد از پوشانده شدن کامل فرم توسط شیت موفقیت صدا زده می‌شود.
+    // چند بار صدا زدنش بی‌خطر است.
+    fun closeAndResetTransactionForm() {
+        scope.launch {
+            // اگر فرم همین حالا بسته است نیازی به انیمیشن بستن نیست.
+            if (showTransactionBottomSheet) sheetState.hide()
+            showTransactionBottomSheet = false
+
+            transactionTitle = ""
+            transactionAmount = ""
+            selectedCategoryKey = ""
+            transactionNote = ""
+            isExpense = true
+            userManuallySelectedCategory = false
         }
     }
 
@@ -713,30 +728,27 @@ fun AddScreen(
                             val isFormValid = !titleError && !amountError && !categoryError
 
                             if (isFormValid) {
+                                // مقدارها همین حالا برداشته می‌شوند؛ تا آمدن نتیجه فرم ممکن است تغییر کند.
+                                val savedTitle = transactionTitle.trim()
+                                val savedDisplayAmount = parsedAmount.toLong()
+                                val savedIsExpense = isExpense
                                 viewModel.addTransaction(
-                                    title = transactionTitle.trim(),
+                                    title = savedTitle,
                                     amount = amount,
                                     categoryKey = selectedCategoryKey,
-                                    isExpense = isExpense,
+                                    isExpense = savedIsExpense,
                                     note = transactionNote.trim(),
                                     onResult = { saved ->
                                         // A failed save keeps the form (and the user's input) open and
-                                        // shows the error snackbar; the success animation is only for real saves.
+                                        // shows the error snackbar; the success sheet is only for real saves.
                                         if (saved) {
-                                            showSuccessAnimation = true
-                                            scope.launch {
-                                                delay(4000)
-                                                showSuccessAnimation = false
-                                                sheetState.hide()
-                                                showTransactionBottomSheet = false
-
-                                                transactionTitle = ""
-                                                transactionAmount = ""
-                                                selectedCategoryKey = ""
-                                                transactionNote = ""
-                                                isExpense = true
-                                                userManuallySelectedCategory = false
-                                            }
+                                            successSheet = transactionSavedContent(
+                                                title = savedTitle,
+                                                displayAmount = savedDisplayAmount,
+                                                isExpense = savedIsExpense,
+                                                currencyUnit = currencyUnit,
+                                                isPersian = isPersian
+                                            )
                                         }
                                     }
                                 )
@@ -748,50 +760,43 @@ fun AddScreen(
             }
         }
 
-        // ۵. اورلی انیمیشن موفقیت
-        if (showSuccessAnimation) {
-            Dialog(onDismissRequest = { }) {
-                val successShape = RoundedCornerShape(24.dp)
-                Box(
-                    modifier = Modifier
-                        .background(MaterialTheme.colorScheme.surface, successShape)
-                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), successShape)
-                        .padding(horizontal = 32.dp, vertical = 28.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        val composition by rememberLottieComposition(
-                            LottieCompositionSpec.RawRes(R.raw.success_anim)
-                        )
-                        val progress by animateLottieCompositionAsState(
-                            composition = composition,
-                            iterations = 1
-                        )
-                        LottieAnimation(
-                            composition = composition,
-                            progress = { progress },
-                            modifier = Modifier.size(130.dp)
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = if (isPersian) "انجام شد!" else "Done!",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = if (isPersian) "تراکنش با موفقیت ثبت شد" else "Transaction added successfully",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
+        // ۵. شیت موفقیت (تمام‌صفحه)
+        successSheet?.let { content ->
+            SuccessBottomSheet(
+                content = content,
+                isPersian = isPersian,
+                onDismiss = {
+                    successSheet = null
+                    // اگر کاربر پیش از باز شدن کامل شیت آن را بست، فرم نباید با اطلاعات قبلی باز بماند.
+                    closeAndResetTransactionForm()
+                },
+                onFullyShown = { closeAndResetTransactionForm() }
+            )
         }
+    }
+}
+
+/** متن شیت موفقیتِ ثبت تراکنش. */
+private fun transactionSavedContent(
+    title: String,
+    displayAmount: Long,
+    isExpense: Boolean,
+    currencyUnit: String,
+    isPersian: Boolean
+): SuccessSheetContent {
+    val amountText = formatSuccessAmount(displayAmount, currencyUnit, isPersian)
+    return if (isPersian) {
+        SuccessSheetContent(
+            title = "تراکنش ثبت شد",
+            message = "${if (isExpense) "هزینه" else "درآمد"} «$title» به مبلغ $amountText با موفقیت ثبت شد.",
+            hint = "موجودی و گزارش‌های شما به‌روز است."
+        )
+    } else {
+        SuccessSheetContent(
+            title = "Transaction recorded",
+            message = "Your ${if (isExpense) "expense" else "income"} “$title” of $amountText was recorded successfully.",
+            hint = "Your balance and reports are up to date."
+        )
     }
 }
 

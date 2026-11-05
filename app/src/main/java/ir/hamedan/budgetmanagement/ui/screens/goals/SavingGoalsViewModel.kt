@@ -46,7 +46,17 @@ class SavingGoalsViewModel(
     private val errorHandler = viewModelErrorHandler(context, "SavingGoalsVM") { _depositError.tryEmit(it) }
 
 
-    fun addGoal(title: String, targetAmount: Long, monthlyAmount: Long, icon: String) {
+    /**
+     * [onResult] با `true` فقط وقتی صدا زده می‌شود که قلک واقعاً ساخته شده باشد (برای نمایش شیت موفقیت)،
+     * و با `false` وقتی ساخت به‌خاطر خطای شناخته‌شده انجام نشده است. روی ترد IO صدا زده می‌شود.
+     */
+    fun addGoal(
+        title: String,
+        targetAmount: Long,
+        monthlyAmount: Long,
+        icon: String,
+        onResult: (Boolean) -> Unit = {}
+    ) {
         viewModelScope.launch(Dispatchers.IO + errorHandler) {
             val normalizedTitle = title.trim()
             val duplicate = savingGoals.value.orEmpty().any { existing ->
@@ -59,17 +69,23 @@ class SavingGoalsViewModel(
                     else
                         "A saving goal with the same name already exists."
                 )
+                onResult(false)
                 return@launch
             }
             runCatching { useCase.create(normalizedTitle, targetAmount, monthlyAmount, icon) }
                 .onSuccess {
+                    onResult(true)
                     NotificationHelper.send(context, NotificationType.GOAL_ADD, "GOALS", "هدف پس‌انداز جدید", "New Saving Goal", "هدف «$title» با موفقیت ایجاد شد.", "Saving goal '$title' was created successfully.")
                 }
-                .onFailure { _depositError.emit((it as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(LocaleHelper.getLanguage(context) == "fa") ?: it.message.orEmpty()) }
+                .onFailure {
+                    _depositError.emit((it as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(LocaleHelper.getLanguage(context) == "fa") ?: it.message.orEmpty())
+                    onResult(false)
+                }
         }
     }
 
-    fun updateGoal(goal: SavingGoalEntity) {
+    /** [onResult] مثل [addGoal]: `true` فقط بعد از ذخیره‌ی واقعی تغییرات. */
+    fun updateGoal(goal: SavingGoalEntity, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch(Dispatchers.IO + errorHandler) {
             val normalized = goal.copy(title = goal.title.trim())
             val duplicate = savingGoals.value.orEmpty().any { existing ->
@@ -83,22 +99,29 @@ class SavingGoalsViewModel(
                     else
                         "A saving goal with the same name already exists."
                 )
+                onResult(false)
                 return@launch
             }
             runCatching { useCase.update(normalized) }
                 .onSuccess {
+                    onResult(true)
                     NotificationHelper.send(context, NotificationType.GOAL_UPDATE, "GOALS", "ویرایش هدف پس‌انداز", "Saving Goal Updated", "اطلاعات هدف «${goal.title}» به‌روزرسانی شد.", "Goal '${goal.title}' details were updated.")
                 }
-                .onFailure { _depositError.emit((it as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(LocaleHelper.getLanguage(context) == "fa") ?: it.message.orEmpty()) }
+                .onFailure {
+                    _depositError.emit((it as? ir.hamedan.budgetmanagement.data.network.ApiException)?.userMessage(LocaleHelper.getLanguage(context) == "fa") ?: it.message.orEmpty())
+                    onResult(false)
+                }
         }
     }
 
-    fun deposit(goalId: String, amount: Long) {
+    /** [onResult] `true` یعنی واریز و تراکنش مربوط به آن واقعاً ثبت شده است. */
+    fun deposit(goalId: String, amount: Long, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch(Dispatchers.IO + errorHandler) {
             if (amount <= 0) {
                 val isPersian = LocaleHelper.getLanguage(context) == "fa"
                 val msg = if (isPersian) "مبلغ واریز باید بیشتر از صفر باشد" else "Deposit amount must be greater than zero"
                 _depositError.emit(msg)
+                onResult(false)
                 return@launch
             }
 
@@ -106,6 +129,7 @@ class SavingGoalsViewModel(
             val goalTitle = currentGoal?.title ?: ""
             if (currentGoal == null) {
                 _depositError.emit(if (LocaleHelper.getLanguage(context) == "fa") "قلک پیدا نشد." else "Saving goal not found.")
+                onResult(false)
                 return@launch
             }
 
@@ -116,6 +140,7 @@ class SavingGoalsViewModel(
                     if (isPersian) "موجودی حساب برای این واریز کافی نیست."
                     else "Your account balance is not sufficient for this deposit."
                 )
+                onResult(false)
                 return@launch
             }
 
@@ -123,6 +148,7 @@ class SavingGoalsViewModel(
                 .firstOrNull { it.title == "SAVING_GOAL" }
                 ?: run {
                     _depositError.emit(if (LocaleHelper.getLanguage(context) == "fa") "دسته‌بندی سیستمی قلک پیدا نشد." else "Saving goal system category is missing.")
+                    onResult(false)
                     return@launch
                 }
 
@@ -136,6 +162,8 @@ class SavingGoalsViewModel(
                     note = if (LocaleHelper.getLanguage(context) == "fa") "واریز دستی به قلک" else "Manual saving goal deposit"
                 )
             )
+            // واریز و تراکنشش ذخیره شده‌اند؛ مشکل ویجت یا نوتیفیکیشن نباید موفقیت را خراب کند.
+            onResult(true)
             BalanceWidget().updateAll(context)
 
             NotificationHelper.send(
@@ -176,22 +204,29 @@ class SavingGoalsViewModel(
         }
     }
 
-    fun withdraw(goalId: String, amount: Long) {
+    /** [onResult] `true` یعنی برداشت و تراکنش مربوط به آن واقعاً ثبت شده است. */
+    fun withdraw(goalId: String, amount: Long, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch(Dispatchers.IO + errorHandler) {
-            if (amount <= 0) return@launch
+            if (amount <= 0) {
+                onResult(false)
+                return@launch
+            }
             val currentGoal = savingGoals.value?.find { it.id == goalId }
             if (currentGoal == null) {
                 _depositError.emit(if (LocaleHelper.getLanguage(context) == "fa") "قلک پیدا نشد." else "Saving goal not found.")
+                onResult(false)
                 return@launch
             }
             if (amount > currentGoal.currentAmount) {
                 _depositError.emit(if (LocaleHelper.getLanguage(context) == "fa") "مبلغ برداشت نمی‌تواند بیشتر از موجودی قلک باشد." else "Withdrawal cannot exceed the goal balance.")
+                onResult(false)
                 return@launch
             }
             val savingGoalCategory = categoryRepository.getAllCategories().first()
                 .firstOrNull { it.title == "SAVING_GOAL" }
                 ?: run {
                     _depositError.emit(if (LocaleHelper.getLanguage(context) == "fa") "دسته‌بندی سیستمی قلک پیدا نشد." else "Saving goal system category is missing.")
+                    onResult(false)
                     return@launch
                 }
 
@@ -206,6 +241,7 @@ class SavingGoalsViewModel(
                     note = if (LocaleHelper.getLanguage(context) == "fa") "برداشت دستی از قلک" else "Manual saving goal withdrawal"
                 )
             )
+            onResult(true)
             BalanceWidget().updateAll(context)
 
             NotificationHelper.send(

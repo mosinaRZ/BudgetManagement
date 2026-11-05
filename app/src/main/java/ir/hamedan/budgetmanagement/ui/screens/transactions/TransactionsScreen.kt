@@ -53,16 +53,15 @@ import ir.hamedan.budgetmanagement.ui.components.BottomBarHeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.airbnb.lottie.compose.LottieAnimation
-import com.airbnb.lottie.compose.LottieCompositionSpec
-import com.airbnb.lottie.compose.animateLottieCompositionAsState
-import com.airbnb.lottie.compose.rememberLottieComposition
 import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.appSkeletonShimmer
+import ir.hamedan.budgetmanagement.ui.components.SuccessBottomSheet
+import ir.hamedan.budgetmanagement.ui.components.SuccessSheetContent
 import ir.hamedan.budgetmanagement.ui.components.SwipeToConfirmButton
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
+import ir.hamedan.budgetmanagement.ui.components.formatSuccessAmountFromToman
 import ir.hamedan.budgetmanagement.ui.screens.add.ThousandsSeparatorTransformation
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
 import ir.hamedan.budgetmanagement.utils.DateUtils
@@ -70,7 +69,6 @@ import ir.hamedan.budgetmanagement.utils.CategoryRules
 import ir.hamedan.budgetmanagement.utils.CategorySuggestionHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
 import ir.hamedan.budgetmanagement.utils.SystemTransactionText
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -121,6 +119,8 @@ fun TransactionsScreen(
     var showFilterSheet by remember { mutableStateOf(false) }
     var transactionToDelete by remember { mutableStateOf<TransactionEntity?>(null) }
     var transactionToEdit by remember { mutableStateOf<TransactionEntity?>(null) }
+    // محتوای شیت موفقیت؛ null یعنی شیت نمایش داده نمی‌شود
+    var successSheet by remember { mutableStateOf<SuccessSheetContent?>(null) }
     var transactionToShare by remember { mutableStateOf<TransactionEntity?>(null) }
 
     val numberFormatter = remember(isPersian) {
@@ -540,9 +540,27 @@ fun TransactionsScreen(
                 viewModel = viewModel,
                 onDismiss = { transactionToEdit = null },
                 onConfirm = { updatedTx ->
-                    viewModel.updateTransaction(updatedTx)
+                    viewModel.updateTransaction(updatedTx) { saved ->
+                        if (saved) {
+                            successSheet = transactionUpdatedContent(
+                                title = updatedTx.title,
+                                amountToman = updatedTx.amount,
+                                currencyUnit = currencyUnit,
+                                isPersian = isPersian
+                            )
+                        }
+                    }
                     transactionToEdit = null
                 }
+            )
+        }
+
+        // شیت موفقیت (تمام‌صفحه)
+        successSheet?.let { content ->
+            SuccessBottomSheet(
+                content = content,
+                isPersian = isPersian,
+                onDismiss = { successSheet = null }
             )
         }
 
@@ -1056,7 +1074,6 @@ private fun EditTransactionBottomSheet(
     onDismiss: () -> Unit,
     onConfirm: (TransactionEntity) -> Unit
 ) {
-    val scope = rememberCoroutineScope()
 
     var title by remember { mutableStateOf(SystemTransactionText.localizeTitle(transaction.title, isPersian)) }
 
@@ -1080,7 +1097,6 @@ private fun EditTransactionBottomSheet(
     var categoryError by remember { mutableStateOf(false) }
 
     var isCategoryDropdownExpanded by remember { mutableStateOf(false) }
-    var showSuccessAnimation by remember { mutableStateOf(false) }
 
     val expenseCategories by viewModel.expenseCategories.collectAsState()
     val incomeCategories by viewModel.incomeCategories.collectAsState()
@@ -1436,59 +1452,11 @@ private fun EditTransactionBottomSheet(
                             note = note.trim()
                         )
 
-                        showSuccessAnimation = true
-                        scope.launch {
-                            delay(4000) // زمان نمایش دیالوگ موفقیت
-                            showSuccessAnimation = false
-                            onConfirm(updatedTransaction)
-                        }
+                        onConfirm(updatedTransaction)
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
             )
-        }
-    }
-
-    // اورلی انیمیشن موفقیت
-    if (showSuccessAnimation) {
-        Dialog(onDismissRequest = { }) {
-            val successShape = RoundedCornerShape(24.dp)
-            Box(
-                modifier = Modifier
-                    .background(MaterialTheme.colorScheme.surface, successShape)
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), successShape)
-                    .padding(horizontal = 32.dp, vertical = 28.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    val composition by rememberLottieComposition(
-                        LottieCompositionSpec.RawRes(R.raw.success_anim)
-                    )
-                    val progress by animateLottieCompositionAsState(
-                        composition = composition,
-                        iterations = 1
-                    )
-                    LottieAnimation(
-                        composition = composition,
-                        progress = { progress },
-                        modifier = Modifier.size(130.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = if (isPersian) "انجام شد!" else "Done!",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = if (isPersian) "تغییرات با موفقیت ذخیره شد" else "Changes saved successfully",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
         }
     }
 }
@@ -1955,5 +1923,28 @@ private fun toPersianDigits(value: String): String {
             val index = latin.indexOf(char)
             append(if (index >= 0) persian[index] else char)
         }
+    }
+}
+
+/** متن شیت موفقیتِ ویرایش تراکنش. */
+private fun transactionUpdatedContent(
+    title: String,
+    amountToman: Long,
+    currencyUnit: String,
+    isPersian: Boolean
+): SuccessSheetContent {
+    val amount = formatSuccessAmountFromToman(amountToman, currencyUnit, isPersian)
+    return if (isPersian) {
+        SuccessSheetContent(
+            title = "تغییرات ذخیره شد",
+            message = "تراکنش «$title» با مبلغ $amount با موفقیت به‌روزرسانی شد.",
+            hint = "موجودی و گزارش‌های شما به‌روز است."
+        )
+    } else {
+        SuccessSheetContent(
+            title = "Changes saved",
+            message = "Your transaction “$title” of $amount was updated successfully.",
+            hint = "Your balance and reports are up to date."
+        )
     }
 }

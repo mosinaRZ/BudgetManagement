@@ -54,6 +54,8 @@ import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AppLogoIcon
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.StatusBarAuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.SuccessBottomSheet
+import ir.hamedan.budgetmanagement.ui.components.SuccessSheetContent
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
@@ -91,6 +93,9 @@ fun CategoriesScreen(
     var categoryToEdit by remember { mutableStateOf<CategoryEntity?>(null) }
     var categoryToDelete by remember { mutableStateOf<CategoryEntity?>(null) }
     var categoryDialogError by remember { mutableStateOf<String?>(null) }
+
+    // محتوای شیت موفقیت؛ null یعنی شیت نمایش داده نمی‌شود
+    var successSheet by remember { mutableStateOf<SuccessSheetContent?>(null) }
 
     val hiddenCategories by categoryViewModel.hiddenCategories.collectAsState()
 
@@ -369,18 +374,33 @@ fun CategoriesScreen(
                     } else {
                         categoryDialogError = null
 
-                        if (categoryToEdit != null) {
+                        val editingCategory = categoryToEdit
+                        if (editingCategory != null) {
                             categoryViewModel.updateCategory(
-                                categoryToEdit!!,
+                                editingCategory,
                                 normalizedTitle,
                                 emoji
-                            )
+                            ) { saved ->
+                                if (saved) {
+                                    successSheet = categoryUpdatedContent(normalizedTitle, emoji, isPersian)
+                                }
+                            }
                         } else {
+                            val addedAsExpense = isExpenseTab
                             categoryViewModel.addCategory(
                                 normalizedTitle,
                                 emoji,
-                                isExpenseTab
-                            )
+                                addedAsExpense
+                            ) { saved ->
+                                if (saved) {
+                                    successSheet = categoryAddedContent(
+                                        title = normalizedTitle,
+                                        emoji = emoji,
+                                        isExpense = addedAsExpense,
+                                        isPersian = isPersian
+                                    )
+                                }
+                            }
                         }
 
                         showAddDialog = false
@@ -388,6 +408,15 @@ fun CategoriesScreen(
                         categoryDialogError = null
                     }
                 }
+            )
+        }
+
+        // ------------------ شیت موفقیت (تمام‌صفحه) ------------------
+        successSheet?.let { content ->
+            SuccessBottomSheet(
+                content = content,
+                isPersian = isPersian,
+                onDismiss = { successSheet = null }
             )
         }
 
@@ -906,3 +935,40 @@ fun AddOrEditCategoryDialog(
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// متن شیت‌های موفقیت
+// ---------------------------------------------------------------------------
+
+private fun categoryAddedContent(
+    title: String,
+    emoji: String,
+    isExpense: Boolean,
+    isPersian: Boolean
+): SuccessSheetContent =
+    if (isPersian) {
+        SuccessSheetContent(
+            title = "دسته‌بندی اضافه شد",
+            message = "دسته‌بندی «$emoji $title» به‌عنوان ${if (isExpense) "هزینه" else "درآمد"} با موفقیت اضافه شد.",
+            hint = "از همین حالا هنگام ثبت تراکنش می‌توانید آن را انتخاب کنید."
+        )
+    } else {
+        SuccessSheetContent(
+            title = "Category added",
+            message = "The ${if (isExpense) "expense" else "income"} category “$emoji $title” was added successfully.",
+            hint = "You can pick it right away when recording a transaction."
+        )
+    }
+
+private fun categoryUpdatedContent(title: String, emoji: String, isPersian: Boolean): SuccessSheetContent =
+    if (isPersian) {
+        SuccessSheetContent(
+            title = "دسته‌بندی به‌روزرسانی شد",
+            message = "تغییرات دسته‌بندی «$emoji $title» با موفقیت ذخیره شد."
+        )
+    } else {
+        SuccessSheetContent(
+            title = "Category updated",
+            message = "Your changes to “$emoji $title” were saved successfully."
+        )
+    }
