@@ -38,6 +38,12 @@ sealed interface AppRoute {
         val highlightId: String? = null
     ) : AppRoute
 
+    /** جریان تمام‌صفحه‌ی مرحله‌به‌مرحله‌ی ثبت تراکنش (مبلغ ← دسته‌بندی ← مرور). */
+    @Serializable
+    data class AddTransaction(
+        val isExpense: Boolean = true
+    ) : AppRoute
+
     @Serializable
     data object Categories : AppRoute
 

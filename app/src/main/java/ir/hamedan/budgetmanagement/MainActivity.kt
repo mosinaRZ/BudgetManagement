@@ -71,6 +71,7 @@ import ir.hamedan.budgetmanagement.ui.navigation.MainTabRoute
 import ir.hamedan.budgetmanagement.ui.screens.admin.AdminRootScreen
 import ir.hamedan.budgetmanagement.ui.screens.profile.ProfileScreen
 import ir.hamedan.budgetmanagement.ui.screens.add.AddScreen
+import ir.hamedan.budgetmanagement.ui.screens.add.AddTransactionScreen
 import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsScreen
 import ir.hamedan.budgetmanagement.ui.screens.home.HomeScreen
 import ir.hamedan.budgetmanagement.ui.screens.auth.LoginScreen
@@ -407,9 +408,11 @@ class MainActivity : FragmentActivity() {
                 route.isNotBlank() &&
                 !route.contains("Login") &&
                 !route.contains("Splash") &&
-                !route.contains("AddScreen")
+                !route.contains("AddScreen") &&
+                !route.contains("AddTransaction")
             ) {
-                navController.navigate(AppRoute.AddScreen())
+                // میانبر «ثبت تراکنش» مستقیم به جریان ثبت می‌رود، نه هاب.
+                navController.navigate(AppRoute.AddTransaction())
                 onShortcutConsumed()
             }
         }
@@ -704,7 +707,28 @@ class MainActivity : FragmentActivity() {
                     },
                     onDebtClick = {
                         navController.navigate(AppRoute.Debt)
+                    },
+                    onAddTransactionClick = { isExpense ->
+                        navController.navigate(AppRoute.AddTransaction(isExpense = isExpense))
                     }
+                )
+            }
+
+            // جریان تمام‌صفحه‌ی ثبت تراکنش (مبلغ ← دسته‌بندی ← مرور)
+            composable<AppRoute.AddTransaction> { backStackEntry ->
+                val route = backStackEntry.toRoute<AppRoute.AddTransaction>()
+
+                AddTransactionScreen(
+                    initialIsExpense = route.isExpense,
+                    onClose = { navController.popBackStack() },
+                    onFinished = {
+                        // بعد از ثبت موفق، مثل دکمه‌ی بازگشتِ هاب به صفحه‌ی اصلی برمی‌گردیم.
+                        navController.navigate(AppRoute.MainStructure) {
+                            popUpTo(AppRoute.MainStructure) { inclusive = false }
+                            launchSingleTop = true
+                        }
+                    },
+                    onManageCategories = { navController.navigate(AppRoute.Categories) }
                 )
             }
 

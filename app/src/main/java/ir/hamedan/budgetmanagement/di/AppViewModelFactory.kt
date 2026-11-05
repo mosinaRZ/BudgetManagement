@@ -56,7 +56,8 @@ class AppViewModelFactory(
                 AddViewModel(
                     transactionRepository = container.transactionRepository,
                     categoryRepository = container.categoryRepository,
-                    context = appContext
+                    context = appContext,
+                    budgetLimitRepository = container.budgetLimitRepository
                 ) as T
             }
             modelClass.isAssignableFrom(CategoriesViewModel::class.java) -> {

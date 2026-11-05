@@ -15,6 +15,7 @@ import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.money.MoneyContract
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
+import ir.hamedan.budgetmanagement.data.repository.BudgetLimitRepository
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.ui.components.BalanceWidget
@@ -22,16 +23,53 @@ import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import kotlinx.coroutines.flow.SharingStarted
 import ir.hamedan.budgetmanagement.utils.CategoryRules
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+/**
+ * بازخورد هوشمند بعد از یک ثبت موفق، برای شیت موفقیت.
+ *
+ * @property budgetPercent درصد مصرف سقف فعالِ همین دسته (فقط برای هزینه)؛ null اگر سقفی نباشد
+ * @property streakDays تعداد روزهای پشت‌سرهمی که کاربر تراکنش ثبت کرده (امروز هم حساب می‌شود)
+ */
+data class SaveInsight(
+    val budgetPercent: Int? = null,
+    val streakDays: Int = 0
+)
+
 class AddViewModel(
     private val transactionRepository: TransactionRepository,
     private val categoryRepository: CategoryRepository,
-    private val context: Context
+    private val context: Context,
+    // اختیاری تا سازنده‌ی قبلی (و تست‌ها) سالم بماند؛ بدون آن، فقط درصد بودجه نمایش داده نمی‌شود.
+    private val budgetLimitRepository: BudgetLimitRepository? = null
 ) : ViewModel() {
+
+    /**
+     * تعداد تراکنش‌های ۹۰ روز اخیر به تفکیک شناسه‌ی دسته؛ برای مرتب‌سازی دسته‌ها بر اساس
+     * پرکاربردی خودِ کاربر.
+     */
+    val categoryUsage: StateFlow<Map<String, Int>> = transactionRepository.getAllTransactions()
+        .map { list ->
+            val since = System.currentTimeMillis() - 90L * 24 * 60 * 60 * 1000
+            list.asSequence()
+                .filter { it.timestamp >= since }
+                .groupingBy { it.categoryId }
+                .eachCount()
+        }
+        .catch { emit(emptyMap()) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap()
+        )
 
     val categories: StateFlow<List<CategoryEntity>> = categoryRepository.getAllCategories()
         .stateIn(
@@ -58,6 +96,8 @@ class AddViewModel(
         categoryKey: String,
         isExpense: Boolean,
         note: String = "",
+        timestamp: Long = System.currentTimeMillis(),
+        onSaved: (SaveInsight) -> Unit = {},
         onResult: (Boolean) -> Unit = {}
     ) {
         viewModelScope.launch(errorHandler) {
@@ -84,6 +124,7 @@ class AddViewModel(
                 amount = MoneyContract.fromInput(amount),
                 categoryId = category.id,
                 type = if (isExpense) "EXPENSE" else "INCOME",
+                timestamp = timestamp,
                 note = note
             )
             try {
@@ -111,7 +152,48 @@ class AddViewModel(
                     tag = "TRANSACTION_ADDED_${newTransaction.id}"
                 )
             }.onFailure { it.rethrowIfCancelled() }
+
+            // بازخورد هوشمند فقط تزئینی است؛ هر خطایی در آن ثبتِ موفق را ناموفق نمی‌کند.
+            val insight = runCatching { buildInsight(category, isExpense) }
+                .onFailure { it.rethrowIfCancelled() }
+                .getOrDefault(SaveInsight())
+            onSaved(insight)
             onResult(true)
         }
+    }
+
+    private suspend fun buildInsight(category: CategoryEntity, isExpense: Boolean): SaveInsight =
+        SaveInsight(
+            budgetPercent = if (isExpense) budgetPercentFor(category.id) else null,
+            streakDays = streakDays()
+        )
+
+    /** درصد مصرف سقف فعالِ این دسته در بازه‌ی جاری؛ null اگر سقف فعالی نباشد. */
+    private suspend fun budgetPercentFor(categoryId: String): Int? {
+        val repo = budgetLimitRepository ?: return null
+        val now = System.currentTimeMillis()
+        val limit = repo.getAllLimits().first().firstOrNull {
+            it.isActive && it.categoryId == categoryId && now in it.startDate..it.endDate
+        } ?: return null
+        if (limit.maxLimit <= 0L) return null
+        val spent = transactionRepository.getTransactionsBetween(limit.startDate, limit.endDate)
+            .filter { it.type == "EXPENSE" && it.categoryId == categoryId }
+            .sumOf { it.amount }
+        return (spent * 100.0 / limit.maxLimit).toInt()
+    }
+
+    /** روزهای پشت‌سرهم با حداقل یک ثبت (بر اساس زمان ثبت، نه تاریخ تراکنش). */
+    private suspend fun streakDays(): Int {
+        val zone = ZoneId.systemDefault()
+        val days = transactionRepository.getAllTransactions().first()
+            .map { Instant.ofEpochMilli(it.createdAt).atZone(zone).toLocalDate() }
+            .toSet()
+        var day = LocalDate.now(zone)
+        var count = 0
+        while (day in days) {
+            count++
+            day = day.minusDays(1)
+        }
+        return count
     }
 }

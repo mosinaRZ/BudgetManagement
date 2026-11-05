@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -63,6 +64,9 @@ fun SwipeToConfirmButton(
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
     height: Dp = 54.dp,
+    enabled: Boolean = true,
+    accentColor: Color? = null,
+    onBlockedAttempt: () -> Unit = {},
 ) {
     val layoutDirection = if (isPersian) LayoutDirection.Ltr else LocalLayoutDirection.current
 
@@ -74,6 +78,9 @@ fun SwipeToConfirmButton(
             onConfirm = onConfirm,
             modifier = modifier,
             height = height,
+            enabled = enabled,
+            accentColor = accentColor,
+            onBlockedAttempt = onBlockedAttempt,
         )
     }
 }
@@ -86,6 +93,9 @@ private fun SwipeToConfirmButtonContent(
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
     height: Dp = 54.dp,
+    enabled: Boolean = true,
+    accentColor: Color? = null,
+    onBlockedAttempt: () -> Unit = {},
 ) {
     val density = LocalDensity.current
     val handleSize = 46.dp
@@ -96,9 +106,9 @@ private fun SwipeToConfirmButtonContent(
 
     val scheme = MaterialTheme.colorScheme
     val trackColor = scheme.surface
-    val progressColor = scheme.primary.copy(alpha = 0.28f)
-    val handleColor = scheme.secondaryContainer
-    val handleIconColor = scheme.onSecondaryContainer
+    val progressColor = (accentColor ?: scheme.primary).copy(alpha = 0.28f)
+    val handleColor = accentColor ?: scheme.secondaryContainer
+    val handleIconColor = if (accentColor != null) scheme.surface else scheme.onSecondaryContainer
     val hintColor = scheme.onSurfaceVariant
 
     val scope = rememberCoroutineScope()
@@ -161,6 +171,7 @@ private fun SwipeToConfirmButtonContent(
             .fillMaxWidth()
             .height(height)
             .onGloballyPositioned { trackWidthPx = it.size.width.toFloat() }
+            .graphicsLayer { alpha = if (enabled) 1f else 0.45f }
             .clip(RoundedCornerShape(16.dp))
             .background(trackColor)
     ) {
@@ -200,9 +211,14 @@ private fun SwipeToConfirmButtonContent(
                 .size(handleSize)
                 .clip(RoundedCornerShape(14.dp))
                 .background(handleColor)
-                .pointerInput(maxOffset) {
+                .pointerInput(maxOffset, enabled) {
                     detectHorizontalDragGestures(
                         onDragStart = {
+                            if (!enabled) {
+                                haptics.performHapticFeedback(HapticFeedbackType.Reject)
+                                onBlockedAttempt()
+                                return@detectHorizontalDragGestures
+                            }
                             isDragging = true
                             lastHapticOffset = offsetX.value
                             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -234,6 +250,7 @@ private fun SwipeToConfirmButtonContent(
                         },
                         onHorizontalDrag = { change, dragAmount ->
                             change.consume()
+                            if (!enabled) return@detectHorizontalDragGestures
                             val newValue = (offsetX.value + dragAmount).coerceIn(0f, maxOffset)
                             scope.launch { offsetX.snapTo(newValue) }
 
