@@ -180,7 +180,7 @@ fun AnalyticsScreen(
                     currencyUnit = currencyUnit
                 )
 
-                Spacer(modifier = Modifier.navigationBarsPadding().height(80.dp))
+                Spacer(modifier = Modifier.navigationBarsPadding().height(88.dp))
             }
 
             AnalyticsInteractionHint(
