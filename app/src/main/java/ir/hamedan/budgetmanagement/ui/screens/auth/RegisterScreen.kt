@@ -5,18 +5,28 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
 import android.os.PersistableBundle
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -83,6 +93,7 @@ import kotlinx.coroutines.launch
 private const val OTP_RESEND_SECONDS = 60L
 private const val REGISTRATION_STEPS = 4
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RegisterScreen(
     onRegistered: () -> Unit,
@@ -127,6 +138,12 @@ fun RegisterScreen(
 
     val normalizedPhone = AuthInputNormalizer.phone(phone)
     val phoneCooldown = cooldown(phoneSentAt)
+
+    // SMS User Consent API: starts listening each time a code is requested (phoneSentAt changes).
+    SmsUserConsentEffect(listenKey = phoneSentAt.takeIf { it > 0L }) { received ->
+        phoneCode = received
+        error = null
+    }
     val passwordValid = password.isNotEmpty() &&
             PasswordPolicy.validate(password, isPersian) == null &&
             password == confirmPassword
@@ -225,208 +242,213 @@ fun RegisterScreen(
     }
 
     AuthScreenContainer {
-        AuthHeader(
-            icon = Icons.Default.PersonAdd,
-            title = if (isPersian) "ساخت حساب کاربری" else "Create account",
-            subtitle = if (isPersian) "شماره موبایل خود را تأیید کنید و گذرواژه تعیین کنید"
-            else "Verify your phone number and choose a password"
-        )
-
-        RegistrationProgress(completed = completedSteps, total = REGISTRATION_STEPS, isPersian = isPersian)
-        Spacer(Modifier.height(16.dp))
-
-        // ---- Step 1: phone verification
-        AuthCard {
-            AuthSectionTitle(if (isPersian) "۱. تأیید شماره موبایل" else "1. Verify your phone")
-            OutlinedTextField(
-                value = phone,
-                onValueChange = {
-                    phone = it
-                    // A different number invalidates the code that was sent to the old one.
-                    phoneChallenge = null
-                    phoneCode = ""
-                    error = null
-                },
-                enabled = !loading,
-                label = { Text(if (isPersian) "شماره موبایل" else "Phone number") },
-                placeholder = {
-                    Text(
-                        if (isPersian) "مثلا: 09123456789" else "For example: 09123456789",
-                        style = credentialTextStyle(),
-                        color = Color.Gray
-                    )
-                },
-                leadingIcon = { Icon(Icons.Default.Phone, null) },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                textStyle = credentialTextStyle(),
-                isError = phone.isNotBlank() && normalizedPhone == null,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
-                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                modifier = Modifier.fillMaxWidth()
+        AuthResponsiveContent {
+            AuthHeader(
+                icon = Icons.Default.PersonAdd,
+                title = if (isPersian) "ساخت حساب کاربری" else "Create account",
+                subtitle = if (isPersian) "شماره موبایل خود را تأیید کنید و گذرواژه تعیین کنید"
+                else "Verify your phone number and choose a password"
             )
-            OutlinedButton(
-                onClick = { normalizedPhone?.let(::requestSmsCode) },
-                enabled = !loading && normalizedPhone != null && phoneCooldown == 0L,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().height(52.dp)
-            ) {
-                Icon(Icons.Default.Sms, null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = when {
-                        phoneCooldown > 0 -> if (isPersian) "ارسال مجدد تا $phoneCooldown ثانیه دیگر" else "Resend in ${phoneCooldown}s"
-                        phoneChallenge != null -> if (isPersian) "ارسال مجدد کد پیامکی" else "Resend SMS code"
-                        else -> if (isPersian) "ارسال کد پیامکی" else "Send SMS code"
-                    },
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            if (phoneChallenge != null) {
+
+            RegistrationProgress(completed = completedSteps, total = REGISTRATION_STEPS, isPersian = isPersian)
+            Spacer(Modifier.height(16.dp))
+
+            // ---- Step 1: phone verification
+            AuthCard {
+                AuthSectionTitle(if (isPersian) "۱. تأیید شماره موبایل" else "1. Verify your phone")
                 OutlinedTextField(
-                    value = phoneCode,
-                    onValueChange = { phoneCode = AuthInputNormalizer.otpCode(it); error = null },
+                    value = phone,
+                    onValueChange = {
+                        phone = it
+                        // A different number invalidates the code that was sent to the old one.
+                        phoneChallenge = null
+                        phoneCode = ""
+                        error = null
+                    },
                     enabled = !loading,
-                    label = { Text(if (isPersian) "کد پیامکی" else "SMS code") },
+                    label = { Text(if (isPersian) "شماره موبایل" else "Phone number") },
+                    placeholder = {
+                        Text(
+                            if (isPersian) "مثلا: 09123456789" else "For example: 09123456789",
+                            style = credentialTextStyle(),
+                            color = Color.Gray
+                        )
+                    },
+                    leadingIcon = { Icon(Icons.Default.Phone, null) },
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
                     textStyle = credentialTextStyle(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
+                    isError = phone.isNotBlank() && normalizedPhone == null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
                     keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                     modifier = Modifier.fillMaxWidth()
                 )
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // ---- Step 2: password
-        AuthCard {
-            AuthSectionTitle(if (isPersian) "۲. تعیین گذرواژه" else "2. Choose a password")
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it.take(PasswordPolicy.MAX_LENGTH + 1); error = null },
-                enabled = !loading,
-                label = { Text(if (isPersian) "گذرواژه" else "Password") },
-                leadingIcon = { Icon(Icons.Default.Lock, null) },
-                trailingIcon = {
-                    IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
-                        Icon(
-                            imageVector = if (isPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = if (isPersian) "نمایش یا پنهان کردن گذرواژه" else "Toggle password visibility"
-                        )
-                    }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                textStyle = credentialTextStyle(),
-                visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next, hintLocales = LocaleList(Locale("en"))),
-                keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
-                modifier = Modifier.fillMaxWidth()
-            )
-            PasswordStrengthMeter(password = password, isPersian = isPersian)
-            OutlinedTextField(
-                value = confirmPassword,
-                onValueChange = { confirmPassword = it.take(PasswordPolicy.MAX_LENGTH + 1); error = null },
-                enabled = !loading,
-                label = { Text(if (isPersian) "تکرار گذرواژه" else "Confirm password") },
-                leadingIcon = { Icon(Icons.Default.Lock, null) },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                textStyle = credentialTextStyle(),
-                isError = confirmPassword.isNotEmpty() && confirmPassword != password,
-                visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
-                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus(); submit() }),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Text(
-                text = if (isPersian) "حداقل ${PasswordPolicy.MIN_LENGTH} کاراکتر؛ فقط حروف انگلیسی، عدد و نماد (بدون فاصله)."
-                else "At least ${PasswordPolicy.MIN_LENGTH} characters; English letters, digits and symbols only (no spaces).",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
-            )
-
-            val termsColors = MaterialTheme.colorScheme
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .toggleable(
-                        value = acceptedTerms,
-                        enabled = !loading,
-                        role = Role.Checkbox,
-                        onValueChange = { acceptedTerms = it }
-                    ),
-                verticalAlignment = Alignment.Top
-            ) {
-                Checkbox(
-                    checked = acceptedTerms,
-                    // The whole row is the toggle target, so the box itself only displays the state.
-                    onCheckedChange = null,
-                    enabled = !loading,
-                    colors = CheckboxDefaults.colors(
-                        checkedColor = termsColors.primary,
-                        checkmarkColor = termsColors.onPrimary,
-                        uncheckedColor = termsColors.onSurface.copy(alpha = 0.6f),
-                        disabledCheckedColor = termsColors.primary.copy(alpha = 0.38f),
-                        disabledUncheckedColor = termsColors.onSurface.copy(alpha = 0.2f)
-                    ),
-                    modifier = Modifier.padding(12.dp)
-                )
-                Column(modifier = Modifier.padding(top = 12.dp, end = 4.dp)) {
+                OutlinedButton(
+                    onClick = { normalizedPhone?.let(::requestSmsCode) },
+                    enabled = !loading && normalizedPhone != null && phoneCooldown == 0L,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                ) {
+                    Icon(Icons.Default.Sms, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
                     Text(
-                        text = if (isPersian) "قوانین و مقررات و سیاست حریم خصوصی سیدنا را خوانده‌ام و می‌پذیرم."
-                        else "I have read and accept Cidna's Terms of Service and Privacy Policy.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = termsColors.onSurface
+                        text = when {
+                            phoneCooldown > 0 -> if (isPersian) "ارسال مجدد تا $phoneCooldown ثانیه دیگر" else "Resend in ${phoneCooldown}s"
+                            phoneChallenge != null -> if (isPersian) "ارسال مجدد کد پیامکی" else "Resend SMS code"
+                            else -> if (isPersian) "ارسال کد پیامکی" else "Send SMS code"
+                        },
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center
                     )
-                    Row {
-                        TextButton(
-                            onClick = { WebLinks.open(context, WebLinks.Page.TERMS, isPersian, darkTheme) },
-                            colors = ButtonDefaults.textButtonColors(contentColor = termsColors.primary)
-                        ) {
-                            Text(
-                                text = if (isPersian) "قوانین و مقررات" else "Terms of Service",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                textDecoration = TextDecoration.Underline
-                            )
-                        }
-                        TextButton(
-                            onClick = { WebLinks.open(context, WebLinks.Page.PRIVACY, isPersian, darkTheme) },
-                            colors = ButtonDefaults.textButtonColors(contentColor = termsColors.primary)
-                        ) {
-                            Text(
-                                text = if (isPersian) "حریم خصوصی" else "Privacy Policy",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                textDecoration = TextDecoration.Underline
-                            )
-                        }
+                }
+                if (phoneChallenge != null) {
+                    val otpEnter = remember { MutableTransitionState(false).apply { targetState = true } }
+                    AnimatedVisibility(
+                        visibleState = otpEnter,
+                        enter = fadeIn(tween(250)) + expandVertically(tween(250))
+                    ) {
+                        OtpCodeField(
+                            value = phoneCode,
+                            onValueChange = { phoneCode = AuthInputNormalizer.otpCode(it).take(6); error = null },
+                            label = if (isPersian) "کد پیامکی" else "SMS code",
+                            enabled = !loading,
+                            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                            modifier = Modifier.fillMaxWidth().smsOtpContentType()
+                        )
                     }
                 }
             }
 
-            error?.let { AuthErrorBanner(message = it) }
+            Spacer(Modifier.height(16.dp))
 
-            LoadingButton(
-                text = if (isPersian) "ساخت حساب" else "Create account",
-                isLoading = loading,
-                loadingText = if (isPersian) "در حال ساخت حساب..." else "Creating account...",
-                onClick = ::submit
-            )
-        }
+            // ---- Step 2: password
+            AuthCard {
+                AuthSectionTitle(if (isPersian) "۲. تعیین گذرواژه" else "2. Choose a password")
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it.take(PasswordPolicy.MAX_LENGTH + 1); error = null },
+                    enabled = !loading,
+                    label = { Text(if (isPersian) "گذرواژه" else "Password") },
+                    leadingIcon = { Icon(Icons.Default.Lock, null) },
+                    trailingIcon = {
+                        IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                            Icon(
+                                imageVector = if (isPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (isPersian) "نمایش یا پنهان کردن گذرواژه" else "Toggle password visibility"
+                            )
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    textStyle = credentialTextStyle(),
+                    visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next, hintLocales = LocaleList(Locale("en"))),
+                    keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                PasswordStrengthMeter(password = password, isPersian = isPersian)
+                OutlinedTextField(
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it.take(PasswordPolicy.MAX_LENGTH + 1); error = null },
+                    enabled = !loading,
+                    label = { Text(if (isPersian) "تکرار گذرواژه" else "Confirm password") },
+                    leadingIcon = { Icon(Icons.Default.Lock, null) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    textStyle = credentialTextStyle(),
+                    isError = confirmPassword.isNotEmpty() && confirmPassword != password,
+                    visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
+                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus(); submit() }),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    text = if (isPersian) "حداقل ${PasswordPolicy.MIN_LENGTH} کاراکتر؛ فقط حروف انگلیسی، عدد و نماد (بدون فاصله)."
+                    else "At least ${PasswordPolicy.MIN_LENGTH} characters; English letters, digits and symbols only (no spaces).",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                )
 
-        TextButton(onClick = onBack, enabled = !loading, modifier = Modifier.padding(top = 8.dp)) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = if (isPersian) "بازگشت به ورود" else "Back to sign in",
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary
-            )
+                val termsColors = MaterialTheme.colorScheme
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .toggleable(
+                            value = acceptedTerms,
+                            enabled = !loading,
+                            role = Role.Checkbox,
+                            onValueChange = { acceptedTerms = it }
+                        ),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Checkbox(
+                        checked = acceptedTerms,
+                        // The whole row is the toggle target, so the box itself only displays the state.
+                        onCheckedChange = null,
+                        enabled = !loading,
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = termsColors.primary,
+                            checkmarkColor = termsColors.onPrimary,
+                            uncheckedColor = termsColors.onSurface.copy(alpha = 0.6f),
+                            disabledCheckedColor = termsColors.primary.copy(alpha = 0.38f),
+                            disabledUncheckedColor = termsColors.onSurface.copy(alpha = 0.2f)
+                        ),
+                        modifier = Modifier.padding(12.dp)
+                    )
+                    Column(modifier = Modifier.padding(top = 12.dp, end = 4.dp)) {
+                        Text(
+                            text = if (isPersian) "قوانین و مقررات و سیاست حریم خصوصی سیدنا را خوانده‌ام و می‌پذیرم."
+                            else "I have read and accept Cidna's Terms of Service and Privacy Policy.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = termsColors.onSurface
+                        )
+                        FlowRow {
+                            TextButton(
+                                onClick = { WebLinks.open(context, WebLinks.Page.TERMS, isPersian, darkTheme) },
+                                colors = ButtonDefaults.textButtonColors(contentColor = termsColors.primary)
+                            ) {
+                                Text(
+                                    text = if (isPersian) "قوانین و مقررات" else "Terms of Service",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    textDecoration = TextDecoration.Underline
+                                )
+                            }
+                            TextButton(
+                                onClick = { WebLinks.open(context, WebLinks.Page.PRIVACY, isPersian, darkTheme) },
+                                colors = ButtonDefaults.textButtonColors(contentColor = termsColors.primary)
+                            ) {
+                                Text(
+                                    text = if (isPersian) "حریم خصوصی" else "Privacy Policy",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    textDecoration = TextDecoration.Underline
+                                )
+                            }
+                        }
+                    }
+                }
+
+                error?.let { AuthErrorBanner(message = it) }
+
+                LoadingButton(
+                    text = if (isPersian) "ساخت حساب" else "Create account",
+                    isLoading = loading,
+                    loadingText = if (isPersian) "در حال ساخت حساب..." else "Creating account...",
+                    onClick = ::submit
+                )
+            }
+
+            TextButton(onClick = onBack, enabled = !loading, modifier = Modifier.padding(top = 8.dp)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = if (isPersian) "بازگشت به ورود" else "Back to sign in",
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 
@@ -497,7 +519,10 @@ private fun RecoveryKeyDialog(recoveryKey: String, isPersian: Boolean, onConfirm
             )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
                 Text(
                     text = if (isPersian)
                         "اگر گذرواژه‌تان را فراموش کنید، فقط با این کلید می‌توانید حساب و اطلاعات رمزنگاری‌شده را بازیابی کنید. این کلید دوباره نمایش داده نمی‌شود؛ آن را در جایی امن و خارج از برنامه نگه دارید."

@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -43,7 +43,8 @@ fun AuthScreenContainer(content: @Composable ColumnScope.() -> Unit) {
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .imePadding()
+                // Status bar, navigation bar, display cutout and keyboard in one place.
+                .safeDrawingPadding()
         ) {
             val viewportHeight = maxHeight
             Column(

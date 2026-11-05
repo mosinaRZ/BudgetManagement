@@ -54,7 +54,7 @@ android {
         targetSdk = 36
         // Play rejects an upload whose versionCode was already used: bump with -PversionCode=N.
         versionCode = providers.gradleProperty("versionCode").map { it.toInt() }.getOrElse(3)
-        versionName = providers.gradleProperty("versionName").getOrElse("1.1.5")
+        versionName = providers.gradleProperty("versionName").getOrElse("1.2.0")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -174,6 +174,7 @@ dependencies {
     implementation(libs.androidx.glance.material3)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.play.services.auth.api.phone)
 
     // Room
     implementation(libs.androidx.room.runtime)

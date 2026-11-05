@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -45,6 +46,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.intl.LocaleList
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
@@ -84,6 +86,12 @@ fun PasswordResetScreen(
     }
     val cooldown = (RESET_OTP_RESEND_SECONDS - (now - sentAt) / 1000).coerceAtLeast(0)
     val normalizedIdentifier = AuthInputNormalizer.identifier(identifier)
+
+    // SMS User Consent API: starts listening each time a code is requested (sentAt changes).
+    SmsUserConsentEffect(listenKey = sentAt.takeIf { it > 0L }) { received ->
+        code = received
+        error = null
+    }
 
     fun requestOtp() {
         if (loading) return
@@ -165,123 +173,122 @@ fun PasswordResetScreen(
     }
 
     AuthScreenContainer {
-        AuthHeader(
-            icon = Icons.Default.LockReset,
-            title = if (isPersian) "بازیابی گذرواژه" else "Reset password",
-            subtitle = if (isPersian) "با کد تأیید و کلید بازیابی، گذرواژه جدید بسازید" else "Use your verification code and recovery key to set a new password"
-        )
-
-        AuthCard {
-            OutlinedTextField(
-                value = identifier,
-                onValueChange = {
-                    identifier = it
-                    challengeId = null
-                    code = ""
-                    error = null
-                },
-                enabled = !loading,
-                label = { Text(if (isPersian) "شماره موبایل" else "Phone number") },
-                leadingIcon = { Icon(Icons.Default.Person, null) },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                textStyle = credentialTextStyle(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
-                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                modifier = Modifier.fillMaxWidth()
+        AuthResponsiveContent {
+            AuthHeader(
+                icon = Icons.Default.LockReset,
+                title = if (isPersian) "بازیابی گذرواژه" else "Reset password",
+                subtitle = if (isPersian) "با کد تأیید و کلید بازیابی، گذرواژه جدید بسازید" else "Use your verification code and recovery key to set a new password"
             )
 
-            OutlinedButton(
-                onClick = ::requestOtp,
-                enabled = !loading && identifier.isNotBlank() && cooldown == 0L,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().height(52.dp)
-            ) {
-                Text(
-                    text = when {
-                        cooldown > 0 -> if (isPersian) "ارسال مجدد تا $cooldown ثانیه دیگر" else "Resend in ${cooldown}s"
-                        challengeId != null -> if (isPersian) "ارسال مجدد کد" else "Resend code"
-                        else -> if (isPersian) "ارسال کد بازیابی" else "Send recovery code"
+            AuthCard {
+                OutlinedTextField(
+                    value = identifier,
+                    onValueChange = {
+                        identifier = it
+                        challengeId = null
+                        code = ""
+                        error = null
                     },
-                    fontWeight = FontWeight.SemiBold
+                    enabled = !loading,
+                    label = { Text(if (isPersian) "شماره موبایل" else "Phone number") },
+                    leadingIcon = { Icon(Icons.Default.Person, null) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    textStyle = credentialTextStyle(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
+                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                    modifier = Modifier.fillMaxWidth()
                 )
-            }
 
-            AnimatedVisibility(visible = challengeId != null) {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    OutlinedTextField(
-                        value = code,
-                        onValueChange = { code = AuthInputNormalizer.otpCode(it); error = null },
-                        enabled = !loading,
-                        label = { Text(if (isPersian) "کد تأیید" else "Verification code") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
-                        textStyle = credentialTextStyle(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
-                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = recoveryKey,
-                        onValueChange = { recoveryKey = it.filterNot(Char::isWhitespace); error = null },
-                        enabled = !loading,
-                        label = { Text(if (isPersian) "کلید بازیابی" else "Recovery key") },
-                        leadingIcon = { Icon(Icons.Default.Key, null) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
-                        textStyle = credentialTextStyle(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
-                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = newPassword,
-                        onValueChange = { newPassword = it.take(PasswordPolicy.MAX_LENGTH + 1); error = null },
-                        enabled = !loading,
-                        label = { Text(if (isPersian) "گذرواژه جدید" else "New password") },
-                        leadingIcon = { Icon(Icons.Default.Lock, null) },
-                        trailingIcon = {
-                            IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
-                                Icon(
-                                    imageVector = if (isPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = if (isPersian) "نمایش یا پنهان کردن گذرواژه" else "Toggle password visibility"
-                                )
-                            }
+                OutlinedButton(
+                    onClick = ::requestOtp,
+                    enabled = !loading && identifier.isNotBlank() && cooldown == 0L,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                ) {
+                    Text(
+                        text = when {
+                            cooldown > 0 -> if (isPersian) "ارسال مجدد تا $cooldown ثانیه دیگر" else "Resend in ${cooldown}s"
+                            challengeId != null -> if (isPersian) "ارسال مجدد کد" else "Resend code"
+                            else -> if (isPersian) "ارسال کد بازیابی" else "Send recovery code"
                         },
-                        singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
-                        textStyle = credentialTextStyle(),
-                        visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
-                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus(); resetPassword() }),
-                        modifier = Modifier.fillMaxWidth()
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center
                     )
-                    PasswordStrengthMeter(password = newPassword, isPersian = isPersian)
+                }
+
+                AnimatedVisibility(visible = challengeId != null) {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        OtpCodeField(
+                            value = code,
+                            onValueChange = { code = AuthInputNormalizer.otpCode(it).take(6); error = null },
+                            label = if (isPersian) "کد تأیید" else "Verification code",
+                            enabled = !loading,
+                            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                            modifier = Modifier.fillMaxWidth().smsOtpContentType()
+                        )
+                        OutlinedTextField(
+                            value = recoveryKey,
+                            onValueChange = { recoveryKey = it.filterNot(Char::isWhitespace); error = null },
+                            enabled = !loading,
+                            label = { Text(if (isPersian) "کلید بازیابی" else "Recovery key") },
+                            leadingIcon = { Icon(Icons.Default.Key, null) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(16.dp),
+                            textStyle = credentialTextStyle(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
+                            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = newPassword,
+                            onValueChange = { newPassword = it.take(PasswordPolicy.MAX_LENGTH + 1); error = null },
+                            enabled = !loading,
+                            label = { Text(if (isPersian) "گذرواژه جدید" else "New password") },
+                            leadingIcon = { Icon(Icons.Default.Lock, null) },
+                            trailingIcon = {
+                                IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                                    Icon(
+                                        imageVector = if (isPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = if (isPersian) "نمایش یا پنهان کردن گذرواژه" else "Toggle password visibility"
+                                    )
+                                }
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(16.dp),
+                            textStyle = credentialTextStyle(),
+                            visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, hintLocales = LocaleList(Locale("en"))),
+                            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus(); resetPassword() }),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        PasswordStrengthMeter(password = newPassword, isPersian = isPersian)
+                    }
+                }
+
+                AnimatedVisibility(visible = error != null) {
+                    error?.let { AuthErrorBanner(message = it) }
+                }
+
+                if (challengeId != null) {
+                    LoadingButton(
+                        text = if (isPersian) "تغییر گذرواژه" else "Reset password",
+                        isLoading = loading,
+                        loadingText = if (isPersian) "در حال بازیابی..." else "Resetting...",
+                        onClick = ::resetPassword
+                    )
                 }
             }
 
-            AnimatedVisibility(visible = error != null) {
-                error?.let { AuthErrorBanner(message = it) }
-            }
-
-            if (challengeId != null) {
-                LoadingButton(
-                    text = if (isPersian) "تغییر گذرواژه" else "Reset password",
-                    isLoading = loading,
-                    loadingText = if (isPersian) "در حال بازیابی..." else "Resetting...",
-                    onClick = ::resetPassword
+            TextButton(onClick = onBack, enabled = !loading, modifier = Modifier.padding(top = 8.dp)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = if (isPersian) "بازگشت به ورود" else "Back to sign in",
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
-        }
-
-        TextButton(onClick = onBack, enabled = !loading, modifier = Modifier.padding(top = 8.dp)) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = if (isPersian) "بازگشت به ورود" else "Back to sign in",
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary
-            )
         }
     }
 }
