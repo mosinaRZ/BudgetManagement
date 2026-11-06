@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -64,6 +65,8 @@ import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.getThemeMode
 import ir.hamedan.budgetmanagement.data.preferences.ThemePreferences.saveThemeMode
 import ir.hamedan.budgetmanagement.ui.components.BottomDock
+import ir.hamedan.budgetmanagement.ui.components.ForceUpdateBottomSheet
+import ir.hamedan.budgetmanagement.data.update.StoreLauncher
 import ir.hamedan.budgetmanagement.ui.components.InAppNotificationHost
 import ir.hamedan.budgetmanagement.ui.components.OnboardingDialog
 import ir.hamedan.budgetmanagement.ui.components.OnboardingPermission
@@ -243,7 +246,13 @@ class MainActivity : FragmentActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 val app = applicationContext as BudgetApp
                 while (true) {
-                    if (app.container.authRepository.isAuthenticated()) {
+                    // Learns the server's minimum app version (throttled); the first call of a
+                    // launch is what the splash screen waits for.
+                    app.container.appUpdateManager.refresh()
+                    // A build that is too old does no background work until it is updated.
+                    if (!app.container.appUpdateManager.isBlocked() &&
+                        app.container.authRepository.isAuthenticated()
+                    ) {
                         // The admin console is separate from the budget app and has no local
                         // budget data to synchronise.
                         val isAdminSession = app.container.authSessionStore.role().equals("admin", ignoreCase = true)
@@ -276,6 +285,11 @@ class MainActivity : FragmentActivity() {
 
             // آیا دیالوگ اولین ورود (خوش‌آمدگویی + مجوزها) باید نشان داده شود؟
             var showOnboarding by remember { mutableStateOf(!OnboardingPreferences.isCompleted(context)) }
+
+            // A build that is too old: a non-dismissible update sheet covers everything.
+            val updateManager = remember { (applicationContext as BudgetApp).container.appUpdateManager }
+            val updateState by updateManager.state.collectAsState()
+            val updateRequirement = updateState.blocked
             var inAppNotification by remember {
                 mutableStateOf<NotificationHelper.InAppNotification?>(null)
             }
@@ -340,14 +354,35 @@ class MainActivity : FragmentActivity() {
                         }
                     )
 
-                    if (showDatabaseResetNotice) {
+                    if (updateRequirement != null) {
+                        ForceUpdateBottomSheet(
+                            isPersian = LocaleHelper.getLanguage(context) == "fa",
+                            installedVersion = updateRequirement.installedVersion,
+                            latestVersion = updateRequirement.latestVersion,
+                            checking = updateState.checking,
+                            onUpdateClick = {
+                                // Only opens the store. The sheet stays until the installed version is new enough.
+                                if (!StoreLauncher.open(context, updateRequirement.updateUrls)) {
+                                    val fa = LocaleHelper.getLanguage(context) == "fa"
+                                    Toast.makeText(
+                                        context,
+                                        if (fa) "فروشگاه باز نشد. برنامه‌ی فروشگاه یا مرورگر را بررسی کنید."
+                                        else "Could not open the store. Check your store app or browser.",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            }
+                        )
+                    }
+
+                    if (showDatabaseResetNotice && updateRequirement == null) {
                         ir.hamedan.budgetmanagement.ui.components.DatabaseResetNoticeDialog(
                             isPersian = LocaleHelper.getLanguage(context) == "fa",
                             onDismiss = { showDatabaseResetNotice = false }
                         )
                     }
 
-                    if (showOnboarding) {
+                    if (showOnboarding && updateRequirement == null) {
                         val isPersian = LocaleHelper.getLanguage(context) == "fa"
                         OnboardingDialog(
                             isPersian = isPersian,
@@ -415,6 +450,24 @@ class MainActivity : FragmentActivity() {
         val hasSession = sessionAuthenticated || guestSession
         val currentRouteEntry by navController.currentBackStackEntryAsState()
         val applicationContext = LocalContext.current.applicationContext
+        val updateState by app.container.appUpdateManager.state.collectAsState()
+        val updateBlocked = updateState.blocked != null
+
+        // A build that is too old stays on the sign-in screen, whichever screen it was on
+        // (a shortcut, a notification or a policy that changed while the app was open).
+        LaunchedEffect(updateBlocked, currentRouteEntry?.destination?.route) {
+            val route = currentRouteEntry?.destination?.route.orEmpty()
+            if (updateBlocked &&
+                route.isNotBlank() &&
+                !route.contains("Login") &&
+                !route.contains("Splash")
+            ) {
+                navController.navigate(AppRoute.Login()) {
+                    popUpTo(navController.graph.id) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+        }
 
         LaunchedEffect(openAddTransactionRequested, hasSession, currentRouteEntry?.destination?.route) {
             val route = currentRouteEntry?.destination?.route.orEmpty()
@@ -603,43 +656,58 @@ class MainActivity : FragmentActivity() {
             composable<AppRoute.Splash> {
                 SplashScreen(
                     onAnimationFinished = {
-                        // Navigate with a concrete route instance. Do not store the two
-                        // branches in a variable typed as AppRoute: typed Navigation infers
-                        // the generic route from the static type, which would make it try
-                        // to serialize the sealed parent instead of the concrete destination.
-                        val guestStore = app.container.guestModeStore
-                        if (sessionAuthenticated) {
-                            // The existing server session remains valid. Opening the app only
-                            // requires local re-authentication; no token refresh/login is triggered.
-                            navController.navigate(AppRoute.Login(localUnlockOnly = true)) {
-                                popUpTo(AppRoute.Splash) { inclusive = true }
-                                launchSingleTop = true
+                        authScope.launch {
+                            // The policy request runs while the animation plays, so this normally
+                            // returns at once; it is bounded, so a dead network never holds the splash.
+                            val updateManager = app.container.appUpdateManager
+                            updateManager.awaitStartupCheck()
+                            if (updateManager.isBlocked()) {
+                                // Too old: do not go anywhere. The sign-in screen stays under the update sheet.
+                                navController.navigate(AppRoute.Login()) {
+                                    popUpTo(AppRoute.Splash) { inclusive = true }
+                                    launchSingleTop = true
+                                }
+                                return@launch
                             }
-                        } else if (guestStore.hasWorkspace() && !guestStore.hasUnlockSecret()) {
-                            // A guest with no passcode and no fingerprint has nothing to verify,
-                            // so the app opens the guest workspace directly, without the login screen.
-                            authScope.launch {
-                                app.container.guestModeManager.startSession()
-                                    .onSuccess {
-                                        runCatching { app.seedDefaultCategoriesIfNeeded() }
-                                        navController.navigate(AppRoute.MainStructure) {
-                                            popUpTo(AppRoute.Splash) { inclusive = true }
-                                            launchSingleTop = true
+
+                            // Navigate with a concrete route instance. Do not store the two
+                            // branches in a variable typed as AppRoute: typed Navigation infers
+                            // the generic route from the static type, which would make it try
+                            // to serialize the sealed parent instead of the concrete destination.
+                            val guestStore = app.container.guestModeStore
+                            if (sessionAuthenticated) {
+                                // The existing server session remains valid. Opening the app only
+                                // requires local re-authentication; no token refresh/login is triggered.
+                                navController.navigate(AppRoute.Login(localUnlockOnly = true)) {
+                                    popUpTo(AppRoute.Splash) { inclusive = true }
+                                    launchSingleTop = true
+                                }
+                            } else if (guestStore.hasWorkspace() && !guestStore.hasUnlockSecret()) {
+                                // A guest with no passcode and no fingerprint has nothing to verify,
+                                // so the app opens the guest workspace directly, without the login screen.
+                                authScope.launch {
+                                    app.container.guestModeManager.startSession()
+                                        .onSuccess {
+                                            runCatching { app.seedDefaultCategoriesIfNeeded() }
+                                            navController.navigate(AppRoute.MainStructure) {
+                                                popUpTo(AppRoute.Splash) { inclusive = true }
+                                                launchSingleTop = true
+                                            }
                                         }
-                                    }
-                                    .onFailure {
-                                        navController.navigate(AppRoute.Login()) {
-                                            popUpTo(AppRoute.Splash) { inclusive = true }
-                                            launchSingleTop = true
+                                        .onFailure {
+                                            navController.navigate(AppRoute.Login()) {
+                                                popUpTo(AppRoute.Splash) { inclusive = true }
+                                                launchSingleTop = true
+                                            }
                                         }
-                                    }
-                            }
-                        } else {
-                            // A guest with a passcode or fingerprint is asked for it on the login
-                            // screen (guest prompt); everyone else signs in as usual.
-                            navController.navigate(AppRoute.Login()) {
-                                popUpTo(AppRoute.Splash) { inclusive = true }
-                                launchSingleTop = true
+                                }
+                            } else {
+                                // A guest with a passcode or fingerprint is asked for it on the login
+                                // screen (guest prompt); everyone else signs in as usual.
+                                navController.navigate(AppRoute.Login()) {
+                                    popUpTo(AppRoute.Splash) { inclusive = true }
+                                    launchSingleTop = true
+                                }
                             }
                         }
                     }
@@ -664,7 +732,10 @@ class MainActivity : FragmentActivity() {
 
                 LoginScreen(
                     localUnlockOnly = loginRoute.localUnlockOnly,
+                    updateBlocked = updateBlocked,
                     onLoginSuccess = {
+                        // Defence in depth: nothing signs a too-old build in.
+                        if (app.container.appUpdateManager.isBlocked()) return@LoginScreen
                         appLockPreferences.clearLock()
                         // The role comes from the server's login response and is checked here, once,
                         // to decide which app the user lands in. Concrete routes in each branch (see

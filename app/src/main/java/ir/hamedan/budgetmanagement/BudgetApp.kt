@@ -40,7 +40,8 @@ class BudgetApp : Application() {
         AppUsagePreferences.updateLastOpen(this)
         // Launcher shortcuts follow the in-app language, not the system language.
         CoroutineScope(Dispatchers.IO).launch { ShortcutsHelper.update(this@BudgetApp) }
-        if (container.authRepository.isAuthenticated()) {
+        // A build that is too old stays quiet until it is updated.
+        if (container.authRepository.isAuthenticated() && !container.appUpdateManager.isBlocked()) {
             CoroutineScope(Dispatchers.IO).launch {
                 runCatching {
                     seedDefaultCategoriesIfNeeded()

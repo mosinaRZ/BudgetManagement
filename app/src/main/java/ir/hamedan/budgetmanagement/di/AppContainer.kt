@@ -1,6 +1,10 @@
 package ir.hamedan.budgetmanagement.di
 
 import android.content.Context
+import ir.hamedan.budgetmanagement.BuildConfig
+import ir.hamedan.budgetmanagement.data.network.AppConfigApi
+import ir.hamedan.budgetmanagement.data.update.AppUpdateManager
+import ir.hamedan.budgetmanagement.data.update.AppUpdateStore
 import ir.hamedan.budgetmanagement.data.guest.GuestModeManager
 import ir.hamedan.budgetmanagement.data.guest.GuestModeStore
 import ir.hamedan.budgetmanagement.data.local.AppDatabase
@@ -49,7 +53,23 @@ class AppContainer(context: Context) {
     val syncLocalDataSource: SyncLocalDataSource by lazy { SyncLocalDataSourceImpl(database, deviceIdentityStore, syncKeyManager, syncScheduler) }
     val syncStateRepository: SyncStateRepository by lazy { SyncStateRepositoryImpl(database.syncStateDao(), deviceIdentityStore) }
 
-    private val apiHttpClient: ApiHttpClient by lazy { ApiHttpClient() }
+    /**
+     * Decides whether this build is too old to be used (non-dismissible update screen).
+     * Its policy request uses its own client with short timeouts, so a slow or unreachable
+     * server never holds up the splash screen.
+     */
+    val appUpdateManager: AppUpdateManager by lazy {
+        AppUpdateManager(
+            api = AppConfigApi(ApiHttpClient(connectTimeoutMs = 4_000, readTimeoutMs = 4_000)),
+            store = AppUpdateStore(appContext),
+            installedVersionName = BuildConfig.VERSION_NAME
+        )
+    }
+
+    // A 426 from any API call means the server refuses this build: block it right away.
+    private val apiHttpClient: ApiHttpClient by lazy {
+        ApiHttpClient(onUpdateRequired = { appUpdateManager.onServerRejectedVersion() })
+    }
     val authSessionStore: AuthSessionStore by lazy { AuthSessionStore(appContext) }
     val authApi: AuthApi by lazy { AuthApi(apiHttpClient) }
     private val authenticatedApiClient: AuthenticatedApiClient by lazy {

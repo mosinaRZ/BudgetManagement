@@ -1,5 +1,6 @@
 package ir.hamedan.budgetmanagement.data.network
 
+import ir.hamedan.budgetmanagement.BuildConfig
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.IOException
@@ -13,7 +14,11 @@ import java.util.UUID
 import javax.net.ssl.SSLException
 
 class ApiHttpClient(
-    private val baseUrl: String = BackendConfig.BASE_URL
+    private val baseUrl: String = BackendConfig.BASE_URL,
+    private val connectTimeoutMs: Int = BackendConfig.CONNECT_TIMEOUT_MS,
+    private val readTimeoutMs: Int = BackendConfig.READ_TIMEOUT_MS,
+    /** Called when the server answers 426: this app version is no longer accepted. */
+    private val onUpdateRequired: () -> Unit = {}
 ) {
     fun request(
         method: String,
@@ -26,12 +31,14 @@ class ApiHttpClient(
             val url = URL(baseUrl.trimEnd('/') + "/" + path.trimStart('/'))
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = method
-                connectTimeout = BackendConfig.CONNECT_TIMEOUT_MS
-                readTimeout = BackendConfig.READ_TIMEOUT_MS
+                connectTimeout = connectTimeoutMs
+                readTimeout = readTimeoutMs
                 doInput = true
                 setRequestProperty("Accept", "application/json")
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("X-Request-ID", UUID.randomUUID().toString())
+                // Lets the server refuse a build that is too old (HTTP 426).
+                setRequestProperty("X-App-Version", BuildConfig.VERSION_NAME)
                 if (!bearerToken.isNullOrBlank()) {
                     setRequestProperty("Authorization", "Bearer $bearerToken")
                 }
@@ -46,6 +53,7 @@ class ApiHttpClient(
             }
 
             val status = conn.responseCode
+            if (status == 426) runCatching { onUpdateRequired() }
             val stream = if (status in 200..299) conn.inputStream else conn.errorStream
             val responseText = stream?.use { input ->
                 BufferedReader(InputStreamReader(input, Charsets.UTF_8)).readText()
@@ -103,6 +111,7 @@ private fun Int.toErrorCode(): String = when (this) {
     409 -> "CONFLICT"
     413 -> "PAYLOAD_TOO_LARGE"
     422 -> "VALIDATION_ERROR"
+    426 -> "UPDATE_REQUIRED"
     429 -> "RATE_LIMITED"
     502, 503, 504 -> "SERVICE_UNAVAILABLE"
     in 500..599 -> "INTERNAL_ERROR"
@@ -127,6 +136,7 @@ class ApiException(
         "NOT_FOUND" -> if (isPersian) "اطلاعات موردنظر پیدا نشد." else "The requested information was not found."
         "CONFLICT" -> if (isPersian) "این عملیات با وضعیت فعلی اطلاعات سازگار نیست." else "The operation conflicts with the current data."
         "STORAGE_QUOTA_EXCEEDED" -> if (isPersian) "سقف فضای همگام‌سازی حساب پر شده است. برخی داده‌ها را حذف کنید یا با پشتیبانی تماس بگیرید." else "This account's sync storage limit is reached. Delete some data or contact support."
+        "UPDATE_REQUIRED" -> if (isPersian) "این نسخه از برنامه دیگر پشتیبانی نمی‌شود. لطفاً برنامه را به‌روزرسانی کنید." else "This version of the app is no longer supported. Please update the app."
         "RATE_LIMITED" -> if (isPersian) "درخواست‌های زیادی ارسال شده است. کمی بعد دوباره تلاش کنید." else "Too many requests. Please try again later."
         "REQUEST_TIMEOUT" -> if (isPersian) "پاسخ سرور خیلی طول کشید. دوباره تلاش کنید." else "The server took too long to respond. Please try again."
         "PAYLOAD_TOO_LARGE" -> if (isPersian) "حجم اطلاعات ارسالی بیش از حد مجاز است." else "The data you sent is too large."

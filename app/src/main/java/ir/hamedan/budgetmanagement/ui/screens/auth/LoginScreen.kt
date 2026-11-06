@@ -62,7 +62,9 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onRegister: () -> Unit,
     onForgotPassword: () -> Unit,
-    localUnlockOnly: Boolean = false
+    localUnlockOnly: Boolean = false,
+    // The build is too old and an update screen covers this one: never start a fingerprint prompt behind it.
+    updateBlocked: Boolean = false
 ) {
     val context = LocalContext.current
     val isPersian = isPersianLocale()
@@ -474,8 +476,8 @@ fun LoginScreen(
 
     // Lock of an open guest workspace, or the guest prompt at app start: ask for the fingerprint
     // straight away, once.
-    LaunchedEffect(guestLock, guestPrompt) {
-        if ((guestLock || guestPrompt) && guestStore.isBiometricEnabled() && !guestBiometricPromptShown) {
+    LaunchedEffect(guestLock, guestPrompt, updateBlocked) {
+        if (!updateBlocked && (guestLock || guestPrompt) && guestStore.isBiometricEnabled() && !guestBiometricPromptShown) {
             startGuestBiometric(onVerified = ::onGuestVerified)
         }
     }
@@ -540,8 +542,8 @@ fun LoginScreen(
         )
     }
 
-    LaunchedEffect(unlockMode, biometricReady) {
-        if (unlockMode && biometricReady) {
+    LaunchedEffect(unlockMode, biometricReady, updateBlocked) {
+        if (!updateBlocked && unlockMode && biometricReady) {
             startBiometricUnlock()
         }
     }
