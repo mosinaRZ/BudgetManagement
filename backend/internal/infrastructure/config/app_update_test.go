@@ -3,7 +3,7 @@ package config
 import "testing"
 
 func TestLoadAppUpdateDefaults(t *testing.T) {
-	for _, k := range []string{"APP_MIN_VERSION", "APP_LATEST_VERSION", "APP_UPDATE_URL_PLAY", "APP_UPDATE_URL_BAZAAR", "APP_UPDATE_URL_MYKET", "APP_UPDATE_URL_DEFAULT"} {
+	for _, k := range []string{"APP_MIN_VERSION", "APP_LATEST_VERSION", "APP_UPDATE_URL_BAZAAR", "APP_UPDATE_URL_MYKET", "APP_UPDATE_URL_DEFAULT"} {
 		t.Setenv(k, "")
 	}
 	got, err := loadAppUpdate()
@@ -13,11 +13,49 @@ func TestLoadAppUpdateDefaults(t *testing.T) {
 	if got.MinVersion != DefaultMinAppVersion || got.LatestVersion != DefaultLatestAppVersion {
 		t.Errorf("versions = %s / %s", got.MinVersion, got.LatestVersion)
 	}
-	for _, key := range []string{"play", "bazaar", "myket", "default"} {
+	for _, key := range []string{"bazaar", "default"} {
 		if got.UpdateURLs[key] == "" {
 			t.Errorf("missing default URL for %s", key)
 		}
 	}
+	if got.UpdateURLs["bazaar"] != "https://cafebazaar.ir/app/ir.hamedan.budgetmanagement?ref=share" {
+		t.Errorf("bazaar URL = %q", got.UpdateURLs["bazaar"])
+	}
+	if _, present := got.UpdateURLs["myket"]; present {
+		t.Error("myket must stay empty (and absent) until APP_UPDATE_URL_MYKET is set")
+	}
+	if _, present := got.UpdateURLs["play"]; present {
+		t.Error("play is no longer an update store")
+	}
+}
+
+func TestLoadAppUpdateMyket(t *testing.T) {
+	t.Run("whitespace counts as empty", func(t *testing.T) {
+		t.Setenv("APP_UPDATE_URL_MYKET", "   ")
+		got, err := loadAppUpdate()
+		if err != nil {
+			t.Fatalf("loadAppUpdate: %v", err)
+		}
+		if _, present := got.UpdateURLs["myket"]; present {
+			t.Error("blank myket URL must be left out")
+		}
+	})
+	t.Run("https URL is kept", func(t *testing.T) {
+		t.Setenv("APP_UPDATE_URL_MYKET", "https://myket.ir/app/ir.hamedan.budgetmanagement")
+		got, err := loadAppUpdate()
+		if err != nil {
+			t.Fatalf("loadAppUpdate: %v", err)
+		}
+		if got.UpdateURLs["myket"] != "https://myket.ir/app/ir.hamedan.budgetmanagement" {
+			t.Errorf("myket URL = %q", got.UpdateURLs["myket"])
+		}
+	})
+	t.Run("http URL is rejected", func(t *testing.T) {
+		t.Setenv("APP_UPDATE_URL_MYKET", "http://myket.ir/app/x")
+		if _, err := loadAppUpdate(); err == nil {
+			t.Fatal("expected an error")
+		}
+	})
 }
 
 func TestLoadAppUpdateRejectsBadValues(t *testing.T) {
@@ -25,11 +63,11 @@ func TestLoadAppUpdateRejectsBadValues(t *testing.T) {
 		"unparsable minimum":       {"APP_MIN_VERSION": "soon"},
 		"unparsable latest":        {"APP_LATEST_VERSION": "x"},
 		"minimum above latest":     {"APP_MIN_VERSION": "1.3.0", "APP_LATEST_VERSION": "1.2.0"},
-		"non-https update address": {"APP_UPDATE_URL_PLAY": "http://example.com"},
+		"non-https update address": {"APP_UPDATE_URL_BAZAAR": "http://example.com"},
 	}
 	for name, env := range cases {
 		t.Run(name, func(t *testing.T) {
-			for _, k := range []string{"APP_MIN_VERSION", "APP_LATEST_VERSION", "APP_UPDATE_URL_PLAY"} {
+			for _, k := range []string{"APP_MIN_VERSION", "APP_LATEST_VERSION", "APP_UPDATE_URL_BAZAAR"} {
 				t.Setenv(k, "")
 			}
 			for k, v := range env {

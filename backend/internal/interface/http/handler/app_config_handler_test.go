@@ -11,7 +11,7 @@ func TestAppConfigHandlerReturnsPolicy(t *testing.T) {
 	h := NewAppConfigHandler(AppConfig{
 		MinVersion:    "1.1.2",
 		LatestVersion: "1.2.0",
-		UpdateURLs:    map[string]string{"play": "https://play.example/app", "myket": ""},
+		UpdateURLs:    map[string]string{"bazaar": "https://bazaar.example/app", "myket": ""},
 	})
 	rec := httptest.NewRecorder()
 	h.Get(rec, httptest.NewRequest(http.MethodGet, "/app-config", nil))
@@ -29,8 +29,8 @@ func TestAppConfigHandlerReturnsPolicy(t *testing.T) {
 	if body.MinVersion != "1.1.2" || body.LatestVersion != "1.2.0" {
 		t.Errorf("versions = %q / %q; want 1.1.2 / 1.2.0", body.MinVersion, body.LatestVersion)
 	}
-	if body.UpdateURLs["play"] != "https://play.example/app" {
-		t.Errorf("play URL = %q", body.UpdateURLs["play"])
+	if body.UpdateURLs["bazaar"] != "https://bazaar.example/app" {
+		t.Errorf("bazaar URL = %q", body.UpdateURLs["bazaar"])
 	}
 	if _, present := body.UpdateURLs["myket"]; present {
 		t.Error("empty URLs must be left out of the response")

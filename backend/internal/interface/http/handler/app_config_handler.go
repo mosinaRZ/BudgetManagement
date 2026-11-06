@@ -13,7 +13,7 @@ type AppConfig struct {
 	MinVersion string
 	// LatestVersion is the newest published version (shown on the update screen).
 	LatestVersion string
-	// UpdateURLs maps a store key ("play", "bazaar", "myket", "default") to the page where the
+	// UpdateURLs maps a store key ("bazaar", "myket", "default") to the page where the
 	// update can be installed.
 	UpdateURLs map[string]string
 }

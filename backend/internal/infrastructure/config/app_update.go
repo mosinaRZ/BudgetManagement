@@ -19,12 +19,14 @@ const (
 // AppUpdateConfig drives the in-app "update required" screen and the 426 check.
 type AppUpdateConfig struct {
 	MinVersion, LatestVersion string
-	// UpdateURLs: "play", "bazaar", "myket" and "default" (used when the store is unknown).
+	// UpdateURLs: "bazaar", "myket" and "default" (used when the store is unknown).
+	// "myket" is left out of the map until APP_UPDATE_URL_MYKET is set.
 	UpdateURLs map[string]string
 }
 
-// loadAppUpdate reads APP_MIN_VERSION, APP_LATEST_VERSION and APP_UPDATE_URL_{PLAY,BAZAAR,MYKET,DEFAULT}.
-// Every value is optional; the defaults match the current release.
+// loadAppUpdate reads APP_MIN_VERSION, APP_LATEST_VERSION and APP_UPDATE_URL_{BAZAAR,MYKET,DEFAULT}.
+// Every value is optional; the defaults match the current release. APP_UPDATE_URL_MYKET has no
+// default: it stays empty (and is not sent to the app) until the Myket page exists.
 func loadAppUpdate() (AppUpdateConfig, error) {
 	minRaw := strings.TrimSpace(get("APP_MIN_VERSION", DefaultMinAppVersion))
 	latestRaw := strings.TrimSpace(get("APP_LATEST_VERSION", DefaultLatestAppVersion))
@@ -41,18 +43,25 @@ func loadAppUpdate() (AppUpdateConfig, error) {
 		return AppUpdateConfig{}, fmt.Errorf("APP_LATEST_VERSION (%s) must not be lower than APP_MIN_VERSION (%s)", latestV, minV)
 	}
 
-	urls := map[string]string{
-		"play":    get("APP_UPDATE_URL_PLAY", "https://play.google.com/store/apps/details?id="+appPackageName),
-		"bazaar":  get("APP_UPDATE_URL_BAZAAR", "https://cafebazaar.ir/app/"+appPackageName),
-		"myket":   get("APP_UPDATE_URL_MYKET", "https://myket.ir/app/"+appPackageName),
-		"default": get("APP_UPDATE_URL_DEFAULT", "https://cidna.ir"),
+	// optional: an empty value is allowed and the store is simply not offered.
+	sources := []struct {
+		key, env, fallback string
+		optional           bool
+	}{
+		{"bazaar", "APP_UPDATE_URL_BAZAAR", "https://cafebazaar.ir/app/" + appPackageName + "?ref=share", false},
+		{"myket", "APP_UPDATE_URL_MYKET", "", true},
+		{"default", "APP_UPDATE_URL_DEFAULT", "https://cidna.ir", false},
 	}
-	for key, value := range urls {
-		value = strings.TrimSpace(value)
-		if !strings.HasPrefix(value, "https://") {
-			return AppUpdateConfig{}, fmt.Errorf("APP_UPDATE_URL_%s must be an https:// URL", strings.ToUpper(key))
+	urls := make(map[string]string, len(sources))
+	for _, src := range sources {
+		value := strings.TrimSpace(get(src.env, src.fallback))
+		if value == "" && src.optional {
+			continue
 		}
-		urls[key] = value
+		if !strings.HasPrefix(value, "https://") {
+			return AppUpdateConfig{}, fmt.Errorf("%s must be an https:// URL", src.env)
+		}
+		urls[src.key] = value
 	}
 	return AppUpdateConfig{MinVersion: minRaw, LatestVersion: latestRaw, UpdateURLs: urls}, nil
 }
