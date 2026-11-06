@@ -1,5 +1,6 @@
 package ir.hamedan.budgetmanagement.data.update
 
+import android.app.Application
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
@@ -13,7 +14,7 @@ import org.robolectric.annotation.Config
 import java.io.IOException
 
 @RunWith(RobolectricTestRunner::class)
-@Config(manifest = Config.NONE)
+@Config(sdk = [35], application = Application::class)
 class AppUpdateManagerTest {
 
     private lateinit var store: AppUpdateStore

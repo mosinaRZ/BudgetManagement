@@ -1,5 +1,6 @@
 package ir.hamedan.budgetmanagement.data.update
 
+import android.app.Application
 import com.google.common.truth.Truth.assertThat
 import org.json.JSONObject
 import org.junit.Test
@@ -8,7 +9,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(manifest = Config.NONE)
+@Config(sdk = [35], application = Application::class)
 class AppUpdatePolicyTest {
 
     @Test
