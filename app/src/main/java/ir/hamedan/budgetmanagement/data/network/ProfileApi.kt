@@ -15,7 +15,8 @@ class ProfileApi(private val client: AuthenticatedApiClient) {
         val body = JSONObject()
             .put("first_name", input.firstName)
             .put("last_name", input.lastName)
-            .put("gender", input.gender)
+        // A blank gender means "not answered yet": it is not sent, so no value is invented for it.
+        if (input.gender.isNotBlank()) body.put("gender", input.gender)
         input.birthDate?.let { body.put("birth_date", it) }
         val response = client.request("PUT", "/api/v1/account/profile", body)
         ensureSuccess(response, "ذخیره پروفایل ناموفق بود.")
@@ -27,7 +28,7 @@ class ProfileApi(private val client: AuthenticatedApiClient) {
         phoneNumber = json.optString("phone_number"),
         firstName = json.optString("first_name"),
         lastName = json.optString("last_name"),
-        gender = json.optString("gender").ifBlank { "prefer_not_to_say" },
+        gender = json.optString("gender"),
         birthDate = json.optString("birth_date").takeIf { it.isNotBlank() }
     )
 

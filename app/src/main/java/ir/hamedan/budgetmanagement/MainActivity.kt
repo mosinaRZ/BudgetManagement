@@ -80,6 +80,7 @@ import ir.hamedan.budgetmanagement.ui.screens.add.AddTransactionScreen
 import ir.hamedan.budgetmanagement.ui.screens.transactions.EditTransactionScreen
 import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsScreen
 import ir.hamedan.budgetmanagement.ui.screens.home.HomeScreen
+import ir.hamedan.budgetmanagement.ui.screens.auth.AccountSwitchGate
 import ir.hamedan.budgetmanagement.ui.screens.auth.LoginScreen
 import ir.hamedan.budgetmanagement.ui.screens.auth.RegisterScreen
 import ir.hamedan.budgetmanagement.ui.screens.auth.PasswordResetScreen
@@ -647,7 +648,7 @@ class MainActivity : FragmentActivity() {
                 // this device was removed from the account while the app was in the background).
                 // Local unlock is meaningless then: switch to the full sign-in form.
                 LaunchedEffect(hasSession, loginRoute.localUnlockOnly) {
-                    if (loginRoute.localUnlockOnly && !hasSession) {
+                    if (loginRoute.localUnlockOnly && !hasSession && !AccountSwitchGate.inProgress) {
                         navController.navigate(AppRoute.Login()) {
                             popUpTo(navController.graph.id) { inclusive = true }
                             launchSingleTop = true

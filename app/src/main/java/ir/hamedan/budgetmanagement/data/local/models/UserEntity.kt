@@ -22,7 +22,7 @@ data class UserEntity(
     val fullName: String = "",
     val firstName: String = "",
     val lastName: String = "",
-    val gender: String = "prefer_not_to_say",
+    val gender: String = "",
     val birthDate: String? = null,
 
     /**

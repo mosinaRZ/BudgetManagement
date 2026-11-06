@@ -152,29 +152,6 @@ fun LoginScreen(
         return !typed.equals(rememberedIdentifier, ignoreCase = true)
     }
 
-    /**
-     * Signs the current account out of this device (after its unsynced changes are synced; refused
-     * when that is not possible), so the user can sign in to the other account with its own password.
-     */
-    fun switchAccount() {
-        if (isLoggingIn) return
-        isLoggingIn = true
-        errorMessage = null
-        scope.launch {
-            val ready = authRepository.prepareAccountSwitch().getOrDefault(false)
-            isLoggingIn = false
-            if (ready) {
-                accountSwitchRequested = true
-            } else {
-                errorMessage = if (isPersian) {
-                    "برای ورود به حساب دیگر، ابتدا تغییرات حساب فعلی باید همگام‌سازی شود. اتصال اینترنت را بررسی کنید و دوباره تلاش کنید."
-                } else {
-                    "Before switching accounts, the current account's changes must sync. Check your connection and try again."
-                }
-            }
-        }
-    }
-
     fun startBiometricUnlock() {
         if (isLoggingIn || biometricPromptShown) return
         if (typedAccountDiffers()) {
@@ -227,26 +204,6 @@ fun LoginScreen(
         )
     }
 
-    fun submitLocalPassword() {
-        if (isLoggingIn) return
-        if (typedAccountDiffers()) {
-            switchAccount()
-            return
-        }
-        if (!passwordUnlockReady) {
-            errorMessage = if (isPersian) "رمز ورود محلی هنوز آماده نیست؛ یک‌بار با اتصال به سرور وارد شوید." else "Local password verification is not initialized; sign in once with the server."
-            return
-        }
-        isLoggingIn = true
-        errorMessage = null
-        if (rememberedLoginStore.verifyPassword(password)) {
-            finishLocalUnlock()
-        } else {
-            isLoggingIn = false
-            errorMessage = if (isPersian) "رمز عبور نادرست است." else "Incorrect password."
-        }
-    }
-
     /**
      * Signs in against the server. [restoreAccount] is only ever true after the server said the
      * account was deleted and the user explicitly agreed to recover it in the dialog below.
@@ -267,15 +224,18 @@ fun LoginScreen(
                         // Biometric enrollment is opt-in and is performed only from Settings.
                         isLoggingIn = false
                         password = ""
+                        AccountSwitchGate.inProgress = false
                         onLoginSuccess()
                     }.onFailure { error ->
                         isLoggingIn = false
+                        AccountSwitchGate.inProgress = false
                         errorMessage = error.message?.takeIf { it.isNotBlank() }
                             ?: if (isPersian) "آماده‌سازی اولیه برنامه انجام نشد" else "Initial app setup failed"
                     }
                 }
                 .onFailure { error ->
                     isLoggingIn = false
+                    AccountSwitchGate.inProgress = false
                     if ((error as? ApiException)?.code == "ACCOUNT_DELETED") {
                         // Correct credentials, but the account was deleted: offer to restore it.
                         pendingDiscardGuestData = discardGuestData
@@ -313,6 +273,71 @@ fun LoginScreen(
             return
         }
         runServerLogin(identifier, restoreAccount = false, discardGuestData = false)
+    }
+
+    /**
+     * Signs the current account out of this device (after its unsynced changes are synced; refused
+     * when that is not possible) and then signs in to the typed account in the same step, so the
+     * user enters the other account's details only once.
+     *
+     * Signing out flips the session flag, which would normally make the navigation replace this
+     * screen (and drop what was typed). [AccountSwitchGate] holds that redirect back until the
+     * new sign-in has finished.
+     */
+    fun switchAccount() {
+        if (isLoggingIn) return
+        isLoggingIn = true
+        errorMessage = null
+        AccountSwitchGate.inProgress = true
+        scope.launch {
+            val ready = authRepository.prepareAccountSwitch().getOrDefault(false)
+            if (ready) {
+                accountSwitchRequested = true
+                isLoggingIn = false
+                // Continue straight into the normal sign-in with the details already typed.
+                // The gate is released when that sign-in ends (see runServerLogin).
+                submitServerLogin()
+                if (!isLoggingIn && !showGuestDataChoice) AccountSwitchGate.inProgress = false
+            } else {
+                isLoggingIn = false
+                AccountSwitchGate.inProgress = false
+                errorMessage = if (isPersian) {
+                    "برای ورود به حساب دیگر، ابتدا تغییرات حساب فعلی باید همگام‌سازی شود. اتصال اینترنت را بررسی کنید و دوباره تلاش کنید."
+                } else {
+                    "Before switching accounts, the current account's changes must sync. Check your connection and try again."
+                }
+            }
+        }
+    }
+
+    fun submitLocalPassword() {
+        if (isLoggingIn) return
+        if (typedAccountDiffers()) {
+            // Check the typed details first: nothing is signed out because of a typo.
+            val validationError = LoginInputValidator.validate(username, password, isPersian)
+            if (validationError != null) {
+                errorMessage = validationError
+                return
+            }
+            if (AuthInputNormalizer.identifier(username) == null) {
+                errorMessage = if (isPersian) "شماره موبایل معتبر نیست" else "Enter a valid phone number"
+                return
+            }
+            switchAccount()
+            return
+        }
+        if (!passwordUnlockReady) {
+            errorMessage = if (isPersian) "رمز ورود محلی هنوز آماده نیست؛ یک‌بار با اتصال به سرور وارد شوید." else "Local password verification is not initialized; sign in once with the server."
+            return
+        }
+        isLoggingIn = true
+        errorMessage = null
+        if (rememberedLoginStore.verifyPassword(password)) {
+            finishLocalUnlock()
+        } else {
+            isLoggingIn = false
+            errorMessage = if (isPersian) "رمز عبور نادرست است." else "Incorrect password."
+        }
     }
 
     // ---------------------------------------------------------------- guest helpers
@@ -455,6 +480,9 @@ fun LoginScreen(
         }
     }
 
+    // Never leave the redirect held back once this screen is gone.
+    DisposableEffect(Unit) { onDispose { AccountSwitchGate.inProgress = false } }
+
     // ---------------------------------------------------------------- dialogs
 
     if (showGuestDataChoice) {
@@ -468,7 +496,7 @@ fun LoginScreen(
                 showGuestDataChoice = false
                 pendingAccountIdentifier?.let { runServerLogin(it, restoreAccount = false, discardGuestData = true) }
             },
-            onDismiss = { showGuestDataChoice = false }
+            onDismiss = { showGuestDataChoice = false; AccountSwitchGate.inProgress = false }
         )
     }
 
@@ -866,6 +894,16 @@ private fun GuestLockCard(
     }
 }
 private object LocalLoginBackPress { var current: Long = 0L }
+
+/**
+ * True while the lock screen is signing out of one account to sign in to another. The navigation
+ * in MainActivity reads it so it does not rebuild the login screen (and wipe the typed details)
+ * when the old session ends.
+ */
+object AccountSwitchGate {
+    @Volatile
+    var inProgress: Boolean = false
+}
 
 @Composable
 fun LoadingButton(

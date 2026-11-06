@@ -327,7 +327,7 @@ class AuthRepositoryImpl(
                 fullName = existingUser?.fullName.orEmpty(),
                 firstName = existingUser?.firstName.orEmpty(),
                 lastName = existingUser?.lastName.orEmpty(),
-                gender = existingUser?.gender ?: "prefer_not_to_say",
+                gender = existingUser?.gender ?: "",
                 birthDate = existingUser?.birthDate,
                 isLoggedIn = true,
                 createdAt = existingUser?.createdAt ?: System.currentTimeMillis(),

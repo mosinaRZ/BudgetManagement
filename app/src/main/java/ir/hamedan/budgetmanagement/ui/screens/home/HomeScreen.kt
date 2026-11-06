@@ -32,6 +32,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.CheckCircle
@@ -1234,62 +1237,18 @@ fun HomeScreen(
 
                     items(recentTransactions, key = { it.id }) { transaction ->
                         val categories = categoriesList.orEmpty()
-
-                        val emoji = getCategoryEmoji(
-                            categories.find { it.id == transaction.categoryId }?.title.orEmpty(),
-                            categories
+                        val category = categories.find { it.id == transaction.categoryId }
+                        RecentTransactionCard(
+                            transaction = transaction,
+                            isPersian = isPersian,
+                            currencyUnit = currencyUnit,
+                            numberFormatter = numberFormatter,
+                            categoryTitle = category?.let { StringMapper.getCategoryName(it.title, isPersian) }
+                                ?: StringMapper.getCategoryName(transaction.categoryId, isPersian),
+                            categoryIcon = category?.iconEmoji.orEmpty(),
+                            // Every card opens the Transactions screen, like "See all".
+                            onClick = onSeeAllTransactionsClick
                         )
-                        val isExpense = transaction.type == "EXPENSE"
-                        val displayAmount = if (currencyUnit == "IRR") transaction.amount * 10L else transaction.amount
-                        val rowShape = RoundedCornerShape(20.dp)
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), rowShape)
-                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), rowShape)
-                                .clip(rowShape)
-                                .clickable { onTransactionClick(transaction) }
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier.size(44.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(text = emoji, fontSize = MaterialTheme.typography.headlineMedium.fontSize)
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                val categories = categoriesList.orEmpty()
-                                Text(
-                                    text = SystemTransactionText.localizeTitle(transaction.title, isPersian).ifEmpty {
-                                        categories.find { it.id == transaction.categoryId }?.title.orEmpty()
-                                    },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = DateUtils.formatTimestamp(transaction.timestamp, isPersian),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                )
-                            }
-                            val recentUnit = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "Rial" else "T")
-                            CountUpText(
-                                target = abs(displayAmount),
-                                key = "home.tx.${transaction.id}.$currencyUnit",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isExpense) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                durationScale = 0.8f,
-                                format = { v -> "${if (isExpense) "-" else "+"}${numberFormatter.format(v)} $recentUnit" }
-                            )
-                        }
                     }
 
                     item {
@@ -2266,6 +2225,156 @@ private fun getCategoryEmoji(categoryName: String, categoriesList: List<Category
 /**
  * کامپوننت SkeletonScreen برای آیتم‌های لیست تراکنش
  */
+/** Recent-transaction card on Home: the same card as the Transactions list (without its swipe actions). */
+@Composable
+private fun RecentTransactionCard(
+    transaction: TransactionEntity,
+    isPersian: Boolean,
+    currencyUnit: String,
+    numberFormatter: java.text.NumberFormat,
+    categoryTitle: String,
+    categoryIcon: String,
+    onClick: () -> Unit
+) {
+    val rowShape = RoundedCornerShape(20.dp)
+    val isExpense = transaction.type == "EXPENSE"
+    val accent = if (isExpense) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+
+    // \u200E (LRM) keeps the sign on the left of the digits in both RTL and LTR layouts.
+    val displayedAmount = if (currencyUnit == "IRR") transaction.amount.toLong() * 10 else transaction.amount.toLong()
+    val amountSign = if (isExpense) "-" else "+"
+    val currencySuffix = if (isPersian) {
+        if (currencyUnit == "IRR") "ریال" else "تومان"
+    } else {
+        if (currencyUnit == "IRR") "IRR" else "IRT"
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), rowShape)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), rowShape)
+            .clip(rowShape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Category emoji tile + small direction badge (income / expense)
+        Box(modifier = Modifier.size(48.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(accent.copy(alpha = 0.12f), RoundedCornerShape(16.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = categoryIcon.ifBlank { "📁" }, fontSize = 22.sp)
+            }
+            Box(
+                modifier = Modifier
+                    .size(18.dp)
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 4.dp, y = 4.dp)
+                    .background(accent, CircleShape)
+                    .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isExpense) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(10.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        // Title / note / category chip
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Text(
+                text = SystemTransactionText.localizeTitle(transaction.title, isPersian).ifEmpty { categoryTitle },
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            if (!transaction.note.isNullOrBlank()) {
+                Text(
+                    text = SystemTransactionText.localizeNote(transaction.note, isPersian).orEmpty(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(modifier = Modifier.height(2.dp))
+            Box(
+                modifier = Modifier
+                    .background(accent.copy(alpha = 0.10f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = categoryTitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // Amount / currency / date
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            CountUpText(
+                target = displayedAmount,
+                key = "tx.${transaction.id}.$currencyUnit",
+                format = { v -> "\u200E$amountSign${numberFormatter.format(v)}" },
+                durationScale = 0.75f,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color = accent
+            )
+            Text(
+                text = currencySuffix,
+                style = MaterialTheme.typography.labelSmall,
+                color = accent.copy(alpha = 0.75f),
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CalendarToday,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                    modifier = Modifier.size(12.dp)
+                )
+                Text(
+                    text = DateUtils.formatTimestamp(transaction.timestamp, isPersian),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun RecentTransactionSkeletonItem() {
     val rowShape = RoundedCornerShape(20.dp)

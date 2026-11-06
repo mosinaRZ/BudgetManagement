@@ -187,7 +187,7 @@ private const val ITEM_SECURITY = "security"
 private data class FormSnapshot(
     val first: String = "",
     val last: String = "",
-    val gender: String = GenderOption.PREFER_NOT_TO_SAY.value,
+    val gender: String = "",
     val birth: String? = null
 )
 
@@ -200,7 +200,7 @@ private data class FormSnapshot(
 private class ProfileFormState {
     var firstName by mutableStateOf("")
     var lastName by mutableStateOf("")
-    var gender by mutableStateOf(GenderOption.PREFER_NOT_TO_SAY.value)
+    var gender by mutableStateOf("")
     var birthDate by mutableStateOf<String?>(null)
 
     private var base by mutableStateOf(FormSnapshot())
@@ -211,14 +211,17 @@ private class ProfileFormState {
 
     val isDirty: Boolean get() = current != base
 
-    val isValid: Boolean get() = firstName.isNotBlank() && lastName.isNotBlank()
+    /** Saving only needs one filled field: nothing has to be complete to keep what was entered. */
+    val isValid: Boolean
+        get() = firstName.isNotBlank() || lastName.isNotBlank() ||
+                gender.isNotBlank() || !birthDate.isNullOrBlank()
 
     fun sync(user: UserEntity) {
         val incoming = FormSnapshot(
             first = user.firstName.trim(),
             last = user.lastName.trim(),
-            gender = user.gender.takeIf { g -> GenderOption.entries.any { it.value == g } }
-                ?: GenderOption.PREFER_NOT_TO_SAY.value,
+            // Anything that is not one of the three answers stays blank (= not answered yet).
+            gender = user.gender.takeIf { g -> GenderOption.entries.any { it.value == g } }.orEmpty(),
             birth = user.birthDate.normalized()
         )
         // Saving makes the form equal to the incoming profile, so that case re-bases too.
@@ -311,7 +314,7 @@ fun ProfileScreen(
             !user?.lastName.isNullOrBlank(),
             ProfileCompletion.isGenderAnswered(user?.gender),
             !user?.birthDate.isNullOrBlank(),
-        ).let { all -> if (viewModel.isGuest) all.dropLast(1) else all }
+        )
     }
     val completion = steps.count { it }
 
@@ -891,7 +894,9 @@ private fun PersonalInfoSheet(
         ProfileRow(
             icon = genderIcon(form.gender),
             label = if (isPersian) "جنسیت" else "Gender",
-            value = genderLabel(form.gender, isPersian),
+            value = if (genderChosen) genderLabel(form.gender, isPersian)
+            else if (isPersian) "جنسیت خود را انتخاب کنید" else "Choose your gender",
+            valueIsHint = !genderChosen,
             done = genderChosen,
             actionText = if (isPersian) "انتخاب" else "Choose",
             onClick = onGenderClick
