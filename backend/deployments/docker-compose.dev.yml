@@ -37,6 +37,8 @@ services:
       SMS_AUTH_TOKEN: ${SMS_AUTH_TOKEN:-}
       SMS_FROM_NUMBER: ${SMS_FROM_NUMBER:-}
       SMS_PATTERN_CODE: ${SMS_PATTERN_CODE:-}
+      APP_MIN_VERSION: ${APP_MIN_VERSION:-}
+      APP_LATEST_VERSION: ${APP_LATEST_VERSION:-}
     depends_on:
       mongo:
         condition: service_healthy

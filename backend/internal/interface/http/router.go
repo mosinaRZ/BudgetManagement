@@ -24,9 +24,13 @@ type RouterDependencies struct {
 	AdminHandler      *handler.AdminHandler
 	AdminPanelHandler *handler.AdminPanelHandler
 	// AdminGate re-checks the caller's role in the database for every admin request.
-	AdminGate          middleware.AdminGate
-	DeviceHandler      *handler.DeviceHandler
-	LegalHandler       *handler.LegalHandler
+	AdminGate     middleware.AdminGate
+	DeviceHandler *handler.DeviceHandler
+	LegalHandler  *handler.LegalHandler
+	// AppConfigHandler serves GET /app-config (public). MinAppVersion makes the API answer 426
+	// to app builds older than that version; empty disables the check.
+	AppConfigHandler   *handler.AppConfigHandler
+	MinAppVersion      string
 	JWTSecret          string
 	UserRepository     repository.UserRepository
 	DeviceRepository   repository.DeviceRepository
@@ -60,6 +64,7 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 	// generous per-user budget instead of the tight one that protects ordinary client traffic.
 	adminRateLimiter := middleware.NewRateLimiterWithStoreAndProxies("admin", store, rate.Every(250*time.Millisecond), 40, deps.TrustedProxyCIDRs)
 	presence := middleware.Presence(deps.DeviceRepository, 45*time.Second)
+	versionGate := middleware.MinAppVersion(deps.MinAppVersion)
 
 	r.Group(func(r chi.Router) {
 		r.Use(publicRateLimiter.LimitByIP)
@@ -67,6 +72,10 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 		r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 			response.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 		})
+
+		if deps.AppConfigHandler != nil {
+			r.Get("/app-config", deps.AppConfigHandler.Get)
+		}
 
 		if deps.LegalHandler != nil {
 			r.Get("/privacy-policy", deps.LegalHandler.PrivacyPolicy)
@@ -76,18 +85,22 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 		}
 
 		if deps.AuthHandler != nil {
-			r.With(otpRateLimiter.LimitByIP).Post("/auth/otp/request", deps.AuthHandler.RequestOTP)
-			r.Post("/auth/register", deps.AuthHandler.Register)
-			r.Post("/auth/login/params", deps.AuthHandler.LoginParams)
-			r.Post("/auth/login", deps.AuthHandler.Login)
-			r.Post("/auth/refresh", deps.AuthHandler.Refresh)
-			r.Post("/auth/recovery/prepare", deps.AuthHandler.PrepareRecovery)
-			r.Post("/auth/password/reset", deps.AuthHandler.ResetPassword)
-			r.Post("/auth/logout", deps.AuthHandler.Logout)
+			r.Group(func(r chi.Router) {
+				r.Use(versionGate)
+				r.With(otpRateLimiter.LimitByIP).Post("/auth/otp/request", deps.AuthHandler.RequestOTP)
+				r.Post("/auth/register", deps.AuthHandler.Register)
+				r.Post("/auth/login/params", deps.AuthHandler.LoginParams)
+				r.Post("/auth/login", deps.AuthHandler.Login)
+				r.Post("/auth/refresh", deps.AuthHandler.Refresh)
+				r.Post("/auth/recovery/prepare", deps.AuthHandler.PrepareRecovery)
+				r.Post("/auth/password/reset", deps.AuthHandler.ResetPassword)
+				r.Post("/auth/logout", deps.AuthHandler.Logout)
+			})
 		}
 	})
 
 	r.Group(func(r chi.Router) {
+		r.Use(versionGate)
 		r.Use(middleware.AuthWithDevices(deps.JWTSecret, deps.UserRepository, deps.DeviceRepository))
 		r.Use(protectedRateLimiter.LimitByUser)
 		r.Use(presence)
@@ -112,6 +125,7 @@ func NewRouter(deps RouterDependencies) *chi.Mux {
 
 	if deps.AdminHandler != nil || deps.AdminPanelHandler != nil {
 		r.Group(func(r chi.Router) {
+			r.Use(versionGate)
 			r.Use(middleware.AuthWithDevices(deps.JWTSecret, deps.UserRepository, deps.DeviceRepository))
 			r.Use(adminRateLimiter.LimitByUser)
 			r.Use(presence)
