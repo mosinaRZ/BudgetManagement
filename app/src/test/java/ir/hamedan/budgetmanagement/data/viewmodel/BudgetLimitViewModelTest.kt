@@ -13,6 +13,9 @@ import ir.hamedan.budgetmanagement.data.repository.NotificationRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitUiModel
 import ir.hamedan.budgetmanagement.ui.screens.budget.BudgetLimitViewModel
+import ir.hamedan.budgetmanagement.ui.screens.budget.endOfDayMillis
+import ir.hamedan.budgetmanagement.ui.screens.budget.findOverlappingLimit
+import ir.hamedan.budgetmanagement.ui.screens.budget.startOfDayMillis
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -58,5 +61,24 @@ class BudgetLimitViewModelTest {
         val ui = BudgetLimitUiModel(entity, 0.0)
         assertThat(ui.isExpired).isTrue()
         assertThat(ui.isActive).isFalse()
+    }
+
+    @Test fun endOfDayMillis_isIdempotent_soResavingALimitDoesNotShiftTheEndDate() {
+        val endOfDay = endOfDayMillis(now)
+        assertThat(endOfDay).isGreaterThan(now - 1L)
+        assertThat(endOfDayMillis(endOfDay)).isEqualTo(endOfDay)
+        assertThat(endOfDayMillis(startOfDayMillis(now))).isEqualTo(endOfDay)
+    }
+
+    @Test fun findOverlappingLimit_detectsOverlapOnlyForSameCategory_andIgnoresTheLimitBeingEdited() {
+        val day = 24L * 60 * 60 * 1000
+        val existing = BudgetLimitEntity(id = "a", categoryId = "food", maxLimit = 100L, startDate = 10 * day, endDate = 20 * day)
+        val limits = listOf(existing)
+
+        assertThat(findOverlappingLimit(limits, "food", 15 * day, 25 * day)).isEqualTo(existing)
+        assertThat(findOverlappingLimit(limits, "food", 20 * day, 30 * day)).isEqualTo(existing) // touching edge overlaps
+        assertThat(findOverlappingLimit(limits, "food", 21 * day, 30 * day)).isNull()
+        assertThat(findOverlappingLimit(limits, "transport", 15 * day, 25 * day)).isNull()
+        assertThat(findOverlappingLimit(limits, "food", 15 * day, 25 * day, excludeId = "a")).isNull()
     }
 }

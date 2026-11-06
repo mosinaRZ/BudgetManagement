@@ -1,42 +1,28 @@
 package ir.hamedan.budgetmanagement.ui.screens.budgetLimit
 
-import ir.hamedan.budgetmanagement.ui.components.CountUpText
 import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
-import ir.hamedan.budgetmanagement.ui.components.WheelDatePickerDialog
 
-import androidx.compose.animation.core.Animatable
-import ir.hamedan.budgetmanagement.data.money.MoneyContract
 import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
-import ir.hamedan.budgetmanagement.ui.components.SuccessBottomSheet
-import ir.hamedan.budgetmanagement.ui.components.SuccessSheetContent
-import ir.hamedan.budgetmanagement.ui.components.formatSuccessAmountFromToman
 import ir.hamedan.budgetmanagement.ui.components.showError
-import ir.hamedan.budgetmanagement.ui.components.showInfo
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AttachMoney
-import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -49,19 +35,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import ir.hamedan.budgetmanagement.R
-import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.StatusBarAuroraBackground
@@ -73,45 +53,12 @@ import ir.hamedan.budgetmanagement.utils.StringMapper
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.*
-import kotlin.math.ceil
-
-class ThousandsSeparatorTransformation : VisualTransformation {
-    override fun filter(text: AnnotatedString): TransformedText {
-        val originalText = text.text
-        if (originalText.isEmpty()) {
-            return TransformedText(text, OffsetMapping.Identity)
-        }
-
-        val formattedText = StringBuilder()
-        for (i in originalText.indices) {
-            formattedText.append(originalText[i])
-            if ((originalText.length - 1 - i) % 3 == 0 && i != originalText.length - 1) {
-                formattedText.append(",")
-            }
-        }
-
-        val numberOffsetTranslator = object : OffsetMapping {
-            override fun originalToTransformed(offset: Int): Int {
-                if (offset <= 0) return 0
-                val commasBefore = (offset - 1) / 3
-                return (offset + commasBefore).coerceAtMost(formattedText.length)
-            }
-
-            override fun transformedToOriginal(offset: Int): Int {
-                if (offset <= 0) return 0
-                val commasBefore = offset / 4
-                return (offset - commasBefore).coerceAtMost(originalText.length)
-            }
-        }
-
-        return TransformedText(AnnotatedString(formattedText.toString()), numberOffsetTranslator)
-    }
-}
 
 @Composable
 fun BudgetLimitScreen(
     onBackClick: () -> Unit = {},
-    onCategoriesClick: () -> Unit = {},
+    onAddLimitClick: () -> Unit = {},
+    onEditLimitClick: (limitId: String) -> Unit = {},
     viewModel: BudgetLimitViewModel = appViewModel()
 ) {
     val context = LocalContext.current
@@ -137,11 +84,7 @@ fun BudgetLimitScreen(
         NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
     }
 
-    var showAddDialog by remember { mutableStateOf(false) }
-    var limitToEdit by remember { mutableStateOf<BudgetLimitUiModel?>(null) }
     var limitToDelete by remember { mutableStateOf<BudgetLimitUiModel?>(null) }
-    // محتوای شیت موفقیت؛ null یعنی شیت نمایش داده نمی‌شود
-    var successSheet by remember { mutableStateOf<SuccessSheetContent?>(null) }
 
     val limitsList = limitsListState ?: emptyList()
 
@@ -200,7 +143,7 @@ fun BudgetLimitScreen(
                                 )
                                 Spacer(modifier = Modifier.height(20.dp))
                                 Button(
-                                    onClick = { showAddDialog = true },
+                                    onClick = onAddLimitClick,
                                     shape = RoundedCornerShape(14.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                                 ) {
@@ -225,7 +168,7 @@ fun BudgetLimitScreen(
                             onToggleActive = { isActive ->
                                 viewModel.updateLimitStatus(item.entity.id, isActive)
                             },
-                            onEditClick = { limitToEdit = item },
+                            onEditClick = { onEditLimitClick(item.entity.id) },
                             onDeleteClick = { limitToDelete = item },
                             onRenewClick = { viewModel.renewLimit(item.entity.id) }
                         )
@@ -290,7 +233,7 @@ fun BudgetLimitScreen(
         // ------------------ Floating Action Button ------------------
         if (limitsListState != null && limitsList.isNotEmpty()) {
             FloatingActionButton(
-                onClick = { showAddDialog = true },
+                onClick = onAddLimitClick,
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 shape = CircleShape,
@@ -300,7 +243,7 @@ fun BudgetLimitScreen(
                     .padding(24.dp)
                     .size(56.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Limit", modifier = Modifier.size(28.dp))
+                Icon(Icons.Default.Add, contentDescription = if (isPersian) "افزودن سقف" else "Add limit", modifier = Modifier.size(28.dp))
             }
         }
 
@@ -313,53 +256,6 @@ fun BudgetLimitScreen(
                 .navigationBarsPadding()
                 .padding(bottom = 90.dp, start = 16.dp, end = 16.dp)
         )
-
-        // ------------------ Dialog Add/Edit ------------------
-        if (showAddDialog || limitToEdit != null) {
-            AddOrEditLimitDialog(
-                limitToEdit = limitToEdit,
-                categories = categories,
-                isPersian = isPersian,
-                currencyUnit = currencyUnit,
-                onDismiss = {
-                    showAddDialog = false
-                    limitToEdit = null
-                },
-                onCategoriesClick = onCategoriesClick,
-                onConfirm = { categoryName, maxLimit, startDate, endDate ->
-                    val editingLimitId = limitToEdit?.entity?.id
-                    viewModel.saveBudgetLimit(
-                        categoryName = categoryName,
-                        maxLimit = maxLimit,
-                        startDate = startDate,
-                        endDate = endDate,
-                        limitId = editingLimitId,
-                        onResult = { saved ->
-                            if (saved) {
-                                successSheet = budgetLimitSavedContent(
-                                    isEdit = editingLimitId != null,
-                                    categoryTitle = StringMapper.getCategoryName(categoryName, isPersian),
-                                    maxLimitToman = MoneyContract.fromInput(maxLimit),
-                                    currencyUnit = currencyUnit,
-                                    isPersian = isPersian
-                                )
-                            }
-                        }
-                    )
-                    showAddDialog = false
-                    limitToEdit = null
-                }
-            )
-        }
-
-        // ------------------ شیت موفقیت (تمام‌صفحه) ------------------
-        successSheet?.let { content ->
-            SuccessBottomSheet(
-                content = content,
-                isPersian = isPersian,
-                onDismiss = { successSheet = null }
-            )
-        }
 
         // ------------------ Delete Dialog (Delete) ------------------
         limitToDelete?.let { item ->
@@ -714,405 +610,6 @@ fun BudgetLimitItemCard(
                     .clip(CircleShape),
                 color = if (item.isActive || item.isExpired) progressColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
                 trackColor = progressColor.copy(alpha = 0.12f)
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun AddOrEditLimitDialog(
-    limitToEdit: BudgetLimitUiModel? = null,
-    categories: List<CategoryEntity>,
-    isPersian: Boolean,
-    currencyUnit: String,
-    onDismiss: () -> Unit,
-    onCategoriesClick: () -> Unit = {},
-    onConfirm: (categoryName: String, maxLimit: Double, startDate: Long, endDate: Long) -> Unit
-) {
-    val maxDigitsLength = 12
-
-    var selectedCategoryKey by remember {
-        mutableStateOf(categories.firstOrNull { it.id == limitToEdit?.entity?.categoryId }?.title ?: categories.firstOrNull()?.title ?: "")
-    }
-    var expanded by remember { mutableStateOf(false) }
-
-    val initialRawDigits = remember(limitToEdit, currencyUnit) {
-        if (limitToEdit == null) ""
-        else {
-            val amount = if (currencyUnit == "IRR") limitToEdit.entity.maxLimit * 10L else limitToEdit.entity.maxLimit
-            amount.toString().take(maxDigitsLength)
-        }
-    }
-    var rawAmountDigits by remember { mutableStateOf(initialRawDigits) }
-
-    val todayStartMillis = remember {
-        Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-    }
-
-    var startDateMillis by remember {
-        mutableStateOf((limitToEdit?.entity?.startDate ?: todayStartMillis).coerceAtLeast(todayStartMillis))
-    }
-    var endDateMillis by remember { mutableStateOf(limitToEdit?.entity?.endDate ?: (todayStartMillis + 30L * 24 * 60 * 60 * 1000)) }
-
-    var showStartDatePicker by remember { mutableStateOf(false) }
-    var showEndDatePicker by remember { mutableStateOf(false) }
-
-    if (showStartDatePicker) {
-        WheelDatePickerDialog(
-            isPersian = isPersian,
-            title = if (isPersian) "تاریخ شروع" else "Start date",
-            initialMillis = startDateMillis,
-            minDate = java.time.LocalDate.now(),
-            onConfirm = { picked ->
-                startDateMillis = picked.coerceAtLeast(todayStartMillis)
-                showStartDatePicker = false
-            },
-            onDismiss = { showStartDatePicker = false }
-        )
-    }
-
-    if (showEndDatePicker) {
-        WheelDatePickerDialog(
-            isPersian = isPersian,
-            title = if (isPersian) "تاریخ پایان" else "End date",
-            initialMillis = endDateMillis,
-            minDate = java.time.LocalDate.now(),
-            onConfirm = { picked ->
-                endDateMillis = picked
-                showEndDatePicker = false
-            },
-            onDismiss = { showEndDatePicker = false }
-        )
-    }
-
-    Dialog(onDismissRequest = onDismiss) {
-        val dialogShape = RoundedCornerShape(28.dp)
-        val selectedCategoryObj = categories.find { it.title == selectedCategoryKey }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.96f),
-                    shape = dialogShape
-                )
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                    shape = dialogShape
-                )
-                .clip(dialogShape)
-                .padding(24.dp)
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (limitToEdit != null) Icons.Default.Edit else Icons.Default.Add,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
-
-                Text(
-                    text = if (limitToEdit != null) {
-                        if (isPersian) "ویرایش سقف بودجه" else "Edit Budget Limit"
-                    } else {
-                        if (isPersian) "تعریف سقف جدید" else "Set New Budget Limit"
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                ExposedDropdownMenuBox(
-                    expanded = expanded,
-                    onExpandedChange = { expanded = !expanded }
-                ) {
-                    OutlinedTextField(
-                        value = StringMapper.getCategoryName(selectedCategoryKey, isPersian),
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text(if (isPersian) "دسته‌بندی" else "Category") },
-                        leadingIcon = {
-                            if (selectedCategoryObj != null) {
-                                Text(
-                                    text = selectedCategoryObj.iconEmoji,
-                                    fontSize = 20.sp,
-                                    modifier = Modifier.padding(horizontal = 4.dp)
-                                )
-                            }
-                        },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                        modifier = Modifier
-                            .menuAnchor()
-                            .fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp)
-                    )
-
-                    ExposedDropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false },
-                        modifier = Modifier
-                            .heightIn(max = 280.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        if (categories.isEmpty()) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = if (isPersian) "دسته‌بندی یافت نشد" else "No categories found",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                },
-                                onClick = { expanded = false }
-                            )
-                        } else {
-                            categories.forEach { category ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            Text(text = category.iconEmoji, fontSize = 22.sp)
-                                            Text(
-                                                text = StringMapper.getCategoryName(category.title, isPersian),
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                        }
-                                    },
-                                    onClick = {
-                                        selectedCategoryKey = category.title
-                                        expanded = false
-                                    },
-                                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                                )
-                            }
-                        }
-
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 8.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
-
-                        DropdownMenuItem(
-                            text = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Text(
-                                        text = if (isPersian) "مدیریت دسته‌بندی‌ها..." else "Manage Categories...",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            },
-                            onClick = {
-                                expanded = false
-                                onDismiss()
-                                onCategoriesClick()
-                            },
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
-                        )
-                    }
-                }
-
-                val labelCurrency = if (isPersian) (if (currencyUnit == "IRR") "سقف مجاز (ریال)" else "سقف مجاز (تومان)")
-                else (if (currencyUnit == "IRR") "Max Limit (Rial)" else "Max Limit (Toman)")
-
-                OutlinedTextField(
-                    value = rawAmountDigits,
-                    onValueChange = { input ->
-                        val digitsOnly = input.filter { it.isDigit() }
-                        if (digitsOnly.length <= maxDigitsLength) {
-                            rawAmountDigits = digitsOnly
-                        }
-                    },
-                    label = { Text(labelCurrency) },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.AttachMoney,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    singleLine = true,
-                    visualTransformation = ThousandsSeparatorTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { showStartDatePicker = true },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(54.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Column(horizontalAlignment = Alignment.Start) {
-                                Text(
-                                    text = if (isPersian) "تاریخ شروع" else "Start Date",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontSize = 10.sp
-                                )
-                                Text(
-                                    text = DateUtils.formatTimestamp(startDateMillis, isPersian),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-
-                    OutlinedButton(
-                        onClick = { showEndDatePicker = true },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(54.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Column(horizontalAlignment = Alignment.Start) {
-                                Text(
-                                    text = if (isPersian) "تاریخ پایان" else "End Date",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontSize = 10.sp
-                                )
-                                Text(
-                                    text = DateUtils.formatTimestamp(endDateMillis, isPersian),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(if (isPersian) "انصراف" else "Cancel")
-                        }
-                    }
-
-                    val cleanNumber = rawAmountDigits.toDoubleOrNull() ?: 0.0
-
-                    Button(
-                        onClick = {
-                            val finalMaxInToman = if (currencyUnit == "IRR") cleanNumber / 10.0 else cleanNumber
-                            onConfirm(selectedCategoryKey, finalMaxInToman, startDateMillis, endDateMillis)
-                        },
-                        enabled = selectedCategoryKey.isNotBlank() && cleanNumber > 0 && endDateMillis > startDateMillis,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = if (limitToEdit != null) Icons.Default.Check else Icons.Default.Add,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                text = if (limitToEdit != null) (if (isPersian) "ذخیره" else "Save") else (if (isPersian) "ایجاد" else "Create"),
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// متن شیت موفقیت
-// ---------------------------------------------------------------------------
-
-private fun budgetLimitSavedContent(
-    isEdit: Boolean,
-    categoryTitle: String,
-    maxLimitToman: Long,
-    currencyUnit: String,
-    isPersian: Boolean
-): SuccessSheetContent {
-    val limit = formatSuccessAmountFromToman(maxLimitToman, currencyUnit, isPersian)
-    return if (isPersian) {
-        if (isEdit) {
-            SuccessSheetContent(
-                title = "محدودیت مالی به‌روزرسانی شد",
-                message = "تغییرات محدودیت دسته‌بندی «$categoryTitle» با سقف $limit با موفقیت ذخیره شد."
-            )
-        } else {
-            SuccessSheetContent(
-                title = "محدودیت مالی ثبت شد",
-                message = "سقف $limit برای دسته‌بندی «$categoryTitle» با موفقیت تعیین شد.",
-                hint = "پیشرفت خرج خود را در همین صفحه دنبال کنید."
-            )
-        }
-    } else {
-        if (isEdit) {
-            SuccessSheetContent(
-                title = "Budget limit updated",
-                message = "Your changes to the “$categoryTitle” limit (now $limit) were saved successfully."
-            )
-        } else {
-            SuccessSheetContent(
-                title = "Budget limit set",
-                message = "A limit of $limit was set for “$categoryTitle” successfully.",
-                hint = "Track your spending against it right on this page."
             )
         }
     }

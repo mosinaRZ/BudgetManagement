@@ -16,11 +16,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -63,15 +61,11 @@ import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.StatusBarAuroraBackground
-import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.ceil
-
-// ایموجی‌های پیشنهادی برای انتخاب قلک
-val DEFAULT_GOAL_EMOJIS = listOf("🎯", "🚗", "🏠", "💻", "📱", "✈️", "💍", "🎓", "🎮", "🎁", "🛵", "🪙")
 
 /**
  * VisualTransformation جهت تفکیک سه رقمی اعداد بدون دستکاری متن اصلی
@@ -126,6 +120,9 @@ class CurrencyAmountInputVisualTransformation : VisualTransformation {
 @Composable
 fun SavingGoalsScreen(
     onBackClick: () -> Unit = {},
+    // ساخت و ویرایش قلک در صفحه‌ی مرحله‌ایِ جداگانه انجام می‌شود (GoalEditorScreen)، نه دیالوگ.
+    onAddGoalClick: () -> Unit = {},
+    onEditGoalClick: (goalId: String) -> Unit = {},
     viewModel: SavingGoalsViewModel = appViewModel()
 ) {
     val context = LocalContext.current
@@ -139,8 +136,6 @@ fun SavingGoalsScreen(
         NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
     }
 
-    var showAddDialog by remember { mutableStateOf(false) }
-    var goalToEdit by remember { mutableStateOf<SavingGoalEntity?>(null) }
     var goalToDelete by remember { mutableStateOf<SavingGoalEntity?>(null) }
     var goalForDeposit by remember { mutableStateOf<SavingGoalEntity?>(null) }
     var goalForWithdraw by remember { mutableStateOf<SavingGoalEntity?>(null) }
@@ -298,7 +293,7 @@ fun SavingGoalsScreen(
                                 )
                                 Spacer(modifier = Modifier.height(20.dp))
                                 Button(
-                                    onClick = { showAddDialog = true },
+                                    onClick = onAddGoalClick,
                                     shape = RoundedCornerShape(14.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                                 ) {
@@ -321,7 +316,7 @@ fun SavingGoalsScreen(
                             numberFormatter = numberFormatter,
                             onDepositClick = { goalForDeposit = goal },
                             onWithdrawClick = { goalForWithdraw = goal },
-                            onEditClick = { goalToEdit = goal },
+                            onEditClick = { onEditGoalClick(goal.id) },
                             onDeleteClick = { goalToDelete = goal }
                         )
                     }
@@ -383,7 +378,7 @@ fun SavingGoalsScreen(
 
         if (goalsListState != null && goalsList.isNotEmpty()) {
             FloatingActionButton(
-                onClick = { showAddDialog = true },
+                onClick = onAddGoalClick,
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 shape = CircleShape,
@@ -406,42 +401,6 @@ fun SavingGoalsScreen(
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp, start = 16.dp, end = 16.dp)
         )
-
-        // دیالوگ افزودن / ویرایش
-        if (showAddDialog || goalToEdit != null) {
-            AddOrEditGoalDialog(
-                goalToEdit = goalToEdit,
-                isPersian = isPersian,
-                currencyUnit = currencyUnit,
-                onDismiss = {
-                    showAddDialog = false
-                    goalToEdit = null
-                },
-                onConfirm = { title, targetAmount, monthlyAmount, icon ->
-                    val editingGoal = goalToEdit
-                    if (editingGoal != null) {
-                        viewModel.updateGoal(
-                            editingGoal.copy(
-                                title = title,
-                                targetAmount = targetAmount,
-                                monthlyAmount = monthlyAmount,
-                                icon = icon
-                            )
-                        ) { saved ->
-                            if (saved) successSheet = goalUpdatedContent(title.trim(), isPersian)
-                        }
-                    } else {
-                        viewModel.addGoal(title, targetAmount, monthlyAmount, icon) { saved ->
-                            if (saved) {
-                                successSheet = goalCreatedContent(title.trim(), targetAmount, currencyUnit, isPersian)
-                            }
-                        }
-                    }
-                    showAddDialog = false
-                    goalToEdit = null
-                }
-            )
-        }
 
         // دیالوگ واریز
         goalForDeposit?.let { goal ->
@@ -943,230 +902,6 @@ fun SavingGoalItemCard(
 }
 
 @Composable
-fun AddOrEditGoalDialog(
-    goalToEdit: SavingGoalEntity? = null,
-    isPersian: Boolean,
-    currencyUnit: String,
-    onDismiss: () -> Unit,
-    onConfirm: (title: String, targetAmount: Long, monthlyAmount: Long, icon: String) -> Unit
-) {
-    val maxTitleLength = 25
-    val maxDigits = 12
-
-    var title by remember { mutableStateOf(goalToEdit?.title ?: "") }
-    var selectedIcon by remember { mutableStateOf(goalToEdit?.icon ?: "🎯") }
-
-    val initialTargetRaw = remember(goalToEdit, currencyUnit) {
-        if (goalToEdit == null) ""
-        else {
-            val amount = if (currencyUnit == "IRR") (goalToEdit.targetAmount * 10).toLong() else goalToEdit.targetAmount.toLong()
-            amount.toString()
-        }
-    }
-    var rawTargetAmount by remember { mutableStateOf(initialTargetRaw) }
-
-    val initialMonthlyRaw = remember(goalToEdit, currencyUnit) {
-        if (goalToEdit == null || goalToEdit.monthlyAmount <= 0) ""
-        else {
-            val amount = if (currencyUnit == "IRR") (goalToEdit.monthlyAmount * 10).toLong() else goalToEdit.monthlyAmount.toLong()
-            amount.toString()
-        }
-    }
-    var rawMonthlyAmount by remember { mutableStateOf(initialMonthlyRaw) }
-
-    // متن تشخیص داده شده از میکروفون
-    var detectedTitle by remember { mutableStateOf<String?>(null) }
-
-    Dialog(onDismissRequest = onDismiss) {
-        val dialogShape = RoundedCornerShape(28.dp)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.96f),
-                    shape = dialogShape
-                )
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                    shape = dialogShape
-                )
-                .clip(dialogShape)
-                .padding(24.dp)
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text(
-                    text = if (goalToEdit != null) {
-                        if (isPersian) "ویرایش قلک" else "Edit Goal"
-                    } else {
-                        if (isPersian) "ساخت قلک جدید" else "New Savings Goal"
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                // انتخاب آیکون
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = if (isPersian) "انتخاب آیکون:" else "Select Icon:",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        items(DEFAULT_GOAL_EMOJIS) { emoji ->
-                            Box(
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (selectedIcon == emoji) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                        else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
-                                    )
-                                    .border(
-                                        1.5.dp,
-                                        if (selectedIcon == emoji) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent,
-                                        CircleShape
-                                    )
-                                    .clickable { selectedIcon = emoji },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(text = emoji, fontSize = 20.sp)
-                            }
-                        }
-                    }
-                }
-
-                // فیلد عنوان + میکروفون
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { if (it.length <= maxTitleLength) title = it },
-                    label = { Text(if (isPersian) "عنوان قلک (مثلاً: خرید لپ‌تاپ)" else "Goal Title") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    trailingIcon = {
-                        VoiceInputButton(
-                            onResult = { spoken ->
-                                detectedTitle = spoken
-                                title = spoken.take(maxTitleLength)
-                            },
-                            language = if (isPersian) "fa-IR" else "en-US"
-                        )
-                    }
-                )
-
-                val labelCurrency = if (isPersian) (if (currencyUnit == "IRR") "مبلغ هدف (ریال)" else "مبلغ هدف (تومان)")
-                else (if (currencyUnit == "IRR") "Target Amount (Rial)" else "Target Amount (Toman)")
-
-                // ورود مبلغ با اعمال VisualTransformation و محدودیت ۱۲ رقم
-                OutlinedTextField(
-                    value = rawTargetAmount,
-                    onValueChange = { input ->
-                        val digitsOnly = input.filter { it.isDigit() }
-                        if (digitsOnly.length <= maxDigits) {
-                            rawTargetAmount = digitsOnly
-                        }
-                    },
-                    label = { Text(labelCurrency) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    visualTransformation = CurrencyAmountInputVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
-                )
-
-                val labelMonthly = if (isPersian) (if (currencyUnit == "IRR") "مبلغ ماهانه (ریال)" else "مبلغ ماهانه (تومان)")
-                else (if (currencyUnit == "IRR") "Monthly Amount (Rial)" else "Monthly Amount (Toman)")
-
-                OutlinedTextField(
-                    value = rawMonthlyAmount,
-                    onValueChange = { input ->
-                        val digitsOnly = input.filter { it.isDigit() }
-                        if (digitsOnly.length <= maxDigits) {
-                            rawMonthlyAmount = digitsOnly
-                        }
-                    },
-                    label = { Text(labelMonthly) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    visualTransformation = CurrencyAmountInputVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    supportingText = {
-                        Text(
-                            text = if (isPersian)
-                                "هر ماه این مبلغ از بالانس کسر و به قلک اضافه می‌شود"
-                            else
-                                "This amount is deducted from balance and added to the goal each month",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(if (isPersian) "انصراف" else "Cancel")
-                        }
-                    }
-
-                    Button(
-                        onClick = {
-                            val cleanTarget = rawTargetAmount.toLongOrNull() ?: 0L
-                            val finalTargetInToman = if (currencyUnit == "IRR") cleanTarget / 10L else cleanTarget
-                            val cleanMonthly = rawMonthlyAmount.toLongOrNull() ?: 0L
-                            val finalMonthlyInToman = if (currencyUnit == "IRR") cleanMonthly / 10L else cleanMonthly
-                            onConfirm(title.trim(), finalTargetInToman, finalMonthlyInToman, selectedIcon)
-                        },
-                        enabled = title.isNotBlank() && (rawTargetAmount.toLongOrNull() ?: 0L) > 0L,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = if (goalToEdit != null) Icons.Default.Check else Icons.Default.Add,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                if (goalToEdit != null) (if (isPersian) "ذخیره" else "Save")
-                                else (if (isPersian) "ایجاد" else "Create"),
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun AmountActionDialog(
     title: String,
     isPersian: Boolean,
@@ -1301,7 +1036,7 @@ fun AmountActionDialog(
 // متن شیت‌های موفقیت
 // ---------------------------------------------------------------------------
 
-private fun goalCreatedContent(
+internal fun goalCreatedContent(
     title: String,
     targetAmountToman: Long,
     currencyUnit: String,
@@ -1323,7 +1058,7 @@ private fun goalCreatedContent(
     }
 }
 
-private fun goalUpdatedContent(title: String, isPersian: Boolean): SuccessSheetContent =
+internal fun goalUpdatedContent(title: String, isPersian: Boolean): SuccessSheetContent =
     if (isPersian) {
         SuccessSheetContent(
             title = "قلک به‌روزرسانی شد",

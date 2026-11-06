@@ -50,17 +50,60 @@ sealed interface AppRoute {
         val transactionId: String
     ) : AppRoute
 
+    /**
+     * جریان تمام‌صفحه‌ی مرحله‌به‌مرحله‌ی ثبت بدهی/طلب (مبلغ ← طرف حساب ← نحوه‌ی تسویه ← مرور).
+     * نام مسیر عمداً شامل کلمه‌ی «Debt» نیست تا بررسی مسیرِ یادآور سررسید در MainActivity
+     * (route.contains("Debt")) فقط به صفحه‌ی فهرست [Debt] واکنش نشان دهد.
+     */
+    @Serializable
+    data object AddLoanRecord : AppRoute
+
+    /** ویرایش تمام‌صفحه‌ی یک بدهی/طلب (جایگزین دیالوگ قدیمی). */
+    @Serializable
+    data class EditLoanRecord(
+        val recordId: String
+    ) : AppRoute
+
     @Serializable
     data object Categories : AppRoute
 
+    /**
+     * ثبت و ویرایش تمام‌صفحه‌ی دسته‌بندی (نام ← آیکون ← مرور).
+     * [categoryId] خالی یعنی دسته‌ی جدید با نوع [isExpense]؛ مقدار داشته باشد یعنی ویرایش همان دسته.
+     */
+    @Serializable
+    data class CategoryEditor(
+        val categoryId: String? = null,
+        val isExpense: Boolean = true
+    ) : AppRoute
+
     @Serializable
     data object Limits : AppRoute
+
+    /** جریان تمام‌صفحه‌ی مرحله‌به‌مرحله‌ی ثبت سقف بودجه (دسته ← مبلغ ← بازه ← مرور). */
+    @Serializable
+    data object AddBudgetLimit : AppRoute
+
+    /** ویرایش تمام‌صفحه‌ی یک سقف بودجه (جایگزین دیالوگ قدیمی). */
+    @Serializable
+    data class EditBudgetLimit(
+        val limitId: String
+    ) : AppRoute
 
     @Serializable
     data object Upcoming : AppRoute
 
     @Serializable
     data object Goals : AppRoute
+
+    /**
+     * جریان تمام‌صفحه‌ی مرحله‌ای ساخت و ویرایش قلک (عنوان ← آیکون ← مبلغ ← مرور).
+     * [goalId] خالی یعنی قلک جدید؛ در غیر این صورت ویرایش همان قلک.
+     */
+    @Serializable
+    data class GoalEditor(
+        val goalId: String? = null
+    ) : AppRoute
 
     @Serializable
     data object Debt : AppRoute

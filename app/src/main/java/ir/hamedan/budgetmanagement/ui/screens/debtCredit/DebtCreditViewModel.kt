@@ -58,6 +58,9 @@ class DebtCreditViewModel(
     private val errorHandler = viewModelErrorHandler(context, "DebtCreditVM") { _errorMessage.tryEmit(it) }
 
 
+    /** یک بدهی/طلب را با شناسه می‌خواند (برای صفحه‌ی ویرایش)؛ اگر پیدا نشد null. */
+    suspend fun findDebtCredit(id: String): DebtCreditEntity? = debtCreditRepository.getById(id)
+
     fun findNameMatches(personName: String): List<DebtCreditEntity> {
         val normalizedName = personName.trim()
         if (normalizedName.isBlank()) return emptyList()

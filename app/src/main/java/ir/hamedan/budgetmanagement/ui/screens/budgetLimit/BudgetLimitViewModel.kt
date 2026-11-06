@@ -15,8 +15,14 @@ import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import ir.hamedan.budgetmanagement.data.money.MoneyContract
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
+import ir.hamedan.budgetmanagement.utils.ErrorMessages
+import ir.hamedan.budgetmanagement.utils.rethrowIfCancelled
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 data class BudgetLimitUiModel(
     val entity: BudgetLimitEntity,
@@ -32,6 +38,41 @@ data class BudgetLimitUiModel(
 
     val isSuccessful: Boolean
         get() = currentSpent <= entity.maxLimit.toDouble()
+}
+
+
+private const val DAY_MILLIS = 24L * 60L * 60L * 1000L
+
+private fun millisToLocalDate(millis: Long, zone: ZoneId = ZoneId.systemDefault()): LocalDate =
+    Instant.ofEpochMilli(millis).atZone(zone).toLocalDate()
+
+/** آغاز روزی که [millis] در آن قرار دارد (۰۰:۰۰:۰۰.۰۰۰ به وقت محلی). */
+internal fun startOfDayMillis(millis: Long, zone: ZoneId = ZoneId.systemDefault()): Long =
+    millisToLocalDate(millis, zone).atStartOfDay(zone).toInstant().toEpochMilli()
+
+/**
+ * پایان روزی که [millis] در آن قرار دارد (۲۳:۵۹:۵۹.۹۹۹).
+ * اگر [millis] از قبل پایان همان روز باشد، همان مقدار برمی‌گردد؛ پس ذخیره‌ی دوباره‌ی یک سقف
+ * (مثلاً در ویرایش) تاریخ پایان را جابه‌جا نمی‌کند.
+ */
+internal fun endOfDayMillis(millis: Long, zone: ZoneId = ZoneId.systemDefault()): Long =
+    millisToLocalDate(millis, zone).plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1L
+
+/**
+ * سقفی از همین دسته که بازه‌اش با [startMillis]..[endMillis] هم‌پوشانی دارد (یا null).
+ * [excludeId] برای ویرایش است تا سقف با خودش اشتباه نشود.
+ */
+internal fun findOverlappingLimit(
+    limits: List<BudgetLimitEntity>,
+    categoryId: String,
+    startMillis: Long,
+    endMillis: Long,
+    excludeId: String? = null
+): BudgetLimitEntity? = limits.firstOrNull { existing ->
+    existing.id != excludeId &&
+            existing.categoryId == categoryId &&
+            existing.startDate <= endMillis &&
+            existing.endDate >= startMillis
 }
 
 class BudgetLimitViewModel(
@@ -50,6 +91,18 @@ class BudgetLimitViewModel(
 
 
     val currencyUnit: StateFlow<String> = CurrencySharedPreferences.currencyFlow
+
+    /**
+     * فهرست خام سقف‌ها (بدون محاسبه‌ی مصرف و بدون اعلان). صفحه‌های ثبت/ویرایش برای تشخیص
+     * هم‌پوشانی از این استفاده می‌کنند؛ پس نیازی به باز بودن صفحه‌ی فهرست نیست.
+     */
+    val allLimits: StateFlow<List<BudgetLimitEntity>> = budgetLimitRepository
+        .getAllLimits()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     val expenseCategories: StateFlow<List<CategoryEntity>> = categoryRepository
         .getCategoriesByExpenseStatus(isExpense = true)
@@ -108,7 +161,41 @@ class BudgetLimitViewModel(
         initialValue = emptyList()
     )
 
-    /** [onResult] با `true` فقط بعد از ذخیره‌ی واقعی محدودیت صدا زده می‌شود (برای شیت موفقیت). */
+    private val isPersian: Boolean get() = LocaleHelper.getLanguage(context) == "fa"
+
+    /** یک سقف را با شناسه برمی‌گرداند؛ null اگر (مثلاً بین دو صفحه) حذف شده باشد. */
+    suspend fun findLimit(id: String): BudgetLimitEntity? =
+        budgetLimitRepository.getAllLimits().first().firstOrNull { it.id == id }
+
+    /**
+     * مجموع هزینه‌ی یک دسته در بازه‌ی [startMillis]..[endMillis] (به تومانِ ذخیره‌شده).
+     * برای نمایش «تاکنون چقدر خرج شده» و پیشنهاد سقف؛ هر خطایی به صفر تبدیل می‌شود چون فقط راهنماست.
+     */
+    suspend fun spentBetween(categoryId: String, startMillis: Long, endMillis: Long): Long =
+        try {
+            transactionRepository.getTransactionsBetween(startMillis, endMillis)
+                .filter { it.type == "EXPENSE" && it.categoryId == categoryId }
+                .sumOf { it.amount }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            0L
+        }
+
+    /** هزینه‌ی ۳۰ روز اخیرِ یک دسته؛ مبنای «پیشنهاد سقف». */
+    suspend fun recentMonthlySpending(categoryId: String): Long {
+        val now = System.currentTimeMillis()
+        return spentBetween(categoryId, now - 30L * DAY_MILLIS, now)
+    }
+
+    /**
+     * ذخیره‌ی سقف. [categoryName] هم با شناسه و هم با عنوان دسته پذیرفته می‌شود.
+     * [startDate] و [endDate] هر لحظه‌ای از روز شروع/پایان هستند؛ ساعتشان در اینجا نرمال می‌شود
+     * (شروع = آغاز روز، پایان = پایان روز). در ویرایش، اگر روزِ شروع/پایان تغییر نکرده باشد
+     * مقدار قبلی دست‌نخورده می‌ماند.
+     *
+     * [onResult] با `true` فقط بعد از ذخیره‌ی واقعی صدا زده می‌شود (برای شیت موفقیت).
+     */
     fun saveBudgetLimit(
         categoryName: String,
         maxLimit: Double,
@@ -118,54 +205,84 @@ class BudgetLimitViewModel(
         onResult: (Boolean) -> Unit = {}
     ) {
         viewModelScope.launch(errorHandler) {
-            // برای ویرایش، رکورد قبلی باید با شناسه (id) پیدا شود، نه با نام دسته‌بندی؛
-            // چون در حالت ویرایش ممکن است دسته‌بندی تغییر کرده باشد و جستجو بر اساس نام
-            // باعث می‌شد رکورد قدیمی پیدا نشود و یک رکورد جدید و تکراری ساخته شود.
-            val existingLimit = limitId?.let { id ->
-                budgetLimitsWithSpent.value.find { it.entity.id == id }?.entity
-            }
+            val persian = isPersian
+            val saved = try {
+                // از مخزن می‌خوانیم، نه از stateIn؛ این تابع باید وقتی صفحه‌ی فهرست باز نیست هم درست کار کند.
+                val limits = budgetLimitRepository.getAllLimits().first()
+                val categories = categoryRepository.getCategoriesByExpenseStatus(isExpense = true).first()
 
-            // تنظیم تاریخ پایان تا آخرین میلی‌ثانیه همان روز (23:59:59.999)
-            val adjustedEndDate = endDate + (24 * 60 * 60 * 1000L - 1)
+                // برای ویرایش، رکورد قبلی باید با شناسه پیدا شود، نه با نام دسته‌بندی؛
+                // چون در حالت ویرایش ممکن است دسته‌بندی تغییر کرده باشد.
+                val existingLimit = limitId?.let { id -> limits.firstOrNull { it.id == id } }
+                if (limitId != null && existingLimit == null) {
+                    _errorMessage.emit(if (persian) "این محدودیت دیگر وجود ندارد." else "This budget limit no longer exists.")
+                    onResult(false)
+                    return@launch
+                }
 
-            val category = expenseCategories.value.firstOrNull { it.title == categoryName }
-            if (category == null) {
-                _errorMessage.emit(if (LocaleHelper.getLanguage(context) == "fa") "دسته‌بندی انتخاب‌شده معتبر نیست." else "The selected category is not valid.")
+                val category = categories.firstOrNull { it.id == categoryName || it.title == categoryName }
+                if (category == null) {
+                    _errorMessage.emit(if (persian) "دسته‌بندی انتخاب‌شده معتبر نیست." else "The selected category is not valid.")
+                    onResult(false)
+                    return@launch
+                }
+
+                val resolvedStart = if (existingLimit != null &&
+                    millisToLocalDate(existingLimit.startDate) == millisToLocalDate(startDate)
+                ) existingLimit.startDate else startOfDayMillis(startDate)
+                val resolvedEnd = if (existingLimit != null &&
+                    millisToLocalDate(existingLimit.endDate) == millisToLocalDate(endDate)
+                ) existingLimit.endDate else endOfDayMillis(endDate)
+
+                if (resolvedEnd < resolvedStart) {
+                    _errorMessage.emit(if (persian) "تاریخ پایان نمی‌تواند قبل از تاریخ شروع باشد." else "The end date can't be before the start date.")
+                    onResult(false)
+                    return@launch
+                }
+
+                val overlapping = findOverlappingLimit(limits, category.id, resolvedStart, resolvedEnd, limitId)
+                if (overlapping != null) {
+                    _errorMessage.emit(if (persian) "برای این دسته‌بندی یک محدودیت با بازه هم‌پوشان از قبل وجود دارد." else "An overlapping budget limit already exists for this category.")
+                    onResult(false)
+                    return@launch
+                }
+
+                val limit = BudgetLimitEntity(
+                    id = existingLimit?.id ?: java.util.UUID.randomUUID().toString(),
+                    categoryId = category.id,
+                    maxLimit = MoneyContract.fromInput(maxLimit),
+                    isActive = existingLimit?.isActive ?: true,
+                    startDate = resolvedStart,
+                    endDate = resolvedEnd,
+                    createdAt = existingLimit?.createdAt ?: System.currentTimeMillis()
+                )
+                budgetLimitRepository.saveLimit(limit)
+                category to (existingLimit != null)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _errorMessage.emit(ErrorMessages.of(e, persian))
                 onResult(false)
                 return@launch
             }
-            val duplicate = budgetLimitsWithSpent.value.any { existing ->
-                existing.entity.id != limitId && existing.entity.categoryId == category.id &&
-                        existing.entity.startDate <= adjustedEndDate && existing.entity.endDate >= startDate
-            }
-            if (duplicate) {
-                val isPersian = LocaleHelper.getLanguage(context) == "fa"
-                _errorMessage.emit(if (isPersian) "برای این دسته‌بندی یک محدودیت با بازه هم‌پوشان از قبل وجود دارد." else "An overlapping budget limit already exists for this category.")
-                onResult(false)
-                return@launch
-            }
-            val limit = BudgetLimitEntity(
-                id = existingLimit?.id ?: java.util.UUID.randomUUID().toString(),
-                categoryId = category.id,
-                maxLimit = MoneyContract.fromInput(maxLimit),
-                isActive = existingLimit?.isActive ?: true,
-                startDate = startDate,
-                endDate = adjustedEndDate,
-                createdAt = existingLimit?.createdAt ?: System.currentTimeMillis()
-            )
-            budgetLimitRepository.saveLimit(limit)
+
+            // سقف ذخیره شده است؛ مشکل اعلان نباید یک ذخیره‌ی موفق را ناموفق نشان بدهد.
             onResult(true)
-
-            NotificationHelper.send(
-                context = context,
-                notificationType = NotificationType.BUDGET_ADD,
-                type = "SUCCESS",
-                titleFa = "محدودیت مالی جدید ثبت شد",
-                titleEn = "New Budget Limit Added",
-                descFa = "محدودیت مالی جدید برای دسته بندی «${categoryName}» ثبت شد.",
-                descEn = "New budget limit added for category ${categoryName}.",
-                tag = "BUDGET_${categoryName}_${System.currentTimeMillis()}"
-            )
+            val (category, isEdit) = saved
+            runCatching {
+                NotificationHelper.send(
+                    context = context,
+                    notificationType = NotificationType.BUDGET_ADD,
+                    type = "SUCCESS",
+                    titleFa = if (isEdit) "محدودیت مالی به‌روزرسانی شد" else "محدودیت مالی جدید ثبت شد",
+                    titleEn = if (isEdit) "Budget Limit Updated" else "New Budget Limit Added",
+                    descFa = if (isEdit) "محدودیت مالی دسته‌بندی «${category.title}» به‌روزرسانی شد."
+                    else "محدودیت مالی جدید برای دسته بندی «${category.title}» ثبت شد.",
+                    descEn = if (isEdit) "Budget limit for category ${category.title} was updated."
+                    else "New budget limit added for category ${category.title}.",
+                    tag = "BUDGET_${category.title}_${System.currentTimeMillis()}"
+                )
+            }.onFailure { it.rethrowIfCancelled() }
         }
     }
 

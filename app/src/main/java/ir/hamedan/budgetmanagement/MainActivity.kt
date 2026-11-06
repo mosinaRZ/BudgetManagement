@@ -84,11 +84,17 @@ import ir.hamedan.budgetmanagement.ui.screens.auth.AccountSwitchGate
 import ir.hamedan.budgetmanagement.ui.screens.auth.LoginScreen
 import ir.hamedan.budgetmanagement.ui.screens.auth.RegisterScreen
 import ir.hamedan.budgetmanagement.ui.screens.auth.PasswordResetScreen
+import ir.hamedan.budgetmanagement.ui.screens.budgetLimit.AddBudgetLimitScreen
 import ir.hamedan.budgetmanagement.ui.screens.budgetLimit.BudgetLimitScreen
+import ir.hamedan.budgetmanagement.ui.screens.budgetLimit.EditBudgetLimitScreen
 import ir.hamedan.budgetmanagement.ui.screens.categories.CategoriesScreen
+import ir.hamedan.budgetmanagement.ui.screens.categories.CategoryEditorScreen
+import ir.hamedan.budgetmanagement.ui.screens.debtCredit.AddDebtCreditScreen
 import ir.hamedan.budgetmanagement.ui.screens.debtCredit.DebtCreditScreen
+import ir.hamedan.budgetmanagement.ui.screens.debtCredit.EditDebtCreditScreen
 import ir.hamedan.budgetmanagement.ui.screens.devices.DevicesScreen
 import ir.hamedan.budgetmanagement.ui.screens.goals.SavingGoalsScreen
+import ir.hamedan.budgetmanagement.ui.screens.goals.GoalEditorScreen
 import ir.hamedan.budgetmanagement.ui.screens.splash.SplashScreen
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionsScreen
 import ir.hamedan.budgetmanagement.ui.screens.settings.NotificationCalibrationScreen
@@ -764,28 +770,131 @@ class MainActivity : FragmentActivity() {
 
             composable<AppRoute.Categories> {
                 CategoriesScreen(
-                    onBackClick = { navController.popBackStack() }
+                    onBackClick = { navController.popBackStack() },
+                    onOpenEditor = { categoryId, isExpense ->
+                        navController.navigate(AppRoute.CategoryEditor(categoryId = categoryId, isExpense = isExpense))
+                    }
+                )
+            }
+
+            // ثبت/ویرایش تمام‌صفحه‌ی دسته‌بندی؛ با همان حرکت و زبان طراحی جریان ثبت تراکنش
+            composable<AppRoute.CategoryEditor>(
+                enterTransition = { slideInVertically(tween(340)) { it / 6 } + fadeIn(tween(340)) },
+                exitTransition = { fadeOut(tween(200)) },
+                popEnterTransition = { fadeIn(tween(250)) },
+                popExitTransition = { slideOutVertically(tween(300)) { it / 6 } + fadeOut(tween(300)) }
+            ) { backStackEntry ->
+                val route = backStackEntry.toRoute<AppRoute.CategoryEditor>()
+
+                CategoryEditorScreen(
+                    categoryId = route.categoryId,
+                    isExpense = route.isExpense,
+                    onClose = { navController.popBackStack() },
+                    onFinished = { navController.popBackStack() }
                 )
             }
 
             composable<AppRoute.Limits> {
                 BudgetLimitScreen(
                     onBackClick = { navController.popBackStack() },
-                    onCategoriesClick = {
-                        navController.navigate(AppRoute.Categories)
+                    onAddLimitClick = { navController.navigate(AppRoute.AddBudgetLimit) },
+                    onEditLimitClick = { limitId ->
+                        navController.navigate(AppRoute.EditBudgetLimit(limitId))
                     }
+                )
+            }
+
+            // جریان تمام‌صفحه‌ی ثبت سقف بودجه (دسته ← مبلغ ← بازه ← مرور)
+            composable<AppRoute.AddBudgetLimit>(
+                enterTransition = { slideInVertically(tween(340)) { it / 6 } + fadeIn(tween(340)) },
+                exitTransition = { fadeOut(tween(200)) },
+                popEnterTransition = { fadeIn(tween(250)) },
+                popExitTransition = { slideOutVertically(tween(300)) { it / 6 } + fadeOut(tween(300)) }
+            ) {
+                AddBudgetLimitScreen(
+                    onClose = { navController.popBackStack() },
+                    // بعد از ثبت موفق، به فهرست سقف‌ها برمی‌گردیم.
+                    onFinished = { navController.popBackStack() },
+                    onManageCategories = { navController.navigate(AppRoute.Categories) }
+                )
+            }
+
+            // ویرایش تمام‌صفحه‌ی سقف بودجه؛ با همان زبان طراحی ویرایش تراکنش
+            composable<AppRoute.EditBudgetLimit>(
+                enterTransition = { slideInVertically(tween(340)) { it / 6 } + fadeIn(tween(340)) },
+                exitTransition = { fadeOut(tween(200)) },
+                popEnterTransition = { fadeIn(tween(250)) },
+                popExitTransition = { slideOutVertically(tween(300)) { it / 6 } + fadeOut(tween(300)) }
+            ) { backStackEntry ->
+                val route = backStackEntry.toRoute<AppRoute.EditBudgetLimit>()
+
+                EditBudgetLimitScreen(
+                    limitId = route.limitId,
+                    onClose = { navController.popBackStack() }
                 )
             }
 
             composable<AppRoute.Goals> {
                 SavingGoalsScreen(
-                    onBackClick = { navController.popBackStack() }
+                    onBackClick = { navController.popBackStack() },
+                    onAddGoalClick = { navController.navigate(AppRoute.GoalEditor()) },
+                    onEditGoalClick = { goalId -> navController.navigate(AppRoute.GoalEditor(goalId)) }
+                )
+            }
+
+            // ساخت/ویرایش تمام‌صفحه‌ی قلک؛ با همان زبان طراحی جریان ثبت تراکنش
+            composable<AppRoute.GoalEditor>(
+                enterTransition = { slideInVertically(tween(340)) { it / 6 } + fadeIn(tween(340)) },
+                exitTransition = { fadeOut(tween(200)) },
+                popEnterTransition = { fadeIn(tween(250)) },
+                popExitTransition = { slideOutVertically(tween(300)) { it / 6 } + fadeOut(tween(300)) }
+            ) { backStackEntry ->
+                val route = backStackEntry.toRoute<AppRoute.GoalEditor>()
+
+                GoalEditorScreen(
+                    goalId = route.goalId,
+                    onClose = { navController.popBackStack() },
+                    // بعد از ثبت موفق به فهرست قلک‌ها برمی‌گردیم تا قلک تازه دیده شود.
+                    onFinished = { navController.popBackStack() }
                 )
             }
 
             composable<AppRoute.Debt> {
                 DebtCreditScreen(
-                    onBackClick = { navController.popBackStack() }
+                    onBackClick = { navController.popBackStack() },
+                    onAddClick = { navController.navigate(AppRoute.AddLoanRecord) },
+                    onEditClick = { recordId ->
+                        navController.navigate(AppRoute.EditLoanRecord(recordId))
+                    }
+                )
+            }
+
+            // جریان تمام‌صفحه‌ی ثبت بدهی/طلب (مبلغ ← طرف حساب ← نحوه‌ی تسویه ← مرور)
+            composable<AppRoute.AddLoanRecord>(
+                enterTransition = { slideInVertically(tween(340)) { it / 6 } + fadeIn(tween(340)) },
+                exitTransition = { fadeOut(tween(200)) },
+                popEnterTransition = { fadeIn(tween(250)) },
+                popExitTransition = { slideOutVertically(tween(300)) { it / 6 } + fadeOut(tween(300)) }
+            ) {
+                AddDebtCreditScreen(
+                    onClose = { navController.popBackStack() },
+                    // بعد از ثبت موفق به فهرست بدهی/طلب برمی‌گردیم.
+                    onFinished = { navController.popBackStack() }
+                )
+            }
+
+            // ویرایش تمام‌صفحه‌ی بدهی/طلب؛ با همان زبان طراحی ویرایش تراکنش
+            composable<AppRoute.EditLoanRecord>(
+                enterTransition = { slideInVertically(tween(340)) { it / 6 } + fadeIn(tween(340)) },
+                exitTransition = { fadeOut(tween(200)) },
+                popEnterTransition = { fadeIn(tween(250)) },
+                popExitTransition = { slideOutVertically(tween(300)) { it / 6 } + fadeOut(tween(300)) }
+            ) { backStackEntry ->
+                val route = backStackEntry.toRoute<AppRoute.EditLoanRecord>()
+
+                EditDebtCreditScreen(
+                    recordId = route.recordId,
+                    onClose = { navController.popBackStack() }
                 )
             }
 

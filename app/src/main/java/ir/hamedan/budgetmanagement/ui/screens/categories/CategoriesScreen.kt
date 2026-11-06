@@ -15,17 +15,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -35,6 +32,7 @@ import androidx.compose.material.icons.filled.Wallet
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,9 +52,6 @@ import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AppLogoIcon
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.StatusBarAuroraBackground
-import ir.hamedan.budgetmanagement.ui.components.SuccessBottomSheet
-import ir.hamedan.budgetmanagement.ui.components.SuccessSheetContent
-import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.utils.StringMapper
@@ -68,6 +63,8 @@ import kotlin.math.ceil
 @Composable
 fun CategoriesScreen(
     onBackClick: () -> Unit = {},
+    /** باز کردن ویرایشگر تمام‌صفحه: [categoryId] خالی = دسته‌ی جدید با نوع [isExpense]. */
+    onOpenEditor: (categoryId: String?, isExpense: Boolean) -> Unit = { _, _ -> },
     categoryViewModel: CategoriesViewModel = appViewModel()
 ) {
     val context = LocalContext.current
@@ -86,16 +83,12 @@ fun CategoriesScreen(
     val transactionTotals by categoryViewModel.transactionTotalsMap.collectAsState()
     val currencyUnit by CurrencySharedPreferences.currencyFlow.collectAsState()
 
-    var selectedTabState by remember { mutableIntStateOf(0) }
+    // با rememberSaveable: ویرایشگر صفحه‌ی جداست و این صفحه موقع رفتن به آن از composition خارج می‌شود؛
+    // بدون ذخیره، بعد از ثبت یک دسته‌ی «درآمد» تب دوباره روی «هزینه‌ها» برمی‌گشت.
+    var selectedTabState by rememberSaveable { mutableStateOf(0) }
     val isExpenseTab = selectedTabState == 0
 
-    var showAddDialog by remember { mutableStateOf(false) }
-    var categoryToEdit by remember { mutableStateOf<CategoryEntity?>(null) }
     var categoryToDelete by remember { mutableStateOf<CategoryEntity?>(null) }
-    var categoryDialogError by remember { mutableStateOf<String?>(null) }
-
-    // محتوای شیت موفقیت؛ null یعنی شیت نمایش داده نمی‌شود
-    var successSheet by remember { mutableStateOf<SuccessSheetContent?>(null) }
 
     val hiddenCategories by categoryViewModel.hiddenCategories.collectAsState()
 
@@ -168,7 +161,7 @@ fun CategoriesScreen(
                                 )
                                 Spacer(modifier = Modifier.height(20.dp))
                                 Button(
-                                    onClick = { showAddDialog = true },
+                                    onClick = { onOpenEditor(null, isExpenseTab) },
                                     shape = RoundedCornerShape(14.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = if (isExpenseTab) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
@@ -201,7 +194,7 @@ fun CategoriesScreen(
                                 transactionTotal = totalAmount,
                                 currencyUnit = currencyUnit,
                                 isPersian = isPersian,
-                                onEditClick = { categoryToEdit = category },
+                                onEditClick = { onOpenEditor(category.id, category.isExpense) },
                                 onDeleteClick = { categoryToDelete = category }
                             )
                         }
@@ -319,19 +312,19 @@ fun CategoriesScreen(
         } ?: false
 
         if (hasCategories) {
-            FloatingActionButton(
-                onClick = { showAddDialog = true },
+            AddCategoryFab(
+                isExpense = isExpenseTab,
+                isPersian = isPersian,
+                // وقتی دیالوگ حذف باز است نکته نمی‌آید تا حواس کاربر پرت نشود.
+                hintEnabled = categoryToDelete == null,
                 containerColor = if (isExpenseTab) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                 contentColor = if (isExpenseTab) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary,
-                shape = CircleShape,
+                onClick = { onOpenEditor(null, isExpenseTab) },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
                     .padding(24.dp)
-                    .size(56.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Category", modifier = Modifier.size(28.dp))
-            }
+            )
         }
 
         // ------------------ Countdown Snackbar Host ------------------
@@ -343,82 +336,6 @@ fun CategoriesScreen(
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp, start = 16.dp, end = 16.dp)
         )
-
-        // ------------------ Dialog Add / Edit ------------------
-        if (showAddDialog || categoryToEdit != null) {
-            AddOrEditCategoryDialog(
-                categoryToEdit = categoryToEdit,
-                isExpense = isExpenseTab,
-                isPersian = isPersian,
-                onDismiss = {
-                    showAddDialog = false
-                    categoryToEdit = null
-                    categoryDialogError = null
-                },
-                errorText = categoryDialogError,
-                onConfirm = { title, emoji ->
-                    val normalizedTitle = title.trim()
-
-                    val duplicate = categoriesState.orEmpty().any {
-                        it.id != categoryToEdit?.id &&
-                                it.title.trim().equals(normalizedTitle, ignoreCase = true)
-                    }
-
-                    if (duplicate) {
-                        categoryDialogError =
-                            if (isPersian) {
-                                "این نام دسته‌بندی قبلاً استفاده شده است. نام دیگری انتخاب کنید."
-                            } else {
-                                "This category name is already in use. Choose another name."
-                            }
-                    } else {
-                        categoryDialogError = null
-
-                        val editingCategory = categoryToEdit
-                        if (editingCategory != null) {
-                            categoryViewModel.updateCategory(
-                                editingCategory,
-                                normalizedTitle,
-                                emoji
-                            ) { saved ->
-                                if (saved) {
-                                    successSheet = categoryUpdatedContent(normalizedTitle, emoji, isPersian)
-                                }
-                            }
-                        } else {
-                            val addedAsExpense = isExpenseTab
-                            categoryViewModel.addCategory(
-                                normalizedTitle,
-                                emoji,
-                                addedAsExpense
-                            ) { saved ->
-                                if (saved) {
-                                    successSheet = categoryAddedContent(
-                                        title = normalizedTitle,
-                                        emoji = emoji,
-                                        isExpense = addedAsExpense,
-                                        isPersian = isPersian
-                                    )
-                                }
-                            }
-                        }
-
-                        showAddDialog = false
-                        categoryToEdit = null
-                        categoryDialogError = null
-                    }
-                }
-            )
-        }
-
-        // ------------------ شیت موفقیت (تمام‌صفحه) ------------------
-        successSheet?.let { content ->
-            SuccessBottomSheet(
-                content = content,
-                isPersian = isPersian,
-                onDismiss = { successSheet = null }
-            )
-        }
 
         // ------------------ Delete Dialog ------------------
         categoryToDelete?.let { category ->
@@ -464,16 +381,22 @@ fun CategoriesScreen(
                     categoryToDelete = null
 
                     coroutineScope.launch {
-                        val result = snackbarHostState.showSnackbar(
-                            message = if (isPersian) "دسته‌بندی «$categoryName» حذف شد" else "Category '$categoryName' deleted",
-                            actionLabel = if (isPersian) "بازگردانی" else "Undo",
-                            duration = SnackbarDuration.Indefinite
-                        )
-
-                        if (result == SnackbarResult.ActionPerformed) {
-                            categoryViewModel.restoreCategory(targetCategory)
-                        } else {
-                            categoryViewModel.commitDeleteCategory(targetCategory)
+                        var undone = false
+                        try {
+                            val result = snackbarHostState.showSnackbar(
+                                message = if (isPersian) "دسته‌بندی «$categoryName» حذف شد" else "Category '$categoryName' deleted",
+                                actionLabel = if (isPersian) "بازگردانی" else "Undo",
+                                duration = SnackbarDuration.Indefinite
+                            )
+                            undone = result == SnackbarResult.ActionPerformed
+                        } finally {
+                            // finally اجرا می‌شود حتی اگر کاربر با اسنک‌بارِ باز به ویرایشگر برود و این صفحه
+                            // (و coroutine) لغو شود؛ وگرنه حذف هرگز نهایی نمی‌شد و دسته فقط مخفی می‌ماند.
+                            if (undone) {
+                                categoryViewModel.restoreCategory(targetCategory)
+                            } else {
+                                categoryViewModel.commitDeleteCategory(targetCategory)
+                            }
                         }
                     }
                 }
@@ -778,197 +701,3 @@ fun CategoryItemCard(
         }
     }
 }
-
-@Composable
-fun AddOrEditCategoryDialog(
-    categoryToEdit: CategoryEntity? = null,
-    isExpense: Boolean,
-    isPersian: Boolean,
-    onDismiss: () -> Unit,
-    errorText: String? = null,
-    onConfirm: (title: String, emoji: String) -> Unit
-) {
-    val maxTitleLength = 20
-    var title by remember { mutableStateOf(categoryToEdit?.title ?: "") }
-    var emoji by remember { mutableStateOf(categoryToEdit?.iconEmoji ?: "🏷️") }
-
-    val emojis = listOf(
-        "🏷️", "🍕", "🚗", "🛍️", "📄", "💰", "📈", "🎮", "🏠", "✈️", "☕", "💻",
-        "🛒", "🍔", "🥖", "🍏", "🍹", "🚌", "⛽", "🔧", "🚕", "💊", "🏥", "💈",
-        "💅", "👕", "👟", "💡", "💧", "📶", "📱", "🎁", "🎓", "💎", "💳", "🏦"
-    )
-
-    var detectedTitle by remember { mutableStateOf<String?>(null) }
-
-    Dialog(onDismissRequest = onDismiss) {
-        val dialogShape = RoundedCornerShape(28.dp)
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.96f),
-                    shape = dialogShape
-                )
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                    shape = dialogShape
-                )
-                .clip(dialogShape)
-                .padding(24.dp)
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text(
-                    text = if (categoryToEdit != null) {
-                        if (isPersian) "ویرایش دسته‌بندی" else "Edit Category"
-                    } else {
-                        if (isPersian) {
-                            if (isExpense) "دسته‌بندی جدید هزینه" else "دسته‌بندی جدید درآمد"
-                        } else {
-                            if (isExpense) "New Expense Category" else "New Income Category"
-                        }
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(emojis) { item ->
-                        Text(
-                            text = item,
-                            fontSize = 24.sp,
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable { emoji = item }
-                                .background(
-                                    if (emoji == item) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                    else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
-                                )
-                                .padding(8.dp)
-                        )
-                    }
-                }
-
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { input ->
-                        if (input.length <= maxTitleLength) {
-                            title = input
-                        }
-                    },
-                    label = { Text(if (isPersian) "عنوان دسته‌بندی" else "Category Title") },
-                    leadingIcon = { Text(text = emoji, fontSize = 20.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    isError = !errorText.isNullOrBlank(),
-                    supportingText = if (!errorText.isNullOrBlank()) { { Text(errorText, color = MaterialTheme.colorScheme.error) } } else null,
-                    trailingIcon = {
-                        VoiceInputButton(
-                            onResult = { spoken ->
-                                detectedTitle = spoken
-                                title = spoken.take(maxTitleLength)
-                            },
-                            language = if (isPersian) "fa-IR" else "en-US"
-                        )
-                    }
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(if (isPersian) "انصراف" else "Cancel")
-                        }
-                    }
-
-                    Button(
-                        onClick = { onConfirm(title, emoji) },
-                        enabled = title.isNotBlank(),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        ),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = if (categoryToEdit != null) Icons.Default.Check else Icons.Default.Add,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                text = if (categoryToEdit != null) {
-                                    if (isPersian) "ذخیره" else "Save"
-                                } else {
-                                    if (isPersian) "افزودن" else "Add"
-                                },
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// متن شیت‌های موفقیت
-// ---------------------------------------------------------------------------
-
-private fun categoryAddedContent(
-    title: String,
-    emoji: String,
-    isExpense: Boolean,
-    isPersian: Boolean
-): SuccessSheetContent =
-    if (isPersian) {
-        SuccessSheetContent(
-            title = "دسته‌بندی اضافه شد",
-            message = "دسته‌بندی «$emoji $title» به‌عنوان ${if (isExpense) "هزینه" else "درآمد"} با موفقیت اضافه شد.",
-            hint = "از همین حالا هنگام ثبت تراکنش می‌توانید آن را انتخاب کنید."
-        )
-    } else {
-        SuccessSheetContent(
-            title = "Category added",
-            message = "The ${if (isExpense) "expense" else "income"} category “$emoji $title” was added successfully.",
-            hint = "You can pick it right away when recording a transaction."
-        )
-    }
-
-private fun categoryUpdatedContent(title: String, emoji: String, isPersian: Boolean): SuccessSheetContent =
-    if (isPersian) {
-        SuccessSheetContent(
-            title = "دسته‌بندی به‌روزرسانی شد",
-            message = "تغییرات دسته‌بندی «$emoji $title» با موفقیت ذخیره شد."
-        )
-    } else {
-        SuccessSheetContent(
-            title = "Category updated",
-            message = "Your changes to “$emoji $title” were saved successfully."
-        )
-    }

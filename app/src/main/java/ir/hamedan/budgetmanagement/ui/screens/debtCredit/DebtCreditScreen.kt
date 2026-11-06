@@ -1,14 +1,9 @@
 package ir.hamedan.budgetmanagement.ui.screens.debtCredit
 
 import ir.hamedan.budgetmanagement.ui.components.CountUpText
-import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
-import ir.hamedan.budgetmanagement.ui.components.WheelDatePickerDialog
 
-import android.widget.Toast
 import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
 import ir.hamedan.budgetmanagement.ui.components.showError
-import ir.hamedan.budgetmanagement.ui.components.showInfo
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -20,14 +15,11 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -45,11 +37,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.data.local.models.DebtCreditEntity
@@ -57,30 +47,24 @@ import ir.hamedan.budgetmanagement.data.money.MoneyContract
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.di.appViewModel
 import ir.hamedan.budgetmanagement.ui.components.AppLogoIcon
-import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.StatusBarAuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.SuccessBottomSheet
 import ir.hamedan.budgetmanagement.ui.components.SuccessSheetContent
 import ir.hamedan.budgetmanagement.ui.components.formatSuccessAmountFromToman
-import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
-import ir.hamedan.budgetmanagement.ui.screens.add.ThousandsSeparatorTransformation
 import ir.hamedan.budgetmanagement.ui.screens.goals.AmountActionDialog
 import ir.hamedan.budgetmanagement.ui.screens.debtCredit.DebtCreditViewModel
-import ir.hamedan.budgetmanagement.utils.CategorySuggestionHelper
 import ir.hamedan.budgetmanagement.utils.DateUtils
-import ir.hamedan.budgetmanagement.utils.DueDay
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
-import ir.hamedan.budgetmanagement.utils.StringMapper
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
-import java.util.Calendar
 import java.util.Locale
-import kotlin.math.ceil
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DebtCreditScreen(
     onBackClick: () -> Unit = {},
+    onAddClick: () -> Unit = {},
+    onEditClick: (String) -> Unit = {},
     viewModel: DebtCreditViewModel = appViewModel()
 ) {
     val context = LocalContext.current
@@ -97,15 +81,10 @@ fun DebtCreditScreen(
         }
     }
 
-    var showAddDialog by remember { mutableStateOf(false) }
-    var selectedItemForEdit by remember { mutableStateOf<DebtCreditEntity?>(null) }
     var itemToDelete by remember { mutableStateOf<DebtCreditEntity?>(null) }
     var itemForDeposit by remember { mutableStateOf<DebtCreditEntity?>(null) }
     var itemForWithdraw by remember { mutableStateOf<DebtCreditEntity?>(null) }
     var itemForSettlement by remember { mutableStateOf<DebtCreditEntity?>(null) }
-
-    var pendingSaveData by remember { mutableStateOf<PendingSaveData?>(null) }
-    var pendingDuplicateData by remember { mutableStateOf<PendingSaveData?>(null) }
 
     // محتوای شیت موفقیت؛ null یعنی شیت نمایش داده نمی‌شود
     var successSheet by remember { mutableStateOf<SuccessSheetContent?>(null) }
@@ -167,10 +146,7 @@ fun DebtCreditScreen(
                             )
                             Spacer(modifier = Modifier.height(20.dp))
                             Button(
-                                onClick = {
-                                    selectedItemForEdit = null
-                                    showAddDialog = true
-                                },
+                                onClick = onAddClick,
                                 shape = RoundedCornerShape(14.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
@@ -192,10 +168,7 @@ fun DebtCreditScreen(
                         currencyUnit = currencyUnit,
                         onDepositClick = { itemForDeposit = item },
                         onWithdrawClick = { itemForWithdraw = item },
-                        onEditClick = {
-                            selectedItemForEdit = item
-                            showAddDialog = true
-                        },
+                        onEditClick = { onEditClick(item.id) },
                         onDeleteClick = { itemToDelete = item },
                         onToggleSettled = {
                             if (item.isSettled) {
@@ -262,10 +235,7 @@ fun DebtCreditScreen(
 
         if (debtCreditList.isNotEmpty()) {
             FloatingActionButton(
-                onClick = {
-                    selectedItemForEdit = null
-                    showAddDialog = true
-                },
+                onClick = onAddClick,
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 shape = CircleShape,
@@ -423,335 +393,6 @@ fun DebtCreditScreen(
                     itemForWithdraw = null
                 }
             )
-        }
-
-        if (showAddDialog) {
-            AddOrEditDebtCreditDialog(
-                initialItem = selectedItemForEdit,
-                isPersian = isPersian,
-                currencyUnit = currencyUnit,
-                onDismiss = {
-                    showAddDialog = false
-                    selectedItemForEdit = null
-                },
-                onSave = { id, type, personName, totalAmount, isMonthly, monthlyAmount, dueDay, oneTimeDueDateMillis, note ->
-                    showAddDialog = false
-                    if (id != null) {
-                        viewModel.saveOrUpdate(
-                            id = id,
-                            type = type,
-                            personName = personName,
-                            totalAmount = totalAmount,
-                            isMonthly = isMonthly,
-                            monthlyAmount = monthlyAmount,
-                            dueDay = dueDay,
-                            oneTimeDueDateMillis = oneTimeDueDateMillis,
-                            note = note,
-                            addToBalance = false,
-                            onResult = { saved ->
-                                if (saved) {
-                                    successSheet = debtCreditUpdatedContent(personName.trim(), isPersian)
-                                }
-                            }
-                        )
-                        selectedItemForEdit = null
-                    } else {
-                        val newData = PendingSaveData(
-                            id = null,
-                            type = type,
-                            personName = personName,
-                            totalAmount = totalAmount,
-                            isMonthly = isMonthly,
-                            monthlyAmount = monthlyAmount,
-                            dueDay = dueDay,
-                            oneTimeDueDateMillis = oneTimeDueDateMillis,
-                            note = note,
-                            confirmedDuplicateName = false
-                        )
-                        val nameMatches = viewModel.findNameMatches(personName)
-                        if (nameMatches.isNotEmpty()) {
-                            pendingDuplicateData = newData
-                        } else {
-                            pendingSaveData = newData
-                        }
-                    }
-                }
-            )
-        }
-
-        pendingDuplicateData?.let { data ->
-            val matches = remember(data.personName, debtCreditList) {
-                viewModel.findNameMatches(data.personName)
-            }
-            Dialog(onDismissRequest = { pendingDuplicateData = null }) {
-                ThemedDialogCard {
-                    DialogIconBadge(
-                        icon = Icons.Default.Warning,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-
-                    Text(
-                        text = if (isPersian) "مورد مشابه پیدا شد" else "A similar record already exists",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Text(
-                        text = if (isPersian)
-                            "قبلاً یک یا چند بدهی/طلب با نام «${data.personName.trim()}» ثبت شده است. آیا مطمئن هستید که این مورد جدید است؟"
-                        else
-                            "One or more debt/credit records with the name '${data.personName.trim()}' already exist. Are you sure this is a new record?",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        matches.take(3).forEach { existing ->
-                            val remaining = (existing.totalAmount - existing.paidAmount).coerceAtLeast(0L)
-                            val isExistingDebt = existing.type == "DEBT"
-                            val typeColor = if (isExistingDebt) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
-                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .width(4.dp)
-                                            .height(38.dp)
-                                            .clip(RoundedCornerShape(2.dp))
-                                            .background(typeColor)
-                                    )
-                                    Spacer(Modifier.width(10.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = if (isExistingDebt) {
-                                                if (isPersian) "بدهی" else "Debt"
-                                            } else {
-                                                if (isPersian) "طلب" else "Credit"
-                                            },
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = typeColor
-                                        )
-                                        Spacer(Modifier.height(2.dp))
-                                        Text(
-                                            text = if (isPersian) "مانده: ${formatDebtCreditAmount(remaining, currencyUnit, true)}"
-                                            else "Remaining: ${formatDebtCreditAmount(remaining, currencyUnit, false)}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    Spacer(Modifier.width(8.dp))
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        Text(
-                                            text = if (isPersian) "مبلغ کل" else "Total",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Text(
-                                            text = formatDebtCreditAmount(existing.totalAmount, currencyUnit, isPersian),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedButton(
-                            onClick = { pendingDuplicateData = null },
-                            modifier = Modifier.weight(1f).height(48.dp),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(if (isPersian) "انصراف" else "Cancel", maxLines = 1)
-                        }
-                        Button(
-                            onClick = {
-                                pendingSaveData = data.copy(confirmedDuplicateName = true)
-                                pendingDuplicateData = null
-                            },
-                            modifier = Modifier.weight(1f).height(48.dp),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                        ) {
-                            Text(
-                                text = if (isPersian) "بله، مطمئنم" else "Yes, continue",
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        pendingSaveData?.let { data ->
-            val dialogShape = RoundedCornerShape(24.dp)
-
-            Dialog(onDismissRequest = {}) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
-                            shape = dialogShape
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                            shape = dialogShape
-                        )
-                        .clip(dialogShape)
-                        .padding(24.dp)
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                    CircleShape
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = AppLogoIcon,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-
-                        Text(
-                            text = if (isPersian) "محاسبه در بالانس حساب" else "Calculate in Main Balance",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Center
-                        )
-
-                        val actionText = if (data.type == "DEBT") {
-                            if (isPersian) "به بالانس حساب شما اضافه گردد؟" else "be added to your main balance?"
-                        } else {
-                            if (isPersian) "از بالانس حساب شما کسر گردد؟" else "be deducted from your main balance?"
-                        }
-
-                        Text(
-                            text = if (isPersian)
-                                "آیا می‌خواهید مبلغ «${formatDebtCreditAmount(MoneyContract.fromInput(data.totalAmount), currencyUnit, true)}» مربوط به «${data.personName}» $actionText"
-                            else
-                                "Do you want the amount of '${formatDebtCreditAmount(MoneyContract.fromInput(data.totalAmount), currencyUnit, false)}' for '${data.personName}' $actionText",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Button(
-                                onClick = {
-                                    viewModel.saveOrUpdate(
-                                        id = data.id,
-                                        type = data.type,
-                                        personName = data.personName,
-                                        totalAmount = data.totalAmount,
-                                        isMonthly = data.isMonthly,
-                                        monthlyAmount = data.monthlyAmount,
-                                        dueDay = data.dueDay,
-                                        oneTimeDueDateMillis = data.oneTimeDueDateMillis,
-                                        note = data.note,
-                                        addToBalance = true,
-                                        forceDuplicateName = data.confirmedDuplicateName,
-                                        onResult = { saved ->
-                                            if (saved) {
-                                                successSheet = debtCreditAddedContent(
-                                                    type = data.type,
-                                                    personName = data.personName.trim(),
-                                                    totalAmountToman = MoneyContract.fromInput(data.totalAmount),
-                                                    currencyUnit = currencyUnit,
-                                                    isPersian = isPersian
-                                                )
-                                            }
-                                        }
-                                    )
-                                    pendingSaveData = null
-                                    selectedItemForEdit = null
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(14.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                            ) {
-                                Text(
-                                    text = if (isPersian) "بله، محاسبه شود" else "Yes, calculate",
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            OutlinedButton(
-                                onClick = {
-                                    viewModel.saveOrUpdate(
-                                        id = data.id,
-                                        type = data.type,
-                                        personName = data.personName,
-                                        totalAmount = data.totalAmount,
-                                        isMonthly = data.isMonthly,
-                                        monthlyAmount = data.monthlyAmount,
-                                        dueDay = data.dueDay,
-                                        oneTimeDueDateMillis = data.oneTimeDueDateMillis,
-                                        note = data.note,
-                                        addToBalance = false,
-                                        forceDuplicateName = data.confirmedDuplicateName,
-                                        onResult = { saved ->
-                                            if (saved) {
-                                                successSheet = debtCreditAddedContent(
-                                                    type = data.type,
-                                                    personName = data.personName.trim(),
-                                                    totalAmountToman = MoneyContract.fromInput(data.totalAmount),
-                                                    currencyUnit = currencyUnit,
-                                                    isPersian = isPersian
-                                                )
-                                            }
-                                        }
-                                    )
-                                    pendingSaveData = null
-                                    selectedItemForEdit = null
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(14.dp)
-                            ) {
-                                Text(if (isPersian) "خیر، فقط ثبت شود" else "No, record only")
-                            }
-                        }
-                    }
-                }
-            }
         }
 
         // ------------------ شیت موفقیت (تمام‌صفحه) ------------------
@@ -949,47 +590,6 @@ fun DebtCreditScreen(
 // متن شیت‌های موفقیت
 // ---------------------------------------------------------------------------
 
-private fun debtCreditAddedContent(
-    type: String,
-    personName: String,
-    totalAmountToman: Long,
-    currencyUnit: String,
-    isPersian: Boolean
-): SuccessSheetContent {
-    val amount = formatSuccessAmountFromToman(totalAmountToman, currencyUnit, isPersian)
-    val isDebt = type == "DEBT"
-    return if (isPersian) {
-        SuccessSheetContent(
-            title = if (isDebt) "بدهی ثبت شد" else "طلب ثبت شد",
-            message = if (isDebt) "بدهی شما به «$personName» به مبلغ $amount با موفقیت ثبت شد."
-            else "طلب شما از «$personName» به مبلغ $amount با موفقیت ثبت شد.",
-            hint = if (isDebt) "هر زمان پرداختی انجام دادید، از همین صفحه ثبتش کنید."
-            else "هر زمان مبلغی دریافت کردید، از همین صفحه ثبتش کنید."
-        )
-    } else {
-        SuccessSheetContent(
-            title = if (isDebt) "Debt recorded" else "Receivable recorded",
-            message = if (isDebt) "Your debt to “$personName” of $amount was recorded successfully."
-            else "Your receivable from “$personName” of $amount was recorded successfully.",
-            hint = if (isDebt) "Record each payment from this page whenever you make one."
-            else "Record each amount you receive from this page."
-        )
-    }
-}
-
-private fun debtCreditUpdatedContent(personName: String, isPersian: Boolean): SuccessSheetContent =
-    if (isPersian) {
-        SuccessSheetContent(
-            title = "تغییرات ذخیره شد",
-            message = "اطلاعات «$personName» با موفقیت به‌روزرسانی شد."
-        )
-    } else {
-        SuccessSheetContent(
-            title = "Changes saved",
-            message = "The details for “$personName” were updated successfully."
-        )
-    }
-
 private fun debtCreditPaymentContent(
     type: String,
     personName: String,
@@ -1041,19 +641,6 @@ private fun debtCreditAdjustmentContent(
         )
     }
 }
-
-private data class PendingSaveData(
-    val id: String?,
-    val type: String,
-    val personName: String,
-    val totalAmount: Double,
-    val isMonthly: Boolean,
-    val monthlyAmount: Double,
-    val dueDay: Int,
-    val oneTimeDueDateMillis: Long,
-    val note: String?,
-    val confirmedDuplicateName: Boolean = false
-)
 
 /** کارت یکپارچه دیالوگ‌ها؛ هم‌رنگ و هم‌فرم با دیالوگ حذف (surfaceVariant، گوشه ۲۸، حاشیه ظریف). */
 @Composable
@@ -1257,379 +844,6 @@ fun DebtCreditItemCard(
                     fontWeight = FontWeight.Medium,
                     color = if (item.isSettled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                 )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun AddOrEditDebtCreditDialog(
-    initialItem: DebtCreditEntity?,
-    isPersian: Boolean,
-    currencyUnit: String = "IRT",
-    onDismiss: () -> Unit,
-    onSave: (
-        id: String?,
-        type: String,
-        personName: String,
-        totalAmount: Double,
-        isMonthly: Boolean,
-        monthlyAmount: Double,
-        dueDay: Int,
-        oneTimeDueDateMillis: Long,
-        note: String?
-    ) -> Unit
-) {
-    val maxNameLength = 40
-    val maxDigitsLength = 12
-    val maxNoteLength = 120
-
-    var type by remember { mutableStateOf(initialItem?.type ?: "DEBT") }
-    var personName by remember { mutableStateOf(initialItem?.personName ?: "") }
-
-    val initialTotalDigits = remember(initialItem, currencyUnit) {
-        if (initialItem == null || initialItem.totalAmount <= 0) ""
-        else {
-            val amount = if (currencyUnit == "IRR") (initialItem.totalAmount * 10).toLong() else initialItem.totalAmount.toLong()
-            amount.toString().take(maxDigitsLength)
-        }
-    }
-    var totalAmountDigits by remember { mutableStateOf(initialTotalDigits) }
-
-    var isMonthly by remember { mutableStateOf(initialItem?.isMonthly ?: false) }
-
-    val initialMonthlyDigits = remember(initialItem, currencyUnit) {
-        if (initialItem == null || initialItem.monthlyAmount <= 0) ""
-        else {
-            val amount = if (currencyUnit == "IRR") (initialItem.monthlyAmount * 10).toLong() else initialItem.monthlyAmount.toLong()
-            amount.toString().take(maxDigitsLength)
-        }
-    }
-    var monthlyAmountDigits by remember { mutableStateOf(initialMonthlyDigits) }
-
-    // The day wheel follows the app language: Jalali days for Persian, Gregorian days for English.
-    // A new record starts on today's day in that calendar. When an existing installment was saved in
-    // the other calendar, its next due date is shown as a day of this calendar instead.
-    val initialDueDay = remember(initialItem, isPersian) {
-        val today = java.time.LocalDate.now()
-        val stored = initialItem?.dueDay ?: 0
-        when {
-            initialItem == null || !initialItem.isMonthly || !DueDay.isValid(stored) ->
-                DueDay.dayOfMonth(today, isPersian)
-            DueDay.isJalali(stored) == isPersian -> DueDay.dayOf(stored)
-            else -> DueDay.dayOfMonth(DueDay.nextDueDate(stored, today), isPersian)
-        }
-    }
-    var selectedDay by remember { mutableIntStateOf(initialDueDay) }
-    var oneTimeDueDateMillis by remember { mutableLongStateOf(initialItem?.dueDateMillis ?: System.currentTimeMillis()) }
-    var showDatePickerDialog by remember { mutableStateOf(false) }
-
-    var note by remember { mutableStateOf(initialItem?.note ?: "") }
-
-    val dayListState = rememberLazyListState(
-        initialFirstVisibleItemIndex = (selectedDay - 1).coerceAtLeast(0)
-    )
-
-    LaunchedEffect(dayListState.isScrollInProgress) {
-        if (!dayListState.isScrollInProgress) {
-            val centerIndex = dayListState.firstVisibleItemIndex +
-                    if (dayListState.firstVisibleItemScrollOffset > 30) 1 else 0
-            val newDay = (centerIndex + 1).coerceIn(1, 31)
-            if (newDay != selectedDay) {
-                selectedDay = newDay
-            }
-        }
-    }
-
-    val labelTotalCurrency = if (isPersian) (if (currencyUnit == "IRR") "مبلغ کل (ریال)" else "مبلغ کل (تومان)")
-    else (if (currencyUnit == "IRR") "Total Amount (Rial)" else "Total Amount (Toman)")
-
-    val labelMonthlyCurrency = if (isPersian) (if (currencyUnit == "IRR") "قسط ماهانه (ریال)" else "قسط ماهانه (تومان)")
-    else (if (currencyUnit == "IRR") "Monthly Installment (Rial)" else "Monthly Installment (Toman)")
-
-    if (showDatePickerDialog) {
-        WheelDatePickerDialog(
-            isPersian = isPersian,
-            title = if (isPersian) "مهلت تسویه" else "Due date",
-            initialMillis = oneTimeDueDateMillis,
-            onConfirm = { picked ->
-                oneTimeDueDateMillis = picked
-                showDatePickerDialog = false
-            },
-            onDismiss = { showDatePickerDialog = false }
-        )
-    }
-
-    var detectedPersonName by remember { mutableStateOf<String?>(null) }
-    var detectedNote by remember { mutableStateOf<String?>(null) }
-
-    Dialog(onDismissRequest = onDismiss) {
-        val dialogShape = RoundedCornerShape(24.dp)
-        Box(
-            modifier = Modifier
-                .background(MaterialTheme.colorScheme.surface, dialogShape)
-                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), dialogShape)
-                .padding(24.dp)
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = if (initialItem != null) {
-                        if (isPersian) "ویرایش بدهی / طلب" else "Edit Debt / Credit"
-                    } else {
-                        if (isPersian) "افزودن بدهی / طلب جدید" else "New Debt / Credit"
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            RoundedCornerShape(12.dp)
-                        )
-                        .padding(4.dp)
-                ) {
-                    FilterChip(
-                        selected = type == "DEBT",
-                        onClick = { type = "DEBT" },
-                        label = {
-                            Text(
-                                if (isPersian) "بدهی (پرداختی)" else "Debt",
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Center
-                            )
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    FilterChip(
-                        selected = type == "CREDIT",
-                        onClick = { type = "CREDIT" },
-                        label = {
-                            Text(
-                                if (isPersian) "طلب (دریافتی)" else "Credit",
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Center
-                            )
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                OutlinedTextField(
-                    value = personName,
-                    onValueChange = { input ->
-                        if (input.length <= maxNameLength) personName = input
-                    },
-                    label = { Text(if (isPersian) "نام طرف حساب" else "Person Name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    trailingIcon = {
-                        VoiceInputButton(
-                            onResult = { spoken ->
-                                detectedPersonName = spoken
-                                personName = spoken.take(maxNameLength)
-                            },
-                            language = if (isPersian) "fa-IR" else "en-US"
-                        )
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = totalAmountDigits,
-                    onValueChange = { input ->
-                        val digitsOnly = input.filter { it.isDigit() }
-                        if (digitsOnly.length <= maxDigitsLength) totalAmountDigits = digitsOnly
-                    },
-                    label = { Text(labelTotalCurrency) },
-                    singleLine = true,
-                    visualTransformation = ThousandsSeparatorTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { isMonthly = !isMonthly },
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(checked = isMonthly, onCheckedChange = { isMonthly = it })
-                    Text(
-                        text = if (isPersian) "پرداخت به صورت ماهانه/اقساطی است" else "Monthly / Installment payment",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                if (isMonthly) {
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = monthlyAmountDigits,
-                        onValueChange = { input ->
-                            val digitsOnly = input.filter { it.isDigit() }
-                            if (digitsOnly.length <= maxDigitsLength) monthlyAmountDigits = digitsOnly
-                        },
-                        label = { Text(labelMonthlyCurrency) },
-                        singleLine = true,
-                        visualTransformation = ThousandsSeparatorTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = if (isPersian) "روز سررسید قسط در ماه" else "Due Day of Month",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                        )
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(120.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                                    RoundedCornerShape(16.dp)
-                                )
-                                .border(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                                    RoundedCornerShape(16.dp)
-                                )
-                                .clip(RoundedCornerShape(16.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            LazyColumn(
-                                state = dayListState,
-                                modifier = Modifier.fillMaxWidth().height(120.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                contentPadding = PaddingValues(vertical = 36.dp)
-                            ) {
-                                items(31) { index ->
-                                    val day = index + 1
-                                    val isSelected = day == selectedDay
-                                    Box(
-                                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = if (isPersian) "روز $day" else "Day $day",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = { showDatePickerDialog = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (isPersian)
-                                "مهلت تسویه: ${DateUtils.formatTimestamp(oneTimeDueDateMillis, isPersian)}"
-                            else
-                                "Due Date: ${DateUtils.formatTimestamp(oneTimeDueDateMillis, isPersian)}"
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = note,
-                    onValueChange = { note = it },
-                    label = { Text(if (isPersian) "یادداشت (اختیاری)" else "Note (Optional)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    maxLines = 3,
-                    trailingIcon = {
-                        VoiceInputButton(
-                            onResult = { spoken ->
-                                detectedNote = spoken
-                                note = spoken.take(maxNoteLength)
-                            },
-                            language = if (isPersian) "fa-IR" else "en-US"
-                        )
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(if (isPersian) "انصراف" else "Cancel")
-                    }
-
-                    val rawTotal = totalAmountDigits.toDoubleOrNull() ?: 0.0
-                    val rawMonthly = monthlyAmountDigits.toDoubleOrNull() ?: 0.0
-
-                    val finalTotalInToman = if (currencyUnit == "IRR") rawTotal / 10.0 else rawTotal
-                    val finalMonthlyInToman = if (currencyUnit == "IRR") rawMonthly / 10.0 else rawMonthly
-
-                    Button(
-                        onClick = {
-                            onSave(
-                                initialItem?.id,
-                                type,
-                                personName.trim(),
-                                finalTotalInToman,
-                                isMonthly,
-                                if (isMonthly) finalMonthlyInToman else 0.0,
-                                DueDay.encode(selectedDay, isPersian),
-                                oneTimeDueDateMillis,
-                                note.ifBlank { null }
-                            )
-                        },
-                        enabled = personName.isNotBlank() && rawTotal > 0,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = if (initialItem != null) (if (isPersian) "ذخیره" else "Save")
-                            else (if (isPersian) "ایجاد" else "Create")
-                        )
-                    }
-                }
             }
         }
     }

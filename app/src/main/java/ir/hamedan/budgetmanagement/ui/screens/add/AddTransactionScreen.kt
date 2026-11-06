@@ -422,7 +422,7 @@ fun AddTransactionScreen(
                 .navigationBarsPadding()
                 .imePadding()
         ) {
-            TopBar(
+            StepTopBar(
                 step = form.step,
                 accent = accent,
                 isPersian = isPersian,
@@ -605,8 +605,15 @@ private fun budgetLine(percent: Int?, categoryName: String, isPersian: Boolean):
 // نوار بالا
 // -----------------------------------------------------------------------------
 
+/** نوار بالای جریان‌های مرحله‌ای: دکمه‌ی بستن/برگشت و نوار پیشرفت با [totalSteps] قطعه. */
 @Composable
-private fun TopBar(step: Int, accent: Color, isPersian: Boolean, onBack: () -> Unit) {
+internal fun StepTopBar(
+    step: Int,
+    accent: Color,
+    isPersian: Boolean,
+    onBack: () -> Unit,
+    totalSteps: Int = 3
+) {
     val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
@@ -635,7 +642,7 @@ private fun TopBar(step: Int, accent: Color, isPersian: Boolean, onBack: () -> U
                 .padding(horizontal = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            repeat(3) { index ->
+            repeat(totalSteps) { index ->
                 val color by animateColorAsState(
                     targetValue = if (index <= step) accent else scheme.onSurface.copy(alpha = 0.12f),
                     animationSpec = tween(300),
@@ -831,6 +838,33 @@ private fun VoicePill(isPersian: Boolean, accent: Color, onResult: (String) -> U
 @Composable
 internal fun TypeToggle(isExpense: Boolean, isPersian: Boolean, onSetType: (Boolean) -> Unit) {
     val scheme = MaterialTheme.colorScheme
+    TwoOptionToggle(
+        firstLabel = tr(isPersian, "هزینه", "Expense"),
+        secondLabel = tr(isPersian, "درآمد", "Income"),
+        firstSelected = isExpense,
+        firstColor = scheme.tertiary,
+        onFirstColor = scheme.onTertiary,
+        secondColor = scheme.primary,
+        onSecondColor = scheme.onPrimary,
+        onSelectFirst = { onSetType(true) },
+        onSelectSecond = { onSetType(false) }
+    )
+}
+
+/** کلید دوحالتی هم‌شکل با کلید «هزینه/درآمد»؛ برای جریان‌های دیگر (مثل بدهی/طلب) هم استفاده می‌شود. */
+@Composable
+internal fun TwoOptionToggle(
+    firstLabel: String,
+    secondLabel: String,
+    firstSelected: Boolean,
+    firstColor: Color,
+    onFirstColor: Color,
+    secondColor: Color,
+    onSecondColor: Color,
+    onSelectFirst: () -> Unit,
+    onSelectSecond: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(16.dp)
     Row(
         modifier = Modifier
@@ -841,19 +875,19 @@ internal fun TypeToggle(isExpense: Boolean, isPersian: Boolean, onSetType: (Bool
             .padding(4.dp)
     ) {
         ToggleSegment(
-            label = tr(isPersian, "هزینه", "Expense"),
-            selected = isExpense,
-            selectedColor = scheme.tertiary,
-            onSelectedColor = scheme.onTertiary,
-            onClick = { onSetType(true) },
+            label = firstLabel,
+            selected = firstSelected,
+            selectedColor = firstColor,
+            onSelectedColor = onFirstColor,
+            onClick = onSelectFirst,
             modifier = Modifier.weight(1f)
         )
         ToggleSegment(
-            label = tr(isPersian, "درآمد", "Income"),
-            selected = !isExpense,
-            selectedColor = scheme.primary,
-            onSelectedColor = scheme.onPrimary,
-            onClick = { onSetType(false) },
+            label = secondLabel,
+            selected = !firstSelected,
+            selectedColor = secondColor,
+            onSelectedColor = onSecondColor,
+            onClick = onSelectSecond,
             modifier = Modifier.weight(1f)
         )
     }
@@ -898,10 +932,20 @@ internal fun AmountHero(
     accent: Color,
     currencyUnit: String,
     isPersian: Boolean
+) = AmountHero(amount = form.amount, accent = accent, currencyUnit = currencyUnit, isPersian = isPersian)
+
+/** همان [AmountHero] برای هر فرمی که مبلغ را به‌صورت رشته‌ی ارقام نگه می‌دارد (تراکنش، بدهی/طلب، سقف بودجه). */
+@Composable
+internal fun AmountHero(
+    amount: String,
+    accent: Color,
+    currencyUnit: String,
+    isPersian: Boolean
 ) {
     val scheme = MaterialTheme.colorScheme
-    val isEmpty = form.amount.isEmpty()
-    val display = formatNumber(form.amountValue, isPersian)
+    val amountValue = amount.toLongOrNull() ?: 0L
+    val isEmpty = amount.isEmpty()
+    val display = formatNumber(amountValue, isPersian)
     // اندازه‌ی فونت با طول عدد کم می‌شود تا ۱۲ رقم هم در یک خط جا شود.
     val fontSize = when {
         display.length <= 8 -> 56.sp
@@ -911,14 +955,14 @@ internal fun AmountHero(
     }
 
     val pop = remember { Animatable(1f) }
-    LaunchedEffect(form.amount) {
-        if (form.amount.isNotEmpty()) {
+    LaunchedEffect(amount) {
+        if (amount.isNotEmpty()) {
             pop.snapTo(1.05f)
             pop.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
         }
     }
 
-    val words = amountInWords(form.amountValue, currencyUnit, isPersian)
+    val words = amountInWords(amountValue, currencyUnit, isPersian)
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1298,7 +1342,7 @@ internal fun CategoryTile(
 }
 
 @Composable
-private fun ManageCategoriesTile(label: String, onClick: () -> Unit) {
+internal fun ManageCategoriesTile(label: String, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(20.dp)
     Box(
@@ -1488,7 +1532,7 @@ private fun ReviewStep(
 }
 
 @Composable
-private fun ReviewRow(
+internal fun ReviewRow(
     label: String,
     value: String,
     onClick: () -> Unit,
@@ -1609,7 +1653,7 @@ internal fun DateRow(
 }
 
 @Composable
-private fun DateChip(
+internal fun DateChip(
     label: String,
     selected: Boolean,
     accent: Color,
