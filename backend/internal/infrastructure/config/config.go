@@ -35,6 +35,8 @@ type Config struct {
 	// MongoAllowPlaintext allows a non-TLS MONGO_URI in production. Intended only
 	// for MongoDB reachable exclusively over a private/loopback network (single VPS).
 	MongoAllowPlaintext bool
+	// AppUpdate drives the in-app "update required" screen (see app_update.go).
+	AppUpdate AppUpdateConfig
 }
 
 func Load() (*Config, error) {
@@ -163,7 +165,11 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("SMS_AUTH_TOKEN, SMS_FROM_NUMBER and SMS_PATTERN_CODE are required in production")
 		}
 	}
-	return &Config{Env: c.Env, HTTPPort: c.HTTPPort, MongoURI: c.MongoURI, MongoDBName: c.MongoDBName, JWTSecret: c.JWTSecret, PhoneHashKey: c.PhoneHashKey, OTPCodeKey: c.OTPCodeKey, DecoySaltKey: c.DecoySaltKey, Argon2MaxConcurrent: c.Argon2MaxConcurrent, Argon2MaxWaiting: c.Argon2MaxWaiting, SyncMaxRecords: c.SyncMaxRecords, SyncMaxBytes: c.SyncMaxBytes, TrustedProxyCIDRs: c.TrustedProxyCIDRs, CORSAllowedOrigins: c.CORSAllowedOrigins, TLSCertFile: c.TLSCertFile, TLSKeyFile: c.TLSKeyFile, TLSTerminatedByProxy: c.TLSTerminatedByProxy, ServeTLS: c.ServeTLS, MongoAllowPlaintext: c.MongoAllowPlaintext, JWTAccessTTL: time.Duration(a) * time.Minute, JWTRefreshTTL: time.Duration(d) * 24 * time.Hour, OTPExpiry: time.Duration(o) * time.Minute, SMSWebhookURL: c.SMSWebhookURL, SMSAuthToken: c.SMSAuthToken, SMSFromNumber: c.SMSFromNumber, SMSPatternCode: c.SMSPatternCode, DevLogOTP: c.DevLogOTP}, nil
+	appUpdate, err := loadAppUpdate()
+	if err != nil {
+		return nil, err
+	}
+	return &Config{Env: c.Env, HTTPPort: c.HTTPPort, MongoURI: c.MongoURI, MongoDBName: c.MongoDBName, JWTSecret: c.JWTSecret, PhoneHashKey: c.PhoneHashKey, OTPCodeKey: c.OTPCodeKey, DecoySaltKey: c.DecoySaltKey, Argon2MaxConcurrent: c.Argon2MaxConcurrent, Argon2MaxWaiting: c.Argon2MaxWaiting, SyncMaxRecords: c.SyncMaxRecords, SyncMaxBytes: c.SyncMaxBytes, TrustedProxyCIDRs: c.TrustedProxyCIDRs, CORSAllowedOrigins: c.CORSAllowedOrigins, TLSCertFile: c.TLSCertFile, TLSKeyFile: c.TLSKeyFile, TLSTerminatedByProxy: c.TLSTerminatedByProxy, ServeTLS: c.ServeTLS, MongoAllowPlaintext: c.MongoAllowPlaintext, JWTAccessTTL: time.Duration(a) * time.Minute, JWTRefreshTTL: time.Duration(d) * 24 * time.Hour, OTPExpiry: time.Duration(o) * time.Minute, SMSWebhookURL: c.SMSWebhookURL, SMSAuthToken: c.SMSAuthToken, SMSFromNumber: c.SMSFromNumber, SMSPatternCode: c.SMSPatternCode, DevLogOTP: c.DevLogOTP, AppUpdate: appUpdate}, nil
 }
 
 // validateKeys checks the dedicated keys: all present, at least minLen characters, and pairwise

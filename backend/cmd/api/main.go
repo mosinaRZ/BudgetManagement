@@ -117,7 +117,9 @@ func run() error {
 	router := httpiface.NewRouter(httpiface.RouterDependencies{
 		AuthHandler: authHandler, SyncHandler: syncHandler, AdminHandler: handler.NewAdminHandler(roleUC, validate),
 		AdminPanelHandler: handler.NewAdminPanelHandler(panelUC), AdminGate: panelUC,
-		DeviceHandler: handler.NewDeviceHandler(deviceUC), LegalHandler: handler.NewLegalHandler(""), JWTSecret: cfg.JWTSecret, UserRepository: userRepo, DeviceRepository: deviceRepo, Env: cfg.Env,
+		DeviceHandler: handler.NewDeviceHandler(deviceUC), LegalHandler: handler.NewLegalHandler(""), JWTSecret: cfg.JWTSecret,
+		AppConfigHandler: handler.NewAppConfigHandler(handler.AppConfig{MinVersion: cfg.AppUpdate.MinVersion, LatestVersion: cfg.AppUpdate.LatestVersion, UpdateURLs: cfg.AppUpdate.UpdateURLs}),
+		MinAppVersion:    cfg.AppUpdate.MinVersion, UserRepository: userRepo, DeviceRepository: deviceRepo, Env: cfg.Env,
 		TrustedProxyCIDRs: trustedProxies, CORSAllowedOrigins: corsOrigins, RateLimitStore: rateStore,
 	})
 
