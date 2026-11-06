@@ -83,6 +83,8 @@ import java.util.Locale
 @Composable
 fun TransactionsScreen(
     onAddTransactionClick: () -> Unit = {},
+    // ویرایش در صفحه‌ی تمام‌صفحه‌ی جدا انجام می‌شود (شناسه‌ی تراکنش داده می‌شود).
+    onEditTransaction: (String) -> Unit = {},
     viewModel: TransactionViewModel = appViewModel()
 ) {
     val isPersian = isPersianLocale()
@@ -118,7 +120,6 @@ fun TransactionsScreen(
 
     var showFilterSheet by remember { mutableStateOf(false) }
     var transactionToDelete by remember { mutableStateOf<TransactionEntity?>(null) }
-    var transactionToEdit by remember { mutableStateOf<TransactionEntity?>(null) }
     // محتوای شیت موفقیت؛ null یعنی شیت نمایش داده نمی‌شود
     var successSheet by remember { mutableStateOf<SuccessSheetContent?>(null) }
     var transactionToShare by remember { mutableStateOf<TransactionEntity?>(null) }
@@ -292,7 +293,7 @@ fun TransactionsScreen(
                                     categoryTitle = categoryInfoById[transaction.categoryId]?.first
                                         ?: StringMapper.getCategoryName(transaction.categoryId, isPersian),
                                     categoryIcon = categoryInfoById[transaction.categoryId]?.second ?: "📁",
-                                    onEdit = { transactionToEdit = transaction },
+                                    onEdit = { onEditTransaction(transaction.id) },
                                     onShare = { transactionToShare = transaction },
                                     onDelete = { transactionToDelete = transaction }
                                 )
@@ -308,7 +309,7 @@ fun TransactionsScreen(
                                 categoryTitle = categoryInfoById[transaction.categoryId]?.first
                                     ?: StringMapper.getCategoryName(transaction.categoryId, isPersian),
                                 categoryIcon = categoryInfoById[transaction.categoryId]?.second ?: "📁",
-                                onEdit = { transactionToEdit = transaction },
+                                onEdit = { onEditTransaction(transaction.id) },
                                 onShare = { transactionToShare = transaction },
                                 onDelete = { transactionToDelete = transaction }
                             )
@@ -527,30 +528,6 @@ fun TransactionsScreen(
                 onApply = { timeFilter, typeFilter, sortOrder, start, end ->
                     viewModel.applyCustomFilter(timeFilter, typeFilter, sortOrder, start, end)
                     showFilterSheet = false
-                }
-            )
-        }
-
-        // ۲. باتم شیت شناور ویرایش تراکنش
-        transactionToEdit?.let { tx ->
-            EditTransactionBottomSheet(
-                transaction = tx,
-                isPersian = isPersian,
-                currencyUnit = currencyUnit,
-                viewModel = viewModel,
-                onDismiss = { transactionToEdit = null },
-                onConfirm = { updatedTx ->
-                    viewModel.updateTransaction(updatedTx) { saved ->
-                        if (saved) {
-                            successSheet = transactionUpdatedContent(
-                                title = updatedTx.title,
-                                amountToman = updatedTx.amount,
-                                currencyUnit = currencyUnit,
-                                isPersian = isPersian
-                            )
-                        }
-                    }
-                    transactionToEdit = null
                 }
             )
         }
@@ -1066,402 +1043,6 @@ class ThousandsSeparatorVisualTransformation : VisualTransformation {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EditTransactionBottomSheet(
-    transaction: TransactionEntity,
-    isPersian: Boolean,
-    currencyUnit: String,
-    viewModel: TransactionViewModel,
-    onDismiss: () -> Unit,
-    onConfirm: (TransactionEntity) -> Unit
-) {
-
-    var title by remember { mutableStateOf(SystemTransactionText.localizeTitle(transaction.title, isPersian)) }
-
-    val initialAmount = remember(transaction.amount, currencyUnit) {
-        if (currencyUnit == "IRR") (transaction.amount * 10).toLong().toString()
-        else transaction.amount.toLong().toString()
-    }
-    var rawAmountText by remember { mutableStateOf(initialAmount) }
-    var note by remember { mutableStateOf(SystemTransactionText.localizeNote(transaction.note, isPersian) ?: "") }
-    var category by remember { mutableStateOf(transaction.categoryId) }
-    var type by remember { mutableStateOf(transaction.type) } // "EXPENSE" or "INCOME"
-    var userManuallySelectedCategory by remember { mutableStateOf(false) }
-    var suggestionRequestedAfterTypeChange by remember { mutableStateOf(false) }
-
-    val maxTitleLength = 40
-    val maxDigitsLength = 12
-    val maxNoteLength = 120
-
-    var titleError by remember { mutableStateOf(false) }
-    var amountError by remember { mutableStateOf(false) }
-    var categoryError by remember { mutableStateOf(false) }
-
-    var isCategoryDropdownExpanded by remember { mutableStateOf(false) }
-
-    val expenseCategories by viewModel.expenseCategories.collectAsState()
-    val incomeCategories by viewModel.incomeCategories.collectAsState()
-
-    // تراکنش‌هایی که خودِ سیستم با دسته‌ی «قلک» ساخته (واریز/برداشت قلک) باید همان دسته را نگه دارند.
-    // دسته‌ی قلک هرگز در لیست انتخاب کاربر نمی‌آید، پس برای این تراکنش‌ها دسته قفل می‌شود.
-    val allCategories by viewModel.categories.collectAsState()
-    val isSavingGoalTransaction = remember(transaction.categoryId, allCategories) {
-        allCategories.any { it.id == transaction.categoryId && !CategoryRules.isUserSelectable(it) }
-    }
-
-    val currentCategories = remember(type, expenseCategories, incomeCategories) {
-        val rawList = if (type == "EXPENSE") expenseCategories else incomeCategories
-        rawList.filter { cat ->
-            CategoryRules.isUserSelectable(cat) &&
-                    cat.title != "دسته‌بندی نشده" &&
-                    cat.title != "دسته بندی نشده" &&
-                    !cat.title.equals("Uncategorized", ignoreCase = true)
-        }
-    }
-
-    val selectedCategoryObj = if (isSavingGoalTransaction) {
-        allCategories.find { it.id == transaction.categoryId }
-    } else {
-        currentCategories.find { it.id == category }
-    }
-
-    fun trySuggestCategory(inputTitle: String): Boolean {
-        if (isSavingGoalTransaction) return false
-        if (userManuallySelectedCategory) return false
-        val suggestedTitle = CategorySuggestionHelper.suggestCategory(inputTitle, currentCategories, isPersian) ?: return false
-        val suggested = currentCategories.firstOrNull { it.title == suggestedTitle } ?: return false
-        category = suggested.id
-        categoryError = false
-        return true
-    }
-
-    LaunchedEffect(type, currentCategories) {
-        val wasSuggested = if (suggestionRequestedAfterTypeChange) {
-            trySuggestCategory(title).also { suggestionRequestedAfterTypeChange = false }
-        } else false
-        if (!isSavingGoalTransaction && !wasSuggested && currentCategories.isNotEmpty() && currentCategories.none { it.id == category }) {
-            category = currentCategories.first().id
-        }
-    }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
-        dragHandle = {
-            Box(
-                modifier = Modifier
-                    .padding(vertical = 12.dp)
-                    .width(48.dp)
-                    .height(4.dp)
-                    .background(
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                        RoundedCornerShape(2.dp)
-                    )
-            )
-        }
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp)
-                .verticalScroll(rememberScrollState())
-        ) {
-            Text(
-                text = if (isPersian) "ویرایش تراکنش" else "Edit Transaction",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // انتخاب نوع تراکنش (هزینه / درآمد)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        RoundedCornerShape(16.dp)
-                    )
-                    .border(
-                        1.dp,
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                        RoundedCornerShape(16.dp)
-                    )
-                    .padding(4.dp)
-            ) {
-                Button(
-                    onClick = {
-                        type = "EXPENSE"
-                        userManuallySelectedCategory = false
-                        category = ""
-                        suggestionRequestedAfterTypeChange = true
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (type == "EXPENSE") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = if (type == "EXPENSE") MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(if (isPersian) "هزینه" else "Expense", fontWeight = FontWeight.Bold)
-                }
-
-                Button(
-                    onClick = {
-                        type = "INCOME"
-                        userManuallySelectedCategory = false
-                        category = ""
-                        suggestionRequestedAfterTypeChange = true
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (type == "INCOME") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = if (type == "INCOME") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(if (isPersian) "درآمد" else "Income", fontWeight = FontWeight.Bold)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // فیلد عنوان
-            OutlinedTextField(
-                value = title,
-                onValueChange = { input ->
-                    if (input.length <= maxTitleLength) {
-                        title = input
-                        if (titleError) titleError = false
-                        trySuggestCategory(input)
-                    }
-                },
-                label = { Text(if (isPersian) "عنوان تراکنش" else "Title") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                singleLine = true,
-                isError = titleError,
-                trailingIcon = {
-                    VoiceInputButton(
-                        onResult = { spoken ->
-                            title = spoken.take(maxTitleLength)
-                            if (titleError) titleError = false
-                            trySuggestCategory(title)
-                        },
-                        language = if (isPersian) "fa-IR" else "en-US"
-                    )
-                },
-                supportingText = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = if (titleError) (if (isPersian) "عنوان تراکنش نمی‌تواند خالی باشد" else "Title cannot be empty") else "",
-                            color = MaterialTheme.colorScheme.error
-                        )
-                        Text(
-                            text = "${title.length}/$maxTitleLength",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // فیلد مبلغ
-            val amountLabel = if (isPersian) {
-                if (currencyUnit == "IRR") "مبلغ (ریال)" else "مبلغ (تومان)"
-            } else {
-                if (currencyUnit == "IRR") "Amount (Rial)" else "Amount (Toman)"
-            }
-
-            OutlinedTextField(
-                value = rawAmountText,
-                onValueChange = { input ->
-                    val digitsOnly = input.filter { it.isDigit() }
-                    if (digitsOnly.length <= maxDigitsLength) {
-                        rawAmountText = digitsOnly
-                        if (amountError) amountError = false
-                    }
-                },
-                label = { Text(amountLabel) },
-                singleLine = true,
-                visualTransformation = ThousandsSeparatorTransformation(), // توجه: از همون کلاسی که در AddScreen گذاشتید استفاده کنید
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                isError = amountError,
-                supportingText = {
-                    if (amountError) {
-                        Text(
-                            text = if (isPersian) "مبلغ معتبر (بزرگتر از ۰) وارد کنید" else "Enter a valid amount (> 0)",
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // دراپ‌داون دسته‌بندی
-            ExposedDropdownMenuBox(
-                expanded = isCategoryDropdownExpanded && !isSavingGoalTransaction,
-                onExpandedChange = { if (!isSavingGoalTransaction) isCategoryDropdownExpanded = !isCategoryDropdownExpanded }
-            ) {
-                OutlinedTextField(
-                    value = StringMapper.getCategoryName(selectedCategoryObj?.title.orEmpty(), isPersian),
-                    onValueChange = {},
-                    readOnly = true,
-                    enabled = !isSavingGoalTransaction,
-                    label = { Text(if (isPersian) "انتخاب دسته‌بندی" else "Select Category") },
-                    leadingIcon = {
-                        if (selectedCategoryObj != null) {
-                            Text(
-                                text = selectedCategoryObj.iconEmoji,
-                                fontSize = 20.sp,
-                                modifier = Modifier.padding(horizontal = 4.dp)
-                            )
-                        }
-                    },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isCategoryDropdownExpanded) },
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    isError = categoryError,
-                    supportingText = {
-                        if (categoryError) {
-                            Text(
-                                text = if (isPersian) "لطفاً یک دسته‌بندی انتخاب کنید" else "Please select a category",
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
-                )
-
-                ExposedDropdownMenu(
-                    expanded = isCategoryDropdownExpanded && !isSavingGoalTransaction,
-                    onDismissRequest = { isCategoryDropdownExpanded = false },
-                    modifier = Modifier
-                        .heightIn(max = 280.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    if (currentCategories.isEmpty()) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = if (isPersian) "دسته‌بندی یافت نشد" else "No categories found",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            },
-                            onClick = { isCategoryDropdownExpanded = false }
-                        )
-                    } else {
-                        currentCategories.forEach { catItem ->
-                            DropdownMenuItem(
-                                text = {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        Text(text = catItem.iconEmoji, fontSize = 22.sp)
-                                        Text(
-                                            text = StringMapper.getCategoryName(catItem.title, isPersian),
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
-                                },
-                                onClick = {
-                                    category = catItem.id
-                                    userManuallySelectedCategory = true
-                                    isCategoryDropdownExpanded = false
-                                    categoryError = false
-                                },
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // فیلد یادداشت
-            OutlinedTextField(
-                value = note,
-                onValueChange = { input ->
-                    if (input.length <= maxNoteLength) {
-                        note = input
-                    }
-                },
-                label = { Text(if (isPersian) "یادداشت (اختیاری)" else "Note (Optional)") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                maxLines = 3,
-                trailingIcon = {
-                    VoiceInputButton(
-                        onResult = { spoken ->
-                            note = spoken.take(maxNoteLength)
-                        },
-                        language = if (isPersian) "fa-IR" else "en-US"
-                    )
-                },
-                supportingText = {
-                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                        Text(
-                            text = "${note.length}/$maxNoteLength",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // دکمه تایید اسکرولی (Swipe To Confirm)
-            SwipeToConfirmButton(
-                text = if (isPersian) "برای ذخیره بکشید" else "Swipe to Save",
-                isPersian = isPersian,
-                resetTrigger = title.isEmpty() && rawAmountText.isEmpty(),
-                onConfirm = {
-                    val parsedAmount = rawAmountText.toDoubleOrNull() ?: 0.0
-                    val isTitleValid = title.isNotBlank()
-                    val isAmountValid = parsedAmount > 0
-                    val isCategoryValid = category.isNotBlank()
-
-                    titleError = !isTitleValid
-                    amountError = !isAmountValid
-                    categoryError = !isCategoryValid
-
-                    if (isTitleValid && isAmountValid && isCategoryValid) {
-                        val finalAmountInToman = if (currencyUnit == "IRR") parsedAmount / 10.0 else parsedAmount
-
-                        val updatedTransaction = transaction.copy(
-                            title = title.trim(),
-                            amount = ir.hamedan.budgetmanagement.data.money.MoneyContract.inputToStorage(parsedAmount, currencyUnit),
-                            categoryId = category,
-                            type = type,
-                            note = note.trim()
-                        )
-
-                        onConfirm(updatedTransaction)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-    }
-}
-
-@Composable
 private fun TimeFilterSelector(
     selectedFilter: TimeFilter,
     isPersian: Boolean,
@@ -1927,7 +1508,7 @@ private fun toPersianDigits(value: String): String {
 }
 
 /** متن شیت موفقیتِ ویرایش تراکنش. */
-private fun transactionUpdatedContent(
+internal fun transactionUpdatedContent(
     title: String,
     amountToman: Long,
     currencyUnit: String,

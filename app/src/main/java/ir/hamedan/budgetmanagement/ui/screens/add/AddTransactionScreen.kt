@@ -32,6 +32,16 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import ir.hamedan.budgetmanagement.ui.screens.transactions.TransactionShareSheet
+import ir.hamedan.budgetmanagement.data.money.MoneyContract
+import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
+import ir.hamedan.budgetmanagement.ui.components.rememberVoiceInputLauncher
+import androidx.compose.material.icons.filled.MicNone
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -111,7 +121,7 @@ import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.launch
 import java.util.Locale
 
-private const val MAX_AMOUNT_DIGITS = 12
+internal const val MAX_AMOUNT_DIGITS = 12
 private const val STEP_AMOUNT = 0
 private const val STEP_CATEGORY = 1
 private const val STEP_REVIEW = 2
@@ -177,29 +187,29 @@ class AddTransactionFormState(
     }
 }
 
-private fun tr(isPersian: Boolean, fa: String, en: String) = if (isPersian) fa else en
+internal fun tr(isPersian: Boolean, fa: String, en: String) = if (isPersian) fa else en
 
-private fun formatNumber(value: Long, isPersian: Boolean): String =
+internal fun formatNumber(value: Long, isPersian: Boolean): String =
     NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US).format(value)
 
-private fun unitLabel(currencyUnit: String, isPersian: Boolean): String = when {
+internal fun unitLabel(currencyUnit: String, isPersian: Boolean): String = when {
     currencyUnit == "IRR" && isPersian -> "ریال"
     currencyUnit == "IRR" -> "Rial"
     isPersian -> "تومان"
     else -> "Toman"
 }
 
-private fun amountInWords(value: Long, currencyUnit: String, isPersian: Boolean): String {
+internal fun amountInWords(value: Long, currencyUnit: String, isPersian: Boolean): String {
     val words = if (isPersian) AmountInWords.persian(value) else AmountInWords.englishCompact(value)
     return if (words.isEmpty()) "" else "$words ${unitLabel(currencyUnit, isPersian)}"
 }
 
-private fun appendDigits(current: String, add: String): String {
+internal fun appendDigits(current: String, add: String): String {
     val next = if (current.isEmpty()) add.trimStart('0') else current + add
     return if (next.length <= MAX_AMOUNT_DIGITS) next else current
 }
 
-private fun addToAmount(current: String, delta: Long): String {
+internal fun addToAmount(current: String, delta: Long): String {
     val next = ((current.toLongOrNull() ?: 0L) + delta).toString()
     return if (next.length <= MAX_AMOUNT_DIGITS) next else current
 }
@@ -240,6 +250,8 @@ fun AddTransactionScreen(
     var successSheet by remember { mutableStateOf<SuccessSheetContent?>(null) }
     var isSaving by remember { mutableStateOf(false) }
     var insight by remember { mutableStateOf(SaveInsight()) }
+    var sharePayload by remember { mutableStateOf<SharePayload?>(null) }
+    var showShareSheet by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
@@ -314,7 +326,7 @@ fun AddTransactionScreen(
         }
         haptics.performHapticFeedback(HapticFeedbackType.Confirm)
         when {
-            form.hasAmount && form.hasCategory -> goTo(STEP_REVIEW)
+            form.hasAmount && form.hasCategory && form.title.isNotBlank() -> goTo(STEP_REVIEW)
             form.hasAmount -> goTo(STEP_CATEGORY)
             else -> scope.launch {
                 snackbarHostState.showSnackbar(
@@ -325,15 +337,14 @@ fun AddTransactionScreen(
     }
 
     fun save() {
-        if (isSaving || !form.hasAmount || !form.hasCategory) return
+        if (isSaving || !form.hasAmount || !form.hasCategory || form.title.isBlank()) return
         val parsed = form.amount.toDoubleOrNull() ?: return
         val amount = if (currencyUnit == "IRR") parsed / 10.0 else parsed
-        // اگر عنوان خالی بود، نام دسته جایگزین می‌شود.
         val savedTitle = form.title.trim()
-            .ifBlank { StringMapper.getCategoryName(form.categoryKey, isPersian) }
         val savedDisplayAmount = parsed.toLong()
         val savedIsExpense = form.isExpense
         val savedCategoryName = StringMapper.getCategoryName(form.categoryKey, isPersian)
+        val savedNote = form.note.trim()
         // تاریخِ انتخابی با ساعتِ همین لحظه ذخیره می‌شود تا ترتیب تراکنش‌های یک روز طبیعی بماند.
         val timestamp = if (form.dayOffset <= 0) {
             System.currentTimeMillis()
@@ -356,6 +367,19 @@ fun AddTransactionScreen(
             onResult = { saved ->
                 // ثبت ناموفق: فرم و ورودی کاربر سر جایش می‌ماند و اسنک‌بار خطا نشان داده می‌شود.
                 if (saved) {
+                    // کارتِ قابل‌اشتراک از همین مقادیر ساخته می‌شود (فقط برای تصویر؛ در دیتابیس نمی‌رود).
+                    sharePayload = SharePayload(
+                        transaction = TransactionEntity(
+                            title = savedTitle,
+                            amount = MoneyContract.inputToStorage(parsed, currencyUnit),
+                            categoryId = selectedCategory?.id ?: form.categoryKey,
+                            type = if (savedIsExpense) "EXPENSE" else "INCOME",
+                            timestamp = timestamp,
+                            note = savedNote
+                        ),
+                        categoryTitle = savedCategoryName,
+                        categoryEmoji = selectedCategory?.iconEmoji ?: "📁"
+                    )
                     successSheet = transactionSavedContent(
                         title = savedTitle,
                         displayAmount = savedDisplayAmount,
@@ -452,8 +476,6 @@ fun AddTransactionScreen(
                             form.categoryKey = category.title
                             form.manualCategory = true
                             form.autoSuggested = false
-                            // اگر عنوانی نوشته نشده، یک تپ روی دسته مستقیم به مرور می‌رود.
-                            if (form.title.isBlank()) goTo(STEP_REVIEW)
                         },
                         onManage = onManageCategories,
                         onContinue = { goTo(STEP_REVIEW) }
@@ -465,7 +487,7 @@ fun AddTransactionScreen(
                         accent = accent,
                         currencyUnit = currencyUnit,
                         isPersian = isPersian,
-                        canSave = !isSaving && form.hasAmount && form.hasCategory,
+                        canSave = !isSaving && form.hasAmount && form.hasCategory && form.title.isNotBlank(),
                         onEditAmount = { goTo(STEP_AMOUNT) },
                         onEditCategory = { goTo(STEP_CATEGORY) },
                         onConfirm = ::save
@@ -492,10 +514,31 @@ fun AddTransactionScreen(
             onDismiss = {
                 successSheet = null
                 onFinished()
-            }
+            },
+            onShare = sharePayload?.let { { showShareSheet = true } }
         )
     }
+
+    if (showShareSheet) {
+        sharePayload?.let { payload ->
+            TransactionShareSheet(
+                transaction = payload.transaction,
+                categoryTitle = payload.categoryTitle,
+                categoryEmoji = payload.categoryEmoji,
+                currencyUnit = currencyUnit,
+                isPersian = isPersian,
+                onDismiss = { showShareSheet = false }
+            )
+        }
+    }
 }
+
+/** داده‌ی لازم برای ساخت کارت اشتراک‌گذاریِ تراکنشِ تازه ثبت‌شده. */
+private class SharePayload(
+    val transaction: TransactionEntity,
+    val categoryTitle: String,
+    val categoryEmoji: String
+)
 
 /** متن شیت موفقیتِ ثبت تراکنش؛ با درصد مصرف بودجه‌ی دسته و streak روزهای پشت‌سرهم. */
 internal fun transactionSavedContent(
@@ -613,7 +656,7 @@ private fun TopBar(step: Int, accent: Color, isPersian: Boolean, onBack: () -> U
 }
 
 @Composable
-private fun PrimaryActionButton(
+internal fun PrimaryActionButton(
     text: String,
     enabled: Boolean,
     accent: Color,
@@ -745,18 +788,27 @@ private fun AmountStep(
     }
 }
 
-/** ثبت با یک جمله: «ناهار ۲۵۰ هزار تومان». */
+/** ثبت با یک جمله: «ناهار ۲۵۰ هزار تومان». کل ردیف لمس‌پذیر است، نه فقط آیکن میکروفون. */
 @Composable
 private fun VoicePill(isPersian: Boolean, accent: Color, onResult: (String) -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(16.dp)
+    val launchSpeech = rememberVoiceInputLauncher(
+        onResult = onResult,
+        language = if (isPersian) "fa-IR" else "en-US"
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
             .background(accent.copy(alpha = 0.08f))
             .border(1.dp, accent.copy(alpha = 0.2f), shape)
-            .padding(start = 16.dp, end = 4.dp),
+            .clickable(
+                role = Role.Button,
+                onClickLabel = tr(isPersian, "شروع ضبط صدا", "Start voice input"),
+                onClick = launchSpeech
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -767,15 +819,17 @@ private fun VoicePill(isPersian: Boolean, accent: Color, onResult: (String) -> U
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
         )
-        VoiceInputButton(
-            onResult = onResult,
-            language = if (isPersian) "fa-IR" else "en-US"
+        Icon(
+            imageVector = Icons.Default.MicNone,
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.size(24.dp)
         )
     }
 }
 
 @Composable
-private fun TypeToggle(isExpense: Boolean, isPersian: Boolean, onSetType: (Boolean) -> Unit) {
+internal fun TypeToggle(isExpense: Boolean, isPersian: Boolean, onSetType: (Boolean) -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(16.dp)
     Row(
@@ -839,7 +893,7 @@ private fun ToggleSegment(
 
 /** عدد بزرگ مبلغ، واحد و مبلغ به حروف. */
 @Composable
-private fun AmountHero(
+internal fun AmountHero(
     form: AddTransactionFormState,
     accent: Color,
     currencyUnit: String,
@@ -919,7 +973,7 @@ private fun AmountHero(
 
 /** کیبورد عددی اختصاصی؛ همیشه چپ‌به‌راست چیده می‌شود تا ۱ ۲ ۳ در هر زبانی یکسان باشد. */
 @Composable
-private fun NumericKeypad(
+internal fun NumericKeypad(
     isPersian: Boolean,
     onDigits: (String) -> Unit,
     onBackspace: () -> Unit,
@@ -1010,6 +1064,17 @@ private fun CategoryStep(
     onContinue: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
+    val haptics = LocalHapticFeedback.current
+    val titleFocus = remember { FocusRequester() }
+    // خطا فقط بعد از زدن «ادامه» با عنوان خالی نشان داده می‌شود، نه از همان اول.
+    var showTitleError by remember { mutableStateOf(false) }
+    var showCategoryError by remember { mutableStateOf(false) }
+
+    fun updateTitle(input: String) {
+        onTitleChanged(input)
+        if (input.isNotBlank()) showTitleError = false
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1029,11 +1094,27 @@ private fun CategoryStep(
 
         OutlinedTextField(
             value = form.title,
-            onValueChange = onTitleChanged,
-            label = { Text(tr(isPersian, "عنوان (اختیاری)", "Title (optional)")) },
-            modifier = Modifier.fillMaxWidth(),
+            onValueChange = ::updateTitle,
+            label = { Text(tr(isPersian, "عنوان", "Title")) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(titleFocus),
             shape = RoundedCornerShape(16.dp),
             singleLine = true,
+            isError = showTitleError,
+            supportingText = if (showTitleError) {
+                {
+                    Text(
+                        tr(
+                            isPersian,
+                            "عنوان رو فراموش کردی؛ یه اسم کوتاه بنویس",
+                            "You forgot the title; add a short name"
+                        )
+                    )
+                }
+            } else {
+                null
+            },
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = accent,
                 focusedLabelColor = accent,
@@ -1041,13 +1122,22 @@ private fun CategoryStep(
             ),
             trailingIcon = {
                 VoiceInputButton(
-                    onResult = { spoken -> onTitleChanged(spoken.take(40)) },
+                    onResult = { spoken -> updateTitle(spoken.take(40)) },
                     language = if (isPersian) "fa-IR" else "en-US"
                 )
             }
         )
 
-        Spacer(Modifier.height(12.dp))
+        if (showCategoryError) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = tr(isPersian, "یک دسته‌بندی انتخاب کن", "Pick a category"),
+                style = MaterialTheme.typography.labelMedium,
+                color = scheme.error
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
 
         if (categories.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -1062,7 +1152,8 @@ private fun CategoryStep(
                 columns = GridCells.Fixed(3),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(bottom = 8.dp),
+                // فاصله‌ی بالا/کناره‌ها جای بزرگ‌شدنِ کارتِ انتخاب‌شده است تا زیر فیلد عنوان یا لبه‌ها بریده نشود.
+                contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 10.dp, bottom = 12.dp),
                 modifier = Modifier.weight(1f)
             ) {
                 items(items = categories, key = { it.id }) { category ->
@@ -1073,8 +1164,12 @@ private fun CategoryStep(
                         selected = selected,
                         suggested = selected && form.autoSuggested,
                         accent = accent,
-                        suggestedLabel = tr(isPersian, "پیشنهاد ✨", "Suggested ✨"),
-                        onClick = { onCategoryPicked(category) }
+                        onAccent = onAccent,
+                        suggestedLabel = tr(isPersian, "✨ پیشنهاد", "✨ Suggested"),
+                        onClick = {
+                            showCategoryError = false
+                            onCategoryPicked(category)
+                        }
                     )
                 }
                 item(key = "manage") {
@@ -1090,68 +1185,111 @@ private fun CategoryStep(
 
         PrimaryActionButton(
             text = tr(isPersian, "ادامه", "Continue"),
-            enabled = form.hasCategory,
+            enabled = true,
             accent = accent,
             onAccent = onAccent,
-            onClick = onContinue
+            onClick = {
+                when {
+                    form.title.isBlank() -> {
+                        showTitleError = true
+                        haptics.performHapticFeedback(HapticFeedbackType.Reject)
+                        titleFocus.requestFocus()
+                    }
+                    !form.hasCategory -> {
+                        showCategoryError = true
+                        haptics.performHapticFeedback(HapticFeedbackType.Reject)
+                    }
+                    else -> onContinue()
+                }
+            }
         )
         Spacer(Modifier.height(16.dp))
     }
 }
 
+/**
+ * کارت دسته: ایموجی داخل دایره، نام تا دو خط، و برای دسته‌ی پیشنهادی یک نوار پررنگ
+ * پایین کارت (متن روی رنگ اصلی با کنتراست کامل، نه متن ریز روی زمینه‌ی کم‌رنگ).
+ */
 @Composable
-private fun CategoryTile(
+internal fun CategoryTile(
     emoji: String,
     name: String,
     selected: Boolean,
     suggested: Boolean,
     accent: Color,
+    onAccent: Color,
     suggestedLabel: String,
     onClick: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(20.dp)
     val scale by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (selected) 1.04f else 1f,
+        targetValue = if (selected) 1.03f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
         label = "tileScale"
     )
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(92.dp)
+            .height(108.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
             .clip(shape)
-            .background(if (selected) accent.copy(alpha = 0.16f) else scheme.surfaceVariant.copy(alpha = 0.5f))
+            .background(if (selected) accent.copy(alpha = 0.14f) else scheme.surfaceVariant.copy(alpha = 0.5f))
             .border(
                 width = if (selected) 1.5.dp else 1.dp,
                 color = if (selected) accent else scheme.outline.copy(alpha = 0.15f),
                 shape = shape
             )
             .clickable(onClick = onClick)
-            .padding(8.dp),
-        contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Text(text = emoji, fontSize = 28.sp)
-            Spacer(Modifier.height(4.dp))
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 6.dp, end = 6.dp, top = 10.dp, bottom = if (suggested) 24.dp else 10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (selected) accent.copy(alpha = 0.18f) else scheme.onSurface.copy(alpha = 0.06f)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = emoji, fontSize = 22.sp)
+            }
+            Spacer(Modifier.height(6.dp))
             Text(
                 text = name,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                 color = if (selected) accent else scheme.onSurface,
                 textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = 14.sp
             )
-            if (suggested) {
+        }
+        if (suggested) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(22.dp)
+                    .background(accent),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
                     text = suggestedLabel,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = accent,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = onAccent,
                     maxLines = 1
                 )
             }
@@ -1166,7 +1304,7 @@ private fun ManageCategoriesTile(label: String, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(92.dp)
+            .height(108.dp)
             .clip(shape)
             .border(1.dp, scheme.outline.copy(alpha = 0.25f), shape)
             .clickable(onClick = onClick)
@@ -1276,10 +1414,7 @@ private fun ReviewStep(
             )
             ReviewRow(
                 label = tr(isPersian, "عنوان", "Title"),
-                value = form.title.trim().ifBlank {
-                    tr(isPersian, "نام دسته استفاده می‌شود", "The category name will be used")
-                },
-                dimmed = form.title.isBlank(),
+                value = form.title.trim(),
                 onClick = onEditCategory
             )
             DateRow(
@@ -1403,7 +1538,7 @@ private fun ReviewRow(
 
 /** امروز | دیروز | انتخاب دستی با چرخ تاریخ (شمسی در فارسی). */
 @Composable
-private fun DateRow(
+internal fun DateRow(
     dayOffset: Int,
     accent: Color,
     isPersian: Boolean,
@@ -1457,7 +1592,10 @@ private fun DateRow(
         WheelDatePickerDialog(
             isPersian = isPersian,
             title = tr(isPersian, "تاریخ تراکنش", "Transaction date"),
-            initialMillis = selectedMillis,
+            initialMillis = maxOf(
+                selectedMillis,
+                today.minusYears(5).atStartOfDay(zone).toInstant().toEpochMilli()
+            ),
             onConfirm = { millis ->
                 val picked = Instant.ofEpochMilli(millis).atZone(zone).toLocalDate()
                 onSelectOffset(ChronoUnit.DAYS.between(picked, today).toInt().coerceAtLeast(0))

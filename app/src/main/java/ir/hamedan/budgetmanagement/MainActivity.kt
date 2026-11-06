@@ -45,6 +45,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -72,6 +77,7 @@ import ir.hamedan.budgetmanagement.ui.screens.admin.AdminRootScreen
 import ir.hamedan.budgetmanagement.ui.screens.profile.ProfileScreen
 import ir.hamedan.budgetmanagement.ui.screens.add.AddScreen
 import ir.hamedan.budgetmanagement.ui.screens.add.AddTransactionScreen
+import ir.hamedan.budgetmanagement.ui.screens.transactions.EditTransactionScreen
 import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsScreen
 import ir.hamedan.budgetmanagement.ui.screens.home.HomeScreen
 import ir.hamedan.budgetmanagement.ui.screens.auth.LoginScreen
@@ -153,7 +159,9 @@ class MainActivity : FragmentActivity() {
         openDebtRequested = requestedRoute == AppNotificationManager.ROUTE_DEBT || action == ACTION_OPEN_DEBT
         // Consume the new shortcut actions so a configuration change (rotation, theme, language)
         // does not re-open the screen the user already left.
-        if (action == ACTION_OPEN_GOALS || action == ACTION_OPEN_LIMITS || action == ACTION_OPEN_DEBT) {
+        if (action == ACTION_ADD_TRANSACTION || action == ACTION_OPEN_GOALS ||
+            action == ACTION_OPEN_LIMITS || action == ACTION_OPEN_DEBT
+        ) {
             intent?.action = null
         }
         // Consume it so a configuration change does not re-open the screen.
@@ -407,12 +415,13 @@ class MainActivity : FragmentActivity() {
                 hasSession &&
                 route.isNotBlank() &&
                 !route.contains("Login") &&
-                !route.contains("Splash") &&
-                !route.contains("AddScreen") &&
-                !route.contains("AddTransaction")
+                !route.contains("Splash")
             ) {
-                // میانبر «ثبت تراکنش» مستقیم به جریان ثبت می‌رود، نه هاب.
-                navController.navigate(AppRoute.AddTransaction())
+                // میانبر «ثبت تراکنش» مستقیم به صفحه‌ی ورود مبلغ می‌رود (نه هاب). اگر همان‌جا باشیم،
+                // فقط درخواست مصرف می‌شود تا بعداً ناخواسته دوباره باز نشود.
+                if (!route.contains("AddTransaction")) {
+                    navController.navigate(AppRoute.AddTransaction()) { launchSingleTop = true }
+                }
                 onShortcutConsumed()
             }
         }
@@ -715,7 +724,12 @@ class MainActivity : FragmentActivity() {
             }
 
             // جریان تمام‌صفحه‌ی ثبت تراکنش (مبلغ ← دسته‌بندی ← مرور)
-            composable<AppRoute.AddTransaction> { backStackEntry ->
+            composable<AppRoute.AddTransaction>(
+                enterTransition = { slideInVertically(tween(340)) { it / 6 } + fadeIn(tween(340)) },
+                exitTransition = { fadeOut(tween(200)) },
+                popEnterTransition = { fadeIn(tween(250)) },
+                popExitTransition = { slideOutVertically(tween(300)) { it / 6 } + fadeOut(tween(300)) }
+            ) { backStackEntry ->
                 val route = backStackEntry.toRoute<AppRoute.AddTransaction>()
 
                 AddTransactionScreen(
@@ -729,6 +743,21 @@ class MainActivity : FragmentActivity() {
                         }
                     },
                     onManageCategories = { navController.navigate(AppRoute.Categories) }
+                )
+            }
+
+            // ویرایش تمام‌صفحه‌ی تراکنش؛ با همان زبان طراحی جریان ثبت
+            composable<AppRoute.EditTransaction>(
+                enterTransition = { slideInVertically(tween(340)) { it / 6 } + fadeIn(tween(340)) },
+                exitTransition = { fadeOut(tween(200)) },
+                popEnterTransition = { fadeIn(tween(250)) },
+                popExitTransition = { slideOutVertically(tween(300)) { it / 6 } + fadeOut(tween(300)) }
+            ) { backStackEntry ->
+                val route = backStackEntry.toRoute<AppRoute.EditTransaction>()
+
+                EditTransactionScreen(
+                    transactionId = route.transactionId,
+                    onClose = { navController.popBackStack() }
                 )
             }
 
@@ -889,7 +918,10 @@ class MainActivity : FragmentActivity() {
                         composable<MainTabRoute.Transactions> {
                             TransactionsScreen(
                                 onAddTransactionClick = {
-                                    navController.navigate(AppRoute.AddScreen())
+                                    navController.navigate(AppRoute.AddTransaction())
+                                },
+                                onEditTransaction = { transactionId ->
+                                    navController.navigate(AppRoute.EditTransaction(transactionId))
                                 }
                             )
                         }
@@ -897,7 +929,7 @@ class MainActivity : FragmentActivity() {
                         composable<MainTabRoute.Analytics> {
                             AnalyticsScreen(
                                 onAddScreenClick = {
-                                    navController.navigate(AppRoute.AddScreen())
+                                    navController.navigate(AppRoute.AddTransaction())
                                 }
                             )
                         }

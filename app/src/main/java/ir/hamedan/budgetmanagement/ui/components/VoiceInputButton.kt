@@ -14,6 +14,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -28,15 +31,19 @@ import androidx.compose.ui.unit.dp
  * @param language کد زبان (پیش‌فرض fa-IR)
  * @param enabled آیا دکمه فعال باشد
  */
+/**
+ * راه‌انداز تشخیص گفتار برای جاهایی که کل یک ردیف باید قابل‌لمس باشد، نه فقط آیکن میکروفون.
+ * خروجی تابعی است که با صدا زدنش رابط تشخیص گفتار سیستم باز می‌شود.
+ */
 @Composable
-fun VoiceInputButton(
+fun rememberVoiceInputLauncher(
     onResult: (String) -> Unit,
     language: String = "fa-IR",
-    enabled: Boolean = true,
-    modifier: Modifier = Modifier
-) {
+    enabled: Boolean = true
+): () -> Unit {
     val context = LocalContext.current
     val isFa = language.startsWith("fa")
+    val latestOnResult by rememberUpdatedState(onResult)
 
     val speechLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -47,13 +54,13 @@ fun VoiceInputButton(
                 ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
                 ?.firstOrNull()
                 ?.trim()
-            if (!text.isNullOrBlank()) onResult(text)
+            if (!text.isNullOrBlank()) latestOnResult(text)
         }
     }
 
-    IconButton(
-        onClick = {
-            if (!enabled) return@IconButton
+    return remember(enabled, language, speechLauncher) {
+        launch@{
+            if (!enabled) return@launch
 
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -79,7 +86,21 @@ fun VoiceInputButton(
                     Toast.LENGTH_SHORT
                 ).show()
             }
-        },
+        }
+    }
+}
+
+@Composable
+fun VoiceInputButton(
+    onResult: (String) -> Unit,
+    language: String = "fa-IR",
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier
+) {
+    val launchSpeech = rememberVoiceInputLauncher(onResult, language, enabled)
+
+    IconButton(
+        onClick = launchSpeech,
         enabled = enabled,
         modifier = modifier
     ) {

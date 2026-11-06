@@ -44,6 +44,12 @@ sealed interface AppRoute {
         val isExpense: Boolean = true
     ) : AppRoute
 
+    /** ویرایش تمام‌صفحه‌ی یک تراکنش (جایگزین باتم‌شیت قدیمی). */
+    @Serializable
+    data class EditTransaction(
+        val transactionId: String
+    ) : AppRoute
+
     @Serializable
     data object Categories : AppRoute
 

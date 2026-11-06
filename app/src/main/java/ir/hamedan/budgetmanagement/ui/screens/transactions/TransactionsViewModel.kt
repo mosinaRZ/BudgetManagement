@@ -230,6 +230,10 @@ class TransactionViewModel(
         }
     }
 
+    /** یک تراکنش را با شناسه می‌خواند (برای صفحه‌ی ویرایش)؛ اگر پیدا نشد null. */
+    suspend fun findTransaction(transactionId: String): TransactionEntity? =
+        transactionRepository.getAllTransactions().first().firstOrNull { it.id == transactionId }
+
     /** [onResult] با `true` فقط بعد از ذخیره‌ی واقعی ویرایش صدا زده می‌شود (برای شیت موفقیت). */
     fun updateTransaction(transaction: TransactionEntity, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch(errorHandler) {

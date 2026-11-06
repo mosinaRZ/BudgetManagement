@@ -33,6 +33,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -122,7 +128,9 @@ fun SuccessBottomSheet(
     content: SuccessSheetContent,
     isPersian: Boolean,
     onDismiss: () -> Unit,
-    onFullyShown: () -> Unit = {}
+    onFullyShown: () -> Unit = {},
+    // اگر داده شود، زیر متن‌ها یک دکمه‌ی «اشتراک‌گذاری» نمایش داده می‌شود.
+    onShare: (() -> Unit)? = null
 ) {
     val colors = MaterialTheme.colorScheme
     val isDark = colors.background.luminance() < 0.5f
@@ -282,6 +290,35 @@ fun SuccessBottomSheet(
                             ),
                             color = colors.onSurface.copy(alpha = 0.62f)
                         )
+                    }
+
+                    if (onShare != null) {
+                        // دکمه بعد از ظاهر شدن متن‌ها نرم وارد می‌شود تا حواس را از پیام اصلی پرت نکند.
+                        var shareVisible by remember { mutableStateOf(false) }
+                        LaunchedEffect(isShown) {
+                            if (isShown) {
+                                delay(HintRevealDelay.toLong() + 350L)
+                                shareVisible = true
+                            }
+                        }
+                        Spacer(Modifier.height(28.dp))
+                        AnimatedVisibility(
+                            visible = shareVisible,
+                            enter = fadeIn(tween(350)) + slideInVertically(tween(350)) { it / 2 }
+                        ) {
+                            FilledTonalButton(
+                                onClick = onShare,
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Share,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(if (isPersian) "اشتراک‌گذاری" else "Share")
+                            }
+                        }
                     }
                 }
             }
