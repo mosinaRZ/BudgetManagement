@@ -108,6 +108,9 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.LayoutDirection
 import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
+import ir.hamedan.budgetmanagement.ui.components.amountFontFeatures
+import ir.hamedan.budgetmanagement.ui.components.widestAmountText
+import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
 import ir.hamedan.budgetmanagement.ui.components.CountUpState
 import ir.hamedan.budgetmanagement.ui.components.CountUpText
 import ir.hamedan.budgetmanagement.ui.components.countUpEffect
@@ -178,28 +181,34 @@ private fun AutoFitAmountText(
 ) {
     val measurer = rememberTextMeasurer()
     val live = countUp != null && formatFull != null
+    val isPersian = isPersianLocale()
+    // tnum فقط برای ارقام لاتین؛ در فارسی ارقام را بیش از حد باز می‌کند.
+    val features = if (live) amountFontFeatures(isPersian) else style.fontFeatureSettings
 
     // عریض‌ترین حالت (مقدار شروع یا نهایی) مبنای اندازه‌گیری است تا در شمارش رو به پایین هم برش نخورد.
-    val fitText = remember(text) {
-        if (live) {
+    val fitText = remember(text, isPersian) {
+        val base = if (live) {
             val start = Snapshot.withoutReadObservation { formatFull!!(countUp!!.value) }
             if (start.length > text.length) start else text
         } else text
+        if (live) widestAmountText(base, isPersian) else base
     }
-    val fitFallback = remember(fallbackText, text) {
-        if (live && fallbackText != null && formatCompact != null) {
+    val fitFallback = remember(fallbackText, text, isPersian) {
+        val base = if (live && fallbackText != null && formatCompact != null) {
             val start = Snapshot.withoutReadObservation { formatCompact(countUp!!.value) }
             if (start.length > fallbackText.length) start else fallbackText
         } else fallbackText
+        if (live && base != null) widestAmountText(base, isPersian) else base
     }
 
     // BoxWithConstraints (SubcomposeLayout) داخل IntrinsicSize.Max کرش می‌کند؛ پس عرض را با onSizeChanged می‌گیریم.
     var maxWidthPx by remember { mutableIntStateOf(0) }
     Box(modifier = modifier.onSizeChanged { maxWidthPx = it.width }) {
-        val fit = remember(fitText, fitFallback, maxFontSize, minFontSize, style, letterSpacing, maxWidthPx) {
+        val fit = remember(fitText, fitFallback, maxFontSize, minFontSize, style, letterSpacing, maxWidthPx, features) {
             fun widthOf(t: String, fs: Float): Int = measurer.measure(
                 text = t,
-                style = style.copy(fontSize = fs.sp, letterSpacing = letterSpacing),
+                // دقیقاً همان ویژگی‌های فونتی که هنگام رسم استفاده می‌شود؛ وگرنه عرض کمتر از واقع سنجیده و متن بریده می‌شود.
+                style = style.copy(fontSize = fs.sp, letterSpacing = letterSpacing, fontFeatureSettings = features),
                 softWrap = false,
                 maxLines = 1
             ).size.width
@@ -208,7 +217,8 @@ private fun AutoFitAmountText(
             var useFallback = false
             while (true) {
                 val current = if (useFallback && fitFallback != null) fitFallback else fitText
-                if (maxWidthPx <= 0 || widthOf(current, fontSize) <= maxWidthPx) break
+                // ۲ پیکسل حاشیهٔ اطمینان برای گرد شدن‌های اندازه‌گیری
+                if (maxWidthPx <= 0 || widthOf(current, fontSize) + 2 <= maxWidthPx) break
                 if (fontSize > minFontSize + 0.1f) {
                     fontSize = maxOf(minFontSize, fontSize * 0.92f)
                 } else if (!useFallback && fitFallback != null) {
@@ -238,7 +248,7 @@ private fun AutoFitAmountText(
                 .fillMaxWidth()
                 .drawWithContent { if (maxWidthPx > 0) drawContent() }
                 .then(if (countUp != null) Modifier.countUpEffect(countUp, pivot) else Modifier),
-            style = style.copy(fontSize = fontSize.sp, letterSpacing = letterSpacing, fontFeatureSettings = if (live) "tnum" else style.fontFeatureSettings),
+            style = style.copy(fontSize = fontSize.sp, letterSpacing = letterSpacing, fontFeatureSettings = features),
             color = color,
             textAlign = textAlign,
             maxLines = 1,
@@ -627,7 +637,8 @@ fun HomeScreen(
                             }
 
                             val formattedAmount = numberFormatter.format(abs(displayBalance))
-                            val sign = if (totalBalance < 0) "-" else ""
+                            // \u200E (LRM) قبل از «-» باعث می‌شود در RTL هم منفی سمت چپِ ارقام بماند (مثل لیست تراکنش‌ها)
+                            val sign = if (totalBalance < 0) "\u200E-" else ""
                             val fullBalanceText = "$sign$formattedAmount $currencyText"
                             val balanceColor = if (totalBalance >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
 
@@ -654,8 +665,8 @@ fun HomeScreen(
                                     textAlign = TextAlign.Start,
                                     letterSpacing = if (hidden) 2.sp else 0.sp,
                                     countUp = if (hidden) null else balanceCount,
-                                    formatFull = { v -> "${if (v < 0) "-" else ""}${numberFormatter.format(abs(v))} $currencyText" },
-                                    formatCompact = { v -> "${if (v < 0) "-" else ""}${compactAmount(v, isPersian)} $currencyText" }
+                                    formatFull = { v -> "${if (v < 0) "\u200E-" else ""}${numberFormatter.format(abs(v))} $currencyText" },
+                                    formatCompact = { v -> "${if (v < 0) "\u200E-" else ""}${compactAmount(v, isPersian)} $currencyText" }
                                 )
                             }
                         }

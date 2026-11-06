@@ -28,6 +28,10 @@ private val IranSansFontFamily = FontFamily(
     Font(R.font.vazirmatn_bold, FontWeight.Bold)
 )
 
+/** فونت اصلی برنامه بر اساس زبان؛ برای جاهایی که مستقیماً TextStyle می‌سازند. */
+@Composable
+fun appFontFamily(): FontFamily = if (isPersianLocale()) IranSansFontFamily else InterFontFamily
+
 @Composable
 fun getAppTypography(): Typography {
     val isPersian = isPersianLocale()
@@ -78,6 +82,48 @@ fun getAppTypography(): Typography {
             fontSize = 12.sp,
             lineHeight = 16.sp,
             letterSpacing = 0.05.em
+        ),
+        displayMedium = TextStyle(
+            fontFamily = defaultFontFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 36.sp,
+            lineHeight = 44.sp
+        ),
+        displaySmall = TextStyle(
+            fontFamily = defaultFontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 30.sp,
+            lineHeight = 38.sp
+        ),
+        headlineSmall = TextStyle(
+            fontFamily = defaultFontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 22.sp,
+            lineHeight = 30.sp
+        ),
+        titleLarge = TextStyle(
+            fontFamily = defaultFontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 20.sp,
+            lineHeight = 28.sp
+        ),
+        titleSmall = TextStyle(
+            fontFamily = defaultFontFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 14.sp,
+            lineHeight = 20.sp
+        ),
+        bodySmall = TextStyle(
+            fontFamily = defaultFontFamily,
+            fontWeight = FontWeight.Normal,
+            fontSize = 12.sp,
+            lineHeight = 18.sp
+        ),
+        labelMedium = TextStyle(
+            fontFamily = defaultFontFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 12.sp,
+            lineHeight = 16.sp
         ),
         labelSmall = TextStyle(
             fontFamily = defaultFontFamily,

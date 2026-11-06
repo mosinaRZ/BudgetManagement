@@ -11,6 +11,14 @@ import android.net.Uri
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.semantics.Role
+
+
+
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -18,6 +26,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,6 +37,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -35,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.painterResource
 import androidx.annotation.DrawableRes
@@ -446,65 +457,60 @@ fun SettingsScreen(
                         onClick = { activeMenu = if (activeMenu == SettingsMenu.NOTIFICATION)
                             SettingsMenu.NONE else SettingsMenu.NOTIFICATION }
                     ) {
+                        fun selectMode(mode: String) {
+                            // انتخاب دوبارهٔ همان حالت نباید اعلان «تنظیمات به‌روزرسانی شد» بفرستد.
+                            if (notifMode == mode) return
+                            notifMode = mode
+                            NotificationPreferences.setMode(context, mode)
+                            NotificationHelper.send(
+                                context = context,
+                                notificationType = NotificationType.SETTINGS_CHANGED,
+                                type = "SYSTEM",
+                                titleFa = "تنظیمات به‌روزرسانی شد",
+                                titleEn = "Settings Updated",
+                                descFa = "نحوه ارسال اعلان برنامه با موفقیت تغییر کرد.",
+                                descEn = "Way of sending notification have been updated successfully.",
+                                tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
+                            )
+                        }
+
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            CurrencyOrLanguageOptionButton(
+                            // گروه ۱: انتخاب «یکی از چند حالت» ← دایرهٔ انتخاب (Radio) نشان می‌دهد که فقط یکی فعال است
+                            SettingsGroupLabel(
+                                text = if (isPersian) "اعلان‌ها کجا نمایش داده شوند؟" else "Where should notifications appear?"
+                            )
+                            SettingsChoiceCard(
                                 title = if (isPersian) "فقط درون برنامه‌ای" else "In-App Only",
+                                description = if (isPersian) "اعلان‌ها فقط داخل برنامه و در بخش اعلان‌ها نمایش داده می‌شوند"
+                                else "Notifications appear only inside the app",
+                                icon = Icons.Default.PhoneAndroid,
                                 isSelected = notifMode == NotificationPreferences.MODE_IN_APP,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                notifMode = NotificationPreferences.MODE_IN_APP
-                                NotificationPreferences.setMode(context, NotificationPreferences.MODE_IN_APP)
-
-                                NotificationHelper.send(
-                                    context = context,
-                                    notificationType = NotificationType.SETTINGS_CHANGED,
-                                    type = "SYSTEM",
-                                    titleFa = "تنظیمات به‌روزرسانی شد",
-                                    titleEn = "Settings Updated",
-                                    descFa = "نحوه ارسال اعلان برنامه با موفقیت تغییر کرد.",
-                                    descEn = "Way of sending notification have been updated successfully.",
-                                    tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
-                                )
-                            }
-                            CurrencyOrLanguageOptionButton(
+                                onClick = { selectMode(NotificationPreferences.MODE_IN_APP) }
+                            )
+                            SettingsChoiceCard(
                                 title = if (isPersian) "درون برنامه + سیستمی" else "In-App + System",
+                                description = if (isPersian) "علاوه بر برنامه، اعلان در نوار وضعیت گوشی هم نمایش داده می‌شود"
+                                else "Also shows alerts in your phone's notification shade",
+                                icon = Icons.Default.NotificationsActive,
                                 isSelected = notifMode == NotificationPreferences.MODE_BOTH,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                notifMode = NotificationPreferences.MODE_BOTH
-                                NotificationPreferences.setMode(context, NotificationPreferences.MODE_BOTH)
+                                onClick = { selectMode(NotificationPreferences.MODE_BOTH) }
+                            )
 
-                                NotificationHelper.send(
-                                    context = context,
-                                    notificationType = NotificationType.SETTINGS_CHANGED,
-                                    type = "SYSTEM",
-                                    titleFa = "تنظیمات به‌روزرسانی شد",
-                                    titleEn = "Settings Updated",
-                                    descFa = "نحوه ارسال اعلان برنامه با موفقیت تغییر کرد.",
-                                    descEn = "Way of sending notification have been updated successfully.",
-                                    tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
-                                )
-                            }
-
-                            OutlinedButton(
-                                onClick = onNotificationCalibrationClick,
-                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Tune,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = if (isPersian) "شخصی‌سازی و مدیریت دقیق اعلان‌ها" else "Notification Calibration",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
+                            // گروه ۲: ورود به یک صفحهٔ جدید ← کارت جداگانه با فلش، متفاوت از گزینه‌های بالا
+                            SettingsGroupLabel(
+                                text = if (isPersian) "تنظیمات پیشرفته" else "Advanced",
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                            SettingsNavigationCard(
+                                title = if (isPersian) "شخصی‌سازی و مدیریت دقیق اعلان‌ها" else "Customize Notifications",
+                                description = if (isPersian) "هر نوع اعلان را جداگانه روشن یا خاموش کنید"
+                                else "Turn each notification type on or off",
+                                icon = Icons.Default.Tune,
+                                onClick = onNotificationCalibrationClick
+                            )
                         }
                     }
                 }
@@ -1294,6 +1300,192 @@ private fun CurrencyOrLanguageOptionButton(
     }
 }
 
+/** عنوان کوچک گروه داخل کارت‌های بازشونده. */
+@Composable
+private fun SettingsGroupLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        modifier = modifier.fillMaxWidth(),
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+/**
+ * کارت «انتخاب تک‌گزینه‌ای». دایرهٔ انتخاب (Radio) در انتهای کارت و رنگ‌بندی primary نشان می‌دهد
+ * که این کارت یکی از چند حالت است، نه دکمهٔ ورود به صفحه‌ای دیگر.
+ */
+@Composable
+private fun SettingsChoiceCard(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(18.dp)
+    val borderColor by animateColorAsState(
+        if (isSelected) scheme.primary.copy(alpha = 0.55f) else scheme.outline.copy(alpha = 0.14f),
+        animationSpec = tween(200), label = "choiceBorder"
+    )
+    val container by animateColorAsState(
+        if (isSelected) scheme.primary.copy(alpha = 0.12f) else scheme.surface.copy(alpha = 0.35f),
+        animationSpec = tween(200), label = "choiceContainer"
+    )
+    val chipColor by animateColorAsState(
+        if (isSelected) scheme.primary else scheme.onSurface.copy(alpha = 0.08f),
+        animationSpec = tween(200), label = "choiceChip"
+    )
+    val dotScale by animateFloatAsState(
+        targetValue = if (isSelected) 1f else 0f,
+        animationSpec = tween(180),
+        label = "choiceDot"
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(container, shape)
+            .border(if (isSelected) 1.5.dp else 1.dp, borderColor, shape)
+            .selectable(selected = isSelected, role = Role.RadioButton, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(chipColor, RoundedCornerShape(12.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (isSelected) scheme.onPrimary else scheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+
+        Spacer(Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                color = if (isSelected) scheme.primary else scheme.onSurface
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant
+            )
+        }
+
+        Spacer(Modifier.width(10.dp))
+
+        // دایرهٔ رادیویی
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .border(
+                    width = 2.dp,
+                    color = if (isSelected) scheme.primary else scheme.outline.copy(alpha = 0.5f),
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .graphicsLayer {
+                        scaleX = dotScale
+                        scaleY = dotScale
+                        alpha = dotScale
+                    }
+                    .background(scheme.primary, CircleShape)
+            )
+        }
+    }
+}
+
+/** کارت «ورود به صفحهٔ جدید»؛ با فلشِ جهت‌دار، عنوان توضیحی و ظاهر متفاوت از کارت‌های انتخاب. */
+@Composable
+private fun SettingsNavigationCard(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(18.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(
+                androidx.compose.ui.graphics.Brush.linearGradient(
+                    listOf(scheme.primaryContainer.copy(alpha = 0.55f), scheme.primaryContainer.copy(alpha = 0.2f))
+                ),
+                shape
+            )
+            .border(1.dp, scheme.primary.copy(alpha = 0.22f), shape)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(scheme.primary.copy(alpha = 0.14f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = scheme.primary,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+
+        Spacer(Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = scheme.onSurface
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant
+            )
+        }
+
+        Spacer(Modifier.width(8.dp))
+
+        Box(
+            modifier = Modifier
+                .size(30.dp)
+                .background(scheme.primary.copy(alpha = 0.14f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = scheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
 @Composable
 private fun SettingsAccordionItem(
     title: String,
@@ -1305,6 +1497,11 @@ private fun SettingsAccordionItem(
     content: @Composable () -> Unit
 ) {
     val cardShape = RoundedCornerShape(20.dp)
+    val chevronAngle by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        animationSpec = tween(220),
+        label = "accordionChevron"
+    )
 
     Column(
         modifier = Modifier
@@ -1312,11 +1509,14 @@ private fun SettingsAccordionItem(
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), cardShape)
             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), cardShape)
             .clip(cardShape)
-            .clickable { onClick() }
             .padding(16.dp)
     ) {
+        // فقط ردیف عنوان باز/بسته می‌کند؛ لمس فضای خالی بین گزینه‌های داخلی کارت را نمی‌بندد.
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .clickable(role = Role.Button, onClick = onClick),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -1351,9 +1551,10 @@ private fun SettingsAccordionItem(
             }
 
             Icon(
-                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                imageVector = Icons.Default.KeyboardArrowDown,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                modifier = Modifier.rotate(chevronAngle)
             )
         }
 
@@ -1445,7 +1646,7 @@ private fun SettingsSimpleItem(
         }
 
         Icon(
-            imageVector = Icons.Default.ChevronRight,
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
         )
@@ -1541,7 +1742,7 @@ private fun SecurityActionRow(
             )
         }
         Icon(
-            imageVector = Icons.Default.ChevronRight,
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
             modifier = Modifier.size(20.dp)

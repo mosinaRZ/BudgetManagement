@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToLong
@@ -74,6 +75,26 @@ class CountUpState internal constructor(initialValue: Long) {
     internal var lift by mutableFloatStateOf(0f)
 
     val isRunning: Boolean get() = progress < 1f
+}
+
+/**
+ * ویژگی‌های OpenType مناسب برای نمایش مبلغ.
+ *
+ * `tnum` فقط برای ارقام لاتین (Inter) مفید است. در وزیرمتن، `tnum` همهٔ ارقام فارسی را به عرض
+ * ثابت ۱۳۴۹ واحد می‌رساند (مثلاً «۱» از ۵۹۱ به ۱۳۴۹)؛ همین باعث فاصلهٔ زیاد بین ارقام می‌شد.
+ * برای فارسی از ارقام تناسبی پیش‌فرض فونت استفاده می‌کنیم.
+ */
+fun amountFontFeatures(isPersian: Boolean): String? = if (isPersian) null else "tnum"
+
+/**
+ * بدترین حالت عرض برای اندازه‌گیری: در فونت فارسی عریض‌ترین رقم (۳) جایگزین همهٔ ارقام می‌شود
+ * تا هنگام شمارش، هیچ مقدار میانی از عرض اندازه‌گیری‌شده بیشتر نشود.
+ */
+fun widestAmountText(text: String, isPersian: Boolean): String {
+    if (!isPersian) return text
+    val sb = StringBuilder(text.length)
+    for (ch in text) sb.append(if (ch in '\u06F0'..'\u06F9' || ch in '0'..'9') '\u06F3' else ch)
+    return sb.toString()
 }
 
 private val CountEasing = CubicBezierEasing(0.22f, 0.85f, 0.2f, 1f)
@@ -197,10 +218,11 @@ fun CountUpText(
     format: (Long) -> String
 ) {
     val state = rememberCountUpAmount(target, key, durationScale)
+    val isPersian = isPersianLocale()
     Text(
         text = format(state.value),
         modifier = modifier.countUpEffect(state, pivot),
-        style = style.copy(fontFeatureSettings = "tnum"),
+        style = style.copy(fontFeatureSettings = amountFontFeatures(isPersian)),
         color = color,
         fontWeight = fontWeight,
         textAlign = textAlign,
@@ -239,10 +261,11 @@ fun CountUpPairText(
 ) {
     val a = rememberCountUpAmount(first, firstKey, durationScale)
     val b = rememberCountUpAmount(second, secondKey, durationScale)
+    val isPersian = isPersianLocale()
     Text(
         text = format(a.value, b.value),
         modifier = modifier.countUpEffect(a, pivot),
-        style = style.copy(fontFeatureSettings = "tnum"),
+        style = style.copy(fontFeatureSettings = amountFontFeatures(isPersian)),
         color = color,
         fontWeight = fontWeight,
         textAlign = textAlign,
