@@ -4,7 +4,7 @@
 ## Key pages
 - [Home](https://cidna.ir/en/): overview
 - [Features](https://cidna.ir/en/features/)
-- [Download](https://cidna.ir/en/download/): Cafe Bazaar or Direct download
+- [Download](https://cidna.ir/en/download/): Cafe Bazaar, Direct download or Myket
 - [Security model & honest limits](https://cidna.ir/en/security/)
 - [Privacy policy](https://cidna.ir/en/privacy/)
 - [Terms](https://cidna.ir/en/terms/)

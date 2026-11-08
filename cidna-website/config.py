@@ -15,11 +15,11 @@ STORES = [
          url="https://cafebazaar.ir/app/?id=ir.hamedan.budgetmanagement&ref=share"),
     dict(id="direct", fa="دانلود مستقیم", en="Direct download",
          url="/downloads/budget-app.apk",   # فایل روی سرور: /var/www/cidna/downloads/budget-app.apk
-         sha256="acee32d1e36c15d32dba733353acb738b20235773dbfa02b75dceb6f68c11462",                    # ← خروجی `sha256sum budget-app.apk` را اینجا بگذارید؛ در صفحهٔ دریافت نمایش داده می‌شود
-         size="17 MB"),
-    dict(id="myket",  fa="مایکت",       en="Myket",       url=None),       # ← لینک مایکت را که گذاشتید، دکمه خودکار ظاهر می‌شود
+         sha256="ef4efa21e606e5cdcecda728c770bb828c899795059558cc77e5526300a7b934",                    # ← خروجی `sha256sum budget-app.apk` را اینجا بگذارید؛ در صفحهٔ دریافت نمایش داده می‌شود
+         size="18 MB"),
+    dict(id="myket",  fa="مایکت",       en="Myket",       url="https://myket.ir/app/ir.hamedan.budgetmanagement"),       # ← لینک مایکت را که گذاشتید، دکمه خودکار ظاهر می‌شود
 ]
-APP_VERSION  = "1.1.4"                   # از app/build.gradle.kts (versionName)
+APP_VERSION  = "1.2.0"                   # از app/build.gradle.kts (versionName)
 MIN_ANDROID  = "8.0"                     # minSdk 26
 SOURCE_URL   = None                      # ← لینک کد منبع (AGPL-3.0 §13 اجبار می‌کند برای نسخهٔ اصلاح‌شدهٔ سرویس شبکه‌ای، سورس در دسترس باشد)
 
