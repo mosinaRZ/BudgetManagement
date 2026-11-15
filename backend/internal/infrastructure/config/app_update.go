@@ -11,7 +11,7 @@ const (
 	appPackageName = "ir.hamedan.budgetmanagement"
 
 	// DefaultMinAppVersion is the oldest app version that is still allowed to run.
-	DefaultMinAppVersion = "1.1.2"
+	DefaultMinAppVersion = "1.2.0"
 	// DefaultLatestAppVersion is the newest published app version.
 	DefaultLatestAppVersion = "1.2.0"
 )
