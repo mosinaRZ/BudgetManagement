@@ -1,0 +1,96 @@
+package ir.hamedan.budgetmanagement.ui.screens.home
+
+/**
+ * جمله‌های انگیزشی، انضباطی و نصیحت‌های مالی برای کارت زیر بالانس صفحه خانه.
+ * هر زبان ۴۰ جمله دارد؛ ترتیب نمایش در هر بار ورود به صفحه به‌صورت تصادفی است.
+ */
+internal object MotivationQuotes {
+
+    val fa: List<String> = listOf(
+        "برای رسیدن به هدف‌های بزرگ، به تصمیم‌های کوچک اما مداوم نیاز داری.",
+        "گاهی یک قدم کوچک در مسیر درست، از هزار قدم بزرگ در مسیر اشتباه ارزشمندتر است.",
+        "هیچ تلاشی کوچک نیست، وقتی تو را به هدفت نزدیک‌تر می‌کند.",
+        "ثروت را یک‌شبه نمی‌سازند؛ روز به روز و تصمیم به تصمیم ساخته می‌شود.",
+        "اول سهم آینده‌ات را کنار بگذار، بعد خرج کن؛ نه برعکس.",
+        "هر خرج کوچکِ بی‌فکر، یک گام از هدف بزرگت دورتر است.",
+        "بودجه یعنی به پولت بگویی کجا برود، نه اینکه بعد از رفتنش بپرسی کجا رفت.",
+        "انضباط مالی یعنی امروز «نه» گفتن به چیزی که فردا از تو آرامش می‌گیرد.",
+        "پس‌انداز کم هم پس‌انداز است؛ مهم این است که شروع کنی و ادامه بدهی.",
+        "پولی که ثبت نشود، مدیریت هم نمی‌شود.",
+        "قبل از خرید، یک نفس عمیق بکش و بپرس: «واقعاً به این نیاز دارم؟»",
+        "آزادی مالی از عادت‌های کوچکِ هر روز شروع می‌شود، نه از یک جهش بزرگ.",
+        "درآمدت را بالا ببر، اما سبک زندگی‌ات را به همان اندازه بالا نبر.",
+        "خرج‌های بی‌صدا، بیشتر از خرج‌های بزرگ کیف پولت را خالی می‌کنند.",
+        "انگیزه تو را شروع می‌کند، اما انضباط تو را به مقصد می‌رساند.",
+        "امروزِ تو، فردای تو را می‌سازد؛ با پول و وقتت درست رفتار کن.",
+        "بدهی را جدی بگیر؛ هر قسطِ به‌موقع، یک قدم به آرامش نزدیک‌تری.",
+        "صندوق اضطراریِ کوچک امروز، تکیه‌گاه بزرگ فردای توست.",
+        "ثروتمند شدن یعنی بیشتر نگه‌داشتن از آنچه به دست می‌آوری، نه فقط بیشتر به دست آوردن.",
+        "شکست مالی پایان ماجرا نیست؛ درس بگیر، بودجه‌ات را اصلاح کن و ادامه بده.",
+        "به قولی که به خودت می‌دهی وفادار بمان؛ اعتماد به خود، پایه‌ی هر موفقیتی است.",
+        "سختیِ انضباط موقتی است، اما پشیمانیِ بی‌برنامگی ماندگار.",
+        "هدف بدون عدد، فقط یک آرزوست؛ برای هدفت مبلغ و تاریخ مشخص کن.",
+        "هر بار که وسوسه را رد می‌کنی، عضله‌ی اراده‌ات قوی‌تر می‌شود.",
+        "وضع مالی‌ات را با دیگران مقایسه نکن؛ مسیر تو فقط با خودِ دیروزت رقابت دارد.",
+        "پیش از خریدهای بزرگ ۲۴ ساعت صبر کن؛ بیشتر وسوسه‌ها در همین مدت خاموش می‌شوند.",
+        "عادت خوب را با تکرار می‌سازند، نه با شور و هیجانِ یک روز.",
+        "سرمایه‌گذاری روی مهارت‌هایت، یکی از پربازده‌ترین تصمیم‌های مالی است.",
+        "هفته‌ای یک بار به تراکنش‌هایت نگاه کن؛ آگاهی، نخستین قدمِ تغییر است.",
+        "پول ابزار است؛ تا برایش برنامه نداشته باشی، برای تو کار نمی‌کند.",
+        "پیشرفت یعنی امروز کمی بهتر از دیروز؛ لازم نیست بی‌نقص باشی.",
+        "پول بیشتر خرج کردن تو را خوشحال‌تر نمی‌کند؛ آرامش مالی می‌کند.",
+        "اگر امروز شروع نکنی، فردا هم همین جمله را به خودت می‌گویی.",
+        "خرج برای تجربه و یادگیری، معمولاً از خرج برای نمایش ماندگارتر است.",
+        "با کوچک‌ترین پس‌انداز هم می‌شود عادت ساخت؛ مبلغ مهم نیست، تداوم مهم است.",
+        "وقتی هدفت روشن باشد، «نه» گفتن به خرج‌های اضافی سخت نیست.",
+        "سبک‌تر خرج کن تا سبک‌تر زندگی کنی؛ بدهیِ کمتر یعنی ذهنِ آزادتر.",
+        "آهسته اما پیوسته؛ همان‌طور که قطره‌های باران رودخانه می‌سازند، پس‌اندازهای کوچک هم ثروت می‌سازند.",
+        "تورم را نمی‌توانی کنترل کنی، اما عادت‌های خرجت را می‌توانی.",
+        "هر روزی که بودجه‌ات را ثبت می‌کنی، یک رأی به آینده‌ی بهتر خودت داده‌ای."
+    )
+
+    val en: List<String> = listOf(
+        "Big goals are built from small decisions made consistently.",
+        "One small step in the right direction is worth more than a thousand big steps in the wrong one.",
+        "No effort is small when it brings you closer to your goal.",
+        "Wealth isn't built overnight; it's built day by day, decision by decision.",
+        "Set aside your future self's share first, then spend — never the other way around.",
+        "Every thoughtless little expense moves you one step further from your big goal.",
+        "A budget tells your money where to go, instead of leaving you wondering where it went.",
+        "Financial discipline is saying “no” today to what would cost you peace of mind tomorrow.",
+        "A small saving is still a saving; what matters is that you start and keep going.",
+        "Money you don't track is money you can't manage.",
+        "Before you buy, take a deep breath and ask: “Do I truly need this?”",
+        "Financial freedom begins with small daily habits, not one giant leap.",
+        "Raise your income — but don't raise your lifestyle by the same amount.",
+        "Quiet little expenses drain your wallet more than the big ones do.",
+        "Motivation gets you started; discipline gets you there.",
+        "Today's you builds tomorrow's you — treat your money and your time well.",
+        "Take debt seriously; every on-time payment brings you closer to peace.",
+        "A small emergency fund today is tomorrow's big safety net.",
+        "Getting rich is about keeping more of what you earn, not just earning more.",
+        "A financial setback isn't the end of the story; learn, adjust your budget, and keep going.",
+        "Keep the promises you make to yourself; self-trust is the foundation of every success.",
+        "The pain of discipline is temporary; the regret of having no plan lasts.",
+        "A goal without a number is just a wish — give yours an amount and a date.",
+        "Every time you resist temptation, your willpower grows stronger.",
+        "Don't compare your finances with anyone else's; your journey competes only with yesterday's you.",
+        "Wait 24 hours before a big purchase; most urges fade in that time.",
+        "Good habits are built through repetition, not a single day of enthusiasm.",
+        "Investing in your skills is one of the highest-return financial decisions you can make.",
+        "Review your transactions once a week; awareness is the first step toward change.",
+        "Money is a tool — without a plan for it, it won't work for you.",
+        "Progress means a little better than yesterday; you don't have to be perfect.",
+        "Spending more won't make you happier; financial peace will.",
+        "If you don't start today, tomorrow you'll tell yourself the same thing.",
+        "Spending on experiences and learning usually lasts longer than spending to impress.",
+        "Even the smallest saving can become a habit; consistency matters more than the amount.",
+        "When your goal is clear, saying “no” to extra spending isn't hard.",
+        "Spend lighter to live lighter; less debt means a freer mind.",
+        "Slow but steady — just as raindrops carve rivers, small savings build wealth.",
+        "You can't control inflation, but you can control your spending habits.",
+        "Every day you log your budget is a vote for a better future you."
+    )
+
+    fun forLanguage(isPersian: Boolean): List<String> = if (isPersian) fa else en
+}

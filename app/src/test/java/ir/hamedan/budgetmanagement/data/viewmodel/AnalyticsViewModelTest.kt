@@ -5,7 +5,9 @@ import io.mockk.every
 import io.mockk.mockk
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
+import ir.hamedan.budgetmanagement.data.repository.BudgetLimitRepository
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
+import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepository
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
 import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsUiState
 import ir.hamedan.budgetmanagement.ui.screens.analytics.AnalyticsViewModel
@@ -13,6 +15,7 @@ import ir.hamedan.budgetmanagement.ui.screens.transactions.TimeFilter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -31,6 +34,8 @@ class AnalyticsViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var repository: TransactionRepository
     private lateinit var categoryRepository: CategoryRepository
+    private lateinit var budgetLimitRepository: BudgetLimitRepository
+    private lateinit var savingGoalRepository: SavingGoalRepository
     private lateinit var viewModel: AnalyticsViewModel
     private val transactionsFlow = MutableStateFlow<List<TransactionEntity>>(emptyList())
     private val categoriesFlow = MutableStateFlow<List<CategoryEntity>>(emptyList())
@@ -50,7 +55,11 @@ class AnalyticsViewModelTest {
         categoryRepository = mockk(relaxed = true)
         every { repository.getAllTransactions() } returns transactionsFlow
         every { categoryRepository.getAllCategories() } returns categoriesFlow
-        viewModel = AnalyticsViewModel(repository, categoryRepository)
+        budgetLimitRepository = mockk(relaxed = true)
+        savingGoalRepository = mockk(relaxed = true)
+        every { budgetLimitRepository.getAllLimits() } returns flowOf(emptyList())
+        every { savingGoalRepository.getAllGoals() } returns flowOf(emptyList())
+        viewModel = AnalyticsViewModel(repository, categoryRepository, budgetLimitRepository, savingGoalRepository)
     }
 
     @After

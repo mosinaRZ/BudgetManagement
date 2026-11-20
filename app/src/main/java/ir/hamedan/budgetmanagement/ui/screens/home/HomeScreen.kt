@@ -289,7 +289,7 @@ fun HomeScreen(
         debtCreditViewModel.errorMessage.collect { errorSnackbarHostState.showError(it) }
     }
 
-    // ===== وضعیت مخفی/نمایان بودن مبالغ (تراز کلی، درآمد و هزینه) — منبع واحد مشترک با ویجت =====
+    // ===== وضعیت مخفی/نمایان بودن مبالغ (تراز کلی) — منبع واحد مشترک با ویجت =====
     AmountPrivacyPreferences.init(context)
     val isAmountsHidden by AmountPrivacyPreferences.hiddenFlow.collectAsState()
 // یک انیمیشن کوچک «چشمک» روی آیکون به هنگام هر تغییر وضعیت
@@ -487,35 +487,8 @@ fun HomeScreen(
                     }
                 }
 
-                // 2. خلاصه درآمد و هزینه
-                item {
-                    val summaryCardShape = RoundedCornerShape(20.dp)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        repeat(2) {
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(80.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), summaryCardShape)
-                                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), summaryCardShape)
-                                    .clip(summaryCardShape)
-                                    .padding(16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Box(modifier = Modifier.width(50.dp).height(10.dp).clip(RoundedCornerShape(4.dp)).appSkeletonShimmer())
-                                    Spacer(Modifier.height(8.dp))
-                                    Box(modifier = Modifier.width(80.dp).height(14.dp).clip(RoundedCornerShape(4.dp)).appSkeletonShimmer())
-                                }
-                            }
-                        }
-                    }
-                }
 
-                // 3. قلک‌ها
+                // 2. قلک‌ها
                 item {
                     val cardShape = RoundedCornerShape(24.dp)
                     Box(
@@ -537,7 +510,7 @@ fun HomeScreen(
                     }
                 }
 
-                // 4. بدهی‌ها
+                // 3. بدهی‌ها
                 item {
                     val cardShape = RoundedCornerShape(24.dp)
                     Box(
@@ -554,6 +527,41 @@ fun HomeScreen(
                                 repeat(2) {
                                     Box(modifier = Modifier.width(140.dp).height(80.dp).clip(RoundedCornerShape(16.dp)).appSkeletonShimmer())
                                 }
+                            }
+                        }
+                    }
+                }
+
+                // 4. جمله‌های انگیزشی
+                item {
+                    val quoteShape = RoundedCornerShape(28.dp)
+                    Box(modifier = Modifier.fillMaxWidth().height(170.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp)
+                                .height(130.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f), quoteShape)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
+                                .height(150.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), quoteShape)
+                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), quoteShape)
+                                .clip(quoteShape)
+                                .padding(22.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Box(modifier = Modifier.fillMaxWidth(0.85f).height(14.dp).clip(RoundedCornerShape(6.dp)).appSkeletonShimmer())
+                                Spacer(Modifier.height(10.dp))
+                                Box(modifier = Modifier.fillMaxWidth(0.65f).height(14.dp).clip(RoundedCornerShape(6.dp)).appSkeletonShimmer())
                             }
                         }
                     }
@@ -668,114 +676,6 @@ fun HomeScreen(
                                     formatFull = { v -> "${if (v < 0) "\u200E-" else ""}${numberFormatter.format(abs(v))} $currencyText" },
                                     formatCompact = { v -> "${if (v < 0) "\u200E-" else ""}${compactAmount(v, isPersian)} $currencyText" }
                                 )
-                            }
-                        }
-                    }
-                }
-
-                // خلاصه درآمد و هزینه
-                item {
-                    val summaryCardShape = RoundedCornerShape(20.dp)
-                    val income = totalAllIncome
-                    val expense = totalAllExpense
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(IntrinsicSize.Max),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), summaryCardShape)
-                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), summaryCardShape)
-                                .clip(summaryCardShape)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Text(text = if (isPersian) "درآمد" else "Income", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(Modifier.height(8.dp))
-                                val displayIncome = if (currencyUnit == "IRR") income * 10L else income
-                                val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "R" else "T")
-                                val formattedIncome = numberFormatter.format(displayIncome)
-                                val incomeCount = rememberCountUpAmount(displayIncome, "home.income.$currencyUnit")
-                                AnimatedContent(
-                                    targetState = isAmountsHidden,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    transitionSpec = {
-                                        (fadeIn(tween(220)) + scaleIn(initialScale = 0.92f, animationSpec = tween(220)))
-                                            .togetherWith(fadeOut(tween(160)) + scaleOut(targetScale = 0.92f, animationSpec = tween(160)))
-                                    },
-                                    label = "income_amount"
-                                ) { hidden ->
-                                    AutoFitAmountText(
-                                        text = if (hidden) "${maskedStars(formattedIncome.length)} $currencyText" else "$formattedIncome $currencyText",
-                                        fallbackText = if (hidden) null else "${compactAmount(displayIncome, isPersian)} $currencyText",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        maxFontSize = 16f,
-                                        minFontSize = 10f,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        letterSpacing = if (hidden) 1.5.sp else 0.sp,
-                                        countUp = if (hidden) null else incomeCount,
-                                        formatFull = { v -> "${numberFormatter.format(v)} $currencyText" },
-                                        formatCompact = { v -> "${compactAmount(v, isPersian)} $currencyText" }
-                                    )
-                                }
-                            }
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), summaryCardShape)
-                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), summaryCardShape)
-                                .clip(summaryCardShape)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Text(text = if (isPersian) "هزینه" else "Expense", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(Modifier.height(8.dp))
-                                val displayExpense = if (currencyUnit == "IRR") expense * 10L else expense
-                                val currencyText = if (isPersian) (if (currencyUnit == "IRR") "ریال" else "تومان") else (if (currencyUnit == "IRR") "R" else "T")
-                                val formattedExpense = numberFormatter.format(displayExpense)
-                                val expenseCount = rememberCountUpAmount(displayExpense, "home.expense.$currencyUnit")
-                                AnimatedContent(
-                                    targetState = isAmountsHidden,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    transitionSpec = {
-                                        (fadeIn(tween(220)) + scaleIn(initialScale = 0.92f, animationSpec = tween(220)))
-                                            .togetherWith(fadeOut(tween(160)) + scaleOut(targetScale = 0.92f, animationSpec = tween(160)))
-                                    },
-                                    label = "expense_amount"
-                                ) { hidden ->
-                                    AutoFitAmountText(
-                                        text = if (hidden) "${maskedStars(formattedExpense.length)} $currencyText" else "$formattedExpense $currencyText",
-                                        fallbackText = if (hidden) null else "${compactAmount(displayExpense, isPersian)} $currencyText",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = MaterialTheme.colorScheme.error,
-                                        maxFontSize = 16f,
-                                        minFontSize = 10f,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        letterSpacing = if (hidden) 1.5.sp else 0.sp,
-                                        countUp = if (hidden) null else expenseCount,
-                                        formatFull = { v -> "${numberFormatter.format(v)} $currencyText" },
-                                        formatCompact = { v -> "${compactAmount(v, isPersian)} $currencyText" }
-                                    )
-                                }
                             }
                         }
                     }
@@ -1232,6 +1132,16 @@ fun HomeScreen(
                             }
                         }
                     }
+                }
+
+                // جمله‌های انگیزشی و انضباطی (کارت‌های پشته‌ای؛ کشیدن یا تعویض خودکار)
+                item(key = "motivation_quotes") {
+                    MotivationQuoteStack(
+                        quotes = MotivationQuotes.forLanguage(isPersian),
+                        isPersian = isPersian,
+                        numberFormatter = numberFormatter,
+                        onSwipeHaptic = { haptic.perform(AppHapticType.Tick) }
+                    )
                 }
 
                 // آخرین تراکنش‌ها (اگر هیچ تراکنشی ثبت نشده باشد، کل این بخش نمایش داده نمی‌شود)

@@ -53,6 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.di.appViewModel
@@ -130,9 +131,12 @@ fun AnalyticsScreen(
                 // فاصله برای تاپ‌بار شناور
                 Spacer(modifier = Modifier.statusBarsPadding().height(140.dp))
 
-                SmartInsightCard(
+                Spacer(modifier = Modifier.height(16.dp))
+
+                FinancialIndicatorsSection(
                     isPersian = isPersian,
-                    insight = uiState.smartInsight
+                    currencyUnit = currencyUnit,
+                    indicators = uiState.indicators
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -183,16 +187,6 @@ fun AnalyticsScreen(
                 Spacer(modifier = Modifier.navigationBarsPadding().height(88.dp))
             }
 
-            AnalyticsInteractionHint(
-                isPersian = isPersian,
-                visible = showAnalyticsInteractionHint && !uiState.isLoading && uiState.hasAnyTransactionInDb,
-                onDismiss = { showAnalyticsInteractionHint = false },
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(top = 150.dp)
-            )
-
             // تاپ‌بار شناور بدون نیاز به Scaffold
             Column(
                 modifier = Modifier
@@ -216,6 +210,18 @@ fun AnalyticsScreen(
                     onFilterSelected = { analyticsViewModel.onTimeFilterChanged(it) }
                 )
             }
+
+            // قرارگیری بعد از تاپ‌بار و فیلتر تا روی آن‌ها رسم شود
+            AnalyticsInteractionHint(
+                isPersian = isPersian,
+                visible = showAnalyticsInteractionHint && !uiState.isLoading && uiState.hasAnyTransactionInDb,
+                onDismiss = { showAnalyticsInteractionHint = false },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .zIndex(10f)
+                    .statusBarsPadding()
+                    .padding(top = 80.dp, start = 24.dp, end = 24.dp)
+            )
         }
 
         if (showAnalyticsFilterSheet) {
@@ -224,7 +230,6 @@ fun AnalyticsScreen(
                 isCustomRange = uiState.isCustomRange,
                 customStartMillis = uiState.customStartMillis,
                 customEndMillis = uiState.customEndMillis,
-                compareWithPrevious = uiState.compareWithPrevious,
                 onDismiss = { showAnalyticsFilterSheet = false },
                 onCustomRangeSelected = { start, end ->
                     analyticsViewModel.setCustomDateRange(start, end)
@@ -233,8 +238,7 @@ fun AnalyticsScreen(
                 onClearCustomRange = {
                     analyticsViewModel.clearCustomDateRange()
                     showAnalyticsFilterSheet = false
-                },
-                onCompareChanged = { analyticsViewModel.setCompareWithPrevious(it) }
+                }
             )
         }
 
@@ -361,7 +365,6 @@ fun ExpenseTimeBarChartCard(
         selectedIndex = selectedIndex,
         onEntryClick = onEntryClick,
         valueFormatter = { value ->
-            // BigDecimal: هم دقت کامل می‌ماند و هم ضرب در ۱۰ (تومان → ریال) هرگز overflow نمی‌کند.
             val displayValue = BigDecimal.valueOf(value).let {
                 if (currencyUnit == "IRR") it.multiply(BigDecimal.TEN) else it
             }
@@ -387,19 +390,20 @@ private fun AnalyticsSkeletonScreen() {
         ) {
             Spacer(modifier = Modifier.statusBarsPadding().height(140.dp))
 
-            // Smart Insight Card Placeholder
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(80.dp)
-                    .padding(horizontal = 24.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .appSkeletonShimmer()
-            )
+            listOf(230.dp, 190.dp, 120.dp).forEachIndexed { index, cardHeight ->
+                if (index > 0) Spacer(modifier = Modifier.height(14.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(cardHeight)
+                        .padding(horizontal = 24.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .appSkeletonShimmer()
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Balance Trend Chart Card Placeholder
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -411,7 +415,6 @@ private fun AnalyticsSkeletonScreen() {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Expense Time Bar Chart Card Placeholder
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -423,7 +426,6 @@ private fun AnalyticsSkeletonScreen() {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Expense Category Pie Chart Card Placeholder
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -435,7 +437,6 @@ private fun AnalyticsSkeletonScreen() {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Top Expenses Card Placeholder
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -448,7 +449,6 @@ private fun AnalyticsSkeletonScreen() {
             Spacer(modifier = Modifier.navigationBarsPadding().height(80.dp))
         }
 
-        // Top Bar & Time Filter Selector Skeletons
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -668,187 +668,6 @@ private fun TimeFilterSelector(
     }
 }
 
-@Composable
-private fun SmartInsightCard(
-    isPersian: Boolean,
-    insight: SmartInsight
-) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    val rotation by animateFloatAsState(
-        targetValue = if (expanded) 180f else 0f,
-        animationSpec = tween(durationMillis = 220),
-        label = "SmartInsightArrowRotation"
-    )
-
-    val cardShape = RoundedCornerShape(20.dp)
-    val headline = localizeInsightCategories(
-        if (isPersian) insight.headlineFa else insight.headlineEn,
-        isPersian
-    )
-    val summary = localizeInsightCategories(
-        if (isPersian) insight.summaryFa else insight.summaryEn,
-        isPersian
-    )
-    val action = localizeInsightCategories(
-        if (isPersian) insight.actionFa else insight.actionEn,
-        isPersian
-    )
-    val focusLabel = localizeInsightCategories(
-        if (isPersian) insight.focusLabelFa else insight.focusLabelEn,
-        isPersian
-    )
-    val focusValue = insight.focusValue.coerceIn(0.0, 100.0)
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 12.dp)
-            .background(
-                Brush.linearGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f)
-                    )
-                ),
-                cardShape
-            )
-            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f), cardShape)
-            .clip(cardShape)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expanded = !expanded }
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.AutoAwesome,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = if (isPersian) "تحلیل هوشمند" else "Smart Analysis",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = headline,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = if (expanded) 2 else 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Icon(
-                imageVector = Icons.Default.KeyboardArrowDown,
-                contentDescription = if (expanded) {
-                    if (isPersian) "بستن تحلیل هوشمند" else "Collapse smart analysis"
-                } else {
-                    if (isPersian) "نمایش تحلیل هوشمند" else "Expand smart analysis"
-                },
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .size(22.dp)
-                    .rotate(rotation)
-            )
-        }
-
-        AnimatedVisibility(visible = expanded) {
-            Column(
-                modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(
-                    text = summary,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 18.sp
-                )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
-                        .padding(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = focusLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Text(
-                            text = "${focusValue.toInt()}%",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .width(76.dp)
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(focusValue.toFloat() / 100f)
-                                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(50))
-                        )
-                    }
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.06f))
-                        .padding(10.dp),
-                    verticalAlignment = Alignment.Top,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Lightbulb,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = action,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 18.sp
-                    )
-                }
-            }
-        }
-    }
-}
-
 private fun localizeInsightCategories(text: String, isPersian: Boolean): String {
     val categoryKeys = listOf(
         "FOOD",
@@ -876,16 +695,13 @@ private fun AnalyticsFilterBottomSheet(
     isCustomRange: Boolean,
     customStartMillis: Long?,
     customEndMillis: Long?,
-    compareWithPrevious: Boolean,
     onDismiss: () -> Unit,
     onCustomRangeSelected: (Long, Long) -> Unit,
-    onClearCustomRange: () -> Unit,
-    onCompareChanged: (Boolean) -> Unit
+    onClearCustomRange: () -> Unit
 ) {
     var showDateRangePicker by remember { mutableStateOf(false) }
     var pendingStart by remember(customStartMillis) { mutableStateOf(customStartMillis) }
     var pendingEnd by remember(customEndMillis) { mutableStateOf(customEndMillis) }
-    var pendingCompare by remember(compareWithPrevious) { mutableStateOf(compareWithPrevious) }
 
     val dateRangeState = rememberDateRangePickerState(
         initialSelectedStartDateMillis = pendingStart,
@@ -951,7 +767,6 @@ private fun AnalyticsFilterBottomSheet(
                     IconButton(onClick = {
                         pendingStart = null
                         pendingEnd = null
-                        pendingCompare = false
                     }) {
                         Icon(
                             Icons.Default.Close,
@@ -994,26 +809,6 @@ private fun AnalyticsFilterBottomSheet(
                 )
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (isPersian) "مقایسه با بازه قبل" else "Compare with previous period",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = if (isPersian) "تغییرات هزینه را هم در تحلیل هوشمند ببین" else "Show spending changes in Smart Analysis",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Switch(
-                    checked = pendingCompare && pendingStart != null && pendingEnd != null,
-                    onCheckedChange = { pendingCompare = it },
-                    enabled = pendingStart != null && pendingEnd != null
-                )
-            }
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1030,10 +825,8 @@ private fun AnalyticsFilterBottomSheet(
                     onClick = {
                         if (pendingStart != null && pendingEnd != null) {
                             onCustomRangeSelected(pendingStart!!, pendingEnd!!)
-                            onCompareChanged(pendingCompare)
                         } else {
                             onClearCustomRange()
-                            onCompareChanged(false)
                         }
                     },
                     modifier = Modifier.weight(1f)
@@ -1106,7 +899,6 @@ private fun BalanceTrendChartCard(
     }
 
     val defaultInsufficientTitle = if (isPersian) "هنوز داده کافی برای رسم روند وجود ندارد" else "Not Enough Data for Trend"
-    // وقتی کاربر روی یک ستون کلیک کرده، تعداد تراکنش‌های همان ستون تعیین‌کننده است نه کل ماه.
     val selectedBucketMode = isBucketSelected || isCustomRange
     val insufficientTitle = if (selectedBucketMode) {
         if (isPersian) "تراکنش کافی برای رسم روند نیست" else "Not Enough Transactions"
@@ -1206,10 +998,6 @@ private fun BalanceTrendChartCard(
                                 .clip(RoundedCornerShape(8.dp))
                         ) {
                             if (isScrollable) {
-                                // محور زمان نمودار همیشه از چپ (قدیمی‌ترین) به راست (جدیدترین) رسم می‌شود.
-                                // در حالت فارسی (RTL) مبدأ اسکرول افقی راست است و نمودار از آخر به اول
-                                // اسکرول می‌شد؛ با جهت LTR فقط برای خودِ نمودار، اسکرول (و اسکرول خودکار
-                                // به نقطه‌ی فعلی) در هر دو زبان از اول به آخر خواهد بود.
                                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                                     Row(
                                         modifier = Modifier

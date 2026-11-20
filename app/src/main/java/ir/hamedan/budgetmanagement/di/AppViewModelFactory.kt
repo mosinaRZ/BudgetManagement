@@ -93,7 +93,9 @@ class AppViewModelFactory(
             modelClass.isAssignableFrom(AnalyticsViewModel::class.java) -> {
                 AnalyticsViewModel(
                     repository = container.transactionRepository,
-                    categoryRepository = container.categoryRepository
+                    categoryRepository = container.categoryRepository,
+                    budgetLimitRepository = container.budgetLimitRepository,
+                    savingGoalRepository = container.savingGoalRepository
                 ) as T
             }
             modelClass.isAssignableFrom(DevicesViewModel::class.java) -> {

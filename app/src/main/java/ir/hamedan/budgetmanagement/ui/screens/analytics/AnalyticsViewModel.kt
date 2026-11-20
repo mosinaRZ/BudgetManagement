@@ -5,7 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.hamedan.budgetmanagement.data.local.models.TransactionEntity
 import ir.hamedan.budgetmanagement.data.repository.TransactionRepository
+import ir.hamedan.budgetmanagement.data.repository.BudgetLimitRepository
 import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
+import ir.hamedan.budgetmanagement.data.repository.SavingGoalRepository
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TimeFilter
 import ir.hamedan.budgetmanagement.utils.DateUtils
 import kotlinx.coroutines.flow.*
@@ -19,7 +21,11 @@ import kotlin.math.roundToInt
 
 class AnalyticsViewModel(
     private val repository: TransactionRepository,
-    private val categoryRepository: CategoryRepository
+    private val categoryRepository: CategoryRepository,
+    private val budgetLimitRepository: BudgetLimitRepository,
+    private val savingGoalRepository: SavingGoalRepository,
+    private val todayProvider: () -> LocalDate = { LocalDate.now() },
+    private val nowMillisProvider: () -> Long = { System.currentTimeMillis() }
 ) : ViewModel() {
 
     val selectedTimeFilter = MutableStateFlow(TimeFilter.ALL)
@@ -28,7 +34,6 @@ class AnalyticsViewModel(
     val selectedTimeBucketIndex = MutableStateFlow<Int?>(null)
     val customStartMillis = MutableStateFlow<Long?>(null)
     val customEndMillis = MutableStateFlow<Long?>(null)
-    val compareWithPreviousState = MutableStateFlow(false)
 
     fun updateLocale(isPersian: Boolean) {
         isPersianState.value = isPersian
@@ -50,8 +55,7 @@ class AnalyticsViewModel(
         val isIncomeChartSelected: Boolean,
         val selectedBucketIndex: Int?,
         val customStartMillis: Long?,
-        val customEndMillis: Long?,
-        val compareWithPrevious: Boolean
+        val customEndMillis: Long?
     )
 
     private val controls: StateFlow<AnalyticsControls> = combine(
@@ -68,28 +72,25 @@ class AnalyticsViewModel(
                 isIncomeChartSelected = isIncomeChartSelected,
                 selectedBucketIndex = selectedBucketIndex,
                 customStartMillis = customStart,
-                customEndMillis = null,
-                compareWithPrevious = false
+                customEndMillis = null
             )
         },
-        customEndMillis,
-        compareWithPreviousState
-    ) { partial, customEnd, compareWithPrevious ->
-        partial.copy(
-            customEndMillis = customEnd,
-            compareWithPrevious = compareWithPrevious
-        )
+        customEndMillis
+    ) { partial, customEnd ->
+        partial.copy(customEndMillis = customEnd)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.Eagerly,
-        initialValue = AnalyticsControls(TimeFilter.ALL, true, false, null, null, null, false)
+        initialValue = AnalyticsControls(TimeFilter.ALL, true, false, null, null, null)
     )
 
     val uiState: StateFlow<AnalyticsUiState> = combine(
         repository.getAllTransactions(),
         categoryRepository.getAllCategories(),
+        budgetLimitRepository.getAllLimits(),
+        savingGoalRepository.getAllGoals(),
         controls
-    ) { allTransactions, categories, controls ->
+    ) { allTransactions, categories, limits, goals, controls ->
         val timeFilter = controls.timeFilter
         val isPersian = controls.isPersian
         val isIncomeChartSelected = controls.isIncomeChartSelected
@@ -165,22 +166,27 @@ class AnalyticsViewModel(
             calculateTrendChartData(allTransactions, timeFilter, isPersian)
         }
 
-        val previousTransactions = if (controls.compareWithPrevious && isCustomRange) {
-            previousPeriodTransactions(allTransactions, controls.customStartMillis!!, controls.customEndMillis!!)
-        } else emptyList()
-        val previousExpense = previousTransactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }.toDouble()
-        val expenseChangePercent = if (controls.compareWithPrevious && previousTransactions.isNotEmpty() && previousExpense > 0.0) {
-            ((totalExpense - previousExpense) / previousExpense) * 100.0
-        } else null
-        val smartInsight = buildSmartInsight(
-            transactions = selectedTransactions,
-            categories = categoryExpenses,
-            totalIncome = totalIncome,
-            totalExpense = totalExpense,
-            averageExpense = averageExpense,
-            heavyExpenseCount = heavyExpenseEntities.size,
-            topExpense = topExpenseEntities.firstOrNull(),
-            expenseChangePercent = expenseChangePercent
+        // شاخص‌های مالی همیشه روی «بازه‌ی فعال» (فیلتر/ستون/بازه‌ی دلخواه) محاسبه می‌شوند.
+        val zone = ZoneId.systemDefault()
+        val today = todayProvider()
+        val window = PeriodWindowResolver.resolve(
+            filter = timeFilter,
+            isPersian = isPersian,
+            bucketIndex = if (isCustomRange) null else selectedBucketIndex,
+            customStart = if (isCustomRange) Instant.ofEpochMilli(controls.customStartMillis!!).atZone(zone).toLocalDate() else null,
+            customEnd = if (isCustomRange) Instant.ofEpochMilli(controls.customEndMillis!!).atZone(zone).toLocalDate() else null,
+            today = today,
+            transactionDates = allTransactions.map { Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate() }
+        )
+        val indicators = FinancialIndicatorCalculator.build(
+            window = window,
+            transactions = allTransactions,
+            categories = categories,
+            limits = limits,
+            goals = goals,
+            today = today,
+            nowMillis = nowMillisProvider(),
+            zone = zone
         )
 
         AnalyticsUiState(
@@ -206,8 +212,7 @@ class AnalyticsViewModel(
             isCustomRange = isCustomRange,
             customStartMillis = controls.customStartMillis,
             customEndMillis = controls.customEndMillis,
-            compareWithPrevious = controls.compareWithPrevious,
-            smartInsight = smartInsight
+            indicators = indicators
         )
     }.stateIn(
         scope = viewModelScope,
@@ -219,7 +224,6 @@ class AnalyticsViewModel(
         selectedTimeBucketIndex.value = null
         customStartMillis.value = null
         customEndMillis.value = null
-        compareWithPreviousState.value = false
         selectedTimeFilter.value = filter
     }
 
@@ -237,11 +241,6 @@ class AnalyticsViewModel(
         selectedTimeBucketIndex.value = null
         customStartMillis.value = null
         customEndMillis.value = null
-        compareWithPreviousState.value = false
-    }
-
-    fun setCompareWithPrevious(enabled: Boolean) {
-        compareWithPreviousState.value = enabled
     }
 
     private fun normalizeStartOfDay(millis: Long): Long =
@@ -251,119 +250,6 @@ class AnalyticsViewModel(
     private fun normalizeEndOfDay(millis: Long): Long =
         Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
             .plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() - 1L
-
-    private fun previousPeriodTransactions(
-        transactions: List<TransactionEntity>,
-        startMillis: Long,
-        endMillis: Long
-    ): List<TransactionEntity> {
-        val duration = (endMillis - startMillis + 1L).coerceAtLeast(1L)
-        val previousEnd = startMillis - 1L
-        val previousStart = previousEnd - duration + 1L
-        return transactions.filter { it.timestamp in previousStart..previousEnd }
-    }
-
-    private fun buildSmartInsight(
-        transactions: List<TransactionEntity>,
-        categories: List<CategoryExpenseModel>,
-        totalIncome: Double,
-        totalExpense: Double,
-        averageExpense: Double,
-        heavyExpenseCount: Int,
-        topExpense: TransactionEntity?,
-        expenseChangePercent: Double?
-    ): SmartInsight {
-        if (transactions.isEmpty()) {
-            return SmartInsight(
-                headlineFa = "هنوز داده کافی برای تحلیل نیست",
-                headlineEn = "Not enough data for a strong insight",
-                summaryFa = "با ثبت چند تراکنش دیگر، الگوی هزینه‌کرد و نقاط قابل‌توجه دقیق‌تر مشخص می‌شود.",
-                summaryEn = "Add a few more transactions to reveal clearer spending patterns.",
-                actionFa = "بعد از چند تراکنش دوباره این بخش را بررسی کن.",
-                actionEn = "Check this section again after a few more transactions.",
-                focusLabelFa = "تراکنش‌های این بازه",
-                focusLabelEn = "Transactions in range",
-                focusValue = 0.0,
-                expenseChangePercent = expenseChangePercent
-            )
-        }
-
-        val expenseRatio = if (totalIncome > 0.0) totalExpense / totalIncome else null
-        val topCategory = categories.firstOrNull()
-        val topCategoryShare = topCategory?.percentage?.toDouble() ?: 0.0
-        val largestAmount = topExpense?.amount?.toDouble() ?: 0.0
-        val largestVsAverage = if (averageExpense > 0.0) largestAmount / averageExpense else 0.0
-
-        val headlineFa: String
-        val headlineEn: String
-        val summaryFa: String
-        val summaryEn: String
-        val actionFa: String
-        val actionEn: String
-
-        when {
-            expenseRatio != null && expenseRatio >= 0.85 -> {
-                headlineFa = "بخش بزرگی از درآمد درگیر هزینه‌هاست"
-                headlineEn = "A large share of income is going to expenses"
-                summaryFa = "در این بازه ${topCategory?.categoryName?.let { "«$it»" } ?: "یک دسته اصلی"} بیشترین سهم هزینه را داشته و مجموع خرج به بخش قابل‌توجهی از درآمد رسیده است."
-                summaryEn = "${topCategory?.categoryName ?: "One main category"} takes the largest spending share, while expenses consume a substantial part of income."
-                actionFa = "اگر می‌خواهی حاشیه امن مالی بیشتری داشته باشی، اول همین دسته و چند هزینه بزرگ را بررسی کن."
-                actionEn = "For more financial breathing room, review this category and the largest purchases first."
-            }
-            topCategoryShare >= 45.0 -> {
-                headlineFa = "یک دسته، بخش اصلی خرج را به خود اختصاص داده"
-                headlineEn = "One category dominates your spending"
-                summaryFa = "تمرکز هزینه‌ها روی ${topCategory?.categoryName ?: "یک دسته اصلی"} بالاست؛ این الگو بیشترین اثر را روی نتیجه مالی این بازه دارد."
-                summaryEn = "Spending is highly concentrated in ${topCategory?.categoryName ?: "one main category"}, making it the biggest driver of this period's result."
-                actionFa = "اگر قصد کاهش هزینه داری، از همین دسته شروع کن؛ حتی تغییر کوچک در آن اثر محسوسی دارد."
-                actionEn = "If you want to reduce spending, start here; even a small change can have a noticeable impact."
-            }
-            largestVsAverage >= 2.2 -> {
-                headlineFa = "یک هزینه غیرعادی بیشتر از بقیه به چشم می‌آید"
-                headlineEn = "One unusually large expense stands out"
-                summaryFa = "بزرگ‌ترین هزینه این بازه حدود ${largestVsAverage.roundToInt()} برابر میانگین هزینه‌ها بوده و بخش مهمی از فشار مالی را ایجاد کرده است."
-                summaryEn = "Your largest expense is about ${largestVsAverage.roundToInt()}× the average, making it a major source of spending pressure."
-                actionFa = "این خرید را جداگانه بررسی کن؛ اگر تکرارشونده نیست، بهتر است اثر آن را از هزینه‌های عادی جدا ببینی."
-                actionEn = "Review this purchase separately; if it is unusual, treat it differently from your normal spending pattern."
-            }
-            heavyExpenseCount >= 3 -> {
-                headlineFa = "چند هزینه بزرگ، الگوی این بازه را شکل داده‌اند"
-                headlineEn = "Several large expenses shape this period"
-                summaryFa = "چند تراکنش سنگین هم‌زمان دیده می‌شود؛ بنابراین کنترل همین موارد می‌تواند بیشترین تفاوت را ایجاد کند."
-                summaryEn = "Several large transactions stand out together, so managing these items can make the biggest difference."
-                actionFa = "به‌جای بررسی همه هزینه‌ها، ابتدا همین چند مورد بزرگ را مرور کن."
-                actionEn = "Instead of reviewing everything, start with these few high-impact transactions."
-            }
-            else -> {
-                headlineFa = "الگوی هزینه‌کردت فعلاً متعادل‌تر به نظر می‌رسد"
-                headlineEn = "Your spending pattern looks relatively balanced"
-                summaryFa = "هزینه‌ها پراکندگی متعادل‌تری دارند و فعلاً نشانه خیلی پررنگی از تمرکز شدید روی یک مورد دیده نمی‌شود."
-                summaryEn = "Spending is more distributed, with no single pattern dominating the period."
-                actionFa = "همین روند را حفظ کن و بیشتر حواست به تغییرات ناگهانی در دسته‌های اصلی باشد."
-                actionEn = "Keep the pattern steady and watch for sudden changes in your main categories."
-            }
-        }
-
-        val comparisonSummary = expenseChangePercent?.let { change ->
-            val directionFa = if (change > 0) "بیشتر" else "کمتر"
-            val directionEn = if (change > 0) "higher" else "lower"
-            " در مقایسه با بازه قبل، هزینه‌ها حدود ${kotlin.math.abs(change).roundToInt()}٪ $directionFa شده‌اند." to
-                    " Compared with the previous period, expenses are about ${kotlin.math.abs(change).roundToInt()}% $directionEn."
-        }
-
-        return SmartInsight(
-            headlineFa = headlineFa,
-            headlineEn = headlineEn,
-            summaryFa = summaryFa + (comparisonSummary?.first ?: ""),
-            summaryEn = summaryEn + (comparisonSummary?.second ?: ""),
-            actionFa = actionFa,
-            actionEn = actionEn,
-            focusLabelFa = if (topCategory != null) "سهم «${topCategory.categoryName}» از هزینه‌ها" else "کل هزینه این بازه",
-            focusLabelEn = if (topCategory != null) "${topCategory.categoryName} share of expenses" else "Total expenses in range",
-            focusValue = topCategoryShare,
-            expenseChangePercent = expenseChangePercent
-        )
-    }
 
     private fun filterTransactionsByBucket(
         transactions: List<TransactionEntity>,
