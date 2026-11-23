@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,10 +33,12 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -50,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -573,6 +578,53 @@ internal fun SettingsFloatingSheet(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 content = content
             )
+        }
+    }
+}
+
+/**
+ * بدنه‌ی قابل‌پیمایشِ شیت‌های فیلتر: گزینه‌ها تا سقف ۵۵٪ ارتفاع صفحه اسکرول می‌شوند و دکمه‌های
+ * [SettingsSheetActions] زیر آن ثابت می‌مانند.
+ */
+@Composable
+internal fun ColumnScope.SettingsSheetScrollBody(content: @Composable ColumnScope.() -> Unit) {
+    val maxHeight = (LocalConfiguration.current.screenHeightDp * 0.55f).dp
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = maxHeight)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        content = content
+    )
+}
+
+/** دکمه‌های انتهای شیتِ فیلتر؛ هم‌قالب با دکمه‌های دیالوگ‌های برنامه (۴۸dp، گوشه‌ی ۱۶dp). */
+@Composable
+internal fun SettingsSheetActions(
+    cancelText: String,
+    applyText: String,
+    onCancel: () -> Unit,
+    onApply: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedButton(
+            onClick = onCancel,
+            modifier = Modifier.weight(1f).height(48.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text(text = cancelText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Button(
+            onClick = onApply,
+            modifier = Modifier.weight(1f).height(48.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text(text = applyText, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

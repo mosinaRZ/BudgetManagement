@@ -27,6 +27,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -62,6 +64,16 @@ import ir.hamedan.budgetmanagement.ui.components.SuccessBottomSheet
 import ir.hamedan.budgetmanagement.ui.components.SuccessSheetContent
 import ir.hamedan.budgetmanagement.ui.components.SwipeToConfirmButton
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
+import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsAccent
+import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsChoiceCard
+import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsFloatingSheet
+import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsGroup
+import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsRow
+import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsSectionHeader
+import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsSheetActions
+import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsSheetHeader
+import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsSheetScrollBody
+import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsValueTrailing
 import ir.hamedan.budgetmanagement.ui.components.formatSuccessAmountFromToman
 import ir.hamedan.budgetmanagement.ui.screens.add.ThousandsSeparatorTransformation
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
@@ -843,7 +855,7 @@ private fun FilterBottomSheet(
     onDismiss: () -> Unit,
     onApply: (TimeFilter, TransactionTypeFilter, SortOrder, Long?, Long?) -> Unit
 ) {
-    var selectedTime by remember { mutableStateOf(currentFilterState.timeFilter) }
+    val selectedTime = currentFilterState.timeFilter
     var selectedType by remember { mutableStateOf(currentFilterState.typeFilter) }
     var selectedSort by remember { mutableStateOf(currentFilterState.sortOrder) }
 
@@ -853,105 +865,130 @@ private fun FilterBottomSheet(
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.padding(horizontal = 12.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(horizontal = 20.dp, vertical = 12.dp)
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(
-                text = if (isPersian) "فیلتر پیشرفته" else "Advanced Filter",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
+    fun typeIcon(type: TransactionTypeFilter) = when (type) {
+        TransactionTypeFilter.ALL -> Icons.Default.AllInclusive
+        TransactionTypeFilter.INCOME -> Icons.Default.ArrowUpward
+        TransactionTypeFilter.EXPENSE -> Icons.Default.ArrowDownward
+        TransactionTypeFilter.UNCATEGORIZED -> Icons.Default.Category
+    }
 
-            Text(if (isPersian) "نوع تراکنش:" else "Type:", fontWeight = FontWeight.SemiBold)
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(vertical = 4.dp)
-            ) {
-                items(TransactionTypeFilter.values()) { type ->
-                    FilterChip(
-                        selected = selectedType == type,
-                        onClick = { selectedType = type },
-                        label = { Text(if (isPersian) type.titleFa else type.titleEn) }
-                    )
-                }
+    fun typeDescription(type: TransactionTypeFilter) = when (type) {
+        TransactionTypeFilter.ALL ->
+            if (isPersian) "درآمدها و هزینه‌ها با هم نمایش داده شوند" else "Show income and expenses together"
+        TransactionTypeFilter.INCOME ->
+            if (isPersian) "فقط پولی که به حساب شما اضافه شده" else "Only money that came in"
+        TransactionTypeFilter.EXPENSE ->
+            if (isPersian) "فقط پولی که خرج کرده‌اید" else "Only money you spent"
+        TransactionTypeFilter.UNCATEGORIZED ->
+            if (isPersian) "تراکنش‌هایی که هنوز دسته‌بندی نشده‌اند" else "Transactions without a category yet"
+    }
+
+    fun sortIcon(sort: SortOrder) = when (sort) {
+        SortOrder.NEWEST -> Icons.Default.Schedule
+        SortOrder.OLDEST -> Icons.Default.History
+        SortOrder.HIGHEST_AMOUNT -> Icons.AutoMirrored.Filled.TrendingUp
+        SortOrder.LOWEST_AMOUNT -> Icons.AutoMirrored.Filled.TrendingDown
+    }
+
+    fun sortDescription(sort: SortOrder) = when (sort) {
+        SortOrder.NEWEST -> if (isPersian) "تراکنش‌های تازه‌تر بالاتر باشند" else "Most recent first"
+        SortOrder.OLDEST -> if (isPersian) "تراکنش‌های قدیمی‌تر بالاتر باشند" else "Oldest first"
+        SortOrder.HIGHEST_AMOUNT -> if (isPersian) "از مبلغ بیشتر به کمتر" else "From the largest amount down"
+        SortOrder.LOWEST_AMOUNT -> if (isPersian) "از مبلغ کمتر به بیشتر" else "From the smallest amount up"
+    }
+
+    val pickDate = if (isPersian) "انتخاب" else "Select"
+
+    SettingsFloatingSheet(onDismiss = onDismiss) {
+        SettingsSheetHeader(
+            title = if (isPersian) "فیلتر پیشرفته" else "Advanced Filter",
+            subtitle = if (isPersian) "تراکنش‌ها را دقیق‌تر پیدا کن" else "Find transactions more precisely",
+            icon = Icons.Default.Tune,
+            accent = SettingsAccent.INDIGO
+        )
+
+        SettingsSheetScrollBody {
+            SettingsSectionHeader(text = if (isPersian) "نوع تراکنش" else "Type")
+            TransactionTypeFilter.values().forEach { type ->
+                SettingsChoiceCard(
+                    title = if (isPersian) type.titleFa else type.titleEn,
+                    description = typeDescription(type),
+                    icon = typeIcon(type),
+                    isSelected = selectedType == type,
+                    onClick = { selectedType = type }
+                )
             }
 
-            Text(if (isPersian) "بازه زمانی سفارشی:" else "Custom Date Range:", fontWeight = FontWeight.SemiBold)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                    onClick = { showStartDatePicker = true },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = if (startDate != null) DateUtils.formatTimestamp(startDate!!, isPersian) else (if (isPersian) "از تاریخ" else "From Date"),
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-
-                OutlinedButton(
-                    onClick = { showEndDatePicker = true },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = if (endDate != null) DateUtils.formatTimestamp(endDate!!, isPersian) else (if (isPersian) "تا تاریخ" else "To Date"),
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-
-            Text(if (isPersian) "ترتیب نمایش:" else "Sort By:", fontWeight = FontWeight.SemiBold)
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                SortOrder.values().forEach { sort ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { selectedSort = sort }
-                            .padding(vertical = 2.dp)
-                    ) {
-                        RadioButton(
-                            selected = selectedSort == sort,
-                            onClick = { selectedSort = sort }
+            Spacer(Modifier.height(2.dp))
+            SettingsGroup(
+                onSheet = true,
+                title = if (isPersian) "بازه زمانی سفارشی" else "Custom Date Range",
+                rows = buildList<@Composable () -> Unit> {
+                    add {
+                        SettingsRow(
+                            title = if (isPersian) "از تاریخ" else "From Date",
+                            icon = Icons.Default.CalendarMonth,
+                            accent = SettingsAccent.TEAL,
+                            onClick = { showStartDatePicker = true },
+                            trailing = {
+                                SettingsValueTrailing(
+                                    startDate?.let { DateUtils.formatTimestamp(it, isPersian) } ?: pickDate
+                                )
+                            }
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (isPersian) sort.titleFa else sort.titleEn)
+                    }
+                    add {
+                        SettingsRow(
+                            title = if (isPersian) "تا تاریخ" else "To Date",
+                            icon = Icons.Default.Event,
+                            accent = SettingsAccent.TEAL,
+                            onClick = { showEndDatePicker = true },
+                            trailing = {
+                                SettingsValueTrailing(
+                                    endDate?.let { DateUtils.formatTimestamp(it, isPersian) } ?: pickDate
+                                )
+                            }
+                        )
+                    }
+                    if (startDate != null || endDate != null) {
+                        add {
+                            SettingsRow(
+                                title = if (isPersian) "پاک کردن بازه" else "Clear range",
+                                icon = Icons.Default.Close,
+                                accent = SettingsAccent.DANGER,
+                                onClick = {
+                                    startDate = null
+                                    endDate = null
+                                }
+                            )
+                        }
                     }
                 }
-            }
+            )
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
-                    Text(if (isPersian) "انصراف" else "Cancel")
-                }
-                Button(
-                    onClick = { onApply(selectedTime, selectedType, selectedSort, startDate, endDate) },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(if (isPersian) "اعمال فیلتر" else "Apply")
-                }
+            Spacer(Modifier.height(2.dp))
+            SettingsSectionHeader(text = if (isPersian) "ترتیب نمایش" else "Sort By")
+            SortOrder.values().forEach { sort ->
+                SettingsChoiceCard(
+                    title = if (isPersian) sort.titleFa else sort.titleEn,
+                    description = sortDescription(sort),
+                    icon = sortIcon(sort),
+                    isSelected = selectedSort == sort,
+                    onClick = { selectedSort = sort }
+                )
             }
         }
+
+        SettingsSheetActions(
+            cancelText = if (isPersian) "انصراف" else "Cancel",
+            applyText = if (isPersian) "اعمال فیلتر" else "Apply",
+            onCancel = onDismiss,
+            onApply = { onApply(selectedTime, selectedType, selectedSort, startDate, endDate) }
+        )
     }
 
     if (showStartDatePicker) {
-        val datePickerState = rememberDatePickerState()
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = startDate)
         DatePickerDialog(
             onDismissRequest = { showStartDatePicker = false },
             confirmButton = {
@@ -961,6 +998,11 @@ private fun FilterBottomSheet(
                 }) {
                     Text(if (isPersian) "تایید" else "OK")
                 }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStartDatePicker = false }) {
+                    Text(if (isPersian) "انصراف" else "Cancel")
+                }
             }
         ) {
             DatePicker(state = datePickerState)
@@ -968,7 +1010,7 @@ private fun FilterBottomSheet(
     }
 
     if (showEndDatePicker) {
-        val datePickerState = rememberDatePickerState()
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = endDate)
         DatePickerDialog(
             onDismissRequest = { showEndDatePicker = false },
             confirmButton = {
@@ -977,6 +1019,11 @@ private fun FilterBottomSheet(
                     showEndDatePicker = false
                 }) {
                     Text(if (isPersian) "تایید" else "OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEndDatePicker = false }) {
+                    Text(if (isPersian) "انصراف" else "Cancel")
                 }
             }
         ) {
