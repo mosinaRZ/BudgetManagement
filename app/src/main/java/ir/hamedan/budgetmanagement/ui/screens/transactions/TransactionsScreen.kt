@@ -1,5 +1,6 @@
 package ir.hamedan.budgetmanagement.ui.screens.transactions
 
+import ir.hamedan.budgetmanagement.ui.components.TimeFilterBar
 import ir.hamedan.budgetmanagement.ui.components.CountUpText
 import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
 import ir.hamedan.budgetmanagement.di.appViewModel
@@ -326,56 +327,35 @@ fun TransactionsScreen(
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
         ) {
-            TransactionsTopBar(
-                isPersian = isPersian,
-                isFilterActive = filterState.isCustomFilterActive,
-                showFilterButton = !isTrulyEmpty && !isLoading,
-                onFilterClick = { showFilterSheet = true }
-            )
+            TransactionsTopBar(isPersian = isPersian)
 
             if (!isTrulyEmpty && !isLoading) {
-                if (filterState.isCustomFilterActive) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 4.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        FilterChip(
-                            selected = true,
-                            onClick = { viewModel.clearFilter() },
-                            label = {
-                                Text(
-                                    if (isPersian) "حذف فیلترها ✕" else "Clear Filters ✕",
-                                    fontWeight = FontWeight.Bold
-                                )
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.errorContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        )
-                    }
-                } else {
-                    TimeFilterSelector(
-                        selectedFilter = filterState.timeFilter,
-                        isPersian = isPersian,
-                        onFilterSelected = { newTimeFilter ->
-                            val previousTimeFilter = filterState.timeFilter
-                            if (newTimeFilter != previousTimeFilter) {
-                                viewModel.setQuickTimeFilter(newTimeFilter)
+                TimeFilterBar(
+                    labels = remember(isPersian) {
+                        TimeFilter.values().map { if (isPersian) it.titleFa else it.titleEn }
+                    },
+                    selectedIndex = if (filterState.isCustomFilterActive) -1 else filterState.timeFilter.ordinal,
+                    isPersian = isPersian,
+                    isFilterActive = filterState.isCustomFilterActive,
+                    clearLabel = if (isPersian) "حذف فیلترها" else "Clear filters",
+                    onClear = if (filterState.isCustomFilterActive) ({ viewModel.clearFilter() }) else null,
+                    onFilterClick = { showFilterSheet = true },
+                    onSelect = { index ->
+                        val newTimeFilter = TimeFilter.values()[index]
+                        val previousTimeFilter = filterState.timeFilter
+                        if (newTimeFilter != previousTimeFilter) {
+                            viewModel.setQuickTimeFilter(newTimeFilter)
 
-                                coroutineScope.launch {
-                                    val newTitle = if (isPersian) newTimeFilter.titleFa else newTimeFilter.titleEn
-                                    snackbarHostState.showInfo(
-                                        message = if (isPersian) "فیلتر زمان به «$newTitle» تغییر یافت" else "Filter set to \"$newTitle\"",
-                                        duration = SnackbarDuration.Indefinite
-                                    )
-                                }
+                            coroutineScope.launch {
+                                val newTitle = if (isPersian) newTimeFilter.titleFa else newTimeFilter.titleEn
+                                snackbarHostState.showInfo(
+                                    message = if (isPersian) "فیلتر زمان به «$newTitle» تغییر یافت" else "Filter set to \"$newTitle\"",
+                                    duration = SnackbarDuration.Indefinite
+                                )
                             }
                         }
-                    )
-                }
+                    }
+                )
             }
         }
 
@@ -1041,58 +1021,6 @@ class ThousandsSeparatorVisualTransformation : VisualTransformation {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun TimeFilterSelector(
-    selectedFilter: TimeFilter,
-    isPersian: Boolean,
-    onFilterSelected: (TimeFilter) -> Unit
-) {
-    val shape = RoundedCornerShape(16.dp)
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 4.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), shape)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), shape)
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        TimeFilter.values().forEach { filter ->
-            val isSelected = filter == selectedFilter
-            val title = if (isPersian) filter.titleFa else filter.titleEn
-
-            val backgroundAlpha by animateFloatAsState(
-                targetValue = if (isSelected) 1f else 0f,
-                label = "TabBgAlpha"
-            )
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(38.dp)
-                    .clip(shape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = backgroundAlpha * 0.15f))
-                    .border(
-                        width = 1.dp,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.Transparent,
-                        shape = shape
-                    )
-                    .clickable { onFilterSelected(filter) },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
-            }
-        }
-    }
-}
-
 @Composable
 private fun TransactionRow(
     transaction: TransactionEntity,
@@ -1369,13 +1297,7 @@ private fun TransactionMetaInfo(
 }
 
 @Composable
-private fun TransactionsTopBar(
-    isPersian: Boolean,
-    isFilterActive: Boolean,
-    onFilterClick: () -> Unit,
-    showFilterButton: Boolean = true,
-) {
-    val smallShape = RoundedCornerShape(24.dp)
+private fun TransactionsTopBar(isPersian: Boolean) {
     val centerShape = RoundedCornerShape(24.dp)
 
     Box(
@@ -1383,59 +1305,28 @@ private fun TransactionsTopBar(
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 8.dp)
     ) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .height(56.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), centerShape)
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), centerShape)
+                .clip(centerShape)
+                .padding(horizontal = 12.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), centerShape)
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), centerShape)
-                    .clip(centerShape)
-                    .padding(horizontal = 12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (isPersian) "جزئیات تراکنش‌ها" else "Transaction Details",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            if (showFilterButton) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .background(
-                            if (isFilterActive) MaterialTheme.colorScheme.primaryContainer
-                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
-                            smallShape
-                        )
-                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), smallShape)
-                        .clip(smallShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    IconButton(onClick = onFilterClick) {
-                        Icon(
-                            imageVector = Icons.Default.FilterList,
-                            contentDescription = if (isPersian) "فیلتر" else "Filter",
-                            tint = if (isFilterActive) MaterialTheme.colorScheme.onPrimaryContainer
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
+            Text(
+                text = if (isPersian) "جزئیات تراکنش‌ها" else "Transaction Details",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
+
 
 private fun getRelativeDateHeader(timestamp: Long, isPersian: Boolean): String {
     val zone = ZoneId.systemDefault()

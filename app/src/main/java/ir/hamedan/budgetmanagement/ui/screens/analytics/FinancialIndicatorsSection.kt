@@ -41,6 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,6 +56,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
@@ -71,18 +73,76 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.abs
 
-// رنگ‌های معنایی شاخص‌ها؛ در تم روشن و تیره هر دو خوانا هستند.
-private val IndicatorGreen = Color(0xFF22C55E)
-private val IndicatorAmber = Color(0xFFF5B301)
-private val IndicatorRed = Color(0xFFEF4444)
+// ───────────────────────── پالت معنایی و کنتراست ─────────────────────────
+//
+// هر رنگ معنایی دو نقش جدا دارد، چون یک رنگِ ثابت نمی‌تواند هر دو را در هر دو تم خوب انجام دهد:
+//  • «متن» (متن، درصد، چیپ، آیکون): در تم روشن تیره و در تم تیره روشن می‌شود تا نسبت کنتراست
+//    (WCAG) روی کارت حداقل ۴٫۵:۱ بماند (چیپ‌ها هم روی زمینه‌ی ۱۴٪ رنگیِ خودشان).
+//  • «پر» (نوار پیشرفت، گیج، نقطه‌ی راهنما): رنگِ سیر و زنده‌تر که روی کارت حداقل ۳:۱ دارد.
+// نسبت‌های اندازه‌گیری‌شده: متن روشن ≥ ۴٫۵ روی کارت و ≥ ۴٫۵ روی چیپ؛ متن تیره ≥ ۵٫۰؛ پر ≥ ۴٫۲.
+
+@Immutable
+private class IndicatorPalette(
+    val goodText: Color,
+    val warningText: Color,
+    val badText: Color,
+    val primaryText: Color,
+    val goodFill: Color,
+    val warningFill: Color,
+    val badFill: Color
+)
+
+private val LightIndicatorPalette = IndicatorPalette(
+    goodText = Color(0xFF166534),
+    warningText = Color(0xFF92400E),
+    badText = Color(0xFFA61B1B),
+    primaryText = Color(0xFF1F6B53),
+    goodFill = Color(0xFF15803D),
+    warningFill = Color(0xFFB45309),
+    badFill = Color(0xFFDC2626)
+)
+
+private val DarkIndicatorPalette = IndicatorPalette(
+    goodText = Color(0xFF4ADE80),
+    warningText = Color(0xFFFBBF24),
+    badText = Color(0xFFFFA89E),
+    primaryText = Color(0xFFB0E4CC),
+    goodFill = Color(0xFF22C55E),
+    warningFill = Color(0xFFF59E0B),
+    badFill = Color(0xFFF87171)
+)
 
 @Composable
-private fun IndicatorTone.color(): Color = when (this) {
-    IndicatorTone.GOOD -> IndicatorGreen
-    IndicatorTone.WARNING -> IndicatorAmber
-    IndicatorTone.BAD -> IndicatorRed
-    IndicatorTone.NEUTRAL -> MaterialTheme.colorScheme.onSurfaceVariant
+private fun indicatorPalette(): IndicatorPalette =
+    if (MaterialTheme.colorScheme.background.luminance() > 0.5f) LightIndicatorPalette else DarkIndicatorPalette
+
+/** رنگِ متن/آیکون/چیپِ این وضعیت؛ همیشه خوانا روی کارت. */
+@Composable
+private fun IndicatorTone.color(): Color {
+    val p = indicatorPalette()
+    return when (this) {
+        IndicatorTone.GOOD -> p.goodText
+        IndicatorTone.WARNING -> p.warningText
+        IndicatorTone.BAD -> p.badText
+        IndicatorTone.NEUTRAL -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
 }
+
+/** رنگِ سطح‌های پر (نوار، گیج، نقطه)؛ سیر و دارای کنتراست کافی با زمینه. */
+@Composable
+private fun IndicatorTone.fillColor(): Color {
+    val p = indicatorPalette()
+    return when (this) {
+        IndicatorTone.GOOD -> p.goodFill
+        IndicatorTone.WARNING -> p.warningFill
+        IndicatorTone.BAD -> p.badFill
+        IndicatorTone.NEUTRAL -> MaterialTheme.colorScheme.outline
+    }
+}
+
+/** متنِ تأکیدی با رنگ اصلی برند که در تم روشن هم از ۴٫۵:۱ کمتر نمی‌شود. */
+@Composable
+private fun brandTextColor(): Color = indicatorPalette().primaryText
 
 private fun LimitStatus.tone(): IndicatorTone = when (this) {
     LimitStatus.EXCEEDED, LimitStatus.DANGER -> IndicatorTone.BAD
@@ -109,8 +169,18 @@ private class IndicatorFormat(val isPersian: Boolean, val currencyUnit: String) 
 
     fun int(v: Int): String = plain0.format(v.toLong())
 
-    fun amount(toman: Long): String =
-        grouped.format(MoneyContract.displayFromStorage(toman, currencyUnit)) + " " + unit
+    /**
+     * علامت منفی/مثبت همیشه به‌صورت جدا و **قبل** از رقم‌ها می‌آید، با همان الگوی صفحه‌ی خانه و تراکنش‌ها:
+     * LRM (\u200E) پیش از «-» باعث می‌شود در چیدمان راست‌به‌چپ هم علامت سمت چپِ ارقام بماند.
+     * (فرمت‌کننده‌ی فارسیِ خودِ جاوا علامت را گاهی بعد از عدد یا با کاراکتر دیگری می‌گذارد، پس فقط
+     * قدرمطلق را فرمت می‌کنیم.)
+     */
+    private fun signed(negative: Boolean, body: String): String = if (negative) NEGATIVE_SIGN + body else body
+
+    fun amount(toman: Long): String {
+        val display = MoneyContract.displayFromStorage(toman, currencyUnit)
+        return signed(display < 0L, grouped.format(abs(display))) + " " + unit
+    }
 
     /** مبلغ کوتاه‌شده برای جاهای تنگ: ۱۲٫۵ میلیون / 12.5M */
     fun compact(toman: Long): String {
@@ -126,7 +196,8 @@ private class IndicatorFormat(val isPersian: Boolean, val currencyUnit: String) 
             v >= 1e3 -> 1e3 to "K"
             else -> 1.0 to ""
         }
-        return (if (toman < 0) "-" else "") + plain1.format(v / div) + suffix
+        val body = plain1.format(v / div)
+        return signed(toman < 0 && !isZeroText(v / div, 1), body) + suffix
     }
 
     fun percent(v: Double, decimals: Int = 0): String {
@@ -135,7 +206,18 @@ private class IndicatorFormat(val isPersian: Boolean, val currencyUnit: String) 
             maximumFractionDigits = decimals
             minimumFractionDigits = 0
         }
-        return nf.format(v) + if (isPersian) "٪" else "%"
+        // «منفیِ صفر» (مثل -0٪ بعد از گرد کردن) نمایش داده نمی‌شود.
+        val negative = v < 0 && !isZeroText(v, decimals)
+        return signed(negative, nf.format(abs(v))) + if (isPersian) "٪" else "%"
+    }
+
+    private fun isZeroText(v: Double, decimals: Int): Boolean {
+        val scale = Math.pow(10.0, decimals.toDouble())
+        return Math.round(abs(v) * scale) == 0L
+    }
+
+    private companion object {
+        const val NEGATIVE_SIGN = "\u200E-"
     }
 }
 
@@ -176,12 +258,12 @@ private fun IndicatorCard(
     accent: Color? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val shape = RoundedCornerShape(24.dp)
+    // کارت‌ها داخل کانتینر بخش شاخص‌ها نشسته‌اند؛ گوشه‌ی کوچک‌تر از کانتینر (۲۸) تا هم‌مرکز دیده شوند.
+    val shape = RoundedCornerShape(20.dp)
     val base = MaterialTheme.colorScheme.surfaceVariant
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp)
             .background(
                 Brush.linearGradient(
                     listOf(
@@ -245,6 +327,7 @@ private fun StatusChip(text: String, color: Color) {
         color = color,
         modifier = Modifier
             .background(color.copy(alpha = 0.14f), RoundedCornerShape(50))
+            .border(1.dp, color.copy(alpha = 0.28f), RoundedCornerShape(50))
             .padding(horizontal = 10.dp, vertical = 4.dp)
     )
 }
@@ -271,7 +354,7 @@ private fun ProgressTrack(
                 .fillMaxWidth()
                 .height(8.dp)
                 .clip(RoundedCornerShape(50))
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f))
         )
         if (animated > 0f) {
             Box(
@@ -279,7 +362,7 @@ private fun ProgressTrack(
                     .fillMaxWidth(animated)
                     .height(8.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(Brush.horizontalGradient(listOf(color.copy(alpha = 0.75f), color)))
+                    .background(Brush.horizontalGradient(listOf(color.copy(alpha = 0.82f), color)))
             )
         }
         if (marker != null) {
@@ -291,7 +374,7 @@ private fun ProgressTrack(
                     modifier = Modifier
                         .width(2.dp)
                         .fillMaxHeight()
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f), RoundedCornerShape(50))
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f), RoundedCornerShape(50))
                 )
             }
         }
@@ -317,13 +400,13 @@ private fun ExpandToggle(expanded: Boolean, hiddenCount: Int, isPersian: Boolean
                 else -> "Show $hiddenCount more"
             },
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Medium
+            color = brandTextColor(),
+            fontWeight = FontWeight.SemiBold
         )
         Icon(
             Icons.Default.KeyboardArrowDown,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
+            tint = brandTextColor(),
             modifier = Modifier.size(20.dp).rotate(rotation)
         )
     }
@@ -341,7 +424,26 @@ fun FinancialIndicatorsSection(
     val f = remember(isPersian, currencyUnit) { IndicatorFormat(isPersian, currencyUnit) }
     var expanded by rememberSaveable { mutableStateOf(false) }
 
-    Column {
+    // یک کانتینر واحد: هدر + همه‌ی کارت‌ها داخل همین کادرند؛ لمس هدر کل بخش را باز/بسته می‌کند.
+    val containerShape = RoundedCornerShape(28.dp)
+    val primary = MaterialTheme.colorScheme.primary
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        primary.copy(alpha = 0.06f),
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)
+                    )
+                ),
+                containerShape
+            )
+            .border(1.dp, primary.copy(alpha = 0.22f), containerShape)
+            .clip(containerShape)
+    ) {
         CollapsibleHeader(
             isPersian = isPersian,
             period = periodLabel(indicators.window, f),
@@ -356,8 +458,8 @@ fun FinancialIndicatorsSection(
             exit = shrinkVertically(animationSpec = tween(300, easing = FastOutSlowInEasing)) + fadeOut(tween(200))
         ) {
             Column(
-                modifier = Modifier.padding(top = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 SavingsRateCard(isPersian, f, indicators)
                 BurnRateCard(isPersian, f, indicators)
@@ -369,7 +471,7 @@ fun FinancialIndicatorsSection(
     }
 }
 
-/** فیلد جمع‌شونده: با کلیک روی کل فیلد (یا پیکان) باز/بسته می‌شود و پیکان ۱۸۰ درجه می‌چرخد. */
+/** هدرِ کانتینر: با لمس هر نقطه‌ی آن کل بخش باز/بسته می‌شود و پیکان ۱۸۰ درجه می‌چرخد. */
 @Composable
 private fun CollapsibleHeader(
     isPersian: Boolean,
@@ -384,24 +486,13 @@ private fun CollapsibleHeader(
         animationSpec = tween(300, easing = FastOutSlowInEasing),
         label = "IndicatorsArrowRotation"
     )
-    val shape = RoundedCornerShape(20.dp)
-    val primary = MaterialTheme.colorScheme.primary
     val rate = savings.ratePercent
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .clip(shape)
-            .background(
-                Brush.linearGradient(
-                    listOf(primary.copy(alpha = 0.10f), MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
-                ),
-                shape
-            )
-            .border(1.dp, primary.copy(alpha = 0.20f), shape)
             .clickable(onClick = onToggle)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -432,7 +523,7 @@ private fun CollapsibleHeader(
         Icon(
             imageVector = Icons.Default.KeyboardArrowDown,
             contentDescription = if (expanded) (if (isPersian) "بستن" else "Collapse") else (if (isPersian) "باز کردن" else "Expand"),
-            tint = primary,
+            tint = brandTextColor(),
             modifier = Modifier.size(28.dp).rotate(rotation)
         )
     }
@@ -446,9 +537,10 @@ private const val GAUGE_MAX_PERCENT = 40.0
 private fun SavingsRateCard(isPersian: Boolean, f: IndicatorFormat, data: FinancialIndicators) {
     val s = data.savings
     val tone = s.tone.color()
+    val toneFill = s.tone.fillColor()
     val rate = s.ratePercent
 
-    IndicatorCard(accent = tone) {
+    IndicatorCard(accent = toneFill) {
         CardHeader(
             icon = Icons.Default.Savings,
             title = if (isPersian) "نرخ پس‌انداز" else "Savings Rate",
@@ -470,7 +562,7 @@ private fun SavingsRateCard(isPersian: Boolean, f: IndicatorFormat, data: Financ
         Spacer(Modifier.height(16.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            SavingsGauge(rate = rate, tone = tone, f = f)
+            SavingsGauge(rate = rate, fill = toneFill, textColor = tone, f = f)
 
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (rate == null) {
@@ -486,7 +578,7 @@ private fun SavingsRateCard(isPersian: Boolean, f: IndicatorFormat, data: Financ
                         val dTone = if (abs(d) < 0.1) IndicatorTone.NEUTRAL
                         else if (d > 0) IndicatorTone.GOOD else IndicatorTone.BAD
                         Text(
-                            text = (if (d > 0) "+" else "") + f.percent(d, 1) +
+                            text = (if (d > 0) "\u200E+" else "") + f.percent(d, 1) +
                                     (if (isPersian) " نسبت به دوره قبل" else " vs previous period"),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
@@ -527,11 +619,11 @@ private fun SavingsRateCard(isPersian: Boolean, f: IndicatorFormat, data: Financ
         Spacer(Modifier.height(16.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MiniStat(if (isPersian) "درآمد" else "Income", f.compact(s.income), IndicatorGreen, Modifier.weight(1f))
-            MiniStat(if (isPersian) "هزینه" else "Expense", f.compact(s.expense), IndicatorRed, Modifier.weight(1f))
+            MiniStat(if (isPersian) "درآمد" else "Income", f.compact(s.income), IndicatorTone.GOOD.color(), Modifier.weight(1f))
+            MiniStat(if (isPersian) "هزینه" else "Expense", f.compact(s.expense), IndicatorTone.BAD.color(), Modifier.weight(1f))
             MiniStat(
                 if (isPersian) "خالص" else "Net", f.compact(s.net),
-                if (s.net >= 0) IndicatorGreen else IndicatorRed, Modifier.weight(1f)
+                (if (s.net >= 0) IndicatorTone.GOOD else IndicatorTone.BAD).color(), Modifier.weight(1f)
             )
         }
 
@@ -540,14 +632,14 @@ private fun SavingsRateCard(isPersian: Boolean, f: IndicatorFormat, data: Financ
             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Icon(
                     Icons.Default.Info, null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(14.dp)
                 )
                 Text(
                     text = if (isPersian) "واریز و برداشت قلک در این شاخص‌ها هزینه یا درآمد حساب نمی‌شود."
                     else "Goal deposits and withdrawals are not counted as expenses or income here.",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 15.sp
                 )
             }
@@ -556,7 +648,7 @@ private fun SavingsRateCard(isPersian: Boolean, f: IndicatorFormat, data: Financ
 }
 
 @Composable
-private fun SavingsGauge(rate: Double?, tone: Color, f: IndicatorFormat) {
+private fun SavingsGauge(rate: Double?, fill: Color, textColor: Color, f: IndicatorFormat) {
     val fraction = ((rate ?: 0.0).coerceIn(0.0, GAUGE_MAX_PERCENT) / GAUGE_MAX_PERCENT).toFloat()
     val animated by animateFloatAsState(
         targetValue = fraction,
@@ -564,6 +656,9 @@ private fun SavingsGauge(rate: Double?, tone: Color, f: IndicatorFormat) {
         label = "SavingsGauge"
     )
     val onSurface = MaterialTheme.colorScheme.onSurface
+    val zoneRed = IndicatorTone.BAD.fillColor()
+    val zoneAmber = IndicatorTone.WARNING.fillColor()
+    val zoneGreen = IndicatorTone.GOOD.fillColor()
 
     Box(modifier = Modifier.size(124.dp), contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
@@ -580,12 +675,12 @@ private fun SavingsGauge(rate: Double?, tone: Color, f: IndicatorFormat) {
             val greenSweep = total - redSweep - amberSweep
             var cursor = start
             listOf(
-                IndicatorRed to redSweep,
-                IndicatorAmber to amberSweep,
-                IndicatorGreen to greenSweep
+                zoneRed to redSweep,
+                zoneAmber to amberSweep,
+                zoneGreen to greenSweep
             ).forEach { (c, sweep) ->
                 drawArc(
-                    color = c.copy(alpha = 0.22f),
+                    color = c.copy(alpha = 0.26f),
                     startAngle = cursor,
                     sweepAngle = sweep,
                     useCenter = false,
@@ -598,7 +693,7 @@ private fun SavingsGauge(rate: Double?, tone: Color, f: IndicatorFormat) {
 
             if (animated > 0.004f) {
                 drawArc(
-                    color = tone,
+                    color = fill,
                     startAngle = start,
                     sweepAngle = total * animated,
                     useCenter = false,
@@ -613,7 +708,7 @@ private fun SavingsGauge(rate: Double?, tone: Color, f: IndicatorFormat) {
                 text = if (rate == null) "—" else f.percent(rate, 1),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.ExtraBold,
-                color = if (rate == null) onSurface else tone,
+                color = if (rate == null) onSurface else textColor,
                 maxLines = 1
             )
         }
@@ -623,16 +718,16 @@ private fun SavingsGauge(rate: Double?, tone: Color, f: IndicatorFormat) {
 @Composable
 private fun ThresholdLegend(isPersian: Boolean, f: IndicatorFormat) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        LegendDot(IndicatorRed, if (isPersian) "زیر ${f.percent(10.0)}" else "< ${f.percent(10.0)}")
-        LegendDot(IndicatorAmber, "${f.int(10)}–${f.percent(20.0)}")
-        LegendDot(IndicatorGreen, if (isPersian) "بالای ${f.percent(20.0)}" else "> ${f.percent(20.0)}")
+        LegendDot(IndicatorTone.BAD.fillColor(), if (isPersian) "زیر ${f.percent(10.0)}" else "< ${f.percent(10.0)}")
+        LegendDot(IndicatorTone.WARNING.fillColor(), "${f.int(10)}–${f.percent(20.0)}")
+        LegendDot(IndicatorTone.GOOD.fillColor(), if (isPersian) "بالای ${f.percent(20.0)}" else "> ${f.percent(20.0)}")
     }
 }
 
 @Composable
 private fun LegendDot(color: Color, text: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Box(Modifier.size(7.dp).background(color, CircleShape))
+        Box(Modifier.size(8.dp).background(color, CircleShape))
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
@@ -675,6 +770,7 @@ private fun BurnRateCard(isPersian: Boolean, f: IndicatorFormat, data: Financial
     val b = data.burn
     val noun = periodNoun(data.window.kind, isPersian)
     val primary = MaterialTheme.colorScheme.primary
+    val brandText = brandTextColor()
 
     IndicatorCard {
         CardHeader(
@@ -719,7 +815,7 @@ private fun BurnRateCard(isPersian: Boolean, f: IndicatorFormat, data: Financial
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .background(primary.copy(alpha = 0.08f))
+                    .background(primary.copy(alpha = 0.10f))
                     .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -732,7 +828,7 @@ private fun BurnRateCard(isPersian: Boolean, f: IndicatorFormat, data: Financial
                     text = f.amount(projected),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = primary
+                    color = brandText
                 )
                 b.projectedVsPreviousPercent?.let { p ->
                     val up = p > 0
@@ -749,8 +845,9 @@ private fun BurnRateCard(isPersian: Boolean, f: IndicatorFormat, data: Financial
                 if (b.lowConfidence) {
                     Text(
                         text = if (isPersian) "در روزهای اول، پیش‌بینی کم‌دقت است." else "Early in the period, the forecast is less reliable.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = IndicatorAmber
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = IndicatorTone.WARNING.color()
                     )
                 }
             }
@@ -862,7 +959,7 @@ private fun ChangeTile(label: String, m: ChangeMetric, f: IndicatorFormat, isPer
         Text(
             text = (if (isPersian) "قبل: " else "Prev: ") + f.compact(m.previous),
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center
@@ -920,9 +1017,9 @@ private fun BudgetAdherenceCard(isPersian: Boolean, f: IndicatorFormat, budget: 
                 if (budget.atRisk > 0) {
                     Text(
                         text = if (isPersian) "${f.int(budget.atRisk)} سقف در معرض خطر" else "${budget.atRisk} at risk",
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = IndicatorAmber
+                        color = IndicatorTone.WARNING.color()
                     )
                 }
             }
@@ -945,7 +1042,7 @@ private fun BudgetAdherenceCard(isPersian: Boolean, f: IndicatorFormat, budget: 
             text = if (isPersian) "خط عمودی روی نوار، زمان سپری‌شده‌ی سقف است."
             else "The vertical line on each bar marks the elapsed time.",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -954,6 +1051,7 @@ private fun BudgetAdherenceCard(isPersian: Boolean, f: IndicatorFormat, budget: 
 private fun LimitRow(p: LimitProgress, f: IndicatorFormat, isPersian: Boolean) {
     val tone = p.status.tone()
     val color = tone.color()
+    val fillColor = tone.fillColor()
     val name = StringMapper.getCategoryName(p.categoryTitle, isPersian)
     val statusText = when (p.status) {
         LimitStatus.EXCEEDED -> if (isPersian) "رد شده" else "Exceeded"
@@ -979,7 +1077,7 @@ private fun LimitRow(p: LimitProgress, f: IndicatorFormat, isPersian: Boolean) {
         }
         ProgressTrack(
             fraction = p.usedFraction.toFloat(),
-            color = color,
+            color = fillColor,
             marker = if (p.isFinished) null else p.elapsedFraction.toFloat()
         )
         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
@@ -1032,7 +1130,7 @@ private fun SavingGoalsCard(isPersian: Boolean, f: IndicatorFormat, goals: Savin
                 text = f.percent(goals.overallPercent),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.primary
+                color = brandTextColor()
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -1080,7 +1178,8 @@ private fun durationText(months: Int, f: IndicatorFormat): String {
 
 @Composable
 private fun GoalRow(g: GoalProgress, f: IndicatorFormat, isPersian: Boolean) {
-    val color = if (g.completed) IndicatorGreen else MaterialTheme.colorScheme.primary
+    val color = if (g.completed) IndicatorTone.GOOD.color() else brandTextColor()
+    val fillColor = if (g.completed) IndicatorTone.GOOD.fillColor() else MaterialTheme.colorScheme.primary
 
     val eta: String = when {
         g.completed -> if (isPersian) "🎉 به هدف رسیده‌ای" else "🎉 Goal reached"
@@ -1122,7 +1221,7 @@ private fun GoalRow(g: GoalProgress, f: IndicatorFormat, isPersian: Boolean) {
                 color = color
             )
         }
-        ProgressTrack(fraction = (g.percent / 100.0).toFloat(), color = color)
+        ProgressTrack(fraction = (g.percent / 100.0).toFloat(), color = fillColor)
         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = eta,

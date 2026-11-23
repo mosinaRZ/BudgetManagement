@@ -19,6 +19,10 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -46,6 +50,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -71,7 +76,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ir.hamedan.budgetmanagement.R
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
+import ir.hamedan.budgetmanagement.data.draft.DraftStore
+import ir.hamedan.budgetmanagement.data.draft.DraftType
+import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.components.DraftsSection
 import ir.hamedan.budgetmanagement.utils.AppHapticType
 import ir.hamedan.budgetmanagement.utils.rememberAppHaptics
 import kotlinx.coroutines.delay
@@ -140,12 +149,16 @@ fun AddScreen(
     onCategoriesClick: () -> Unit = {},
     onLimitsClick: () -> Unit = {},
     onDebtClick: () -> Unit = {},
-    onAddTransactionClick: (isExpense: Boolean) -> Unit = {}
+    onAddTransactionClick: (isExpense: Boolean) -> Unit = {},
+    onResumeDraft: (DraftType) -> Unit = {}
 ) {
     val context = LocalContext.current
     val isPersian = remember { LocaleHelper.getLanguage(context) == "fa" }
     val scheme = MaterialTheme.colorScheme
     val haptic = rememberAppHaptics()
+
+    val drafts by DraftStore.drafts.collectAsState()
+    val currencyUnit by CurrencySharedPreferences.currencyFlow.collectAsState()
 
     var isAnimationActive by remember { mutableStateOf(false) }
     var consumedHighlightId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -196,19 +209,33 @@ fun AddScreen(
     ) {
         AuroraBackground()
 
-        Column(modifier = Modifier.fillMaxSize()) {
-            AddTopBar(isPersian = isPersian, onBackClick = {
-                haptic.perform(AppHapticType.Click)
-                onBackClick()
-            })
+        // محتوا زیر هدرِ شناور اسکرول می‌شود (مثل آنالیز، تراکنش‌ها و تنظیمات)؛ فاصله‌ی بالا = نوار وضعیت + هدر.
+        val headerClearance = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 12.dp + 72.dp + 12.dp
 
+        Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
-                    start = 24.dp, end = 24.dp, top = 12.dp, bottom = 32.dp
+                    start = 24.dp, end = 24.dp, top = headerClearance, bottom = 32.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                if (drafts.isNotEmpty()) {
+                    item(key = "drafts") {
+                        DraftsSection(
+                            drafts = drafts,
+                            isPersian = isPersian,
+                            currencyUnit = currencyUnit,
+                            onResume = { type ->
+                                haptic.perform(AppHapticType.Click)
+                                DraftStore.requestResume(type)
+                                onResumeDraft(type)
+                            },
+                            onDelete = { type -> DraftStore.discard(type) }
+                        )
+                    }
+                }
+
                 item(key = "transaction") {
                     val highlighted = isAnimationActive &&
                             (highlightId == "transaction" || highlightId == "buy" || highlightId == "sell")
@@ -251,6 +278,18 @@ fun AddScreen(
                     Spacer(Modifier.navigationBarsPadding())
                 }
             }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+            ) {
+                Spacer(modifier = Modifier.statusBarsPadding().padding(top = 12.dp))
+                AddTopBar(isPersian = isPersian, onBackClick = {
+                    haptic.perform(AppHapticType.Click)
+                    onBackClick()
+                })
+            }
         }
     }
 }
@@ -260,46 +299,60 @@ fun AddScreen(
 @Composable
 private fun AddTopBar(isPersian: Boolean, onBackClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    Row(
+    val capsule = RoundedCornerShape(24.dp)
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 24.dp, vertical = 8.dp)
     ) {
-        IconButton(
-            onClick = onBackClick,
+        Row(
             modifier = Modifier
-                .size(44.dp)
-                .background(scheme.surfaceVariant.copy(alpha = 0.75f), CircleShape)
-                .border(1.dp, scheme.outline.copy(alpha = 0.15f), CircleShape)
+                .fillMaxWidth()
+                .height(56.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = if (isPersian) "بازگشت" else "Back",
-                tint = scheme.onSurface
-            )
-        }
+            // دکمه‌ی بازگشت: همان کپسول ۵۶dpیِ دکمه‌ی فیلتر در آنالیز و تراکنش‌ها
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .background(scheme.surfaceVariant.copy(alpha = 0.75f), capsule)
+                    .border(1.dp, scheme.outline.copy(alpha = 0.15f), capsule)
+                    .clip(capsule),
+                contentAlignment = Alignment.Center
+            ) {
+                IconButton(onClick = onBackClick) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = if (isPersian) "بازگشت" else "Back",
+                        tint = scheme.onSurface
+                    )
+                }
+            }
 
-        Spacer(Modifier.width(14.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = if (isPersian) "افزودن و مدیریت" else "Add & Manage",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = scheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = if (isPersian) "همه‌چیز برای مدیریت پول شما، یک‌جا"
-                else "Everything for your money, in one place",
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            // کپسول عنوان
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .background(scheme.surfaceVariant.copy(alpha = 0.75f), capsule)
+                    .border(1.dp, scheme.outline.copy(alpha = 0.15f), capsule)
+                    .clip(capsule)
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = if (isPersian) "افزودن و مدیریت" else "Add & Manage",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = scheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         }
     }
 }

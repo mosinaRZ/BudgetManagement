@@ -28,7 +28,7 @@ class AnalyticsViewModel(
     private val nowMillisProvider: () -> Long = { System.currentTimeMillis() }
 ) : ViewModel() {
 
-    val selectedTimeFilter = MutableStateFlow(TimeFilter.ALL)
+    val selectedTimeFilter = MutableStateFlow(TimeFilter.WEEKLY)
     val isPersianState = MutableStateFlow(true)
     val isIncomeChartSelectedState = MutableStateFlow(false)
     val selectedTimeBucketIndex = MutableStateFlow<Int?>(null)

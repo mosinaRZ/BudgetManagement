@@ -35,6 +35,7 @@ class BudgetApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        ir.hamedan.budgetmanagement.data.draft.DraftStore.init(this)
         NotificationPreferences.ensureDefaultsInitialized(this)
         AppNotificationManager.createChannel(this)
         AppUsagePreferences.updateLastOpen(this)

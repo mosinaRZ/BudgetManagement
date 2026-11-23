@@ -1,5 +1,6 @@
 package ir.hamedan.budgetmanagement.ui.screens.analytics
 
+import ir.hamedan.budgetmanagement.ui.components.TimeFilterBar
 import ir.hamedan.budgetmanagement.ui.components.CountUpText
 import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
 import androidx.compose.animation.AnimatedVisibility
@@ -84,6 +85,12 @@ fun AnalyticsScreen(
 
     LaunchedEffect(isPersian) {
         analyticsViewModel.updateLocale(isPersian)
+    }
+
+    // هر بار که وارد صفحه‌ی آمار می‌شویم، فیلتر زمانی روی «هفتگی» است. این کار پیش از اولین خواندن state
+    // انجام می‌شود تا پیام «فیلتر زمانی تغییر کرد» برای این بازنشانیِ خودکار نمایش داده نشود.
+    remember(analyticsViewModel) {
+        analyticsViewModel.onTimeFilterChanged(TimeFilter.WEEKLY)
     }
 
     val uiState by analyticsViewModel.uiState.collectAsState()
@@ -195,19 +202,19 @@ fun AnalyticsScreen(
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding().padding(top = 12.dp))
 
-                AnalyticsTopBar(
-                    isPersian = isPersian,
-                    isFilterActive = uiState.isCustomRange,
-                    onFilterClick = { showAnalyticsFilterSheet = true }
-                )
+                AnalyticsTopBar(isPersian = isPersian)
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                TimeFilterSelector(
-                    selectedFilter = selectedFilter,
+                TimeFilterBar(
+                    labels = remember(isPersian) {
+                        TimeFilter.values().map { if (isPersian) it.titleFa else it.titleEn }
+                    },
+                    selectedIndex = if (uiState.isCustomRange) -1 else selectedFilter.ordinal,
                     isPersian = isPersian,
-                    isCustomRange = uiState.isCustomRange,
-                    onFilterSelected = { analyticsViewModel.onTimeFilterChanged(it) }
+                    isFilterActive = uiState.isCustomRange,
+                    onSelect = { analyticsViewModel.onTimeFilterChanged(TimeFilter.values()[it]) },
+                    onFilterClick = { showAnalyticsFilterSheet = true }
                 )
             }
 
@@ -549,12 +556,7 @@ private fun EmptyAnalyticsView(
 }
 
 @Composable
-private fun AnalyticsTopBar(
-    isPersian: Boolean,
-    isFilterActive: Boolean,
-    onFilterClick: () -> Unit
-) {
-    val smallShape = RoundedCornerShape(24.dp)
+private fun AnalyticsTopBar(isPersian: Boolean) {
     val centerShape = RoundedCornerShape(24.dp)
 
     Box(
@@ -562,111 +564,28 @@ private fun AnalyticsTopBar(
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 8.dp)
     ) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .height(56.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), centerShape)
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), centerShape)
+                .clip(centerShape)
+                .padding(horizontal = 12.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), centerShape)
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), centerShape)
-                    .clip(centerShape)
-                    .padding(horizontal = 12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (isPersian) "آنالیز و تحلیل مالی" else "Financial Analytics",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .background(
-                        if (isFilterActive) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
-                        smallShape
-                    )
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), smallShape)
-                    .clip(smallShape),
-                contentAlignment = Alignment.Center
-            ) {
-                IconButton(onClick = onFilterClick) {
-                    Icon(
-                        imageVector = Icons.Default.FilterList,
-                        contentDescription = if (isPersian) "فیلتر" else "Filter",
-                        tint = if (isFilterActive) MaterialTheme.colorScheme.onPrimaryContainer
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TimeFilterSelector(
-    selectedFilter: TimeFilter,
-    isPersian: Boolean,
-    isCustomRange: Boolean = false,
-    onFilterSelected: (TimeFilter) -> Unit
-) {
-    val shape = RoundedCornerShape(16.dp)
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), shape)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), shape)
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        val filters = remember { TimeFilter.values() }
-
-        filters.forEach { filter ->
-            val isSelected = !isCustomRange && filter == selectedFilter
-            val title = if (isPersian) filter.titleFa else filter.titleEn
-
-            val backgroundAlpha by animateFloatAsState(
-                targetValue = if (isSelected) 1f else 0f,
-                label = "TabBgAlpha"
+            Text(
+                text = if (isPersian) "آنالیز و تحلیل مالی" else "Financial Analytics",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(38.dp)
-                    .clip(shape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = backgroundAlpha * 0.15f))
-                    .border(
-                        width = 1.dp,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.Transparent,
-                        shape = shape
-                    )
-                    .clickable { onFilterSelected(filter) },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
-            }
         }
     }
 }
+
 
 private fun localizeInsightCategories(text: String, isPersian: Boolean): String {
     val categoryKeys = listOf(

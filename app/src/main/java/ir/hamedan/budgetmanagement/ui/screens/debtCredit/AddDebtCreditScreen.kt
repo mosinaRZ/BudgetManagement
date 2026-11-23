@@ -1,5 +1,10 @@
 package ir.hamedan.budgetmanagement.ui.screens.debtCredit
 
+import ir.hamedan.budgetmanagement.data.draft.DraftType
+import ir.hamedan.budgetmanagement.ui.components.DraftExitSheet
+import ir.hamedan.budgetmanagement.ui.components.DraftResumeSheet
+import ir.hamedan.budgetmanagement.ui.components.rememberDraftSession
+import ir.hamedan.budgetmanagement.ui.screens.draft.DraftCodecs
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -118,6 +123,11 @@ fun AddDebtCreditScreen(
             dueDay = DueDay.dayOfMonth(LocalDate.now(), isPersian)
         )
     }
+    val draft = rememberDraftSession(
+        type = DraftType.LOAN_RECORD,
+        snapshot = { DraftCodecs.loan(form, currencyUnit) },
+        restore = { DraftCodecs.applyLoan(form, it, currencyUnit) }
+    )
     var successSheet by remember { mutableStateOf<SuccessSheetContent?>(null) }
     var isSaving by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -209,6 +219,7 @@ fun AddDebtCreditScreen(
             forceDuplicateName = similarRecords.isNotEmpty(),
             onResult = { saved ->
                 if (saved) {
+                    draft.markCompleted()
                     successSheet = debtCreditAddedContent(
                         type = savedType,
                         personName = savedName,
@@ -226,6 +237,10 @@ fun AddDebtCreditScreen(
 
     BackHandler(enabled = form.step > STEP_AMOUNT && successSheet == null) {
         goTo(form.step - 1)
+    }
+
+    BackHandler(enabled = draft.shouldInterceptBack && form.step == STEP_AMOUNT && successSheet == null) {
+        draft.requestClose(onClose)
     }
 
     Box(
@@ -255,7 +270,7 @@ fun AddDebtCreditScreen(
                 accent = accent,
                 isPersian = isPersian,
                 totalSteps = TOTAL_STEPS,
-                onBack = { if (form.step == STEP_AMOUNT) onClose() else goTo(form.step - 1) }
+                onBack = { if (form.step == STEP_AMOUNT) draft.requestClose(onClose) else goTo(form.step - 1) }
             )
 
             AnimatedContent(
@@ -336,6 +351,9 @@ fun AddDebtCreditScreen(
                 .padding(bottom = 96.dp)
         )
     }
+
+    DraftResumeSheet(session = draft, isPersian = isPersian, currencyUnit = currencyUnit, onExit = onClose)
+    DraftExitSheet(session = draft, isPersian = isPersian)
 
     successSheet?.let { content ->
         SuccessBottomSheet(

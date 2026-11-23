@@ -1,5 +1,10 @@
 package ir.hamedan.budgetmanagement.ui.screens.goals
 
+import ir.hamedan.budgetmanagement.data.draft.DraftType
+import ir.hamedan.budgetmanagement.ui.components.DraftExitSheet
+import ir.hamedan.budgetmanagement.ui.components.DraftResumeSheet
+import ir.hamedan.budgetmanagement.ui.components.rememberDraftSession
+import ir.hamedan.budgetmanagement.ui.screens.draft.DraftCodecs
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -294,6 +299,13 @@ private fun GoalEditorContent(
         }
     }
 
+    val draft = rememberDraftSession(
+        type = DraftType.SAVING_GOAL,
+        enabled = !isEdit,
+        snapshot = { DraftCodecs.goal(form, currencyUnit) },
+        restore = { DraftCodecs.applyGoal(form, it, currencyUnit) }
+    )
+
     var successSheet by remember { mutableStateOf<SuccessSheetContent?>(null) }
     var isSaving by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -334,7 +346,7 @@ private fun GoalEditorContent(
         when {
             form.step != STEP_REVIEW && form.returnToReview -> goTo(STEP_REVIEW)
             form.step == STEP_REVIEW && isEdit -> onClose()
-            form.step == STEP_TITLE -> onClose()
+            form.step == STEP_TITLE -> draft.requestClose(onClose)
             form.step == STEP_AMOUNT && form.field == FIELD_MONTHLY -> form.field = FIELD_TARGET
             else -> goTo(form.step - 1)
         }
@@ -361,6 +373,7 @@ private fun GoalEditorContent(
         } else {
             viewModel.addGoal(title, target, monthly, icon) { saved ->
                 if (saved) {
+                    draft.markCompleted()
                     successSheet = goalCreatedContent(title, target, currencyUnit, isPersian)
                 } else {
                     isSaving = false
@@ -476,6 +489,9 @@ private fun GoalEditorContent(
                 .padding(bottom = 96.dp)
         )
     }
+
+    DraftResumeSheet(session = draft, isPersian = isPersian, currencyUnit = currencyUnit, onExit = onClose)
+    DraftExitSheet(session = draft, isPersian = isPersian)
 
     successSheet?.let { content ->
         SuccessBottomSheet(

@@ -56,6 +56,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import ir.hamedan.budgetmanagement.data.draft.DraftStore
+import ir.hamedan.budgetmanagement.data.draft.DraftType
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.data.security.AppLockPreferences
 import ir.hamedan.budgetmanagement.data.security.ScreenSecurity
@@ -797,6 +799,19 @@ class MainActivity : FragmentActivity() {
                     },
                     onAddTransactionClick = { isExpense ->
                         navController.navigate(AppRoute.AddTransaction(isExpense = isExpense))
+                    },
+                    // بازگشت به جریانِ ثبتِ ناتمام؛ خودِ صفحه پیش‌نویس را بدون پرسش بازیابی می‌کند.
+                    onResumeDraft = { type ->
+                        when (type) {
+                            DraftType.TRANSACTION -> navController.navigate(
+                                AppRoute.AddTransaction(isExpense = DraftStore.get(type)?.isExpense ?: true)
+                            )
+                            DraftType.LOAN_RECORD -> navController.navigate(AppRoute.AddLoanRecord)
+                            DraftType.CATEGORY_EXPENSE -> navController.navigate(AppRoute.CategoryEditor(isExpense = true))
+                            DraftType.CATEGORY_INCOME -> navController.navigate(AppRoute.CategoryEditor(isExpense = false))
+                            DraftType.BUDGET_LIMIT -> navController.navigate(AppRoute.AddBudgetLimit)
+                            DraftType.SAVING_GOAL -> navController.navigate(AppRoute.GoalEditor())
+                        }
                     }
                 )
             }

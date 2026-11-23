@@ -95,30 +95,80 @@ import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import ir.hamedan.budgetmanagement.utils.WebLinks
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.saveable.rememberSaveable
+import ir.hamedan.budgetmanagement.BuildConfig
+import ir.hamedan.budgetmanagement.data.local.models.UserEntity
+import ir.hamedan.budgetmanagement.data.share.TransactionShareFormatter
+import ir.hamedan.budgetmanagement.ui.components.AppConfirmDialog
+import ir.hamedan.budgetmanagement.ui.screens.profile.ProfileCompletion
+import kotlinx.coroutines.flow.flowOf
 
 enum class SettingsMenu {
     LANGUAGE, CURRENCY, SECURITY, EXPORT, ABOUT, NOTIFICATION, NONE
 }
 
-private data class SettingsSearchItem(
+/** یک مورد قابل‌جستجوی تنظیمات؛ همان متن در ردیف نمایش داده می‌شود تا جستجو و نمایش هرگز ناهماهنگ نشوند. */
+private data class SettingsEntry(
+    val id: String,
     val titleFa: String,
     val titleEn: String,
     val subtitleFa: String,
     val subtitleEn: String
-)
+) {
+    fun title(isPersian: Boolean) = if (isPersian) titleFa else titleEn
+    fun subtitle(isPersian: Boolean) = if (isPersian) subtitleFa else subtitleEn
+}
 
 private val ALL_SETTINGS_ITEMS = listOf(
-    SettingsSearchItem("پروفایل من", "My Profile", "اطلاعات شخصی و امنیت حساب", "Personal information and account security"),
-    SettingsSearchItem("ظاهر برنامه", "App Theme", "تغییر حالت تاریک و روشن", "Switch between Dark and Light mode"),
-    SettingsSearchItem("زبان برنامه", "App Language", "انتخاب زبان کاربری (فارسی / انگلیسی)", "Choose UI language (Persian / English)"),
-    SettingsSearchItem("واحد پولی", "Currency", "نمایش مبالغ بر اساس تومان یا ریال", "Display amounts in Toman or Rial"),
-    SettingsSearchItem("تنظیمات اعلان‌ها", "Notification Settings", "کنترل نحوه دریافت اعلان‌های برنامه", "Control how you receive app notifications"),
-    SettingsSearchItem("مدیریت دسته‌بندی‌ها", "Manage Categories", "ویرایش، حذف یا ایجاد دسته‌های خرید و فروش", "Edit, delete, or create transaction categories"),
-    SettingsSearchItem("امنیت برنامه", "App Security", "تنظیم رمز ورود و ویژگی‌های بیومتریک", "Configure passcode and biometric login"),
-    SettingsSearchItem("دستگاه‌های حساب", "Account Devices", "مدیریت دستگاه‌های متصل به حساب", "Manage devices connected to your account"),
-    SettingsSearchItem("دریافت اطلاعات و گزارش‌ها", "Export Data & Reports", "خروجی گرفتن از تراکنش‌ها در قالب PDF یا Excel", "Export transactions to PDF or Excel formats"),
-    SettingsSearchItem("درباره ما و پشتیبانی", "About Us & Support", "راه‌های ارتباطی و پشتیبانی", "Contact channels, WhatsApp & Support")
+    SettingsEntry("profile", "پروفایل من", "My Profile", "اطلاعات شخصی و امنیت حساب", "Personal information and account security"),
+    SettingsEntry("theme", "ظاهر برنامه", "App Theme", "تغییر حالت تاریک و روشن", "Switch between Dark and Light mode"),
+    SettingsEntry("language", "زبان برنامه", "App Language", "انتخاب زبان کاربری (فارسی / انگلیسی)", "Choose UI language (Persian / English)"),
+    SettingsEntry("currency", "واحد پولی", "Currency", "نمایش مبالغ بر اساس تومان یا ریال", "Display amounts in Toman or Rial"),
+    SettingsEntry("notifications", "تنظیمات اعلان‌ها", "Notification Settings", "کنترل نحوه دریافت اعلان‌های برنامه", "Control how you receive app notifications"),
+    SettingsEntry("categories", "مدیریت دسته‌بندی‌ها", "Manage Categories", "ویرایش، حذف یا ایجاد دسته‌های خرید و فروش", "Edit, delete, or create transaction categories"),
+    SettingsEntry("devices", "دستگاه‌های حساب", "Account Devices", "مدیریت دستگاه‌های متصل به حساب", "Manage devices connected to your account"),
+    SettingsEntry("biometric", "ورود با اثر انگشت", "Biometric Login", "باز کردن برنامه با اثر انگشت", "Unlock the app with your fingerprint"),
+    SettingsEntry("screenProtection", "محافظت از محتوای صفحه", "Screen content protection", "جلوگیری از اسکرین‌شات و نمایش محتوا در برنامه‌های اخیر", "Block screenshots and hide content in Recents"),
+    SettingsEntry("password", "تغییر گذرواژه", "Change Password", "گذرواژه ورود به حساب را عوض کنید", "Update your sign-in password"),
+    SettingsEntry("exportExcel", "خروجی Excel", "Excel export", "جدول قابل‌ویرایش از تراکنش‌ها (XLSX)", "An editable spreadsheet of your transactions (XLSX)"),
+    SettingsEntry("exportPdf", "خروجی PDF", "PDF report", "گزارش خوانا برای چاپ و اشتراک‌گذاری", "A readable report to print or share"),
+    SettingsEntry("backup", "پشتیبان‌گیری", "Backup", "نسخه‌ی رمزنگاری‌شده از تمام اطلاعات شما", "An encrypted copy of all your data"),
+    SettingsEntry("email", "ارسال ایمیل به پشتیبانی", "Email Support", "cidna.app@gmail.com", "cidna.app@gmail.com"),
+    SettingsEntry("whatsapp", "واتس‌اپ توسعه‌دهنده", "WhatsApp Contact", "گفتگوی مستقیم با توسعه‌دهنده", "Chat with the developer"),
+    SettingsEntry("twitter", "ایکس (توییتر)", "X (Twitter)", "@CidnaApp", "@CidnaApp"),
+    SettingsEntry("instagram", "اینستاگرام", "Instagram", "@cidnaapp", "@cidnaapp"),
+    SettingsEntry("privacy", "حریم خصوصی", "Privacy Policy", "نحوه‌ی نگهداری و استفاده از اطلاعات شما", "How your information is handled"),
+    SettingsEntry("securityPage", "امنیت و رمزنگاری", "Security & Encryption", "جزئیات رمزنگاری و امنیت داده‌ها", "Encryption and data-security details"),
+    SettingsEntry("terms", "قوانین و مقررات", "Terms of Service", "شرایط استفاده از برنامه", "Terms for using the app"),
+    SettingsEntry("licenses", "مجوزهای متن‌باز", "Open-source licenses", "کتابخانه‌های استفاده‌شده در برنامه", "Libraries used in the app"),
+    SettingsEntry("logout", "خروج از حساب کاربری", "Log Out", "خروج از این دستگاه", "Sign out of this device"),
+    SettingsEntry("deleteAccount", "حذف حساب کاربری", "Delete Account", "پاک‌کردن دائمی حساب و داده‌ها", "Permanently erase your account and data")
 )
+
+private val SETTINGS_ENTRY_BY_ID = ALL_SETTINGS_ITEMS.associateBy { it.id }
+
+private const val SHEET_THEME = "theme"
+private const val SHEET_LANGUAGE = "language"
+private const val SHEET_CURRENCY = "currency"
+private const val SHEET_NOTIFICATIONS = "notifications"
+
+/** فهرست ردیف‌هایی که جستجو نشانشان می‌دهد؛ جفت‌های `(قابل‌نمایش؟, ردیف)`. */
+private fun settingsRows(vararg entries: Pair<Boolean, @Composable () -> Unit>): List<@Composable () -> Unit> =
+    entries.filter { it.first }.map { it.second }
+
+private fun initialsOf(first: String, last: String, isPersian: Boolean): String {
+    val a = first.trim().firstOrNull { it.isLetter() }
+    val b = last.trim().firstOrNull { it.isLetter() }
+    // نیم‌فاصله مانع چسبیدن دو حرف فارسی به هم می‌شود.
+    return listOfNotNull(a, b).joinToString(if (isPersian) "\u200C" else "") { it.uppercase() }
+}
+
+private fun maskedPhone(phone: String, isPersian: Boolean): String {
+    if (phone.length < 7) return phone
+    val masked = phone.take(4) + " ••• " + phone.takeLast(3)
+    // LRM: ارقام و نقطه‌ها در چیدمان راست‌به‌چپ هم به ترتیب درست نمایش داده می‌شوند.
+    return "\u200E" + if (isPersian) TransactionShareFormatter.toPersianDigits(masked) else masked
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -139,7 +189,7 @@ fun SettingsScreen(
 
     var searchQuery by remember { mutableStateOf("") }
     var isSearchExpanded by remember { mutableStateOf(false) }
-    var activeMenu by remember { mutableStateOf(SettingsMenu.NONE) }
+    var activeSheet by rememberSaveable { mutableStateOf<String?>(null) }
 
     val app = context.applicationContext as BudgetApp
     // Guest mode has its own passcode and fingerprint, separate from the account's.
@@ -167,14 +217,13 @@ fun SettingsScreen(
     var showBiometricPasswordDialog by remember { mutableStateOf(false) }
     var biometricSetupError by remember { mutableStateOf<String?>(null) }
     val rememberedLoginStore = remember(context) { RememberedLoginStore(context) }
-    var showThemeBottomSheet by remember { mutableStateOf(false) }
     var themeMode by remember(context) { mutableStateOf(ThemePreferences.getThemeMode(context)) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showDeleteAccountDialog by remember { mutableStateOf(false) }
 
-    // به‌روزرسانی مقدار تم در بدو باز شدن باتم‌شیت
-    LaunchedEffect(showThemeBottomSheet) {
-        if (showThemeBottomSheet) {
+    // به‌روزرسانی مقدار تم در بدو باز شدن شیت
+    LaunchedEffect(activeSheet) {
+        if (activeSheet == SHEET_THEME) {
             themeMode = ThemePreferences.getThemeMode(context)
         }
     }
@@ -183,26 +232,61 @@ fun SettingsScreen(
     var currentCurrencyCode by remember(context) {
         mutableStateOf(CurrencySharedPreferences.getCurrency(context))
     }
+    var notifMode by remember { mutableStateOf(NotificationPreferences.getMode(context)) }
 
     var showExportSheet by remember { mutableStateOf(false) }
     var exportFormat by remember { mutableStateOf<ExportFormat?>(null) } // PDF یا XLSX
     val exportScope = rememberCoroutineScope()
     val settingsSnackbarHostState = remember { SnackbarHostState() }
 
-    fun matchesSearch(titleFa: String, titleEn: String, subtitleFa: String, subtitleEn: String): Boolean {
-        if (searchQuery.isBlank()) return true
-        val query = searchQuery.trim()
-        val targetTitle = if (isPersian) titleFa else titleEn
-        val targetSubtitle = if (isPersian) subtitleFa else subtitleEn
-        return targetTitle.contains(query, ignoreCase = true) ||
-                targetSubtitle.contains(query, ignoreCase = true)
+    // ─── پروفایل برای کارت بالای صفحه (فقط خواندن از دیتابیس محلی؛ درخواست شبکه‌ای نمی‌زند) ───
+    val profileUserId = remember(context, isGuest) {
+        if (isGuest) GuestModeStore.GUEST_USER_ID else app.container.authSessionStore.userId()
     }
+    val profileFlow = remember(profileUserId) {
+        profileUserId?.takeIf { it.isNotBlank() }
+            ?.let { app.container.profileRepository.observeLocalProfile(it) }
+            ?: flowOf<UserEntity?>(null)
+    }
+    val profile by profileFlow.collectAsState(initial = null)
+
+    val hasBiometricHardware = remember(context) {
+        val biometricManager = BiometricManager.from(context)
+        val result = biometricManager.canAuthenticate(
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                    BiometricManager.Authenticators.BIOMETRIC_WEAK
+        )
+        result != BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE &&
+                result != BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE
+    }
+
+    val systemInDark = isSystemInDarkTheme()
+    val effectiveDark = when (themeMode) {
+        ThemePreferences.MODE_DARK -> true
+        ThemePreferences.MODE_LIGHT -> false
+        else -> systemInDark
+    }
+    val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+    fun matchesSearch(id: String): Boolean {
+        if (searchQuery.isBlank()) return true
+        val entry = SETTINGS_ENTRY_BY_ID[id] ?: return false
+        val query = normalizeForSearch(searchQuery)
+        return normalizeForSearch(entry.title(isPersian)).contains(query) ||
+                normalizeForSearch(entry.subtitle(isPersian)).contains(query)
+    }
+
+    fun visible(id: String): Boolean = matchesSearch(id)
 
     // آیا هیچ آیتمی با جستجوی فعلی مطابقت دارد؟
     val hasAnyMatch = remember(searchQuery, isPersian) {
         if (searchQuery.isBlank()) true
-        else ALL_SETTINGS_ITEMS.any { item ->
-            matchesSearch(item.titleFa, item.titleEn, item.subtitleFa, item.subtitleEn)
+        else {
+            val query = normalizeForSearch(searchQuery)
+            ALL_SETTINGS_ITEMS.any { item ->
+                normalizeForSearch(item.title(isPersian)).contains(query) ||
+                        normalizeForSearch(item.subtitle(isPersian)).contains(query)
+            }
         }
     }
 
@@ -210,19 +294,388 @@ fun SettingsScreen(
         if (!hasAnyMatch) findSuggestion(searchQuery, isPersian) else null
     }
 
+    fun title(id: String) = SETTINGS_ENTRY_BY_ID.getValue(id).title(isPersian)
+    fun subtitle(id: String) = SETTINGS_ENTRY_BY_ID.getValue(id).subtitle(isPersian)
+
+    // ─── منطق روشن/خاموش‌کردن اثر انگشت (بدون تغییر نسبت به قبل) ───
+    val onBiometricToggle: (Boolean) -> Unit = { targetChecked ->
+
+        val activity = context as? FragmentActivity
+        if (isGuest) {
+            biometricSetupError = null
+            when {
+                activity == null -> biometricSetupError = if (isPersian) "امکان احراز هویت در این صفحه وجود ندارد." else "Biometric authentication is unavailable on this screen."
+                !targetChecked -> BiometricPromptManager.showBiometricPrompt(
+                    activity = activity,
+                    onSuccess = {
+                        guestStore.disableBiometric()
+                        isBiometricEnabled = false
+                    }
+                )
+                !guestStore.hasPasscode() -> {
+                    // Fingerprint needs a passcode to fall back on, so set that first.
+                    biometricSetupError = if (isPersian) "ابتدا گذرواژه مهمان را تعیین کنید؛ سپس اثر انگشت را فعال کنید." else "Set a guest passcode first, then enable fingerprint."
+                    showChangePasswordDialog = true
+                }
+                else -> enrollGuestBiometric(activity, guestStore, isPersian) { ok, error ->
+                    isBiometricEnabled = guestStore.isBiometricEnabled()
+                    biometricSetupError = error
+                }
+            }
+        } else if (activity == null) {
+            biometricSetupError = if (isPersian) "امکان احراز هویت در این صفحه وجود ندارد." else "Biometric authentication is unavailable on this screen."
+        } else if (!targetChecked) {
+            // خاموش کردن فقط پس از احراز هویت انجام می‌شود تا تغییر تنظیم امنیتی بدون تأیید کاربر ممکن نباشد.
+            BiometricPromptManager.showBiometricPrompt(
+                activity = activity,
+                onSuccess = {
+                    isBiometricEnabled = false
+                    SharedPreferences.setBiometricEnabled(context, false)
+                    NotificationHelper.send(
+                        context = context,
+                        notificationType = NotificationType.SETTINGS_CHANGED,
+                        type = "SYSTEM",
+                        titleFa = "تنظیمات به‌روزرسانی شد",
+                        titleEn = "Settings Updated",
+                        descFa = "ورود با اثر انگشت غیرفعال شد.",
+                        descEn = "Biometric login has been disabled.",
+                        tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
+                    )
+                }
+            )
+        } else {
+            // اگر Credential قبلاً ساخته شده باشد فقط تأیید بیومتریک لازم است.
+            // در غیر این صورت ابتدا رمز محلی بررسی و سپس Credential در Keystore ساخته می‌شود.
+            biometricSetupError = null
+            if (rememberedLoginStore.hasBiometricCredential() && rememberedLoginStore.canUseStrongBiometric()) {
+                BiometricPromptManager.showBiometricPrompt(
+                    activity = activity,
+                    onSuccess = {
+                        isBiometricEnabled = true
+                        SharedPreferences.setBiometricEnabled(context, true)
+                        NotificationHelper.send(
+                            context = context,
+                            notificationType = NotificationType.SETTINGS_CHANGED,
+                            type = "SYSTEM",
+                            titleFa = "ورود با اثر انگشت فعال شد",
+                            titleEn = "Biometric login enabled",
+                            descFa = "از این پس می‌توانید بدون وارد کردن رمز عبور وارد شوید.",
+                            descEn = "You can now unlock the app without typing your password.",
+                            tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
+                        )
+                    }
+                )
+            } else {
+                showBiometricPasswordDialog = true
+            }
+        }
+    }
+
+    // ─── ردیف‌های هر گروه ───
+    val prefRows = settingsRows(
+        visible("theme") to @Composable {
+            SettingsRow(
+                title = title("theme"),
+                subtitle = subtitle("theme"),
+                icon = if (effectiveDark) Icons.Default.DarkMode else Icons.Default.WbSunny,
+                accent = SettingsAccent.VIOLET,
+                onClick = { activeSheet = SHEET_THEME },
+                trailing = { SettingsValueTrailing(if (effectiveDark) (if (isPersian) "تاریک" else "Dark") else (if (isPersian) "روشن" else "Light")) }
+            )
+        },
+        visible("language") to @Composable {
+            SettingsRow(
+                title = title("language"),
+                subtitle = subtitle("language"),
+                icon = Icons.Default.Language,
+                accent = SettingsAccent.SKY,
+                onClick = { activeSheet = SHEET_LANGUAGE },
+                trailing = { SettingsValueTrailing(if (isPersian) "فارسی" else "English") }
+            )
+        },
+        visible("currency") to @Composable {
+            SettingsRow(
+                title = title("currency"),
+                subtitle = subtitle("currency"),
+                iconRes = R.drawable.ic_currency,
+                accent = SettingsAccent.AMBER,
+                onClick = { activeSheet = SHEET_CURRENCY },
+                trailing = {
+                    SettingsValueTrailing(
+                        if (currentCurrencyCode == "IRR") (if (isPersian) "ریال" else "Rial") else (if (isPersian) "تومان" else "Toman")
+                    )
+                }
+            )
+        },
+        visible("notifications") to @Composable {
+            SettingsRow(
+                title = title("notifications"),
+                subtitle = subtitle("notifications"),
+                icon = Icons.Default.Notifications,
+                accent = SettingsAccent.ROSE,
+                onClick = { activeSheet = SHEET_NOTIFICATIONS },
+                trailing = {
+                    SettingsValueTrailing(
+                        if (notifMode == NotificationPreferences.MODE_IN_APP) (if (isPersian) "درون‌برنامه" else "In-app")
+                        else (if (isPersian) "برنامه + سیستم" else "App + system")
+                    )
+                }
+            )
+        }
+    )
+
+    val manageRows = settingsRows(
+        visible("categories") to @Composable {
+            SettingsRow(
+                title = title("categories"),
+                subtitle = subtitle("categories"),
+                iconRes = R.drawable.ic_category,
+                accent = SettingsAccent.TEAL,
+                onClick = { onAddScreenClick() },
+                trailing = { SettingsChevron() }
+            )
+        },
+        visible("devices") to @Composable {
+            SettingsRow(
+                title = title("devices"),
+                subtitle = subtitle("devices"),
+                icon = Icons.Default.Devices,
+                accent = SettingsAccent.INDIGO,
+                onClick = onDevicesClick,
+                trailing = { SettingsChevron() }
+            )
+        }
+    )
+
+    val securityRows = settingsRows(
+        (hasBiometricHardware && visible("biometric")) to @Composable {
+            SettingsSwitchRow(
+                title = title("biometric"),
+                subtitle = subtitle("biometric"),
+                icon = Icons.Default.Fingerprint,
+                accent = SettingsAccent.TEAL,
+                checked = isBiometricEnabled,
+                onCheckedChange = onBiometricToggle
+            )
+        },
+        visible("screenProtection") to @Composable {
+            SettingsSwitchRow(
+                title = title("screenProtection"),
+                subtitle = subtitle("screenProtection"),
+                icon = Icons.Default.VisibilityOff,
+                accent = SettingsAccent.INDIGO,
+                checked = isScreenProtected,
+                onCheckedChange = { target ->
+                    isScreenProtected = target
+                    ScreenSecurity.setEnabled(context, target)
+                }
+            )
+        },
+        visible("password") to @Composable {
+            SettingsRow(
+                title = if (isGuest) (if (isPersian) "گذرواژه مهمان" else "Guest passcode") else title("password"),
+                subtitle = if (isGuest) (if (isPersian) "تعیین یا تغییر گذرواژه‌ی حالت مهمان" else "Set or change the guest passcode") else subtitle("password"),
+                icon = Icons.Default.Password,
+                accent = SettingsAccent.AMBER,
+                onClick = { showChangePasswordDialog = true },
+                trailing = { SettingsChevron() }
+            )
+        }
+    )
+
+    val dataRows = settingsRows(
+        visible("exportExcel") to @Composable {
+            SettingsRow(
+                title = title("exportExcel"),
+                subtitle = subtitle("exportExcel"),
+                icon = Icons.Default.TableChart,
+                accent = SettingsAccent.TEAL,
+                onClick = {
+                    exportFormat = ExportFormat.XLSX
+                    showExportSheet = true
+                },
+                trailing = { SettingsChevron() }
+            )
+        },
+        visible("exportPdf") to @Composable {
+            SettingsRow(
+                title = title("exportPdf"),
+                subtitle = subtitle("exportPdf"),
+                icon = Icons.Default.PictureAsPdf,
+                accent = SettingsAccent.ROSE,
+                onClick = {
+                    exportFormat = ExportFormat.PDF
+                    showExportSheet = true
+                },
+                trailing = { SettingsChevron() }
+            )
+        },
+        // Backup is a guest-only feature: guest data lives only on this phone.
+        // An account's data is stored (encrypted) on the server and comes back
+        // after sign-in, so signed-in users get no local backup at all.
+        (isGuest && visible("backup")) to @Composable {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                SettingsGroupLabel(
+                    title = title("backup"),
+                    subtitle = subtitle("backup")
+                )
+                LocalBackupButtons(
+                    snackbarHostState = settingsSnackbarHostState,
+                    isPersian = isPersian
+                )
+            }
+        }
+    )
+
+    val supportRows = settingsRows(
+        visible("email") to @Composable {
+            SettingsRow(
+                title = title("email"),
+                subtitle = subtitle("email"),
+                iconRes = R.drawable.ic_gmail,
+                tint = settingsBrandColor(Color(0xFFC5221F), Color(0xFFFF8A80)),
+                onClick = {
+                    val email = "cidna.app@gmail.com"
+                    val intent = Intent(Intent.ACTION_SENDTO).apply {
+                        data = Uri.parse("mailto:$email")
+                        setPackage("com.google.android.gm")
+                    }
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        val fallbackIntent = Intent(Intent.ACTION_SENDTO).apply {
+                            data = Uri.parse("mailto:$email")
+                        }
+                        try {
+                            context.startActivity(Intent.createChooser(fallbackIntent, if (isPersian) "ارسال ایمیل" else "Send Email"))
+                        } catch (e2: Exception) {
+                            exportScope.launch {
+                                settingsSnackbarHostState.showError(
+                                    if (isPersian) "برنامه‌ای برای ارسال ایمیل پیدا نشد."
+                                    else "No app found to send an email."
+                                )
+                            }
+                        }
+                    }
+                },
+                trailing = { SettingsChevron() }
+            )
+        },
+        visible("whatsapp") to @Composable {
+            SettingsRow(
+                title = title("whatsapp"),
+                subtitle = subtitle("whatsapp"),
+                iconRes = R.drawable.ic_whatsapp,
+                tint = settingsBrandColor(Color(0xFF128C7E), Color(0xFF25D366)),
+                onClick = { openUrl(context, "https://wa.me/989180500841") },
+                trailing = { SettingsChevron() }
+            )
+        },
+        visible("twitter") to @Composable {
+            SettingsRow(
+                title = title("twitter"),
+                subtitle = subtitle("twitter"),
+                iconRes = R.drawable.ic_x,
+                tint = MaterialTheme.colorScheme.onSurface,
+                onClick = { openUrl(context, "https://twitter.com/CidnaApp") },
+                trailing = { SettingsChevron() }
+            )
+        },
+        visible("instagram") to @Composable {
+            SettingsRow(
+                title = title("instagram"),
+                subtitle = subtitle("instagram"),
+                iconRes = R.drawable.ic_instagram,
+                tint = settingsBrandColor(Color(0xFFD6005B), Color(0xFFFF6FA5)),
+                onClick = { openUrl(context, "https://www.instagram.com/cidnaapp") },
+                trailing = { SettingsChevron() }
+            )
+        }
+    )
+
+    // Legal and security pages come from the official website (same text as the store listings),
+    // shown in a Custom Tab with the app's light/dark scheme.
+    val legalRows = settingsRows(
+        visible("privacy") to @Composable {
+            SettingsRow(
+                title = title("privacy"),
+                subtitle = subtitle("privacy"),
+                iconRes = R.drawable.ic_legal,
+                accent = SettingsAccent.SLATE,
+                onClick = { WebLinks.open(context, WebLinks.Page.PRIVACY, isPersian, darkTheme) },
+                trailing = { SettingsChevron() }
+            )
+        },
+        visible("securityPage") to @Composable {
+            SettingsRow(
+                title = title("securityPage"),
+                subtitle = subtitle("securityPage"),
+                iconRes = R.drawable.ic_legal,
+                accent = SettingsAccent.SLATE,
+                onClick = { WebLinks.open(context, WebLinks.Page.SECURITY, isPersian, darkTheme) },
+                trailing = { SettingsChevron() }
+            )
+        },
+        visible("terms") to @Composable {
+            SettingsRow(
+                title = title("terms"),
+                subtitle = subtitle("terms"),
+                iconRes = R.drawable.ic_legal,
+                accent = SettingsAccent.SLATE,
+                onClick = { WebLinks.open(context, WebLinks.Page.TERMS, isPersian, darkTheme) },
+                trailing = { SettingsChevron() }
+            )
+        },
+        visible("licenses") to @Composable {
+            SettingsRow(
+                title = title("licenses"),
+                subtitle = subtitle("licenses"),
+                iconRes = R.drawable.ic_legal,
+                accent = SettingsAccent.SLATE,
+                onClick = { WebLinks.open(context, WebLinks.Page.LICENSES, isPersian, darkTheme) },
+                trailing = { SettingsChevron() }
+            )
+        }
+    )
+
+    val dangerRows = settingsRows(
+        visible("logout") to @Composable {
+            SettingsRow(
+                title = if (isGuest) (if (isPersian) "خروج از حالت مهمان" else "Leave guest mode") else title("logout"),
+                subtitle = if (isGuest) (if (isPersian) "بازگشت به صفحه‌ی ورود" else "Return to the sign-in screen") else subtitle("logout"),
+                icon = Icons.Default.Logout,
+                accent = SettingsAccent.DANGER,
+                titleColor = MaterialTheme.colorScheme.error,
+                onClick = { showLogoutDialog = true }
+            )
+        },
+        visible("deleteAccount") to @Composable {
+            SettingsRow(
+                title = if (isGuest) (if (isPersian) "حذف داده‌های مهمان" else "Delete guest data") else title("deleteAccount"),
+                subtitle = if (isGuest) (if (isPersian) "پاک‌کردن دائمی همه‌ی اطلاعات این گوشی" else "Permanently erase everything on this phone") else subtitle("deleteAccount"),
+                icon = Icons.Default.DeleteForever,
+                accent = SettingsAccent.DANGER,
+                titleColor = MaterialTheme.colorScheme.error,
+                onClick = { showDeleteAccountDialog = true }
+            )
+        }
+    )
+
     Box(modifier = Modifier.fillMaxSize()) {
         AuroraBackground()
 
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
             contentPadding = PaddingValues(top = 75.dp, bottom = 130.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             item {
                 Spacer(modifier = Modifier.statusBarsPadding().height(5.dp))
             }
 
-            // داخل LazyColumn، بعد از Spacer اول:
             if (suggestion != null) {
                 item {
                     Row(
@@ -231,14 +684,14 @@ fun SettingsScreen(
                             .clip(RoundedCornerShape(14.dp))
                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
                             .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f), RoundedCornerShape(14.dp))
-                            .clickable { searchQuery = suggestion!! }
+                            .clickable { searchQuery = suggestion }
                             .padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Default.Lightbulb,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = settingsBrandText(),
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
@@ -248,7 +701,7 @@ fun SettingsScreen(
                             else
                                 "Did you mean \"$suggestion\"?",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = settingsBrandText(),
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -275,7 +728,7 @@ fun SettingsScreen(
                             Icon(
                                 imageVector = Icons.Default.SearchOff,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = settingsBrandText(),
                                 modifier = Modifier.size(28.dp)
                             )
                         }
@@ -304,542 +757,94 @@ fun SettingsScreen(
                 }
             }
 
-            // پروفایل کاربر
-            if (matchesSearch("پروفایل من", "My Profile", "اطلاعات شخصی و امنیت حساب", "Personal information and account security")) {
-                item {
-                    SettingsSimpleItem(
-                        title = if (isPersian) "پروفایل من" else "My Profile",
-                        subtitle = if (isPersian) "اطلاعات شخصی و امنیت حساب" else "Personal information and account security",
-                        icon = Icons.Default.AccountCircle,
+            // کارت پروفایل
+            if (visible("profile")) {
+                item(key = "hero") {
+                    val user = profile
+                    val displayName = user?.let {
+                        it.fullName.ifBlank { "${it.firstName} ${it.lastName}".trim() }
+                    }.orEmpty().ifBlank {
+                        if (isGuest) (if (isPersian) "کاربر مهمان" else "Guest user")
+                        else (if (isPersian) "کاربر سیدنا" else "Cidna user")
+                    }
+                    SettingsProfileHero(
+                        isPersian = isPersian,
+                        isGuest = isGuest,
+                        name = displayName,
+                        subtitle = if (isGuest) {
+                            if (isPersian) "داده‌ها فقط روی همین گوشی ذخیره می‌شوند" else "Your data stays on this phone only"
+                        } else {
+                            user?.phoneNumber?.takeIf { it.isNotBlank() }?.let { maskedPhone(it, isPersian) }
+                                ?: subtitle("profile")
+                        },
+                        initials = user?.let { initialsOf(it.firstName, it.lastName, isPersian) }.orEmpty(),
+                        completionPercent = if (isGuest) null else user?.let { ProfileCompletion.of(it).percent },
                         onClick = onProfileClick
                     )
                 }
             }
 
-            // ظاهر برنامه
-            if (matchesSearch("ظاهر برنامه", "App Theme", "تغییر حالت تاریک و روشن", "Switch between Dark and Light mode")) {
-                item {
-                    SettingsSimpleItem(
-                        title = if (isPersian) "ظاهر برنامه" else "App Theme",
-                        subtitle = if (isPersian) "تغییر حالت تاریک و روشن" else "Switch between Dark and Light mode",
-                        icon = Icons.Default.DarkMode,
-                        onClick = { showThemeBottomSheet = true }
+            if (prefRows.isNotEmpty()) {
+                item(key = "prefs") {
+                    SettingsGroup(
+                        rows = prefRows,
+                        title = if (isPersian) "شخصی‌سازی" else "Personalization"
+                    )
+                }
+            }
+            if (manageRows.isNotEmpty()) {
+                item(key = "manage") {
+                    SettingsGroup(
+                        rows = manageRows,
+                        title = if (isPersian) "مدیریت" else "Manage"
+                    )
+                }
+            }
+            if (securityRows.isNotEmpty()) {
+                item(key = "security") {
+                    SettingsGroup(
+                        rows = securityRows,
+                        title = if (isPersian) "امنیت و حریم خصوصی" else "Security & Privacy"
+                    )
+                }
+            }
+            if (dataRows.isNotEmpty()) {
+                item(key = "data") {
+                    SettingsGroup(
+                        rows = dataRows,
+                        title = if (isPersian) "داده‌ها و گزارش‌ها" else "Data & Reports"
+                    )
+                }
+            }
+            if (supportRows.isNotEmpty()) {
+                item(key = "support") {
+                    SettingsGroup(
+                        rows = supportRows,
+                        title = if (isPersian) "پشتیبانی و ارتباط با ما" else "Support & Contact"
+                    )
+                }
+            }
+            if (legalRows.isNotEmpty()) {
+                item(key = "legal") {
+                    SettingsGroup(
+                        rows = legalRows,
+                        title = if (isPersian) "قوانین و شفافیت" else "Legal & Transparency"
+                    )
+                }
+            }
+            if (dangerRows.isNotEmpty()) {
+                item(key = "danger") {
+                    SettingsGroup(
+                        rows = dangerRows,
+                        title = if (isPersian) "حساب کاربری" else "Account",
+                        danger = true
                     )
                 }
             }
 
-            // ۱. زبان برنامه
-            if (matchesSearch("زبان برنامه", "App Language", "انتخاب زبان کاربری (فارسی / انگلیسی)", "Choose UI language (Persian / English)")) {
-                item {
-                    SettingsAccordionItem(
-                        title = if (isPersian) "زبان برنامه" else "App Language",
-                        subtitle = if (isPersian) "انتخاب زبان کاربری (فارسی / انگلیسی)" else "Choose UI language (Persian / English)",
-                        icon = Icons.Default.Language,
-                        isExpanded = activeMenu == SettingsMenu.LANGUAGE,
-                        onClick = { activeMenu = if (activeMenu == SettingsMenu.LANGUAGE) SettingsMenu.NONE else SettingsMenu.LANGUAGE }
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            CurrencyOrLanguageOptionButton(
-                                title = "پارسی (FA)",
-                                isSelected = isPersian,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                LocaleHelper.setLocale(context, "fa")
-                                ir.hamedan.budgetmanagement.platform.locale.ShortcutsHelper.update(context)
-                                (context as? Activity)?.recreate()
-
-                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                    ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
-                                }
-                            }
-                            CurrencyOrLanguageOptionButton(
-                                title = "English (EN)",
-                                isSelected = !isPersian,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                LocaleHelper.setLocale(context, "en")
-                                ir.hamedan.budgetmanagement.platform.locale.ShortcutsHelper.update(context)
-                                (context as? Activity)?.recreate()
-
-                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                    ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ۲. واحد پولی (استفاده از ۲ دکمه به جای RadioButton)
-            if (matchesSearch("واحد پولی", "Currency", "نمایش مبالغ بر اساس تومان یا ریال", "Display amounts in Toman or Rial")) {
-                item {
-                    SettingsAccordionItem(
-                        title = if (isPersian) "واحد پولی" else "Currency",
-                        subtitle = if (isPersian) "نمایش مبالغ بر اساس تومان یا ریال" else "Display amounts in Toman or Rial",
-                        iconRes = R.drawable.ic_currency,
-                        isExpanded = activeMenu == SettingsMenu.CURRENCY,
-                        onClick = { activeMenu = if (activeMenu == SettingsMenu.CURRENCY) SettingsMenu.NONE else SettingsMenu.CURRENCY }
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            CurrencyOrLanguageOptionButton(
-                                title = if (isPersian) "تومان" else "Toman (IRT)",
-                                isSelected = currentCurrencyCode == "IRT",
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                currentCurrencyCode = "IRT"
-                                CurrencySharedPreferences.setCurrency(context, "IRT")
-                                onCurrencyChanged("IRT")
-
-                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                    ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
-                                }
-
-                                NotificationHelper.send(
-                                    context = context,
-                                    notificationType = NotificationType.SETTINGS_CHANGED,
-                                    type = "SYSTEM",
-                                    titleFa = "تنظیمات به‌روزرسانی شد",
-                                    titleEn = "Settings Updated",
-                                    descFa = "واحد پولی برنامه با موفقیت تغییر کرد.",
-                                    descEn = "Currency have been updated successfully.",
-                                    tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
-                                )
-                            }
-                            CurrencyOrLanguageOptionButton(
-                                title = if (isPersian) "ریال" else "Rial (IRR)",
-                                isSelected = currentCurrencyCode == "IRR",
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                currentCurrencyCode = "IRR"
-                                CurrencySharedPreferences.setCurrency(context, "IRR")
-                                onCurrencyChanged("IRR")
-
-                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                    ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
-                                }
-
-                                NotificationHelper.send(
-                                    context = context,
-                                    notificationType = NotificationType.SETTINGS_CHANGED,
-                                    type = "SYSTEM",
-                                    titleFa = "تنظیمات به‌روزرسانی شد",
-                                    titleEn = "Settings Updated",
-                                    descFa = "واحد پولی برنامه با موفقیت تغییر کرد.",
-                                    descEn = "Currency have been updated successfully.",
-                                    tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ۰. تنظیمات اعلان‌ها
-            if (matchesSearch("تنظیمات اعلان‌ها", "Notification Settings",
-                    "کنترل نحوه دریافت اعلان‌های برنامه", "Control how you receive app notifications")) {
-                item {
-                    var notifMode by remember {
-                        mutableStateOf(NotificationPreferences.getMode(context))
-                    }
-
-                    SettingsAccordionItem(
-                        title = if (isPersian) "تنظیمات اعلان‌ها" else "Notification Settings",
-                        subtitle = if (isPersian) "کنترل نحوه دریافت اعلان‌های برنامه"
-                        else "Control how you receive app notifications",
-                        icon = Icons.Default.Notifications,
-                        isExpanded = activeMenu == SettingsMenu.NOTIFICATION,
-                        onClick = { activeMenu = if (activeMenu == SettingsMenu.NOTIFICATION)
-                            SettingsMenu.NONE else SettingsMenu.NOTIFICATION }
-                    ) {
-                        fun selectMode(mode: String) {
-                            // انتخاب دوبارهٔ همان حالت نباید اعلان «تنظیمات به‌روزرسانی شد» بفرستد.
-                            if (notifMode == mode) return
-                            notifMode = mode
-                            NotificationPreferences.setMode(context, mode)
-                            NotificationHelper.send(
-                                context = context,
-                                notificationType = NotificationType.SETTINGS_CHANGED,
-                                type = "SYSTEM",
-                                titleFa = "تنظیمات به‌روزرسانی شد",
-                                titleEn = "Settings Updated",
-                                descFa = "نحوه ارسال اعلان برنامه با موفقیت تغییر کرد.",
-                                descEn = "Way of sending notification have been updated successfully.",
-                                tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
-                            )
-                        }
-
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            // گروه ۱: انتخاب «یکی از چند حالت» ← دایرهٔ انتخاب (Radio) نشان می‌دهد که فقط یکی فعال است
-                            SettingsGroupLabel(
-                                text = if (isPersian) "اعلان‌ها کجا نمایش داده شوند؟" else "Where should notifications appear?"
-                            )
-                            SettingsChoiceCard(
-                                title = if (isPersian) "فقط درون برنامه‌ای" else "In-App Only",
-                                description = if (isPersian) "اعلان‌ها فقط داخل برنامه و در بخش اعلان‌ها نمایش داده می‌شوند"
-                                else "Notifications appear only inside the app",
-                                icon = Icons.Default.PhoneAndroid,
-                                isSelected = notifMode == NotificationPreferences.MODE_IN_APP,
-                                onClick = { selectMode(NotificationPreferences.MODE_IN_APP) }
-                            )
-                            SettingsChoiceCard(
-                                title = if (isPersian) "درون برنامه + سیستمی" else "In-App + System",
-                                description = if (isPersian) "علاوه بر برنامه، اعلان در نوار وضعیت گوشی هم نمایش داده می‌شود"
-                                else "Also shows alerts in your phone's notification shade",
-                                icon = Icons.Default.NotificationsActive,
-                                isSelected = notifMode == NotificationPreferences.MODE_BOTH,
-                                onClick = { selectMode(NotificationPreferences.MODE_BOTH) }
-                            )
-
-                            // گروه ۲: ورود به یک صفحهٔ جدید ← کارت جداگانه با فلش، متفاوت از گزینه‌های بالا
-                            SettingsGroupLabel(
-                                text = if (isPersian) "تنظیمات پیشرفته" else "Advanced",
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
-                            SettingsNavigationCard(
-                                title = if (isPersian) "شخصی‌سازی و مدیریت دقیق اعلان‌ها" else "Customize Notifications",
-                                description = if (isPersian) "هر نوع اعلان را جداگانه روشن یا خاموش کنید"
-                                else "Turn each notification type on or off",
-                                icon = Icons.Default.Tune,
-                                onClick = onNotificationCalibrationClick
-                            )
-                        }
-                    }
-                }
-            }
-
-            // ۳. مدیریت دسته‌بندی‌ها
-            if (matchesSearch("مدیریت دسته‌بندی‌ها", "Manage Categories", "ویرایش، حذف یا ایجاد دسته‌های خرید و فروش", "Edit, delete, or create transaction categories")) {
-                item {
-                    SettingsSimpleItem(
-                        title = if (isPersian) "مدیریت دسته‌بندی‌ها" else "Manage Categories",
-                        subtitle = if (isPersian) "ویرایش، حذف یا ایجاد دسته‌های خرید و فروش" else "Edit, delete, or create transaction categories",
-                        iconRes = R.drawable.ic_category,
-                        onClick = { onAddScreenClick() }
-                    )
-                }
-            }
-
-            if (matchesSearch("دستگاه‌های حساب", "Account Devices", "مدیریت دستگاه‌های متصل به حساب", "Manage devices connected to your account")) {
-                item {
-                    SettingsSimpleItem(
-                        title = if (isPersian) "دستگاه‌های حساب" else "Account Devices",
-                        subtitle = if (isPersian) "مدیریت دستگاه‌های متصل به حساب" else "Manage devices connected to your account",
-                        icon = Icons.Default.Devices,
-                        onClick = onDevicesClick
-                    )
-                }
-            }
-
-            // ۴. بخش امنیت
-            if (matchesSearch("امنیت برنامه", "App Security", "تنظیم رمز ورود و ویژگی‌های بیومتریک", "Configure passcode and biometric login")) {
-                item {
-                    val hasBiometricHardware = remember(context) {
-                        val biometricManager = BiometricManager.from(context)
-                        val result = biometricManager.canAuthenticate(
-                            BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                                    BiometricManager.Authenticators.BIOMETRIC_WEAK
-                        )
-                        result != BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE &&
-                                result != BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE
-                    }
-
-                    SettingsAccordionItem(
-                        title = if (isPersian) "امنیت برنامه" else "App Security",
-                        subtitle = if (isPersian) "تنظیم رمز ورود و ویژگی‌های بیومتریک" else "Configure passcode and biometric login",
-                        icon = Icons.Default.Lock,
-                        isExpanded = activeMenu == SettingsMenu.SECURITY,
-                        onClick = { activeMenu = if (activeMenu == SettingsMenu.SECURITY) SettingsMenu.NONE else SettingsMenu.SECURITY }
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            if (hasBiometricHardware) {
-                                SecuritySwitchRow(
-                                    title = if (isPersian) "ورود با اثر انگشت" else "Biometric Login",
-                                    icon = Icons.Default.Fingerprint,
-                                    checked = isBiometricEnabled,
-                                    onCheckedChange = { targetChecked ->
-                                        val activity = context as? FragmentActivity
-                                        if (isGuest) {
-                                            biometricSetupError = null
-                                            when {
-                                                activity == null -> biometricSetupError = if (isPersian) "امکان احراز هویت در این صفحه وجود ندارد." else "Biometric authentication is unavailable on this screen."
-                                                !targetChecked -> BiometricPromptManager.showBiometricPrompt(
-                                                    activity = activity,
-                                                    onSuccess = {
-                                                        guestStore.disableBiometric()
-                                                        isBiometricEnabled = false
-                                                    }
-                                                )
-                                                !guestStore.hasPasscode() -> {
-                                                    // Fingerprint needs a passcode to fall back on, so set that first.
-                                                    biometricSetupError = if (isPersian) "ابتدا گذرواژه مهمان را تعیین کنید؛ سپس اثر انگشت را فعال کنید." else "Set a guest passcode first, then enable fingerprint."
-                                                    showChangePasswordDialog = true
-                                                }
-                                                else -> enrollGuestBiometric(activity, guestStore, isPersian) { ok, error ->
-                                                    isBiometricEnabled = guestStore.isBiometricEnabled()
-                                                    biometricSetupError = error
-                                                }
-                                            }
-                                        } else if (activity == null) {
-                                            biometricSetupError = if (isPersian) "امکان احراز هویت در این صفحه وجود ندارد." else "Biometric authentication is unavailable on this screen."
-                                        } else if (!targetChecked) {
-                                            // خاموش کردن فقط پس از احراز هویت انجام می‌شود تا تغییر تنظیم امنیتی بدون تأیید کاربر ممکن نباشد.
-                                            BiometricPromptManager.showBiometricPrompt(
-                                                activity = activity,
-                                                onSuccess = {
-                                                    isBiometricEnabled = false
-                                                    SharedPreferences.setBiometricEnabled(context, false)
-                                                    NotificationHelper.send(
-                                                        context = context,
-                                                        notificationType = NotificationType.SETTINGS_CHANGED,
-                                                        type = "SYSTEM",
-                                                        titleFa = "تنظیمات به‌روزرسانی شد",
-                                                        titleEn = "Settings Updated",
-                                                        descFa = "ورود با اثر انگشت غیرفعال شد.",
-                                                        descEn = "Biometric login has been disabled.",
-                                                        tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
-                                                    )
-                                                }
-                                            )
-                                        } else {
-                                            // اگر Credential قبلاً ساخته شده باشد فقط تأیید بیومتریک لازم است.
-                                            // در غیر این صورت ابتدا رمز محلی بررسی و سپس Credential در Keystore ساخته می‌شود.
-                                            biometricSetupError = null
-                                            if (rememberedLoginStore.hasBiometricCredential() && rememberedLoginStore.canUseStrongBiometric()) {
-                                                BiometricPromptManager.showBiometricPrompt(
-                                                    activity = activity,
-                                                    onSuccess = {
-                                                        isBiometricEnabled = true
-                                                        SharedPreferences.setBiometricEnabled(context, true)
-                                                        NotificationHelper.send(
-                                                            context = context,
-                                                            notificationType = NotificationType.SETTINGS_CHANGED,
-                                                            type = "SYSTEM",
-                                                            titleFa = "ورود با اثر انگشت فعال شد",
-                                                            titleEn = "Biometric login enabled",
-                                                            descFa = "از این پس می‌توانید بدون وارد کردن رمز عبور وارد شوید.",
-                                                            descEn = "You can now unlock the app without typing your password.",
-                                                            tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
-                                                        )
-                                                    }
-                                                )
-                                            } else {
-                                                showBiometricPasswordDialog = true
-                                            }
-                                        }
-                                    }
-                                )
-                            }
-
-                            // Optional privacy protection. The preference is opt-in and applied live.
-                            SecuritySwitchRow(
-                                title = if (isPersian) "محافظت از محتوای صفحه" else "Screen content protection",
-                                subtitle = if (isPersian) "جلوگیری از اسکرین‌شات و نمایش محتوا در برنامه‌های اخیر" else "Block screenshots and hide content in Recents",
-                                icon = Icons.Default.VisibilityOff,
-                                checked = isScreenProtected,
-                                onCheckedChange = { target ->
-                                    isScreenProtected = target
-                                    ScreenSecurity.setEnabled(context, target)
-                                }
-                            )
-
-                            SecurityActionRow(
-                                title = if (isPersian) "تغییر گذرواژه حساب" else "Change Password",
-                                icon = Icons.Default.Password
-                            ) {
-                                showChangePasswordDialog = true
-                            }
-
-                            SecurityActionRow(
-                                title = if (isGuest) {
-                                    if (isPersian) "خروج از حالت مهمان" else "Leave guest mode"
-                                } else {
-                                    if (isPersian) "خروج از حساب کاربری" else "Log Out"
-                                },
-                                icon = Icons.Default.Logout,
-                                iconTint = MaterialTheme.colorScheme.error,
-                                titleColor = MaterialTheme.colorScheme.error
-                            ) {
-                                showLogoutDialog = true
-                            }
-
-                            SecurityActionRow(
-                                title = if (isGuest) {
-                                    if (isPersian) "حذف داده‌های مهمان" else "Delete guest data"
-                                } else {
-                                    if (isPersian) "حذف حساب کاربری" else "Delete Account"
-                                },
-                                icon = Icons.Default.DeleteForever,
-                                iconTint = MaterialTheme.colorScheme.error,
-                                titleColor = MaterialTheme.colorScheme.error
-                            ) {
-                                showDeleteAccountDialog = true
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ۵. دریافت داده‌ها
-            if (matchesSearch("دریافت اطلاعات و گزارش‌ها", "Export Data & Reports", "خروجی گرفتن از تراکنش‌ها در قالب PDF یا Excel", "Export transactions to PDF or Excel formats")) {
-                item {
-                    SettingsAccordionItem(
-                        title = if (isPersian) "دریافت اطلاعات و گزارش‌ها" else "Export Data & Reports",
-                        subtitle = if (isPersian) "خروجی گرفتن از تراکنش‌ها در قالب PDF یا Excel" else "Export transactions to PDF or Excel formats",
-                        icon = Icons.Default.Download,
-                        isExpanded = activeMenu == SettingsMenu.EXPORT,
-                        onClick = { activeMenu = if (activeMenu == SettingsMenu.EXPORT) SettingsMenu.NONE else SettingsMenu.EXPORT }
-                    ) {
-                        // Column (not Box): the accordion hosts its content in a Box, so two
-                        // sibling blocks would be drawn on top of each other.
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            SettingsGroupLabel(
-                                title = if (isPersian) "گزارش‌ها" else "Reports",
-                                subtitle = if (isPersian) "خروجی خوانا از تراکنش‌ها برای چاپ و اشتراک‌گذاری"
-                                else "A readable copy of your transactions to print or share"
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                SettingsActionButton(
-                                    title = "Excel (XLSX)",
-                                    icon = Icons.Default.TableChart,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    exportFormat = ExportFormat.XLSX
-                                    showExportSheet = true
-                                }
-                                SettingsActionButton(
-                                    title = "PDF",
-                                    icon = Icons.Default.PictureAsPdf,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    exportFormat = ExportFormat.PDF
-                                    showExportSheet = true
-                                }
-                            }
-
-                            // Backup is a guest-only feature: guest data lives only on this phone.
-                            // An account's data is stored (encrypted) on the server and comes back
-                            // after sign-in, so signed-in users get no local backup at all.
-                            if (isGuest) {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(vertical = 4.dp),
-                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
-                                )
-
-                                SettingsGroupLabel(
-                                    title = if (isPersian) "پشتیبان‌گیری" else "Backup",
-                                    subtitle = if (isPersian) "نسخه‌ی رمزنگاری‌شده از تمام اطلاعات شما"
-                                    else "An encrypted copy of all your data"
-                                )
-                                LocalBackupButtons(
-                                    snackbarHostState = settingsSnackbarHostState,
-                                    isPersian = isPersian
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ۶. درباره ما
-            if (matchesSearch("درباره ما و پشتیبانی", "About Us & Support", "راه‌های ارتباطی، ایمیل و پشتیبانی", "Contact channels, email, WhatsApp & Support")) {
-                item {
-                    SettingsAccordionItem(
-                        title = if (isPersian) "درباره ما و پشتیبانی" else "About Us & Support",
-                        subtitle = if (isPersian) "راه‌های ارتباطی، ایمیل و پشتیبانی" else "Contact channels, email, WhatsApp & Support",
-                        icon = Icons.Default.Info,
-                        isExpanded = activeMenu == SettingsMenu.ABOUT,
-                        onClick = { activeMenu = if (activeMenu == SettingsMenu.ABOUT) SettingsMenu.NONE else SettingsMenu.ABOUT }
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            SocialLinkRow(
-                                title = if (isPersian) "ارسال ایمیل به پشتیبانی" else "Email Support",
-                                iconRes = R.drawable.ic_gmail,
-                                color = Color(0xFFEA4335)
-                            ) {
-                                val email = "cidna.app@gmail.com"
-                                val intent = Intent(Intent.ACTION_SENDTO).apply {
-                                    data = Uri.parse("mailto:$email")
-                                    setPackage("com.google.android.gm")
-                                }
-                                try {
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    val fallbackIntent = Intent(Intent.ACTION_SENDTO).apply {
-                                        data = Uri.parse("mailto:$email")
-                                    }
-                                    try {
-                                        context.startActivity(Intent.createChooser(fallbackIntent, if (isPersian) "ارسال ایمیل" else "Send Email"))
-                                    } catch (e2: Exception) {
-                                        exportScope.launch {
-                                            settingsSnackbarHostState.showError(
-                                                if (isPersian) "برنامه‌ای برای ارسال ایمیل پیدا نشد."
-                                                else "No app found to send an email."
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            SocialLinkRow(
-                                title = if (isPersian) "واتس‌اپ توسعه‌دهنده" else "WhatsApp Contact",
-                                iconRes = R.drawable.ic_whatsapp,
-                                color = Color(0xFF25D366)
-                            ) { openUrl(context, "https://wa.me/989180500841") }
-                            SocialLinkRow(
-                                title = if (isPersian) "ایکس (توییتر)" else "X (Twitter)",
-                                iconRes = R.drawable.ic_x,
-                                color = Color(0xFF000000)
-                            ) { openUrl(context, "https://twitter.com/CidnaApp") }
-                            SocialLinkRow(
-                                title = if (isPersian) "اینستاگرام" else "Instagram",
-                                iconRes = R.drawable.ic_instagram,
-                                color = Color(0xFFFF0069)
-                            ) { openUrl(context, "https://www.instagram.com/cidnaapp") }
-                            // Legal and security pages come from the official website (same text as the
-                            // store listings), shown in a Custom Tab with the app's light/dark scheme.
-                            val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
-                            SocialLinkRow(
-                                title = if (isPersian) "حریم خصوصی" else "Privacy Policy",
-                                iconRes = R.drawable.ic_legal,
-                                color = Color(0xFF607D8B)
-                            ) { WebLinks.open(context, WebLinks.Page.PRIVACY, isPersian, darkTheme) }
-                            SocialLinkRow(
-                                title = if (isPersian) "امنیت و رمزنگاری" else "Security & Encryption",
-                                iconRes = R.drawable.ic_legal,
-                                color = Color(0xFF607D8B)
-                            ) { WebLinks.open(context, WebLinks.Page.SECURITY, isPersian, darkTheme) }
-                            SocialLinkRow(
-                                title = if (isPersian) "قوانین و مقررات" else "Terms of Service",
-                                iconRes = R.drawable.ic_legal,
-                                color = Color(0xFF607D8B)
-                            ) { WebLinks.open(context, WebLinks.Page.TERMS, isPersian, darkTheme) }
-                            SocialLinkRow(
-                                title = if (isPersian) "مجوزهای متن‌باز" else "Open-source licenses",
-                                iconRes = R.drawable.ic_legal,
-                                color = Color(0xFF607D8B)
-                            ) { WebLinks.open(context, WebLinks.Page.LICENSES, isPersian, darkTheme) }
-                        }
-                    }
+            if (searchQuery.isBlank()) {
+                item(key = "footer") {
+                    SettingsFooter(isPersian = isPersian, versionName = BuildConfig.VERSION_NAME)
                 }
             }
         }
@@ -1015,242 +1020,236 @@ fun SettingsScreen(
             )
         }
 
-        if (showExportSheet && exportFormat != null) {
-            ModalBottomSheet(
-                onDismissRequest = { showExportSheet = false },
-                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                containerColor = MaterialTheme.colorScheme.surface
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 24.dp, vertical = 16.dp)
-                ) {
-                    Text(
-                        text = if (isPersian) "بازه زمانی گزارش را انتخاب کنید" else "Select report period",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = 16.dp)
+        // ─── شیت‌های انتخاب ───
+        if (activeSheet == SHEET_THEME) {
+            SettingsOptionSheet(
+                title = if (isPersian) "انتخاب ظاهر برنامه" else "Select App Theme",
+                subtitle = if (isPersian) "ظاهر مناسب خودت را انتخاب کن" else "Pick the look that suits you",
+                icon = Icons.Default.DarkMode,
+                accent = SettingsAccent.VIOLET,
+                options = listOf(
+                    SettingsOption(
+                        id = "light",
+                        title = if (isPersian) "روشن" else "Light",
+                        description = if (isPersian) "مناسب روز و نور محیط" else "Best in daylight and bright rooms",
+                        icon = Icons.Default.WbSunny
+                    ),
+                    SettingsOption(
+                        id = "dark",
+                        title = if (isPersian) "تاریک" else "Dark",
+                        description = if (isPersian) "راحت‌تر برای چشم در شب" else "Easier on the eyes at night",
+                        icon = Icons.Default.NightsStay
                     )
+                ),
+                selectedId = if (effectiveDark) "dark" else "light",
+                onSelect = { id ->
+                    val mode = if (id == "light") ThemePreferences.MODE_LIGHT else ThemePreferences.MODE_DARK
+                    if (themeMode != mode) {
+                        themeMode = mode
+                        saveThemeMode(context, mode)
+                        onThemeToggle()
 
-                    ExportPeriod.entries.forEach { period ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .clickable {
-                                    showExportSheet = false
-                                    val selectedFormat = exportFormat
-                                    exportScope.launch {
-                                        if (selectedFormat == null) return@launch
-                                        try {
-                                            ExportManager.export(
-                                                context = context,
-                                                format = selectedFormat,
-                                                period = period,
-                                                isPersian = isPersian
-                                            )
-                                        } catch (e: kotlinx.coroutines.CancellationException) {
-                                            throw e
-                                        } catch (e: Exception) {
-                                            android.util.Log.e("SettingsScreen", "Export failed", e)
-                                            settingsSnackbarHostState.showError(
-                                                if (isPersian) "ساخت گزارش ناموفق بود. دوباره تلاش کنید."
-                                                else "Creating the report failed. Please try again."
-                                            )
-                                        }
-                                    }
-                                }
-                                .padding(vertical = 14.dp, horizontal = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CalendarMonth,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = if (isPersian) period.titleFa else period.titleEn,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                            ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
                         }
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
                     }
-                }
-            }
+                    activeSheet = null
+                },
+                onDismiss = { activeSheet = null }
+            )
         }
 
-        if (showThemeBottomSheet) {
-            ModalBottomSheet(
-                onDismissRequest = { showThemeBottomSheet = false },
-                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                containerColor = MaterialTheme.colorScheme.surface
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = if (isPersian) "انتخاب ظاهر برنامه" else "Select App Theme",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = 24.dp)
+        if (activeSheet == SHEET_LANGUAGE) {
+            SettingsOptionSheet(
+                title = if (isPersian) "زبان برنامه" else "App Language",
+                subtitle = if (isPersian) "زبان رابط کاربری را انتخاب کن" else "Choose the interface language",
+                icon = Icons.Default.Language,
+                accent = SettingsAccent.SKY,
+                options = listOf(
+                    SettingsOption(
+                        id = "fa",
+                        title = "پارسی (FA)",
+                        description = if (isPersian) "رابط راست‌به‌چپ و تقویم شمسی" else "Right-to-left layout, Persian calendar",
+                        icon = Icons.Default.Translate
+                    ),
+                    SettingsOption(
+                        id = "en",
+                        title = "English (EN)",
+                        description = if (isPersian) "رابط چپ‌به‌راست" else "Left-to-right layout",
+                        icon = Icons.Default.Language
                     )
+                ),
+                selectedId = if (isPersian) "fa" else "en",
+                onSelect = { id ->
+                    activeSheet = null
+                    val toPersian = id == "fa"
+                    if (toPersian != isPersian) {
+                        LocaleHelper.setLocale(context, if (toPersian) "fa" else "en")
+                        ir.hamedan.budgetmanagement.platform.locale.ShortcutsHelper.update(context)
+                        (context as? Activity)?.recreate()
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        // محاسبه حالت تم فعلی (در نظر گرفتن تم سیستم در صورت استفاده از MODE_SYSTEM)
-                        val systemInDark = isSystemInDarkTheme()
-                        val currentActiveMode = if (themeMode == ThemePreferences.MODE_SYSTEM) {
-                            if (systemInDark) ThemePreferences.MODE_DARK else ThemePreferences.MODE_LIGHT
-                        } else {
-                            themeMode
-                        }
-
-                        val isLightSelected = currentActiveMode == ThemePreferences.MODE_LIGHT
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .background(
-                                    if (isLightSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                                    RoundedCornerShape(20.dp)
-                                )
-                                .border(
-                                    width = if (isLightSelected) 2.dp else 1.dp,
-                                    color = if (isLightSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
-                                    shape = RoundedCornerShape(20.dp)
-                                )
-                                .clip(RoundedCornerShape(20.dp))
-                                .clickable {
-                                    if (themeMode != ThemePreferences.MODE_LIGHT) {
-                                        themeMode = ThemePreferences.MODE_LIGHT
-                                        saveThemeMode(context, ThemePreferences.MODE_LIGHT)
-                                        onThemeToggle()
-
-                                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                            ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
-                                        }
-                                    }
-                                }
-                                .padding(16.dp)
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.WbSunny,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = if (isLightSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    RadioButton(
-                                        selected = isLightSelected,
-                                        onClick = {
-                                            if (themeMode != ThemePreferences.MODE_LIGHT) {
-                                                themeMode = ThemePreferences.MODE_LIGHT
-                                                saveThemeMode(context, ThemePreferences.MODE_LIGHT)
-                                                onThemeToggle()
-
-                                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                                    ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
-                                                }
-                                            }
-                                        }
-                                    )
-                                    Text(
-                                        text = if (isPersian) "روشن" else "Light",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-                        }
-
-                        val isDarkSelected = currentActiveMode == ThemePreferences.MODE_DARK
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .background(
-                                    if (isDarkSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                                    RoundedCornerShape(20.dp)
-                                )
-                                .border(
-                                    width = if (isDarkSelected) 2.dp else 1.dp,
-                                    color = if (isDarkSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
-                                    shape = RoundedCornerShape(20.dp)
-                                )
-                                .clip(RoundedCornerShape(20.dp))
-                                .clickable {
-                                    if (themeMode != ThemePreferences.MODE_DARK) {
-                                        themeMode = ThemePreferences.MODE_DARK
-                                        saveThemeMode(context, ThemePreferences.MODE_DARK)
-                                        onThemeToggle()
-
-                                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                            ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
-                                        }
-                                    }
-                                }
-                                .padding(16.dp)
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.NightsStay,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = if (isDarkSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    RadioButton(
-                                        selected = isDarkSelected,
-                                        onClick = {
-                                            if (themeMode != ThemePreferences.MODE_DARK) {
-                                                themeMode = ThemePreferences.MODE_DARK
-                                                saveThemeMode(context, ThemePreferences.MODE_DARK)
-                                                onThemeToggle()
-
-                                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                                    ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
-                                                }
-                                            }
-                                        }
-                                    )
-                                    Text(
-                                        text = if (isPersian) "تاریک" else "Dark",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                            ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
                         }
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
+                },
+                onDismiss = { activeSheet = null }
+            )
+        }
+
+        if (activeSheet == SHEET_CURRENCY) {
+            SettingsOptionSheet(
+                title = if (isPersian) "واحد پولی" else "Currency",
+                subtitle = if (isPersian) "مبالغ در کل برنامه با این واحد نمایش داده می‌شوند" else "Amounts across the app use this unit",
+                icon = null,
+                iconRes = R.drawable.ic_currency,
+                accent = SettingsAccent.AMBER,
+                options = listOf(
+                    SettingsOption(
+                        id = "IRT",
+                        title = if (isPersian) "تومان" else "Toman (IRT)",
+                        description = if (isPersian) "پیش‌فرض؛ ۱ تومان = ۱۰ ریال" else "Default; 1 Toman = 10 Rials",
+                        icon = Icons.Default.Payments
+                    ),
+                    SettingsOption(
+                        id = "IRR",
+                        title = if (isPersian) "ریال" else "Rial (IRR)",
+                        description = if (isPersian) "نمایش مبالغ به ریال" else "Show amounts in Rials",
+                        icon = Icons.Default.Payments
+                    )
+                ),
+                selectedId = currentCurrencyCode,
+                onSelect = { code ->
+                    activeSheet = null
+                    if (currentCurrencyCode != code) {
+                        currentCurrencyCode = code
+                        CurrencySharedPreferences.setCurrency(context, code)
+                        onCurrencyChanged(code)
+
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                            ir.hamedan.budgetmanagement.ui.components.updateBalanceWidget(context)
+                        }
+
+                        NotificationHelper.send(
+                            context = context,
+                            notificationType = NotificationType.SETTINGS_CHANGED,
+                            type = "SYSTEM",
+                            titleFa = "تنظیمات به‌روزرسانی شد",
+                            titleEn = "Settings Updated",
+                            descFa = "واحد پولی برنامه با موفقیت تغییر کرد.",
+                            descEn = "Currency have been updated successfully.",
+                            tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
+                        )
+                    }
+                },
+                onDismiss = { activeSheet = null }
+            )
+        }
+
+        if (activeSheet == SHEET_NOTIFICATIONS) {
+            SettingsOptionSheet(
+                title = if (isPersian) "تنظیمات اعلان‌ها" else "Notification Settings",
+                subtitle = if (isPersian) "اعلان‌ها کجا نمایش داده شوند؟" else "Where should notifications appear?",
+                icon = Icons.Default.Notifications,
+                accent = SettingsAccent.ROSE,
+                options = listOf(
+                    SettingsOption(
+                        id = NotificationPreferences.MODE_IN_APP,
+                        title = if (isPersian) "فقط درون برنامه‌ای" else "In-App Only",
+                        description = if (isPersian) "اعلان‌ها فقط داخل برنامه و در بخش اعلان‌ها نمایش داده می‌شوند"
+                        else "Notifications appear only inside the app",
+                        icon = Icons.Default.PhoneAndroid
+                    ),
+                    SettingsOption(
+                        id = NotificationPreferences.MODE_BOTH,
+                        title = if (isPersian) "درون برنامه + سیستمی" else "In-App + System",
+                        description = if (isPersian) "علاوه بر برنامه، اعلان در نوار وضعیت گوشی هم نمایش داده می‌شود"
+                        else "Also shows alerts in your phone's notification shade",
+                        icon = Icons.Default.NotificationsActive
+                    )
+                ),
+                selectedId = notifMode,
+                onSelect = { mode ->
+                    // انتخاب دوبارهٔ همان حالت نباید اعلان «تنظیمات به‌روزرسانی شد» بفرستد.
+                    if (notifMode != mode) {
+                        notifMode = mode
+                        NotificationPreferences.setMode(context, mode)
+                        NotificationHelper.send(
+                            context = context,
+                            notificationType = NotificationType.SETTINGS_CHANGED,
+                            type = "SYSTEM",
+                            titleFa = "تنظیمات به‌روزرسانی شد",
+                            titleEn = "Settings Updated",
+                            descFa = "نحوه ارسال اعلان برنامه با موفقیت تغییر کرد.",
+                            descEn = "Way of sending notification have been updated successfully.",
+                            tag = "SETTINGS_CHANGED_${System.currentTimeMillis()}"
+                        )
+                    }
+                },
+                onDismiss = { activeSheet = null },
+                footer = {
+                    // ورود به یک صفحهٔ جدید ← کارت جداگانه با فلش، متفاوت از گزینه‌های بالا
+                    Spacer(Modifier.height(4.dp))
+                    SettingsNavigationCard(
+                        title = if (isPersian) "شخصی‌سازی و مدیریت دقیق اعلان‌ها" else "Customize Notifications",
+                        description = if (isPersian) "هر نوع اعلان را جداگانه روشن یا خاموش کنید"
+                        else "Turn each notification type on or off",
+                        icon = Icons.Default.Tune,
+                        onClick = {
+                            activeSheet = null
+                            onNotificationCalibrationClick()
+                        }
+                    )
+                }
+            )
+        }
+
+        if (showExportSheet && exportFormat != null) {
+            val isExcel = exportFormat == ExportFormat.XLSX
+            SettingsFloatingSheet(onDismiss = { showExportSheet = false }) {
+                run {
+                    SettingsSheetHeader(
+                        title = if (isPersian) "بازه زمانی گزارش را انتخاب کنید" else "Select report period",
+                        subtitle = if (isExcel) title("exportExcel") else title("exportPdf"),
+                        icon = if (isExcel) Icons.Default.TableChart else Icons.Default.PictureAsPdf,
+                        accent = if (isExcel) SettingsAccent.TEAL else SettingsAccent.ROSE
+                    )
+                    SettingsGroup(
+                        onSheet = true,
+                        rows = ExportPeriod.entries.map { period ->
+                            @Composable {
+                                SettingsRow(
+                                    title = if (isPersian) period.titleFa else period.titleEn,
+                                    icon = Icons.Default.CalendarMonth,
+                                    accent = SettingsAccent.TEAL,
+                                    onClick = {
+                                        showExportSheet = false
+                                        val selectedFormat = exportFormat
+                                        exportScope.launch {
+                                            if (selectedFormat == null) return@launch
+                                            try {
+                                                ExportManager.export(
+                                                    context = context,
+                                                    format = selectedFormat,
+                                                    period = period,
+                                                    isPersian = isPersian
+                                                )
+                                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                                throw e
+                                            } catch (e: Exception) {
+                                                android.util.Log.e("SettingsScreen", "Export failed", e)
+                                                settingsSnackbarHostState.showError(
+                                                    if (isPersian) "ساخت گزارش ناموفق بود. دوباره تلاش کنید."
+                                                    else "Creating the report failed. Please try again."
+                                                )
+                                            }
+                                        }
+                                    },
+                                    trailing = { SettingsChevron() }
+                                )
+                            }
+                        }
+                    )
                 }
             }
         }
@@ -1266,548 +1265,25 @@ fun SettingsScreen(
     }
 }
 
-// دکمه مشترک دوگانه برای انتخاب واحد پولی و زبان
-@Composable
-private fun CurrencyOrLanguageOptionButton(
-    title: String,
-    isSelected: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    val shape = RoundedCornerShape(12.dp)
-    Box(
-        modifier = modifier
-            .height(44.dp)
-            .clip(shape)
-            .background(
-                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                else Color.Transparent
-            )
-            .border(
-                width = 1.dp,
-                color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
-                shape = shape
-            )
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-        )
-    }
-}
-
-/** عنوان کوچک گروه داخل کارت‌های بازشونده. */
-@Composable
-private fun SettingsGroupLabel(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        modifier = modifier.fillMaxWidth(),
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-}
-
-/**
- * کارت «انتخاب تک‌گزینه‌ای». دایرهٔ انتخاب (Radio) در انتهای کارت و رنگ‌بندی primary نشان می‌دهد
- * که این کارت یکی از چند حالت است، نه دکمهٔ ورود به صفحه‌ای دیگر.
- */
-@Composable
-private fun SettingsChoiceCard(
-    title: String,
-    description: String,
-    icon: ImageVector,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(18.dp)
-    val borderColor by animateColorAsState(
-        if (isSelected) scheme.primary.copy(alpha = 0.55f) else scheme.outline.copy(alpha = 0.14f),
-        animationSpec = tween(200), label = "choiceBorder"
-    )
-    val container by animateColorAsState(
-        if (isSelected) scheme.primary.copy(alpha = 0.12f) else scheme.surface.copy(alpha = 0.35f),
-        animationSpec = tween(200), label = "choiceContainer"
-    )
-    val chipColor by animateColorAsState(
-        if (isSelected) scheme.primary else scheme.onSurface.copy(alpha = 0.08f),
-        animationSpec = tween(200), label = "choiceChip"
-    )
-    val dotScale by animateFloatAsState(
-        targetValue = if (isSelected) 1f else 0f,
-        animationSpec = tween(180),
-        label = "choiceDot"
-    )
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(container, shape)
-            .border(if (isSelected) 1.5.dp else 1.dp, borderColor, shape)
-            .selectable(selected = isSelected, role = Role.RadioButton, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .background(chipColor, RoundedCornerShape(12.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (isSelected) scheme.onPrimary else scheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp)
-            )
-        }
-
-        Spacer(Modifier.width(12.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                color = if (isSelected) scheme.primary else scheme.onSurface
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant
-            )
-        }
-
-        Spacer(Modifier.width(10.dp))
-
-        // دایرهٔ رادیویی
-        Box(
-            modifier = Modifier
-                .size(24.dp)
-                .border(
-                    width = 2.dp,
-                    color = if (isSelected) scheme.primary else scheme.outline.copy(alpha = 0.5f),
-                    shape = CircleShape
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .graphicsLayer {
-                        scaleX = dotScale
-                        scaleY = dotScale
-                        alpha = dotScale
-                    }
-                    .background(scheme.primary, CircleShape)
-            )
-        }
-    }
-}
-
-/** کارت «ورود به صفحهٔ جدید»؛ با فلشِ جهت‌دار، عنوان توضیحی و ظاهر متفاوت از کارت‌های انتخاب. */
-@Composable
-private fun SettingsNavigationCard(
-    title: String,
-    description: String,
-    icon: ImageVector,
-    onClick: () -> Unit
-) {
-    val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(18.dp)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(
-                androidx.compose.ui.graphics.Brush.linearGradient(
-                    listOf(scheme.primaryContainer.copy(alpha = 0.55f), scheme.primaryContainer.copy(alpha = 0.2f))
-                ),
-                shape
-            )
-            .border(1.dp, scheme.primary.copy(alpha = 0.22f), shape)
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .background(scheme.primary.copy(alpha = 0.14f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = scheme.primary,
-                modifier = Modifier.size(22.dp)
-            )
-        }
-
-        Spacer(Modifier.width(12.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
-                color = scheme.onSurface
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant
-            )
-        }
-
-        Spacer(Modifier.width(8.dp))
-
-        Box(
-            modifier = Modifier
-                .size(30.dp)
-                .background(scheme.primary.copy(alpha = 0.14f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = scheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun SettingsAccordionItem(
-    title: String,
-    subtitle: String,
-    icon: ImageVector? = null,
-    @DrawableRes iconRes: Int? = null,
-    isExpanded: Boolean,
-    onClick: () -> Unit,
-    content: @Composable () -> Unit
-) {
-    val cardShape = RoundedCornerShape(20.dp)
-    val chevronAngle by animateFloatAsState(
-        targetValue = if (isExpanded) 180f else 0f,
-        animationSpec = tween(220),
-        label = "accordionChevron"
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), cardShape)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), cardShape)
-            .clip(cardShape)
-            .padding(16.dp)
-    ) {
-        // فقط ردیف عنوان باز/بسته می‌کند؛ لمس فضای خالی بین گزینه‌های داخلی کارت را نمی‌بندد.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .clickable(role = Role.Button, onClick = onClick),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                SettingsItemIcon(
-                    icon = icon,
-                    iconRes = iconRes,
-                    tint = MaterialTheme.colorScheme.primary,
-                    size = 20.dp
-                )
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                )
-            }
-
-            Icon(
-                imageVector = Icons.Default.KeyboardArrowDown,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                modifier = Modifier.rotate(chevronAngle)
-            )
-        }
-
-        AnimatedVisibility(
-            visible = isExpanded,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
-            Box(modifier = Modifier.fillMaxWidth()) {
-                content()
-            }
-        }
-    }
-}
-
-/** Renders a settings icon from either a Material vector or a drawable resource. */
-@Composable
-private fun SettingsItemIcon(
-    icon: ImageVector?,
-    @DrawableRes iconRes: Int?,
-    tint: Color,
-    size: Dp
-) {
-    if (iconRes != null) {
-        Icon(
-            painter = painterResource(id = iconRes),
-            contentDescription = null,
-            tint = tint,
-            modifier = Modifier.size(size)
-        )
-    } else if (icon != null) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = tint,
-            modifier = Modifier.size(size)
-        )
-    }
-}
-
-@Composable
-private fun SettingsSimpleItem(
-    title: String,
-    subtitle: String,
-    icon: ImageVector? = null,
-    @DrawableRes iconRes: Int? = null,
-    onClick: () -> Unit
-) {
-    val cardShape = RoundedCornerShape(20.dp)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), cardShape)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), cardShape)
-            .clip(cardShape)
-            .clickable { onClick() }
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            SettingsItemIcon(
-                icon = icon,
-                iconRes = iconRes,
-                tint = MaterialTheme.colorScheme.primary,
-                size = 20.dp
-            )
-        }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-            )
-        }
-
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-        )
-    }
-}
-
-@Composable
-private fun SecuritySwitchRow(
-    title: String,
-    subtitle: String? = null,
-    icon: ImageVector,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .padding(vertical = 4.dp, horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp)
-            )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                if (!subtitle.isNullOrBlank()) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = MaterialTheme.colorScheme.primary,
-                checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-            )
-        )
-    }
-}
-
-@Composable
-private fun SecurityActionRow(
-    title: String,
-    icon: ImageVector,
-    iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    titleColor: Color = MaterialTheme.colorScheme.onSurface,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onClick() }
-            .padding(vertical = 12.dp, horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = iconTint,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = titleColor
-            )
-        }
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-            modifier = Modifier.size(20.dp)
-        )
-    }
-}
-
 @Composable
 fun LogoutConfirmationDialog(
     isPersian: Boolean,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(28.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
-        icon = {
-            Icon(
-                imageVector = Icons.Default.Logout,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(36.dp)
-            )
-        },
-        title = {
-            Text(
-                text = if (isPersian) "خروج از حساب" else "Log Out",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        },
-        text = {
-            Text(
-                text = if (isPersian)
-                    "آیا مطمئن هستید که می‌خواهید از حساب کاربری خود خارج شوید؟ برای ورود مجدد به رمز عبور نیاز خواهید داشت."
-                else
-                    "Are you sure you want to log out? You will need your passcode to sign in again.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = if (isPersian) TextAlign.Right else TextAlign.Left,
-                modifier = Modifier.fillMaxWidth()
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error,
-                    contentColor = MaterialTheme.colorScheme.onError
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(if (isPersian) "خروج" else "Log Out")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(
-                    text = if (isPersian) "انصراف" else "Cancel",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
+    AppConfirmDialog(
+        title = if (isPersian) "خروج از حساب" else "Log Out",
+        message = if (isPersian)
+            "آیا مطمئن هستید که می‌خواهید از حساب کاربری خود خارج شوید؟ برای ورود مجدد به رمز عبور نیاز خواهید داشت."
+        else
+            "Are you sure you want to log out? You will need your passcode to sign in again.",
+        confirmText = if (isPersian) "خروج" else "Log Out",
+        cancelText = if (isPersian) "انصراف" else "Cancel",
+        destructive = true,
+        icon = Icons.Default.Logout,
+        confirmIcon = Icons.Default.Logout,
+        onConfirm = onConfirm,
+        onDismiss = onDismiss
     )
 }
 
@@ -2211,39 +1687,6 @@ fun DeleteAccountDialog(
             }
         }
     )
-}
-
-@Composable
-private fun SocialLinkRow(
-    title: String,
-    @DrawableRes iconRes: Int,
-    color: Color,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onClick() }
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .background(color.copy(alpha = 0.12f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = painterResource(id = iconRes),
-                contentDescription = null,
-                tint = color,
-                modifier = Modifier.size(16.dp)
-            )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Text(text = title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-    }
 }
 
 @Composable

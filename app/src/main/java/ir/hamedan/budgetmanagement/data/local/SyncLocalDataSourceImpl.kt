@@ -108,5 +108,7 @@ class SyncLocalDataSourceImpl(
             database.userDao().clearAll()
             database.syncStateDao().resetCursor()
         }
+        // پیش‌نویس‌های ثبت‌های ناتمام هم متعلق به همین حساب‌اند و نباید به حساب بعدی برسند.
+        ir.hamedan.budgetmanagement.data.draft.DraftStore.clearAll()
     }
 }

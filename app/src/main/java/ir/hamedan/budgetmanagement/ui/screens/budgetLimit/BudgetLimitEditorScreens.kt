@@ -1,5 +1,10 @@
 package ir.hamedan.budgetmanagement.ui.screens.budgetLimit
 
+import ir.hamedan.budgetmanagement.data.draft.DraftType
+import ir.hamedan.budgetmanagement.ui.components.DraftExitSheet
+import ir.hamedan.budgetmanagement.ui.components.DraftResumeSheet
+import ir.hamedan.budgetmanagement.ui.components.rememberDraftSession
+import ir.hamedan.budgetmanagement.ui.screens.draft.DraftCodecs
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -344,6 +349,11 @@ fun AddBudgetLimitScreen(
     val form = rememberSaveable(saver = LimitFormState.Saver) {
         LimitFormState(startDay = today, endDay = today + (DEFAULT_PERIOD_DAYS - 1).toLong())
     }
+    val draft = rememberDraftSession(
+        type = DraftType.BUDGET_LIMIT,
+        snapshot = { DraftCodecs.limit(form, currencyUnit) },
+        restore = { DraftCodecs.applyLimit(form, it, currencyUnit) }
+    )
     val presets = remember(today, isPersian) { buildPresets(today, isPersian) }
 
     var successSheet by remember { mutableStateOf<SuccessSheetContent?>(null) }
@@ -418,6 +428,7 @@ fun AddBudgetLimitScreen(
             endDate = dayToMillis(form.endDay),
             onResult = { saved ->
                 if (saved) {
+                    draft.markCompleted()
                     successSheet = budgetLimitSavedContent(
                         isEdit = false,
                         categoryTitle = categoryTitle,
@@ -436,6 +447,10 @@ fun AddBudgetLimitScreen(
 
     BackHandler(enabled = form.step > STEP_CATEGORY && successSheet == null) {
         goTo(form.step - 1)
+    }
+
+    BackHandler(enabled = draft.shouldInterceptBack && form.step == STEP_CATEGORY && successSheet == null) {
+        draft.requestClose(onClose)
     }
 
     Box(
@@ -462,7 +477,7 @@ fun AddBudgetLimitScreen(
                 step = form.step,
                 accent = accent,
                 isPersian = isPersian,
-                onBack = { if (form.step == STEP_CATEGORY) onClose() else goTo(form.step - 1) },
+                onBack = { if (form.step == STEP_CATEGORY) draft.requestClose(onClose) else goTo(form.step - 1) },
                 totalSteps = STEP_COUNT
             )
 
@@ -553,6 +568,9 @@ fun AddBudgetLimitScreen(
                 .padding(bottom = 96.dp)
         )
     }
+
+    DraftResumeSheet(session = draft, isPersian = isPersian, currencyUnit = currencyUnit, onExit = onClose)
+    DraftExitSheet(session = draft, isPersian = isPersian)
 
     successSheet?.let { content ->
         SuccessBottomSheet(

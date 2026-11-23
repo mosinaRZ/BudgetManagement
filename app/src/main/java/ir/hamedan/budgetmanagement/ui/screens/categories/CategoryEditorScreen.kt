@@ -1,5 +1,10 @@
 package ir.hamedan.budgetmanagement.ui.screens.categories
 
+import ir.hamedan.budgetmanagement.data.draft.DraftType
+import ir.hamedan.budgetmanagement.ui.components.DraftExitSheet
+import ir.hamedan.budgetmanagement.ui.components.DraftResumeSheet
+import ir.hamedan.budgetmanagement.ui.components.rememberDraftSession
+import ir.hamedan.budgetmanagement.ui.screens.draft.DraftCodecs
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -163,6 +168,12 @@ fun CategoryEditorScreen(
     val expense = editing?.isExpense ?: isExpense
 
     val form = rememberSaveable(saver = CategoryFormState.Saver) { CategoryFormState() }
+    val draft = rememberDraftSession(
+        type = if (expense) DraftType.CATEGORY_EXPENSE else DraftType.CATEGORY_INCOME,
+        enabled = !isEditMode,
+        snapshot = { DraftCodecs.category(form) },
+        restore = { DraftCodecs.applyCategory(form, it) }
+    )
     var successSheet by remember { mutableStateOf<SuccessSheetContent?>(null) }
     var isSaving by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -222,6 +233,7 @@ fun CategoryEditorScreen(
         } else {
             viewModel.addCategory(savedTitle, savedEmoji, expense) { saved ->
                 if (saved) {
+                    draft.markCompleted()
                     successSheet = categoryAddedContent(savedTitle, savedEmoji, expense, isPersian)
                 } else {
                     isSaving = false
@@ -231,6 +243,10 @@ fun CategoryEditorScreen(
     }
 
     BackHandler(enabled = form.step > STEP_NAME && successSheet == null) { goTo(form.step - 1) }
+
+    BackHandler(enabled = draft.shouldInterceptBack && form.step == STEP_NAME && successSheet == null) {
+        draft.requestClose(onClose)
+    }
 
     Box(
         modifier = Modifier
@@ -258,7 +274,7 @@ fun CategoryEditorScreen(
                 step = form.step,
                 accent = accent,
                 isPersian = isPersian,
-                onBack = { if (form.step == STEP_NAME) onClose() else goTo(form.step - 1) }
+                onBack = { if (form.step == STEP_NAME) draft.requestClose(onClose) else goTo(form.step - 1) }
             )
 
             if (!ready) {
@@ -332,6 +348,9 @@ fun CategoryEditorScreen(
                 .padding(bottom = 96.dp)
         )
     }
+
+    DraftResumeSheet(session = draft, isPersian = isPersian, currencyUnit = "IRT", onExit = onClose)
+    DraftExitSheet(session = draft, isPersian = isPersian)
 
     successSheet?.let { content ->
         SuccessBottomSheet(

@@ -1,5 +1,10 @@
 package ir.hamedan.budgetmanagement.ui.screens.add
 
+import ir.hamedan.budgetmanagement.data.draft.DraftType
+import ir.hamedan.budgetmanagement.ui.components.DraftExitSheet
+import ir.hamedan.budgetmanagement.ui.components.DraftResumeSheet
+import ir.hamedan.budgetmanagement.ui.components.rememberDraftSession
+import ir.hamedan.budgetmanagement.ui.screens.draft.DraftCodecs
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -247,6 +252,11 @@ fun AddTransactionScreen(
     val form = rememberSaveable(saver = AddTransactionFormState.Saver) {
         AddTransactionFormState(isExpense = initialIsExpense)
     }
+    val draft = rememberDraftSession(
+        type = DraftType.TRANSACTION,
+        snapshot = { DraftCodecs.transaction(form, currencyUnit) },
+        restore = { DraftCodecs.applyTransaction(form, it, currencyUnit) }
+    )
     var successSheet by remember { mutableStateOf<SuccessSheetContent?>(null) }
     var isSaving by remember { mutableStateOf(false) }
     var insight by remember { mutableStateOf(SaveInsight()) }
@@ -367,6 +377,7 @@ fun AddTransactionScreen(
             onResult = { saved ->
                 // ثبت ناموفق: فرم و ورودی کاربر سر جایش می‌ماند و اسنک‌بار خطا نشان داده می‌شود.
                 if (saved) {
+                    draft.markCompleted()
                     // کارتِ قابل‌اشتراک از همین مقادیر ساخته می‌شود (فقط برای تصویر؛ در دیتابیس نمی‌رود).
                     sharePayload = SharePayload(
                         transaction = TransactionEntity(
@@ -400,6 +411,10 @@ fun AddTransactionScreen(
         goTo(form.step - 1)
     }
 
+    BackHandler(enabled = draft.shouldInterceptBack && form.step == STEP_AMOUNT && successSheet == null) {
+        draft.requestClose(onClose)
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -426,7 +441,7 @@ fun AddTransactionScreen(
                 step = form.step,
                 accent = accent,
                 isPersian = isPersian,
-                onBack = { if (form.step == STEP_AMOUNT) onClose() else goTo(form.step - 1) }
+                onBack = { if (form.step == STEP_AMOUNT) draft.requestClose(onClose) else goTo(form.step - 1) }
             )
 
             AnimatedContent(
@@ -506,6 +521,9 @@ fun AddTransactionScreen(
                 .padding(bottom = 96.dp)
         )
     }
+
+    DraftResumeSheet(session = draft, isPersian = isPersian, currencyUnit = currencyUnit, onExit = onClose)
+    DraftExitSheet(session = draft, isPersian = isPersian)
 
     successSheet?.let { content ->
         SuccessBottomSheet(
