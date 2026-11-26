@@ -283,6 +283,7 @@ fun HomeScreen(
     onAddScreenClickPiggy: () -> Unit = {},
     onAddScreenClickLimit: () -> Unit = {},
     onProfileClick: () -> Unit = {},
+    onCreateAccountClick: () -> Unit = {},
     transactionViewModel: TransactionViewModel = appViewModel(),
     goalsViewModel: SavingGoalsViewModel = appViewModel(),
     budgetViewModel: BudgetLimitViewModel = appViewModel(),
@@ -294,6 +295,13 @@ fun HomeScreen(
     val context = LocalContext.current
     val isPersian = LocaleHelper.getLanguage(context) == "fa"
     val haptic = rememberAppHaptics()
+
+    // A guest has no account: the home screen then shows a card inviting them to create one.
+    // Read once per visit; ending the guest session navigates away, so it must not flicker.
+    val isGuest = remember(context) {
+        (context.applicationContext as ir.hamedan.budgetmanagement.BudgetApp)
+            .container.guestModeStore.isSessionActive
+    }
 
     // One snackbar for every failure raised by actions started on the home screen.
     val errorSnackbarHostState = remember { SnackbarHostState() }
@@ -710,6 +718,21 @@ fun HomeScreen(
                             onClick = {
                                 haptic.perform(AppHapticType.Click)
                                 onProfileClick()
+                            }
+                        )
+                    }
+                }
+
+                // CTA ساخت حساب برای مهمان (غیرقابل بستن؛ با خروج از حالت مهمان حذف می‌شود)
+                if (isGuest) {
+                    item(key = "guest_account_cta") {
+                        GuestAccountCtaCard(
+                            isPersian = isPersian,
+                            entryCount = transactionsList.size,
+                            numberFormatter = numberFormatter,
+                            onClick = {
+                                haptic.perform(AppHapticType.Click)
+                                onCreateAccountClick()
                             }
                         )
                     }

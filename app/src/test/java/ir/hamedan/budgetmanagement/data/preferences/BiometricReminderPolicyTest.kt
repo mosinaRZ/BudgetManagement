@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.data.preferences
 
+import ir.hamedan.budgetmanagement.data.preferences.BiometricReminderTrigger.RETURN_TO_APP
+import ir.hamedan.budgetmanagement.data.preferences.BiometricReminderTrigger.SESSION_ENTRY
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -7,45 +9,58 @@ import org.junit.Test
 
 class BiometricReminderPolicyTest {
 
-    private val day = 24L * 60 * 60 * 1000
+    private val minute = 60L * 1000
 
     @Test
-    fun waitsForMinimumActiveDays() {
+    fun brandNewUserIsRemindedAtOnce() {
+        // No waiting period and no minimum number of active days.
+        assertTrue(BiometricReminderPolicy.shouldRemind(BiometricReminderState(), 0L, SESSION_ENTRY))
+    }
+
+    @Test
+    fun everySessionEntryIsRemindedNoMatterHowOftenItWasShown() {
         var s = BiometricReminderState()
-        s = BiometricReminderPolicy.recordActiveDay(s, 100)
-        assertFalse(BiometricReminderPolicy.shouldRemind(s, 0))
-        s = BiometricReminderPolicy.recordActiveDay(s, 101)
-        assertTrue(BiometricReminderPolicy.shouldRemind(s, 0))
-    }
-
-    @Test
-    fun intervalsGrowSlowlyAndStopAtMax() {
-        var s = BiometricReminderState(activeDays = 5)
-        val expected = listOf(2, 3, 5, 7, 7, 7, 7, 7)
         var now = 1_000L
-        expected.forEach { days ->
-            assertTrue(BiometricReminderPolicy.shouldRemind(s, now))
+        repeat(50) {
+            assertTrue(BiometricReminderPolicy.shouldRemind(s, now, SESSION_ENTRY))
             s = BiometricReminderPolicy.markShown(s, now)
-            assertEquals(now + days * day, s.nextDueAt)
-            assertFalse(BiometricReminderPolicy.shouldRemind(s, now + days * day - 1))
-            now = s.nextDueAt
+            // Even straight after being shown, a new login shows it again.
+            assertTrue(BiometricReminderPolicy.shouldRemind(s, now + 1, SESSION_ENTRY))
+            now += minute
         }
-        assertFalse(BiometricReminderPolicy.shouldRemind(s, now + 100 * day))
+        assertEquals(50, s.shownCount)
     }
 
     @Test
-    fun stopIsPermanent() {
-        val s = BiometricReminderPolicy.stop(BiometricReminderState(activeDays = 5))
-        assertFalse(BiometricReminderPolicy.shouldRemind(s, Long.MAX_VALUE))
+    fun returningToTheAppWaitsForTheShortInterval() {
+        val shownAt = 10_000L
+        val s = BiometricReminderPolicy.markShown(BiometricReminderState(), shownAt)
+        val interval = BiometricReminderPolicy.RETURN_INTERVAL_MILLIS
+        assertFalse(BiometricReminderPolicy.shouldRemind(s, shownAt + interval - 1, RETURN_TO_APP))
+        assertTrue(BiometricReminderPolicy.shouldRemind(s, shownAt + interval, RETURN_TO_APP))
     }
 
     @Test
-    fun capNextDuePullsInOldLongDelaysOnlyOnce() {
-        val now = 10 * day
-        val legacy = BiometricReminderState(activeDays = 9, shownCount = 2, nextDueAt = now + 30 * day)
-        val capped = BiometricReminderPolicy.capNextDue(legacy, now)
-        assertEquals(now + 3 * day, capped.nextDueAt)
-        // Idempotent: a later call (time moved on) must not push the date away again.
-        assertEquals(capped, BiometricReminderPolicy.capNextDue(capped, now + day))
+    fun returningToTheAppIsDueWhenNeverShown() {
+        assertTrue(
+            BiometricReminderPolicy.shouldRemind(
+                BiometricReminderState(),
+                BiometricReminderPolicy.RETURN_INTERVAL_MILLIS,
+                RETURN_TO_APP
+            )
+        )
+    }
+
+    @Test
+    fun markShownRecordsTimeAndCount() {
+        val s = BiometricReminderPolicy.markShown(BiometricReminderState(shownCount = 2), 777L)
+        assertEquals(777L, s.lastShownAt)
+        assertEquals(3, s.shownCount)
+    }
+
+    @Test
+    fun intervalIsShorterThanTheOldTwoDayMinimum() {
+        // Guards against the reminder drifting back to a "once in a few days" cadence.
+        assertTrue(BiometricReminderPolicy.RETURN_INTERVAL_MILLIS <= 60 * minute)
     }
 }

@@ -1,126 +1,99 @@
 package ir.hamedan.budgetmanagement.data.preferences
 
 import android.content.Context
-import java.time.LocalDate
 
-/** Everything the fingerprint reminder needs to remember between launches. */
+/** What the fingerprint reminder remembers between launches. */
 data class BiometricReminderState(
-    /** Number of different calendar days on which the user opened the main screen. */
-    val activeDays: Int = 0,
-    val lastActiveEpochDay: Long = -1L,
-    /** How many times the reminder has already been shown. */
-    val shownCount: Int = 0,
-    /** Epoch millis from which the next reminder may appear. */
-    val nextDueAt: Long = 0L,
-    /** Fingerprint was enabled or the user chose "don't ask again": never remind again. */
-    val stopped: Boolean = false
+    /** Epoch millis of the last time the reminder was shown (0 = never). */
+    val lastShownAt: Long = 0L,
+    /** How many times the reminder has been shown so far (informational). */
+    val shownCount: Int = 0
 )
+
+/** Why the reminder is being considered right now. */
+enum class BiometricReminderTrigger {
+    /** The user just got into the app: a fresh sign-in, a local unlock or a cold start. */
+    SESSION_ENTRY,
+
+    /** The app came back to the foreground while the user was already inside. */
+    RETURN_TO_APP
+}
 
 /**
  * The rules of the "enable fingerprint login" reminder, kept free of Android so they are easy to test.
  *
- *  - It waits until the user has actually used the app on [MIN_ACTIVE_DAYS] different days, so a
- *    new user is never asked about a shortcut before they have a reason to want one.
- *  - Each time it is shown, the next one comes after a short, slowly growing delay
- *    (2 -> 3 -> 5 -> 7 days), and it is shown at most [MAX_REMINDERS] times in total; closing it
- *    counts as "later".
- *  - Enabling fingerprint login or choosing "don't ask again" stops it for good.
+ *  - Every time the user gets into the app ([BiometricReminderTrigger.SESSION_ENTRY]) the reminder
+ *    is due, as long as fingerprint login is still off. There is no minimum number of days, no
+ *    growing delay and no cap on how often it comes back.
+ *  - While the user keeps using the app, coming back to it from the background brings the reminder
+ *    again once [RETURN_INTERVAL_MILLIS] have passed since it was last shown.
+ *  - There is deliberately NO "don't ask again": the only thing that ends the reminder is turning
+ *    fingerprint login on. (If it is turned off later, the reminder simply starts again.)
+ *
+ * Whether fingerprint login is already enabled, or even possible on this device, is decided by the
+ * caller; this object only decides about timing.
  */
 object BiometricReminderPolicy {
-    const val MIN_ACTIVE_DAYS = 2
-    const val MAX_REMINDERS = 8
+    /** Minimum gap between two reminders that are not triggered by getting into the app. */
+    const val RETURN_INTERVAL_MILLIS = 20L * 60 * 1000
 
-    private const val DAY_MILLIS = 24L * 60 * 60 * 1000
-
-    /** Delay before the reminder that follows the [shownCount]-th one. */
-    fun intervalAfter(shownCount: Int): Long = when {
-        shownCount <= 1 -> 2 * DAY_MILLIS
-        shownCount == 2 -> 3 * DAY_MILLIS
-        shownCount == 3 -> 5 * DAY_MILLIS
-        else -> 7 * DAY_MILLIS
+    fun shouldRemind(
+        state: BiometricReminderState,
+        nowMillis: Long,
+        trigger: BiometricReminderTrigger
+    ): Boolean = when (trigger) {
+        BiometricReminderTrigger.SESSION_ENTRY -> true
+        BiometricReminderTrigger.RETURN_TO_APP ->
+            nowMillis - state.lastShownAt >= RETURN_INTERVAL_MILLIS
     }
 
-    fun recordActiveDay(state: BiometricReminderState, epochDay: Long): BiometricReminderState =
-        if (state.lastActiveEpochDay == epochDay) state
-        else state.copy(activeDays = state.activeDays + 1, lastActiveEpochDay = epochDay)
-
-    fun shouldRemind(state: BiometricReminderState, nowMillis: Long): Boolean =
-        !state.stopped &&
-                state.shownCount < MAX_REMINDERS &&
-                state.activeDays >= MIN_ACTIVE_DAYS &&
-                nowMillis >= state.nextDueAt
-
-    fun markShown(state: BiometricReminderState, nowMillis: Long): BiometricReminderState {
-        val count = state.shownCount + 1
-        return state.copy(shownCount = count, nextDueAt = nowMillis + intervalAfter(count))
-    }
-
-    /**
-     * One-time catch-up for installs that scheduled their next reminder under the old, longer
-     * delays (7/14/30 days): a due date further away than the current interval is pulled in.
-     * A due date that is already within the interval is left untouched, so this is idempotent.
-     */
-    fun capNextDue(state: BiometricReminderState, nowMillis: Long): BiometricReminderState {
-        if (state.shownCount == 0) return state
-        val latestAllowed = nowMillis + intervalAfter(state.shownCount)
-        return if (state.nextDueAt > latestAllowed) state.copy(nextDueAt = latestAllowed) else state
-    }
-
-    fun stop(state: BiometricReminderState): BiometricReminderState = state.copy(stopped = true)
+    fun markShown(state: BiometricReminderState, nowMillis: Long): BiometricReminderState =
+        state.copy(lastShownAt = nowMillis, shownCount = state.shownCount + 1)
 }
 
 /** Persists [BiometricReminderState]; all decisions are made by [BiometricReminderPolicy]. */
 object BiometricReminderPreferences {
     private const val PREFS_NAME = "biometric_reminder"
-    private const val KEY_ACTIVE_DAYS = "active_days"
-    private const val KEY_LAST_ACTIVE_DAY = "last_active_epoch_day"
+    private const val KEY_LAST_SHOWN = "last_shown_at"
     private const val KEY_SHOWN_COUNT = "shown_count"
-    private const val KEY_NEXT_DUE = "next_due_at"
-    private const val KEY_STOPPED = "stopped"
+
+    // Keys of the previous scheduling scheme (active days, growing delays and a permanent
+    // "don't ask again"). They are erased on first use so nobody stays opted out of the reminder.
+    private val LEGACY_KEYS = listOf("active_days", "last_active_epoch_day", "next_due_at", "stopped")
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    private fun dropLegacyKeys(context: Context) {
+        val p = prefs(context)
+        if (LEGACY_KEYS.none { p.contains(it) }) return
+        p.edit().apply { LEGACY_KEYS.forEach { remove(it) } }.apply()
+    }
+
     internal fun load(context: Context): BiometricReminderState {
+        dropLegacyKeys(context)
         val p = prefs(context)
         return BiometricReminderState(
-            activeDays = p.getInt(KEY_ACTIVE_DAYS, 0),
-            lastActiveEpochDay = p.getLong(KEY_LAST_ACTIVE_DAY, -1L),
-            shownCount = p.getInt(KEY_SHOWN_COUNT, 0),
-            nextDueAt = p.getLong(KEY_NEXT_DUE, 0L),
-            stopped = p.getBoolean(KEY_STOPPED, false)
+            lastShownAt = p.getLong(KEY_LAST_SHOWN, 0L),
+            shownCount = p.getInt(KEY_SHOWN_COUNT, 0)
         )
     }
 
     private fun save(context: Context, state: BiometricReminderState) {
         prefs(context).edit()
-            .putInt(KEY_ACTIVE_DAYS, state.activeDays)
-            .putLong(KEY_LAST_ACTIVE_DAY, state.lastActiveEpochDay)
+            .putLong(KEY_LAST_SHOWN, state.lastShownAt)
             .putInt(KEY_SHOWN_COUNT, state.shownCount)
-            .putLong(KEY_NEXT_DUE, state.nextDueAt)
-            .putBoolean(KEY_STOPPED, state.stopped)
             .apply()
     }
 
-    /** Counts today as a day of real use (once per calendar day). */
-    fun recordActiveDay(context: Context, today: LocalDate = LocalDate.now()) {
-        val state = load(context)
-        val updated = BiometricReminderPolicy
-            .recordActiveDay(state, today.toEpochDay())
-            .let { BiometricReminderPolicy.capNextDue(it, System.currentTimeMillis()) }
-        if (updated != state) save(context, updated)
-    }
+    fun shouldRemindNow(
+        context: Context,
+        trigger: BiometricReminderTrigger,
+        nowMillis: Long = System.currentTimeMillis()
+    ): Boolean = BiometricReminderPolicy.shouldRemind(load(context), nowMillis, trigger)
 
-    fun shouldRemindNow(context: Context, nowMillis: Long = System.currentTimeMillis()): Boolean =
-        BiometricReminderPolicy.shouldRemind(load(context), nowMillis)
-
-    /** Records that the reminder is being shown and schedules the one after it. */
+    /** Records that the reminder is being shown right now. */
     fun markShownNow(context: Context, nowMillis: Long = System.currentTimeMillis()) {
         save(context, BiometricReminderPolicy.markShown(load(context), nowMillis))
-    }
-
-    /** Fingerprint login was enabled, or the user asked not to be reminded again. */
-    fun stopForever(context: Context) {
-        save(context, BiometricReminderPolicy.stop(load(context)))
     }
 }

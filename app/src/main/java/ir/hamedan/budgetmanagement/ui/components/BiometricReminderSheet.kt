@@ -36,7 +36,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,9 +52,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import java.util.concurrent.atomic.AtomicBoolean
 import ir.hamedan.budgetmanagement.BudgetApp
 import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import ir.hamedan.budgetmanagement.data.preferences.BiometricReminderPreferences
+import ir.hamedan.budgetmanagement.data.preferences.BiometricReminderTrigger
 import ir.hamedan.budgetmanagement.data.preferences.NotificationType
 import ir.hamedan.budgetmanagement.data.preferences.OnboardingPreferences
 import ir.hamedan.budgetmanagement.data.preferences.SharedPreferences
@@ -60,19 +68,33 @@ import ir.hamedan.budgetmanagement.platform.biometric.BiometricPromptManager
 import ir.hamedan.budgetmanagement.ui.screens.settings.EnableBiometricLoginDialog
 import ir.hamedan.budgetmanagement.ui.screens.settings.enrollGuestBiometric
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
-/** How long the home screen is left alone before the reminder may appear. */
-private const val SETTLE_DELAY_MS = 2_500L
+/** How long the home screen is left alone before the reminder may appear after getting in. */
+private const val SETTLE_DELAY_MS = 1_500L
+
+/** Pause after the app returns to the foreground, so a lock screen can take over first. */
+private const val RETURN_SETTLE_DELAY_MS = 1_500L
+
+/** How often the host re-checks whether onboarding / another sheet is still in the way. */
+private const val READY_POLL_MS = 500L
 
 /**
  * Hosts the "sign in faster with your fingerprint" reminder.
  *
- * It decides (see [BiometricReminderPolicy][ir.hamedan.budgetmanagement.data.preferences.BiometricReminderPolicy])
- * whether to show a themed bottom sheet and, when the user taps "Enable", runs the same enrollment
- * as Settings > App Security right there, so enabling takes one tap instead of a trip through Settings.
+ * It is deliberately persistent (see [BiometricReminderPolicy][ir.hamedan.budgetmanagement.data.preferences.BiometricReminderPolicy]):
+ *  - every time the user gets into the app (sign-in, local unlock, cold start) the reminder is
+ *    shown, as long as fingerprint login is still off;
+ *  - while the user stays in the app, coming back from the background shows it again after a
+ *    short interval;
+ *  - there is no "don't ask again": the only way to stop it is to enable fingerprint login.
  *
- * Nothing is shown when the device has no enrolled strong biometric, when fingerprint login is
- * already on, while another sheet (permissions) is open, or before the onboarding has finished.
+ * "Enable" runs the same enrollment as Settings > App Security right there, so enabling takes one
+ * tap instead of a trip through Settings. "Later" just closes the sheet for now.
+ *
+ * Nothing is shown when the device has no enrolled strong biometric or when fingerprint login is
+ * already on. A due reminder waits (instead of being skipped) while the onboarding or the
+ * permissions sheet is open and appears as soon as they are gone.
  */
 @Composable
 fun BiometricReminderHost(
@@ -82,29 +104,58 @@ fun BiometricReminderHost(
     val context = LocalContext.current
     val app = remember(context) { context.applicationContext as BudgetApp }
     val blocked by rememberUpdatedState(blockedByOtherSheet)
+    val scope = rememberCoroutineScope()
 
-    var showSheet by remember { mutableStateOf(false) }
+    // Saveable: a rotation must neither lose an open sheet nor count as a new sign-in.
+    var showSheet by rememberSaveable { mutableStateOf(false) }
+    var entryHandled by rememberSaveable { mutableStateOf(false) }
     var showPasswordDialog by remember { mutableStateOf(false) }
     var setupError by remember { mutableStateOf<String?>(null) }
+    val checking = remember { AtomicBoolean(false) }
 
+    /** Shows the reminder if it is due for [trigger] and fingerprint login can be offered. */
+    suspend fun remindIfDue(trigger: BiometricReminderTrigger) {
+        if (showSheet || showPasswordDialog || !checking.compareAndSet(false, true)) return
+        try {
+            // Wait for the first-run onboarding and any permission sheet instead of skipping.
+            while (!OnboardingPreferences.isCompleted(context) || blocked) delay(READY_POLL_MS)
+            if (showSheet || showPasswordDialog) return
+            if (!canOfferFingerprint(context, app)) return
+            if (!BiometricReminderPreferences.shouldRemindNow(context, trigger)) return
+            BiometricReminderPreferences.markShownNow(context)
+            showSheet = true
+        } finally {
+            checking.set(false)
+        }
+    }
+
+    // Getting into the app (a fresh sign-in, a local unlock or a cold start) always reminds.
     LaunchedEffect(Unit) {
-        BiometricReminderPreferences.recordActiveDay(context)
-
-        // Let the home screen settle, and let a due permission sheet appear first.
+        if (entryHandled) return@LaunchedEffect
         delay(SETTLE_DELAY_MS)
-        if (blocked) return@LaunchedEffect
-        if (!OnboardingPreferences.isCompleted(context) ||
-            !OnboardingPreferences.isReminderGracePeriodOver(context)
-        ) return@LaunchedEffect
-        if (!BiometricReminderPreferences.shouldRemindNow(context)) return@LaunchedEffect
-        if (!canOfferFingerprint(context, app)) return@LaunchedEffect
+        remindIfDue(BiometricReminderTrigger.SESSION_ENTRY)
+        entryHandled = true
+    }
 
-        BiometricReminderPreferences.markShownNow(context)
-        showSheet = true
+    // Coming back to the app from the background reminds again after a short interval.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        var registered = false
+        val observer = LifecycleEventObserver { _, event ->
+            // Adding an observer replays the current state; only real returns count.
+            if (registered && event == Lifecycle.Event.ON_START) {
+                scope.launch {
+                    delay(RETURN_SETTLE_DELAY_MS)
+                    remindIfDue(BiometricReminderTrigger.RETURN_TO_APP)
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        registered = true
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     fun onEnabled() {
-        BiometricReminderPreferences.stopForever(context)
         showSheet = false
         showPasswordDialog = false
         setupError = null
@@ -162,11 +213,6 @@ fun BiometricReminderHost(
             errorMessage = setupError,
             onEnable = { startEnable() },
             onLater = {
-                showSheet = false
-                setupError = null
-            },
-            onNeverAskAgain = {
-                BiometricReminderPreferences.stopForever(context)
                 showSheet = false
                 setupError = null
             }
@@ -278,8 +324,7 @@ private fun BiometricReminderSheet(
     isPersian: Boolean,
     errorMessage: String?,
     onEnable: () -> Unit,
-    onLater: () -> Unit,
-    onNeverAskAgain: () -> Unit
+    onLater: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -389,31 +434,16 @@ private fun BiometricReminderSheet(
 
             Spacer(Modifier.height(6.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+            TextButton(
+                onClick = onLater,
+                modifier = Modifier.fillMaxWidth().height(48.dp)
             ) {
-                TextButton(
-                    onClick = onNeverAskAgain,
-                    modifier = Modifier.weight(1f).height(48.dp)
-                ) {
-                    Text(
-                        text = if (isPersian) "دیگه نشون نده" else "Don't ask again",
-                        color = colors.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                }
-                TextButton(
-                    onClick = onLater,
-                    modifier = Modifier.weight(1f).height(48.dp)
-                ) {
-                    Text(
-                        text = if (isPersian) "بعداً" else "Later",
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center
-                    )
-                }
+                Text(
+                    text = if (isPersian) "فعلاً نه، بعداً" else "Not now",
+                    color = colors.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }

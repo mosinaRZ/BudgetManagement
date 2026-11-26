@@ -633,12 +633,15 @@ class MainActivity : FragmentActivity() {
                 }
             }
 
+            // The destination as it is right now: `route` above can lag one frame behind a
+            // navigation that was started in the same tick as the session ending.
+            val liveRoute = navController.currentDestination?.route.orEmpty().ifBlank { route }
             if (!hasSession &&
-                route.isNotBlank() &&
-                !route.contains("Login") &&
-                !route.contains("Register") &&
-                !route.contains("PasswordReset") &&
-                !route.contains("Splash")
+                liveRoute.isNotBlank() &&
+                !liveRoute.contains("Login") &&
+                !liveRoute.contains("Register") &&
+                !liveRoute.contains("PasswordReset") &&
+                !liveRoute.contains("Splash")
             ) {
                 navController.navigate(AppRoute.Login()) {
                     popUpTo(navController.graph.startDestinationId) {
@@ -1017,6 +1020,19 @@ class MainActivity : FragmentActivity() {
             }
 
             composable<AppRoute.Register> {
+                val leaveRegister: () -> Unit = {
+                    // Reached from the guest home screen the stack holds only this screen:
+                    // go to the sign-in screen instead of leaving the app.
+                    if (navController.previousBackStackEntry == null) {
+                        navController.navigate(AppRoute.Login()) {
+                            popUpTo(navController.graph.id) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    } else {
+                        navController.popBackStack()
+                    }
+                }
+                androidx.activity.compose.BackHandler(onBack = leaveRegister)
                 RegisterScreen(
                     onRegistered = {
                         navController.navigate(AppRoute.Login()) {
@@ -1025,9 +1041,7 @@ class MainActivity : FragmentActivity() {
                             }
                         }
                     },
-                    onBack = {
-                        navController.popBackStack()
-                    }
+                    onBack = leaveRegister
                 )
             }
 
@@ -1107,6 +1121,17 @@ class MainActivity : FragmentActivity() {
                                 },
                                 onProfileClick = {
                                     navController.navigate(AppRoute.Profile)
+                                },
+                                onCreateAccountClick = {
+                                    // Guest -> account: open the registration screen (it asks what
+                                    // happens to the guest data) and end the guest session. The
+                                    // navigation goes first so the "no session" redirect below
+                                    // already sees the Register route and leaves it alone.
+                                    navController.navigate(AppRoute.Register) {
+                                        popUpTo(AppRoute.MainStructure) { inclusive = true }
+                                        launchSingleTop = true
+                                    }
+                                    app.container.guestModeManager.endSession()
                                 }
                             )
                         }
