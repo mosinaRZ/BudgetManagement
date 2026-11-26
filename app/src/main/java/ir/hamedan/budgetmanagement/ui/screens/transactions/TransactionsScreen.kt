@@ -1,5 +1,19 @@
 package ir.hamedan.budgetmanagement.ui.screens.transactions
 
+import androidx.compose.material.icons.filled.AllInclusive
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import ir.hamedan.budgetmanagement.ui.components.FilterChipGrid
+import ir.hamedan.budgetmanagement.ui.components.FilterChoice
+import ir.hamedan.budgetmanagement.ui.components.FilterDateRangeGroup
+import ir.hamedan.budgetmanagement.ui.components.FilterSheetHeader
+import ir.hamedan.budgetmanagement.ui.components.FilterSheetBody
+import ir.hamedan.budgetmanagement.ui.components.filterEndOfDay
+import ir.hamedan.budgetmanagement.ui.components.filterStartOfDay
 import ir.hamedan.budgetmanagement.ui.components.scrollEdgeFade
 
 import ir.hamedan.budgetmanagement.ui.theme.navigationBarBottom
@@ -41,8 +55,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.TrendingDown
-import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -78,16 +90,9 @@ import ir.hamedan.budgetmanagement.ui.components.SuccessBottomSheet
 import ir.hamedan.budgetmanagement.ui.components.SuccessSheetContent
 import ir.hamedan.budgetmanagement.ui.components.SwipeToConfirmButton
 import ir.hamedan.budgetmanagement.ui.components.VoiceInputButton
-import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsAccent
-import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsChoiceCard
 import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsFloatingSheet
-import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsGroup
-import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsRow
 import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsSectionHeader
 import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsSheetActions
-import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsSheetHeader
-import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsSheetScrollBody
-import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsValueTrailing
 import ir.hamedan.budgetmanagement.ui.components.formatSuccessAmountFromToman
 import ir.hamedan.budgetmanagement.ui.screens.add.ThousandsSeparatorTransformation
 import ir.hamedan.budgetmanagement.ui.theme.isPersianLocale
@@ -553,7 +558,14 @@ fun TransactionsScreen(
                 isPersian = isPersian,
                 onDismiss = { showFilterSheet = false },
                 onApply = { timeFilter, typeFilter, sortOrder, start, end ->
-                    viewModel.applyCustomFilter(timeFilter, typeFilter, sortOrder, start, end)
+                    val isDefault = typeFilter == TransactionTypeFilter.ALL &&
+                            sortOrder == SortOrder.NEWEST && start == null && end == null
+                    if (isDefault) {
+                        // هیچ فیلتر پیشرفته‌ای انتخاب نشده؛ به حالت چیپ‌های زمانی برگرد.
+                        viewModel.setQuickTimeFilter(timeFilter)
+                    } else {
+                        viewModel.applyCustomFilter(timeFilter, typeFilter, sortOrder, start, end)
+                    }
                     showFilterSheet = false
                 }
             )
@@ -897,30 +909,20 @@ private fun FilterBottomSheet(
     val selectedTime = currentFilterState.timeFilter
     var selectedType by remember { mutableStateOf(currentFilterState.typeFilter) }
     var selectedSort by remember { mutableStateOf(currentFilterState.sortOrder) }
-
     var startDate by remember { mutableStateOf(currentFilterState.startDate) }
     var endDate by remember { mutableStateOf(currentFilterState.endDate) }
 
-    var showStartDatePicker by remember { mutableStateOf(false) }
-    var showEndDatePicker by remember { mutableStateOf(false) }
-
+    // آیکون‌های برداری (بدون ایموجی) برای کاشی‌های فیلتر
     fun typeIcon(type: TransactionTypeFilter) = when (type) {
         TransactionTypeFilter.ALL -> Icons.Default.AllInclusive
         TransactionTypeFilter.INCOME -> Icons.Default.ArrowUpward
         TransactionTypeFilter.EXPENSE -> Icons.Default.ArrowDownward
-        TransactionTypeFilter.UNCATEGORIZED -> Icons.Default.Category
+        TransactionTypeFilter.UNCATEGORIZED -> null // از R.drawable.ic_category استفاده می‌شود (typeIconRes)
     }
 
-    fun typeDescription(type: TransactionTypeFilter) = when (type) {
-        TransactionTypeFilter.ALL ->
-            if (isPersian) "درآمدها و هزینه‌ها با هم نمایش داده شوند" else "Show income and expenses together"
-        TransactionTypeFilter.INCOME ->
-            if (isPersian) "فقط پولی که به حساب شما اضافه شده" else "Only money that came in"
-        TransactionTypeFilter.EXPENSE ->
-            if (isPersian) "فقط پولی که خرج کرده‌اید" else "Only money you spent"
-        TransactionTypeFilter.UNCATEGORIZED ->
-            if (isPersian) "تراکنش‌هایی که هنوز دسته‌بندی نشده‌اند" else "Transactions without a category yet"
-    }
+    // «دسته‌بندی نشده» همان آیکونِ «مدیریت دسته‌بندی‌ها» را دارد
+    fun typeIconRes(type: TransactionTypeFilter): Int? =
+        if (type == TransactionTypeFilter.UNCATEGORIZED) R.drawable.ic_category else null
 
     fun sortIcon(sort: SortOrder) = when (sort) {
         SortOrder.NEWEST -> Icons.Default.Schedule
@@ -929,145 +931,79 @@ private fun FilterBottomSheet(
         SortOrder.LOWEST_AMOUNT -> Icons.AutoMirrored.Filled.TrendingDown
     }
 
-    fun sortDescription(sort: SortOrder) = when (sort) {
-        SortOrder.NEWEST -> if (isPersian) "تراکنش‌های تازه‌تر بالاتر باشند" else "Most recent first"
-        SortOrder.OLDEST -> if (isPersian) "تراکنش‌های قدیمی‌تر بالاتر باشند" else "Oldest first"
-        SortOrder.HIGHEST_AMOUNT -> if (isPersian) "از مبلغ بیشتر به کمتر" else "From the largest amount down"
-        SortOrder.LOWEST_AMOUNT -> if (isPersian) "از مبلغ کمتر به بیشتر" else "From the smallest amount up"
+    val typeChoices = remember(isPersian) {
+        TransactionTypeFilter.values().map {
+            FilterChoice(id = it.name, title = if (isPersian) it.titleFa else it.titleEn, icon = typeIcon(it), iconRes = typeIconRes(it))
+        }
+    }
+    val sortChoices = remember(isPersian) {
+        SortOrder.values().map {
+            FilterChoice(id = it.name, title = if (isPersian) it.titleFa else it.titleEn, icon = sortIcon(it))
+        }
     }
 
-    val pickDate = if (isPersian) "انتخاب" else "Select"
+    val hasChanges = selectedType != TransactionTypeFilter.ALL ||
+            selectedSort != SortOrder.NEWEST ||
+            startDate != null || endDate != null
 
     SettingsFloatingSheet(onDismiss = onDismiss) {
-        SettingsSheetHeader(
+        FilterSheetHeader(
             title = if (isPersian) "فیلتر پیشرفته" else "Advanced Filter",
             subtitle = if (isPersian) "تراکنش‌ها را دقیق‌تر پیدا کن" else "Find transactions more precisely",
-            icon = Icons.Default.Tune,
-            accent = SettingsAccent.INDIGO
+            resetLabel = if (isPersian) "بازنشانی" else "Reset",
+            showReset = hasChanges,
+            onReset = {
+                selectedType = TransactionTypeFilter.ALL
+                selectedSort = SortOrder.NEWEST
+                startDate = null
+                endDate = null
+            }
         )
 
-        SettingsSheetScrollBody {
+        FilterSheetBody {
             SettingsSectionHeader(text = if (isPersian) "نوع تراکنش" else "Type")
-            TransactionTypeFilter.values().forEach { type ->
-                SettingsChoiceCard(
-                    title = if (isPersian) type.titleFa else type.titleEn,
-                    description = typeDescription(type),
-                    icon = typeIcon(type),
-                    isSelected = selectedType == type,
-                    onClick = { selectedType = type }
-                )
-            }
-
-            Spacer(Modifier.height(2.dp))
-            SettingsGroup(
-                onSheet = true,
-                title = if (isPersian) "بازه زمانی سفارشی" else "Custom Date Range",
-                rows = buildList<@Composable () -> Unit> {
-                    add {
-                        SettingsRow(
-                            title = if (isPersian) "از تاریخ" else "From Date",
-                            icon = Icons.Default.CalendarMonth,
-                            accent = SettingsAccent.TEAL,
-                            onClick = { showStartDatePicker = true },
-                            trailing = {
-                                SettingsValueTrailing(
-                                    startDate?.let { DateUtils.formatTimestamp(it, isPersian) } ?: pickDate
-                                )
-                            }
-                        )
-                    }
-                    add {
-                        SettingsRow(
-                            title = if (isPersian) "تا تاریخ" else "To Date",
-                            icon = Icons.Default.Event,
-                            accent = SettingsAccent.TEAL,
-                            onClick = { showEndDatePicker = true },
-                            trailing = {
-                                SettingsValueTrailing(
-                                    endDate?.let { DateUtils.formatTimestamp(it, isPersian) } ?: pickDate
-                                )
-                            }
-                        )
-                    }
-                    if (startDate != null || endDate != null) {
-                        add {
-                            SettingsRow(
-                                title = if (isPersian) "پاک کردن بازه" else "Clear range",
-                                icon = Icons.Default.Close,
-                                accent = SettingsAccent.DANGER,
-                                onClick = {
-                                    startDate = null
-                                    endDate = null
-                                }
-                            )
-                        }
-                    }
-                }
+            FilterChipGrid(
+                choices = typeChoices,
+                selectedId = selectedType.name,
+                onSelect = { selectedType = TransactionTypeFilter.valueOf(it) }
             )
 
-            Spacer(Modifier.height(2.dp))
             SettingsSectionHeader(text = if (isPersian) "ترتیب نمایش" else "Sort By")
-            SortOrder.values().forEach { sort ->
-                SettingsChoiceCard(
-                    title = if (isPersian) sort.titleFa else sort.titleEn,
-                    description = sortDescription(sort),
-                    icon = sortIcon(sort),
-                    isSelected = selectedSort == sort,
-                    onClick = { selectedSort = sort }
-                )
-            }
+            FilterChipGrid(
+                choices = sortChoices,
+                selectedId = selectedSort.name,
+                onSelect = { selectedSort = SortOrder.valueOf(it) }
+            )
+
+            FilterDateRangeGroup(
+                isPersian = isPersian,
+                title = if (isPersian) "بازه زمانی سفارشی" else "Custom Date Range",
+                startMillis = startDate,
+                endMillis = endDate,
+                maxDate = LocalDate.now().plusYears(1),
+                onRangeChange = { s, e ->
+                    startDate = s
+                    endDate = e
+                }
+            )
         }
 
         SettingsSheetActions(
             cancelText = if (isPersian) "انصراف" else "Cancel",
             applyText = if (isPersian) "اعمال فیلتر" else "Apply",
             onCancel = onDismiss,
-            onApply = { onApply(selectedTime, selectedType, selectedSort, startDate, endDate) }
+            onApply = {
+                // بازه فقط وقتی معتبر است که هر دو سر آن انتخاب شده باشد؛ پایان تا آخرِ همان روز حساب می‌شود.
+                val hasRange = startDate != null && endDate != null
+                onApply(
+                    selectedTime,
+                    selectedType,
+                    selectedSort,
+                    if (hasRange) filterStartOfDay(startDate!!) else null,
+                    if (hasRange) filterEndOfDay(endDate!!) else null
+                )
+            }
         )
-    }
-
-    if (showStartDatePicker) {
-        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = startDate)
-        DatePickerDialog(
-            onDismissRequest = { showStartDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    startDate = datePickerState.selectedDateMillis
-                    showStartDatePicker = false
-                }) {
-                    Text(if (isPersian) "تایید" else "OK")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showStartDatePicker = false }) {
-                    Text(if (isPersian) "انصراف" else "Cancel")
-                }
-            }
-        ) {
-            DatePicker(state = datePickerState)
-        }
-    }
-
-    if (showEndDatePicker) {
-        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = endDate)
-        DatePickerDialog(
-            onDismissRequest = { showEndDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    endDate = datePickerState.selectedDateMillis
-                    showEndDatePicker = false
-                }) {
-                    Text(if (isPersian) "تایید" else "OK")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEndDatePicker = false }) {
-                    Text(if (isPersian) "انصراف" else "Cancel")
-                }
-            }
-        ) {
-            DatePicker(state = datePickerState)
-        }
     }
 }
 

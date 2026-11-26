@@ -1,5 +1,11 @@
 package ir.hamedan.budgetmanagement.ui.screens.analytics
 
+import ir.hamedan.budgetmanagement.ui.components.FilterChipGrid
+import ir.hamedan.budgetmanagement.ui.components.FilterChoice
+import ir.hamedan.budgetmanagement.ui.components.FilterDateRangeGroup
+import ir.hamedan.budgetmanagement.ui.components.FilterSheetHeader
+import ir.hamedan.budgetmanagement.ui.components.FilterSheetBody
+import ir.hamedan.budgetmanagement.ui.components.filterStartOfDay
 import ir.hamedan.budgetmanagement.ui.components.scrollEdgeFade
 
 import ir.hamedan.budgetmanagement.ui.theme.dockClearance
@@ -32,20 +38,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
-import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.ShowChart
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -59,7 +60,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -78,15 +78,9 @@ import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.BarChartEntry
 import ir.hamedan.budgetmanagement.ui.components.ColumnBarChartCard
 import ir.hamedan.budgetmanagement.ui.components.appSkeletonShimmer
-import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsAccent
-import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsChoiceCard
 import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsFloatingSheet
-import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsGroup
-import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsRow
+import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsSectionHeader
 import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsSheetActions
-import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsSheetHeader
-import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsSheetScrollBody
-import ir.hamedan.budgetmanagement.ui.screens.settings.SettingsValueTrailing
 import ir.hamedan.budgetmanagement.ui.screens.transactions.TimeFilter
 import ir.hamedan.budgetmanagement.utils.DateUtils
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
@@ -621,112 +615,81 @@ private fun AnalyticsFilterBottomSheet(
     onCustomRangeSelected: (Long, Long) -> Unit,
     onClearCustomRange: () -> Unit
 ) {
-    var showDateRangePicker by remember { mutableStateOf(false) }
     var pendingStart by remember(customStartMillis) { mutableStateOf(customStartMillis) }
     var pendingEnd by remember(customEndMillis) { mutableStateOf(customEndMillis) }
-
-    val dateRangeState = rememberDateRangePickerState(
-        initialSelectedStartDateMillis = pendingStart,
-        initialSelectedEndDateMillis = pendingEnd
-    )
 
     fun localDateMillis(date: LocalDate): Long =
         date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
-    // هر بازه‌ی سریع: عنوان، توضیح، آیکون و تعداد روزهای آن (شامل امروز)
-    data class QuickRange(val title: String, val description: String, val icon: ImageVector, val days: Long)
-
-    val quickRanges = listOf(
-        QuickRange(
-            title = if (isPersian) "امروز" else "Today",
-            description = if (isPersian) "فقط تراکنش‌های امروز" else "Only today's transactions",
-            icon = Icons.Default.Today,
-            days = 1
-        ),
-        QuickRange(
-            title = if (isPersian) "۷ روز اخیر" else "Last 7 days",
-            description = if (isPersian) "یک هفته‌ی گذشته تا امروز" else "The past week up to today",
-            icon = Icons.Default.DateRange,
-            days = 7
-        ),
-        QuickRange(
-            title = if (isPersian) "۳۰ روز اخیر" else "Last 30 days",
-            description = if (isPersian) "یک ماه گذشته تا امروز" else "The past month up to today",
-            icon = Icons.Default.CalendarMonth,
-            days = 30
-        ),
-        QuickRange(
-            title = if (isPersian) "۹۰ روز اخیر" else "Last 90 days",
-            description = if (isPersian) "سه ماه گذشته تا امروز" else "The past three months up to today",
-            icon = Icons.AutoMirrored.Filled.EventNote,
-            days = 90
-        )
+    // هر بازه‌ی سریع: تعداد روز (برای محاسبه‌ی بازه) و عنوان
+    val quickRanges: List<Pair<Long, String>> = listOf(
+        1L to (if (isPersian) "امروز" else "Today"),
+        7L to (if (isPersian) "۷ روز اخیر" else "Last 7 days"),
+        30L to (if (isPersian) "۳۰ روز اخیر" else "Last 30 days"),
+        90L to (if (isPersian) "۹۰ روز اخیر" else "Last 90 days")
     )
-
-    fun isQuickRangeSelected(range: QuickRange): Boolean {
-        val start = pendingStart ?: return false
-        val end = pendingEnd ?: return false
-        val today = LocalDate.now()
-        return start == localDateMillis(today.minusDays(range.days - 1)) && end == localDateMillis(today)
+    val quickChoices = remember(isPersian) {
+        quickRanges.map { (days, title) ->
+            FilterChoice(
+                id = days.toString(),
+                title = title
+            )
+        }
     }
 
-    val customRangeText = if (pendingStart != null && pendingEnd != null) {
-        "${DateUtils.formatTimestamp(pendingStart!!, isPersian)}  —  ${DateUtils.formatTimestamp(pendingEnd!!, isPersian)}"
-    } else {
-        if (isPersian) "انتخاب" else "Select"
+    // چیپ سریع فقط وقتی انتخاب است که بازه‌ی فعلی دقیقاً «N روز اخیر تا امروز» باشد.
+    val selectedQuickId = run {
+        val start = pendingStart
+        val end = pendingEnd
+        if (start == null || end == null) {
+            null
+        } else {
+            val today = LocalDate.now()
+            quickRanges.firstOrNull { (days, _) ->
+                filterStartOfDay(start) == localDateMillis(today.minusDays(days - 1)) &&
+                        filterStartOfDay(end) == localDateMillis(today)
+            }?.first?.toString()
+        }
     }
+
+    val hasChanges = pendingStart != null || pendingEnd != null || isCustomRange
 
     SettingsFloatingSheet(onDismiss = onDismiss) {
-        SettingsSheetHeader(
-            title = if (isPersian) "فیلتر هوشمند" else "Smart Filter",
+        FilterSheetHeader(
+            title = if (isPersian) "فیلتر پیشرفته" else "Advanced Filter",
             subtitle = if (isPersian) "بازه تحلیل را انتخاب کن" else "Choose the analytics range",
-            icon = Icons.Default.Tune,
-            accent = SettingsAccent.INDIGO
+            icon = null,
+            resetLabel = if (isPersian) "بازنشانی" else "Reset",
+            showReset = hasChanges,
+            onReset = {
+                pendingStart = null
+                pendingEnd = null
+            }
         )
 
-        SettingsSheetScrollBody {
-            quickRanges.forEach { range ->
-                SettingsChoiceCard(
-                    title = range.title,
-                    description = range.description,
-                    icon = range.icon,
-                    isSelected = isQuickRangeSelected(range),
-                    onClick = {
-                        val end = LocalDate.now()
-                        pendingStart = localDateMillis(end.minusDays(range.days - 1))
-                        pendingEnd = localDateMillis(end)
-                    }
-                )
-            }
+        FilterSheetBody {
+            SettingsSectionHeader(text = if (isPersian) "بازه‌های سریع" else "Quick Ranges")
+            FilterChipGrid(
+                choices = quickChoices,
+                selectedId = selectedQuickId,
+                useIcons = false,
+                onSelect = { id ->
+                    val days = id.toLong()
+                    val end = LocalDate.now()
+                    pendingStart = localDateMillis(end.minusDays(days - 1))
+                    pendingEnd = localDateMillis(end)
+                }
+            )
 
-            Spacer(Modifier.height(2.dp))
-            SettingsGroup(
-                onSheet = true,
+            FilterDateRangeGroup(
+                isPersian = isPersian,
                 title = if (isPersian) "بازه دلخواه" else "Custom Range",
-                rows = buildList<@Composable () -> Unit> {
-                    add {
-                        SettingsRow(
-                            title = if (isPersian) "انتخاب بازه دلخواه" else "Choose a custom range",
-                            subtitle = if (isPersian) "از تاریخ تا تاریخ" else "From date to date",
-                            icon = Icons.Default.DateRange,
-                            accent = SettingsAccent.TEAL,
-                            onClick = { showDateRangePicker = true },
-                            trailing = { SettingsValueTrailing(customRangeText) }
-                        )
-                    }
-                    if (pendingStart != null || pendingEnd != null || isCustomRange) {
-                        add {
-                            SettingsRow(
-                                title = if (isPersian) "حذف فیلتر" else "Clear filter",
-                                icon = Icons.Default.Close,
-                                accent = SettingsAccent.DANGER,
-                                onClick = {
-                                    pendingStart = null
-                                    pendingEnd = null
-                                }
-                            )
-                        }
-                    }
+                useIcons = false,
+                startMillis = pendingStart,
+                endMillis = pendingEnd,
+                onRangeChange = { s, e ->
+                    pendingStart = s
+                    pendingEnd = e
                 }
             )
         }
@@ -736,45 +699,15 @@ private fun AnalyticsFilterBottomSheet(
             applyText = if (isPersian) "اعمال فیلتر" else "Apply Filter",
             onCancel = onDismiss,
             onApply = {
-                if (pendingStart != null && pendingEnd != null) {
-                    onCustomRangeSelected(pendingStart!!, pendingEnd!!)
+                val start = pendingStart
+                val end = pendingEnd
+                if (start != null && end != null) {
+                    onCustomRangeSelected(start, end)
                 } else {
                     onClearCustomRange()
                 }
             }
         )
-    }
-
-    if (showDateRangePicker) {
-        DatePickerDialog(
-            onDismissRequest = { showDateRangePicker = false },
-            confirmButton = {
-                TextButton(
-                    enabled = dateRangeState.selectedStartDateMillis != null && dateRangeState.selectedEndDateMillis != null,
-                    onClick = {
-                        pendingStart = dateRangeState.selectedStartDateMillis
-                        pendingEnd = dateRangeState.selectedEndDateMillis
-                        showDateRangePicker = false
-                    }
-                ) {
-                    Text(if (isPersian) "تایید" else "OK")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDateRangePicker = false }) {
-                    Text(if (isPersian) "انصراف" else "Cancel")
-                }
-            }
-        ) {
-            DateRangePicker(
-                state = dateRangeState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 520.dp),
-                title = { Text(if (isPersian) "انتخاب بازه تحلیل" else "Select analytics range") },
-                headline = { Text(if (isPersian) "از تاریخ تا تاریخ" else "From date to date") }
-            )
-        }
     }
 }
 
