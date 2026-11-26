@@ -130,6 +130,8 @@ class MainActivity : FragmentActivity() {
         super.onStart()
         val app = applicationContext as BudgetApp
         app.isAppInForeground = true
+        // A real, user-visible launch: restart the inactivity-reminder cycle.
+        ir.hamedan.budgetmanagement.data.preferences.AppUsagePreferences.markOpened(applicationContext)
         AppNotificationManager.cancelAll(applicationContext)
     }
 

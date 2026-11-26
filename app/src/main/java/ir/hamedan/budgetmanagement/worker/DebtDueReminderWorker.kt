@@ -73,8 +73,18 @@ class DebtDueReminderWorker(
             val step = DebtDueReminders.stepFor(info.daysLeft) ?: continue
             if (!DebtDueReminders.shouldSend(step, DebtDueReminderState.lastSentStep(context, key))) continue
 
-            sendReminder(item, info, step, showAmounts, zone)
-            DebtDueReminderState.markSent(context, key, step)
+            // Only remember the step as delivered once the notification was really stored. If storing
+            // fails, the step stays unmarked, so the next run retries it; one failing item must not
+            // stop the reminders of the others.
+            val delivered = try {
+                sendReminder(item, info, step, showAmounts, zone)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Could not deliver reminder for ${item.id}", e)
+                false
+            }
+            if (delivered) DebtDueReminderState.markSent(context, key, step)
         }
 
         // An empty list can be a momentary read; never wipe the delivery history because of it.
@@ -82,13 +92,14 @@ class DebtDueReminderWorker(
         return Result.success()
     }
 
-    private fun sendReminder(
+    /** @return `true` when the reminder is stored in the notification list (see [NotificationHelper.sendAndAwait]). */
+    private suspend fun sendReminder(
         item: DebtCreditEntity,
         info: DebtDueReminders.DueInfo,
         step: Int,
         showAmounts: Boolean,
         zone: ZoneId
-    ) {
+    ): Boolean {
         val context = applicationContext
         val isDebt = item.type == "DEBT"
         val days = info.daysLeft
@@ -147,7 +158,7 @@ class DebtDueReminderWorker(
             if (showAmounts) append(" $amountLabelEn: ${amount.second}.")
         }
 
-        NotificationHelper.send(
+        return NotificationHelper.sendAndAwait(
             context = context,
             notificationType = NotificationType.DEBT_DUE_REMINDER,
             type = "WARNING",

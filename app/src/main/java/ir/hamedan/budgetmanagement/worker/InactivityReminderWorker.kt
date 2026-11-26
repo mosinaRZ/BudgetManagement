@@ -25,7 +25,7 @@ class InactivityReminderWorker(
         Result.success()
     }
 
-    private fun checkInactivity(): Result {
+    private suspend fun checkInactivity(): Result {
         val lastOpen = AppUsagePreferences.getLastOpen(applicationContext)
         if (lastOpen == 0L) return Result.success()
 
@@ -68,7 +68,9 @@ class InactivityReminderWorker(
                 )
             }
 
-            NotificationHelper.send(
+            // Awaited on purpose: the threshold below is only recorded after the notification
+            // was really stored, and the worker must not finish before that.
+            NotificationHelper.sendAndAwait(
                 context = applicationContext,
                 notificationType = NotificationType.INACTIVITY_REMINDER,
                 type = "WARNING",

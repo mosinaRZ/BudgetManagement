@@ -38,13 +38,13 @@ class ProfileOccasionWorker(
         }
     }
 
-    private fun checkBirthday(user: UserEntity, today: LocalDate, dateKey: String) {
+    private suspend fun checkBirthday(user: UserEntity, today: LocalDate, dateKey: String) {
         val birth = user.birthDate ?: return
         val parsed = runCatching { LocalDate.parse(birth) }.getOrNull() ?: return
         if (parsed.monthValue != today.monthValue || parsed.dayOfMonth != today.dayOfMonth) return
 
         val name = user.firstName.ifBlank { user.fullName.ifBlank { "دوست خوبم" } }
-        NotificationHelper.send(
+        NotificationHelper.sendAndAwait(
             context = applicationContext,
             notificationType = NotificationType.PROFILE_OCCASION,
             type = "PROFILE",
@@ -56,7 +56,7 @@ class ProfileOccasionWorker(
         )
     }
 
-    private fun checkGenderOccasions(user: UserEntity, today: LocalDate, dateKey: String) {
+    private suspend fun checkGenderOccasions(user: UserEntity, today: LocalDate, dateKey: String) {
         val gender = user.gender
         if (gender != "male" && gender != "female") return
 
@@ -133,7 +133,7 @@ class ProfileOccasionWorker(
         }
     }
 
-    private fun sendGender(
+    private suspend fun sendGender(
         dateKey: String,
         user: UserEntity,
         titleFa: String,
@@ -141,7 +141,7 @@ class ProfileOccasionWorker(
         bodyFa: String,
         bodyEn: String
     ) {
-        NotificationHelper.send(
+        NotificationHelper.sendAndAwait(
             context = applicationContext,
             notificationType = NotificationType.PROFILE_OCCASION,
             type = "PROFILE",

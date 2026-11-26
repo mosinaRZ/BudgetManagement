@@ -1,6 +1,7 @@
 package ir.hamedan.budgetmanagement.worker
 
 import android.content.Context
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import ir.hamedan.budgetmanagement.BudgetApp
@@ -11,6 +12,7 @@ import ir.hamedan.budgetmanagement.data.repository.CategoryRepository
 import ir.hamedan.budgetmanagement.platform.locale.LocaleHelper
 import ir.hamedan.budgetmanagement.data.notification.NotificationHelper
 import ir.hamedan.budgetmanagement.utils.CategoryRules
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import java.util.Calendar
 
@@ -24,6 +26,7 @@ class MonthlyGoalDepositWorker(
         val goalRepository = app.container.savingGoalRepository
         val transactionRepository = app.container.transactionRepository
         val categoryRepository = app.container.categoryRepository
+        val syncLocalDataSource = app.container.syncLocalDataSource
         val isPersian = LocaleHelper.getLanguage(applicationContext) == "fa"
 
         val goals = goalRepository.getAllGoals().first()
@@ -60,40 +63,70 @@ class MonthlyGoalDepositWorker(
 
             val monthTag = "%04d-%02d".format(year, month + 1)
             if (currentBalance < goal.monthlyAmount) {
-                NotificationHelper.send(
-                    context = applicationContext,
-                    notificationType = NotificationType.GOAL_AUTO_DEPOSIT,
-                    type = "WARNING",
-                    titleFa = "واریز ماهانه قلک انجام نشد",
-                    titleEn = "Monthly Goal Deposit Skipped",
-                    descFa = "برای واریز ${goal.monthlyAmount} به قلک «${goal.title}» در روز $dueDay ماه، موجودی کافی نیست. پس از تأمین موجودی، واریز در اجرای بعدی دوباره بررسی می‌شود.",
-                    descEn = "The balance is too low to deposit ${goal.monthlyAmount} to \"${goal.title}\" on day $dueDay. The deposit will be retried automatically when the worker runs again.",
-                    tag = "GOAL_AUTO_FAIL_${goal.id}_$monthTag"
-                )
+                notifyQuietly {
+                    NotificationHelper.sendAndAwait(
+                        context = applicationContext,
+                        notificationType = NotificationType.GOAL_AUTO_DEPOSIT,
+                        type = "WARNING",
+                        titleFa = "واریز ماهانه قلک انجام نشد",
+                        titleEn = "Monthly Goal Deposit Skipped",
+                        descFa = "برای واریز ${goal.monthlyAmount} به قلک «${goal.title}» در روز $dueDay ماه، موجودی کافی نیست. پس از تأمین موجودی، واریز در اجرای بعدی دوباره بررسی می‌شود.",
+                        descEn = "The balance is too low to deposit ${goal.monthlyAmount} to \"${goal.title}\" on day $dueDay. The deposit will be retried automatically when the worker runs again.",
+                        tag = "GOAL_AUTO_FAIL_${goal.id}_$monthTag"
+                    )
+                }
                 continue
             }
 
             try {
-                // Resolve the category BEFORE mutating the goal, so a failure here can
-                // never leave a deposit without its matching transaction.
-                val category = savingGoalCategory
-                    ?: resolveSavingGoalCategory(categoryRepository).also { savingGoalCategory = it }
+                // The deposit, its matching expense transaction and the "already processed this month"
+                // marker are ONE atomic unit. If any step fails, all of them are rolled back, so a retry
+                // can never deposit twice (previously the deposit survived a failed transaction insert
+                // and the retry deposited again because the marker was not yet written).
+                syncLocalDataSource.transaction {
+                    // Resolve the category inside the same unit: a failure here cannot leave a deposit
+                    // without its matching transaction.
+                    val category = savingGoalCategory
+                        ?: resolveSavingGoalCategory(categoryRepository).also { savingGoalCategory = it }
 
-                goalRepository.depositToGoal(goal.id, goal.monthlyAmount)
-                transactionRepository.insertTransaction(
-                    TransactionEntity(
-                        title = if (isPersian) "واریز خودکار ماهانه به قلک: ${goal.title}"
-                        else "Auto Monthly Deposit to: ${goal.title}",
-                        amount = goal.monthlyAmount,
-                        categoryId = category.id,
-                        type = "EXPENSE",
-                        note = if (isPersian) "واریز خودکار ماهانه" else "Automatic monthly deposit"
+                    goalRepository.depositToGoal(goal.id, goal.monthlyAmount)
+                    transactionRepository.insertTransaction(
+                        TransactionEntity(
+                            title = if (isPersian) "واریز خودکار ماهانه به قلک: ${goal.title}"
+                            else "Auto Monthly Deposit to: ${goal.title}",
+                            amount = goal.monthlyAmount,
+                            categoryId = category.id,
+                            type = "EXPENSE",
+                            note = if (isPersian) "واریز خودکار ماهانه" else "Automatic monthly deposit"
+                        )
                     )
-                )
-                goalRepository.updateLastAutoDepositTimestamp(goal.id, now)
+                    goalRepository.updateLastAutoDepositTimestamp(goal.id, now)
+                }
                 currentBalance -= goal.monthlyAmount
+            } catch (e: CancellationException) {
+                throw e
+            } catch (error: Exception) {
+                Log.e(TAG, "Monthly deposit failed for goal ${goal.id}", error)
+                // The category may have been created inside the rolled-back transaction: forget it.
+                savingGoalCategory = null
+                notifyQuietly {
+                    NotificationHelper.sendAndAwait(
+                        context = applicationContext,
+                        notificationType = NotificationType.GOAL_AUTO_DEPOSIT,
+                        type = "WARNING",
+                        titleFa = "خطا در واریز ماهانه قلک",
+                        titleEn = "Monthly Goal Deposit Error",
+                        descFa = "واریز ماهانه قلک «${goal.title}» کامل نشد. لطفاً تراکنش‌ها و موجودی را بررسی کنید؛ برنامه دوباره تلاش خواهد کرد.",
+                        descEn = "The monthly deposit to \"${goal.title}\" did not complete. Please review the balance and transactions; the app will retry.",
+                        tag = "GOAL_AUTO_ERROR_${goal.id}_$monthTag"
+                    )
+                }
+                return Result.retry()
+            }
 
-                NotificationHelper.send(
+            // The deposit is committed. A failure to notify must never turn into a retry of the run.
+            notifyQuietly {
+                NotificationHelper.sendAndAwait(
                     context = applicationContext,
                     notificationType = NotificationType.GOAL_AUTO_DEPOSIT,
                     type = "SUCCESS",
@@ -103,22 +136,21 @@ class MonthlyGoalDepositWorker(
                     descEn = "${goal.monthlyAmount} was deposited to \"${goal.title}\" on day $dueDay of the month.",
                     tag = "GOAL_AUTO_SUCCESS_${goal.id}_$monthTag"
                 )
-            } catch (error: Exception) {
-                NotificationHelper.send(
-                    context = applicationContext,
-                    notificationType = NotificationType.GOAL_AUTO_DEPOSIT,
-                    type = "WARNING",
-                    titleFa = "خطا در واریز ماهانه قلک",
-                    titleEn = "Monthly Goal Deposit Error",
-                    descFa = "واریز ماهانه قلک «${goal.title}» کامل نشد. لطفاً تراکنش‌ها و موجودی را بررسی کنید؛ برنامه دوباره تلاش خواهد کرد.",
-                    descEn = "The monthly deposit to \"${goal.title}\" did not complete. Please review the balance and transactions; the app will retry.",
-                    tag = "GOAL_AUTO_ERROR_${goal.id}_$monthTag"
-                )
-                return Result.retry()
             }
         }
 
         return Result.success()
+    }
+
+    /** Notifications are informational: never let one fail the run (or turn into a retry). */
+    private suspend fun notifyQuietly(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not deliver goal-deposit notification", e)
+        }
     }
 
     /**
@@ -148,5 +180,9 @@ class MonthlyGoalDepositWorker(
         )
         categoryRepository.insertCategory(category)
         return category
+    }
+
+    private companion object {
+        const val TAG = "MonthlyGoalDepositWorker"
     }
 }

@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 object NotificationHelper {
 
@@ -70,6 +71,10 @@ object NotificationHelper {
 
     /**
      * ارسال اعلان درون‌برنامه‌ای + (در صورت فعال بودن) اعلان سیستمی
+     *
+     * Fire-and-forget: returns immediately and does the work on a background scope. Fine for UI
+     * code (ViewModels, screens). Do NOT use it from a Worker — the worker would finish before the
+     * notification is stored/shown and the process may be killed in between; use [sendAndAwait].
      */
     fun send(
         context: Context,
@@ -87,35 +92,78 @@ object NotificationHelper {
     ) {
         if (tag != "WELCOME" && !NotificationPreferences.isTypeEnabled(context, notificationType)) return
 
+        CoroutineScope(Dispatchers.IO).launch {
+            deliver(context, type, titleFa, titleEn, descFa, descEn, tag, security, openRoute)
+        }
+    }
+
+    /**
+     * Same as [send], but suspends until the notification has been stored (and handed to the
+     * system / in-app queue). Workers must use this so that the work is finished before they
+     * report a result, and so that they only record an item as "delivered" when it really was.
+     *
+     * @return `true` if the notification is in the app's notification list when this returns
+     *         (newly stored, or already there from an earlier run with the same [tag]);
+     *         `false` if the user has turned this notification type off.
+     * @throws Exception when storing fails (e.g. database error), so the caller can retry later
+     *         instead of treating the item as delivered.
+     */
+    suspend fun sendAndAwait(
+        context: Context,
+        notificationType: NotificationType,
+        type: String = "SYSTEM",
+        titleFa: String,
+        titleEn: String,
+        descFa: String,
+        descEn: String,
+        tag: String = "",
+        security: Boolean = false,
+        openRoute: String? = null
+    ): Boolean {
+        if (tag != "WELCOME" && !NotificationPreferences.isTypeEnabled(context, notificationType)) return false
+
+        withContext(Dispatchers.IO) {
+            deliver(context, type, titleFa, titleEn, descFa, descEn, tag, security, openRoute)
+        }
+        return true
+    }
+
+    private suspend fun deliver(
+        context: Context,
+        type: String,
+        titleFa: String,
+        titleEn: String,
+        descFa: String,
+        descEn: String,
+        tag: String,
+        security: Boolean,
+        openRoute: String?
+    ) {
         val app = context.applicationContext as BudgetApp
         val repository = app.container.notificationRepository
 
-        val entity = NotificationEntity(
-            type = type,
-            titleFa = titleFa,
-            titleEn = titleEn,
-            descFa = descFa,
-            descEn = descEn,
-            tag = tag
+        if (repository.countByTag(tag) > 0) return
+
+        repository.insert(
+            NotificationEntity(
+                type = type,
+                titleFa = titleFa,
+                titleEn = titleEn,
+                descFa = descFa,
+                descEn = descEn,
+                tag = tag
+            )
         )
 
-        CoroutineScope(Dispatchers.IO).launch {
-            val alreadyExists = repository.countByTag(entity.tag) > 0
-
-            if (!alreadyExists) {
-                repository.insert(entity)
-
-                publishDelivery(
-                    context = context.applicationContext,
-                    titleFa = titleFa,
-                    titleEn = titleEn,
-                    bodyFa = descFa,
-                    bodyEn = descEn,
-                    security = security,
-                    openRoute = openRoute
-                )
-            }
-        }
+        publishDelivery(
+            context = context.applicationContext,
+            titleFa = titleFa,
+            titleEn = titleEn,
+            bodyFa = descFa,
+            bodyEn = descEn,
+            security = security,
+            openRoute = openRoute
+        )
     }
 
     private fun publishDelivery(

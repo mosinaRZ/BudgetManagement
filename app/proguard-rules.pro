@@ -50,6 +50,13 @@
 # ============================================================
 -keep class androidx.work.** { *; }
 
+# WorkManager recreates workers by their class name (stored in its own database) through the
+# (Context, WorkerParameters) constructor. Keep the app's workers unrenamed so that work enqueued
+# by one release can still be instantiated after an update that changes the obfuscation mapping.
+-keep class ir.hamedan.budgetmanagement.worker.** extends androidx.work.ListenableWorker {
+    public <init>(android.content.Context, androidx.work.WorkerParameters);
+}
+
 # ============================================================
 # Glance
 # ============================================================

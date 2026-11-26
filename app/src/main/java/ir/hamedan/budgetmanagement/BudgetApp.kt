@@ -9,7 +9,6 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import ir.hamedan.budgetmanagement.data.local.models.CategoryEntity
-import ir.hamedan.budgetmanagement.data.preferences.AppUsagePreferences
 import ir.hamedan.budgetmanagement.data.preferences.NotificationPreferences
 import ir.hamedan.budgetmanagement.di.AppContainer
 import ir.hamedan.budgetmanagement.data.notification.AppNotificationManager
@@ -38,7 +37,9 @@ class BudgetApp : Application() {
         ir.hamedan.budgetmanagement.data.draft.DraftStore.init(this)
         NotificationPreferences.ensureDefaultsInitialized(this)
         AppNotificationManager.createChannel(this)
-        AppUsagePreferences.updateLastOpen(this)
+        // NOTE: "last opened" is deliberately NOT recorded here. Application.onCreate also runs when
+        // WorkManager starts the process in the background for a worker; that is not user activity.
+        // It is recorded in MainActivity.onStart() (see AppUsagePreferences.markOpened).
         // Launcher shortcuts follow the in-app language, not the system language.
         CoroutineScope(Dispatchers.IO).launch { ShortcutsHelper.update(this@BudgetApp) }
         // A build that is too old stays quiet until it is updated.
