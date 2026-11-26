@@ -1,5 +1,17 @@
 package ir.hamedan.budgetmanagement.ui.screens.profile
 
+import ir.hamedan.budgetmanagement.ui.components.scrollEdgeFade
+
+import ir.hamedan.budgetmanagement.ui.theme.navigationBarBottom
+
+import ir.hamedan.budgetmanagement.ui.theme.AppSpacing
+
+import ir.hamedan.budgetmanagement.ui.theme.AppDimens
+
+import ir.hamedan.budgetmanagement.ui.components.AppBarIconSlot
+
+import ir.hamedan.budgetmanagement.ui.components.AppBackTopBar
+
 import androidx.activity.compose.BackHandler
 import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
 import ir.hamedan.budgetmanagement.ui.components.showError
@@ -370,9 +382,12 @@ fun ProfileScreen(
 
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
-                    contentPadding = PaddingValues(top = 4.dp, bottom = 132.dp),
-                    verticalArrangement = Arrangement.spacedBy(22.dp)
+                    modifier = Modifier.fillMaxSize().scrollEdgeFade(top = AppSpacing.Lg).padding(horizontal = AppDimens.ScreenHorizontal),
+                    contentPadding = PaddingValues(
+                        top = AppSpacing.Sm,
+                        bottom = navigationBarBottom() + ProfileSaveBarClearance
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(AppSpacing.Xl)
                 ) {
                     item(key = ITEM_HERO) {
                         ProfileHero(
@@ -439,7 +454,7 @@ fun ProfileScreen(
                 modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                AppSnackbarHost(hostState = snackbarHost, isPersian = isPersian, modifier = Modifier.padding(horizontal = 16.dp))
+                AppSnackbarHost(hostState = snackbarHost, isPersian = isPersian, modifier = Modifier.padding(horizontal = AppDimens.SnackbarHorizontal))
                 AnimatedVisibility(
                     visible = form.isDirty,
                     enter = slideInVertically(tween(260, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(200)),
@@ -561,33 +576,31 @@ private fun ProfileTopBar(
     onBack: () -> Unit,
     onRefresh: () -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = if (isPersian) "بازگشت" else "Back"
-            )
-        }
-        Text(
-            text = if (isPersian) "پروفایل من" else "My Profile",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.weight(1f)
-        )
-        Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-            if (isRefreshing) {
-                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else {
-                IconButton(onClick = onRefresh) {
-                    Icon(Icons.Default.Refresh, contentDescription = if (isPersian) "به‌روزرسانی" else "Refresh")
+    AppBackTopBar(
+        title = if (isPersian) "پروفایل من" else "My Profile",
+        onBack = onBack,
+        backContentDescription = if (isPersian) "بازگشت" else "Back",
+        trailing = {
+            AppBarIconSlot(
+                onClick = onRefresh,
+                contentDescription = if (isPersian) "به‌روزرسانی" else "Refresh",
+                enabled = !isRefreshing
+            ) {
+                if (isRefreshing) {
+                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = if (isPersian) "به‌روزرسانی" else "Refresh"
+                    )
                 }
             }
         }
-    }
+    )
 }
+
+/** فضای زیر لیست برای نوار ذخیره‌ی شناور (بدون nav bar سیستم). */
+private val ProfileSaveBarClearance = 108.dp
 
 /* ────────────────────────────── Hero ────────────────────────────────────── */
 
@@ -1176,7 +1189,7 @@ private fun GenderSheet(
             )
             GenderOption.entries.forEach { option ->
                 val isSelected = selected == option.value
-                val shape = RoundedCornerShape(18.dp)
+                val shape = RoundedCornerShape(16.dp)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1422,7 +1435,7 @@ private fun BirthDateSheet(
                     }
                 }
                 Box(Modifier.fillMaxWidth().height(itemHeight * 5)) {
-                    val band = RoundedCornerShape(14.dp)
+                    val band = RoundedCornerShape(16.dp)
                     Box(
                         Modifier
                             .align(Alignment.Center)

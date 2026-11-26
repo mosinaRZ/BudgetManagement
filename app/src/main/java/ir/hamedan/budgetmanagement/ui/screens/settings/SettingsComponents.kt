@@ -685,7 +685,7 @@ internal fun SettingsChoiceCard(
 ) {
     val scheme = MaterialTheme.colorScheme
     val brand = settingsBrandText()
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(16.dp)
     val borderColor by animateColorAsState(
         if (isSelected) scheme.primary.copy(alpha = 0.60f) else scheme.outline.copy(alpha = 0.16f),
         animationSpec = tween(200), label = "choiceBorder"
@@ -774,7 +774,7 @@ internal fun SettingsNavigationCard(
 ) {
     val scheme = MaterialTheme.colorScheme
     val brand = settingsBrandText()
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(16.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()

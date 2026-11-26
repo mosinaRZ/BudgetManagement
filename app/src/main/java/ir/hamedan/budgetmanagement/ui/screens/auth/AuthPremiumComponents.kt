@@ -220,7 +220,7 @@ private fun OtpCell(
     caretAlpha: State<Float>
 ) {
     val colors = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(16.dp)
 
     val borderColor by animateColorAsState(
         targetValue = when {

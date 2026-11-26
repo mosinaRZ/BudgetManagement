@@ -179,7 +179,7 @@ private fun AddHintBubble(visible: Boolean, text: String, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val origin = TransformOrigin(pivotFractionX = if (rtl) 0f else 1f, pivotFractionY = 1f)
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(24.dp)
 
     AnimatedVisibility(
         visible = visible,

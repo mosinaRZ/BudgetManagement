@@ -1,5 +1,19 @@
 package ir.hamedan.budgetmanagement.ui.screens.devices
 
+import ir.hamedan.budgetmanagement.ui.components.scrollEdgeFade
+
+import ir.hamedan.budgetmanagement.ui.theme.AppSpacing
+
+import ir.hamedan.budgetmanagement.ui.theme.plainBottomClearance
+
+import ir.hamedan.budgetmanagement.ui.theme.topBarClearance
+
+import ir.hamedan.budgetmanagement.ui.theme.AppDimens
+
+import ir.hamedan.budgetmanagement.ui.components.AppBarIconSlot
+
+import ir.hamedan.budgetmanagement.ui.components.AppBackTopBar
+
 import androidx.compose.foundation.BorderStroke
 import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
 import ir.hamedan.budgetmanagement.ui.components.showError
@@ -108,8 +122,13 @@ fun DevicesScreen(onBack: () -> Unit) {
         AuroraBackground()
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 128.dp, bottom = 48.dp),
+            modifier = Modifier.fillMaxSize().scrollEdgeFade(),
+            contentPadding = PaddingValues(
+                start = AppDimens.ScreenHorizontal,
+                end = AppDimens.ScreenHorizontal,
+                top = topBarClearance(),
+                bottom = plainBottomClearance()
+            ),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
@@ -186,64 +205,43 @@ fun DevicesScreen(onBack: () -> Unit) {
             }
         }
 
-        // Header: same back-button + title treatment as the other sub-screens.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopCenter)
-                .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onBack,
-                modifier = Modifier
-                    .size(44.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), CircleShape)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = if (isPersian) "بازگشت" else "Back",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = if (isPersian) "دستگاه‌های حساب" else "Account Devices",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = if (isPersian) "${devices.size.toString()} دستگاه متصل" else "${devices.size} connected",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                )
-            }
-            IconButton(
-                onClick = vm::refresh,
-                enabled = !isLoading,
-                modifier = Modifier
-                    .size(44.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), CircleShape)
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = if (isPersian) "بازخوانی" else "Refresh",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
+        // Header: همان تاپ‌بارِ مشترک زیرصفحه‌ها (بازگشت + عنوان + اکشن)
+        AppBackTopBar(
+            title = if (isPersian) "دستگاه‌های حساب" else "Account Devices",
+            subtitle = if (isPersian) "${devices.size} دستگاه متصل" else "${devices.size} connected",
+            onBack = onBack,
+            backContentDescription = if (isPersian) "بازگشت" else "Back",
+            modifier = Modifier.align(Alignment.TopCenter),
+            trailing = {
+                AppBarIconSlot(
+                    onClick = vm::refresh,
+                    contentDescription = if (isPersian) "بازخوانی" else "Refresh",
+                    enabled = !isLoading
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = if (isPersian) "بازخوانی" else "Refresh",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
-        }
+        )
 
         AppSnackbarHost(
             hostState = snackbarHostState,
             isPersian = isPersian,
-            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp)
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(horizontal = AppDimens.SnackbarHorizontal, vertical = AppSpacing.Lg)
         )
     }
 
@@ -427,7 +425,7 @@ private fun DeviceCard(
                 onClick = onRemove,
                 enabled = removeEnabled,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = if (removeEnabled) 0.5f else 0.2f)),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
             ) {

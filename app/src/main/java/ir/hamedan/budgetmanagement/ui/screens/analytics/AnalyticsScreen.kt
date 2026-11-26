@@ -1,5 +1,17 @@
 package ir.hamedan.budgetmanagement.ui.screens.analytics
 
+import ir.hamedan.budgetmanagement.ui.components.scrollEdgeFade
+
+import ir.hamedan.budgetmanagement.ui.theme.dockClearance
+
+import ir.hamedan.budgetmanagement.ui.theme.topBarWithFilterClearance
+
+import ir.hamedan.budgetmanagement.ui.theme.AppSpacing
+
+import ir.hamedan.budgetmanagement.ui.theme.AppDimens
+
+import ir.hamedan.budgetmanagement.ui.components.AppTitleTopBar
+
 import ir.hamedan.budgetmanagement.ui.components.TimeFilterBar
 import ir.hamedan.budgetmanagement.ui.components.CountUpText
 import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
@@ -146,12 +158,11 @@ fun AnalyticsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .scrollEdgeFade()
                     .verticalScroll(rememberScrollState())
             ) {
-                // فاصله برای تاپ‌بار شناور
-                Spacer(modifier = Modifier.statusBarsPadding().height(140.dp))
-
-                Spacer(modifier = Modifier.height(16.dp))
+                // فاصله‌ی واقعی تا زیر تاپ‌بار و نوار فیلتر (status bar را هم حساب می‌کند)
+                Spacer(modifier = Modifier.height(topBarWithFilterClearance()))
 
                 FinancialIndicatorsSection(
                     isPersian = isPersian,
@@ -204,7 +215,7 @@ fun AnalyticsScreen(
                     currencyUnit = currencyUnit
                 )
 
-                Spacer(modifier = Modifier.navigationBarsPadding().height(88.dp))
+                Spacer(modifier = Modifier.height(dockClearance()))
             }
 
             // تاپ‌بار شناور بدون نیاز به Scaffold
@@ -213,11 +224,7 @@ fun AnalyticsScreen(
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
             ) {
-                Spacer(modifier = Modifier.statusBarsPadding().padding(top = 12.dp))
-
                 AnalyticsTopBar(isPersian = isPersian)
-
-                Spacer(modifier = Modifier.height(8.dp))
 
                 TimeFilterBar(
                     labels = remember(isPersian) {
@@ -240,7 +247,11 @@ fun AnalyticsScreen(
                     .align(Alignment.TopCenter)
                     .zIndex(10f)
                     .statusBarsPadding()
-                    .padding(top = 80.dp, start = 24.dp, end = 24.dp)
+                    .padding(
+                        top = AppDimens.TopBarBlockHeight + AppSpacing.Sm,
+                        start = AppDimens.ScreenHorizontal,
+                        end = AppDimens.ScreenHorizontal
+                    )
             )
         }
 
@@ -269,7 +280,11 @@ fun AnalyticsScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 84.dp, start = 16.dp, end = 16.dp)
+                .padding(
+                    bottom = AppDimens.DockBlockHeight + AppDimens.SnackbarGap,
+                    start = AppDimens.SnackbarHorizontal,
+                    end = AppDimens.SnackbarHorizontal
+                )
         )
     }
 }
@@ -314,7 +329,7 @@ fun ChartTypeTab(
     )
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.primary.copy(alpha = backgroundAlpha * 0.15f))
             .clickable { onClick() }
             .padding(horizontal = 12.dp, vertical = 6.dp),
@@ -406,9 +421,10 @@ private fun AnalyticsSkeletonScreen() {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .scrollEdgeFade()
                 .verticalScroll(rememberScrollState())
         ) {
-            Spacer(modifier = Modifier.statusBarsPadding().height(140.dp))
+            Spacer(modifier = Modifier.height(topBarWithFilterClearance()))
 
             listOf(230.dp, 190.dp, 120.dp).forEachIndexed { index, cardHeight ->
                 if (index > 0) Spacer(modifier = Modifier.height(14.dp))
@@ -466,7 +482,7 @@ private fun AnalyticsSkeletonScreen() {
                     .appSkeletonShimmer()
             )
 
-            Spacer(modifier = Modifier.navigationBarsPadding().height(80.dp))
+            Spacer(modifier = Modifier.height(dockClearance()))
         }
 
         Column(
@@ -570,33 +586,7 @@ private fun EmptyAnalyticsView(
 
 @Composable
 private fun AnalyticsTopBar(isPersian: Boolean) {
-    val centerShape = RoundedCornerShape(24.dp)
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 8.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), centerShape)
-                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), centerShape)
-                .clip(centerShape)
-                .padding(horizontal = 12.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = if (isPersian) "آنالیز و تحلیل مالی" else "Financial Analytics",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
+    AppTitleTopBar(title = if (isPersian) "آنالیز و تحلیل مالی" else "Financial Analytics")
 }
 
 

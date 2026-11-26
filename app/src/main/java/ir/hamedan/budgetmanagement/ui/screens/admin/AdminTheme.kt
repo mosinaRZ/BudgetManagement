@@ -27,13 +27,13 @@ internal object AdminShapes {
     val Card = RoundedCornerShape(24.dp)
 
     /** Rows nested inside a card or sheet (devices, events). */
-    val Item = RoundedCornerShape(18.dp)
+    val Item = RoundedCornerShape(16.dp)
 
     /** Text fields and filter buttons. */
     val Field = RoundedCornerShape(16.dp)
 
     /** Dialog, sheet-footer and action buttons (48dp tall everywhere in the app). */
-    val Button = RoundedCornerShape(14.dp)
+    val Button = RoundedCornerShape(16.dp)
 
     val Dialog = RoundedCornerShape(28.dp)
     val Sheet = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)

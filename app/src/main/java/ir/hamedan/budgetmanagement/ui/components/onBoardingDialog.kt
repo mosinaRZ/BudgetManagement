@@ -694,7 +694,7 @@ private fun OrbitHero() {
         orbiters.forEach { (res, accent, index) ->
             val theta = Math.toRadians((angle + index * (360.0 / orbiters.size)) - 90.0)
             val tint = accent.color()
-            val tileShape = RoundedCornerShape(15.dp)
+            val tileShape = RoundedCornerShape(16.dp)
             Box(
                 modifier = Modifier
                     .offset(x = (orbitRadius * cos(theta)).dp, y = (orbitRadius * sin(theta)).dp)
@@ -1010,7 +1010,7 @@ private fun PermissionCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(success.copy(alpha = 0.13f), RoundedCornerShape(14.dp))
+                    .background(success.copy(alpha = 0.13f), RoundedCornerShape(16.dp))
                     .padding(vertical = 10.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
@@ -1028,7 +1028,7 @@ private fun PermissionCard(
             FilledTonalButton(
                 onClick = onAllow,
                 modifier = Modifier.fillMaxWidth().height(46.dp),
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(16.dp)
             ) { Text(allowLabel, fontWeight = FontWeight.SemiBold) }
         }
     }

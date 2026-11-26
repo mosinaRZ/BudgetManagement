@@ -55,7 +55,7 @@ fun credentialTextStyle(): TextStyle {
 fun AuthErrorBanner(message: String, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.25f))
     ) {

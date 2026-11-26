@@ -278,7 +278,7 @@ fun ForceUpdateBottomSheet(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(56.dp),
-                            shape = RoundedCornerShape(18.dp)
+                            shape = RoundedCornerShape(16.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.ArrowUpward,

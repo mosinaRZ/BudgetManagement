@@ -1,5 +1,19 @@
 package ir.hamedan.budgetmanagement.ui.screens.categories
 
+import ir.hamedan.budgetmanagement.ui.components.scrollEdgeFade
+
+import ir.hamedan.budgetmanagement.ui.theme.fabClearance
+
+import ir.hamedan.budgetmanagement.ui.theme.topBarClearance
+
+import ir.hamedan.budgetmanagement.ui.theme.AppSpacing
+
+import ir.hamedan.budgetmanagement.ui.theme.AppShapes
+
+import ir.hamedan.budgetmanagement.ui.theme.AppDimens
+
+import ir.hamedan.budgetmanagement.ui.components.AppBackTopBar
+
 import ir.hamedan.budgetmanagement.ui.components.CountUpText
 import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
 import androidx.compose.animation.core.Animatable
@@ -60,6 +74,9 @@ import java.text.NumberFormat
 import java.util.*
 import kotlin.math.ceil
 
+/** سوییچر تب (۴۸) + پدینگ پایین (۸) زیر تاپ‌بار شناورِ دسته‌بندی‌ها. */
+private val CategoriesTabSwitcherBlockHeight = 56.dp
+
 @Composable
 fun CategoriesScreen(
     onBackClick: () -> Unit = {},
@@ -102,7 +119,8 @@ fun CategoriesScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 175.dp) // تنظیم فاصله از بالا متناسب با ارتفاع جدید هدر شناور
+                // ارتفاع واقعی هدر شناور: status bar + تاپ‌بار + سوییچر تب + فاصله‌ی استاندارد
+                .padding(top = topBarClearance(extra = CategoriesTabSwitcherBlockHeight))
         ) {
             // ------------------ Category Grid Content ------------------
             if (categoriesState != null) {
@@ -118,7 +136,7 @@ fun CategoriesScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 24.dp, vertical = 12.dp),
+                            .padding(horizontal = AppDimens.ScreenHorizontal),
                         contentAlignment = Alignment.TopCenter
                     ) {
                         val emptyCardShape = RoundedCornerShape(24.dp)
@@ -162,7 +180,7 @@ fun CategoriesScreen(
                                 Spacer(modifier = Modifier.height(20.dp))
                                 Button(
                                     onClick = { onOpenEditor(null, isExpenseTab) },
-                                    shape = RoundedCornerShape(14.dp),
+                                    shape = RoundedCornerShape(16.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = if (isExpenseTab) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                                     )
@@ -180,10 +198,15 @@ fun CategoriesScreen(
                 } else {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(bottom = 100.dp, start = 24.dp, end = 24.dp, top = 12.dp),
-                        modifier = Modifier.weight(1f)
+                        horizontalArrangement = Arrangement.spacedBy(AppDimens.ItemSpacing),
+                        verticalArrangement = Arrangement.spacedBy(AppDimens.ItemSpacing),
+                        contentPadding = PaddingValues(
+                            start = AppDimens.ScreenHorizontal,
+                            end = AppDimens.ScreenHorizontal,
+                            top = 0.dp,
+                            bottom = fabClearance()
+                        ),
+                        modifier = Modifier.weight(1f).scrollEdgeFade(top = AppSpacing.Lg)
                     ) {
                         items(filteredCategories, key = { it.id }) { category ->
                             val count = transactionCounts[category.id] ?: 0
@@ -208,73 +231,29 @@ fun CategoriesScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
-                .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
-            // Top Row: Back Button & Title
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                val shape = RoundedCornerShape(24.dp)
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), shape)
-                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape)
-                        .clip(shape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    IconButton(
-                        onClick = onBackClick,
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(10.dp))
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .size(56.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), shape)
-                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape)
-                        .clip(shape)
-                        .padding(horizontal = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (isPersian) "مدیریت دسته‌بندی‌ها" else "Manage Categories",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
+            AppBackTopBar(
+                title = if (isPersian) "مدیریت دسته‌بندی‌ها" else "Manage Categories",
+                onBack = onBackClick,
+                backContentDescription = if (isPersian) "بازگشت" else "Back"
+            )
 
             // Tab Switcher inside the floating header
             Row(
                 modifier = Modifier
+                    .padding(horizontal = AppDimens.ScreenHorizontal)
+                    .padding(bottom = AppSpacing.Sm)
                     .fillMaxWidth()
                     .background(
                         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
-                        RoundedCornerShape(16.dp)
+                        AppShapes.Item
                     )
                     .border(
                         1.dp,
                         MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                        RoundedCornerShape(16.dp)
+                        AppShapes.Item
                     )
-                    .padding(4.dp)
+                    .padding(AppSpacing.Xs)
             ) {
                 Button(
                     onClick = { selectedTabState = 0 },
@@ -283,7 +262,7 @@ fun CategoriesScreen(
                         containerColor = if (isExpenseTab) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0f),
                         contentColor = if (isExpenseTab) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurfaceVariant
                     ),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = AppShapes.Control
                 ) {
                     Text(if (isPersian) "هزینه‌ها" else "Expenses", fontWeight = FontWeight.Bold)
                 }
@@ -295,7 +274,7 @@ fun CategoriesScreen(
                         containerColor = if (!isExpenseTab) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0f),
                         contentColor = if (!isExpenseTab) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                     ),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = AppShapes.Control
                 ) {
                     Text(if (isPersian) "درآمدها" else "Incomes", fontWeight = FontWeight.Bold)
                 }
@@ -323,7 +302,7 @@ fun CategoriesScreen(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
-                    .padding(24.dp)
+                    .padding(AppDimens.FabMargin)
             )
         }
 
@@ -334,7 +313,11 @@ fun CategoriesScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 16.dp, start = 16.dp, end = 16.dp)
+                .padding(
+                    bottom = AppDimens.SnackbarGap + AppSpacing.Xs,
+                    start = AppDimens.SnackbarHorizontal,
+                    end = AppDimens.SnackbarHorizontal
+                )
         )
 
         // ------------------ Delete Dialog ------------------
@@ -484,7 +467,7 @@ fun CategoriesScreen(
                                         .weight(cancelWeight)
                                         .height(48.dp)
                                         .padding(end = (12 * cancelWeight).dp),
-                                    shape = RoundedCornerShape(14.dp)
+                                    shape = RoundedCornerShape(16.dp)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -510,7 +493,7 @@ fun CategoriesScreen(
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(48.dp)
-                                    .clip(RoundedCornerShape(14.dp))
+                                    .clip(RoundedCornerShape(16.dp))
                                     .background(MaterialTheme.colorScheme.error)
                                     .pointerInput(Unit) {
                                         detectTapGestures(

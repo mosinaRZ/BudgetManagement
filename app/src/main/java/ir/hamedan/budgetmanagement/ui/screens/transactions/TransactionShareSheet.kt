@@ -309,7 +309,7 @@ private fun BackgroundThumbnail(
         }
     }
 
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(16.dp)
     val borderColor = if (selected) MaterialTheme.colorScheme.primary
     else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
 

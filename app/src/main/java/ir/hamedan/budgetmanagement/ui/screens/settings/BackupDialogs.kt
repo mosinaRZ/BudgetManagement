@@ -127,7 +127,7 @@ private fun BackupDialogShell(
 
 @Composable
 private fun DialogNote(text: String, accent: Color, icon: ImageVector) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(16.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -166,7 +166,7 @@ private fun DialogButtons(
                 modifier = Modifier
                     .weight(1f)
                     .height(48.dp),
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(16.dp)
             ) {
                 Text(
                     text = if (isPersian) "انصراف" else "Cancel",
@@ -181,7 +181,7 @@ private fun DialogButtons(
             modifier = Modifier
                 .weight(1f)
                 .height(48.dp),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
@@ -283,7 +283,7 @@ private fun BackupPasswordField(
         supportingText = if (supportingText != null) {
             { Text(supportingText) }
         } else null,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
         trailingIcon = {

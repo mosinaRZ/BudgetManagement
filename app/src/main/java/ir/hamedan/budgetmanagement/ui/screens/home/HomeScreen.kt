@@ -1,5 +1,17 @@
 package ir.hamedan.budgetmanagement.ui.screens.home
 
+import ir.hamedan.budgetmanagement.ui.components.scrollEdgeFade
+
+import ir.hamedan.budgetmanagement.ui.theme.dockClearance
+
+import ir.hamedan.budgetmanagement.ui.theme.AppSpacing
+
+import ir.hamedan.budgetmanagement.ui.theme.AppShapes
+
+import ir.hamedan.budgetmanagement.ui.theme.AppDimens
+
+import ir.hamedan.budgetmanagement.ui.components.AppSnackbarDefaults
+
 import android.app.Activity
 import ir.hamedan.budgetmanagement.ui.components.showError
 import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
@@ -154,6 +166,9 @@ private fun compactAmount(value: Long, isPersian: Boolean): String {
     }
     return "${formatter.format(absValue / divisor)} $suffix"
 }
+
+/** ارتفاع کپسول پیشنهاد افزودن ویجت زیر هدر خانه. */
+private val WidgetPromptHeight = 44.dp
 
 /**
  * متن مبلغِ تک‌خطی که خودش را با عرض موجود تنظیم می‌کند:
@@ -442,7 +457,10 @@ fun HomeScreen(
     }
 
     val headerSpacerHeight by animateDpAsState(
-        targetValue = if (showWidgetPrompt) 110.dp else 55.dp,
+        // مقدار اول = فاصله‌ی بین آیتم‌های لیست (۲۰) از قبل بعد از این Spacer اضافه می‌شود؛
+        // پس برای رسیدن به فاصله‌ی استاندارد زیر هدر، آن را کم می‌کنیم.
+        targetValue = AppDimens.TopBarBlockHeight - AppSpacing.Xl + AppDimens.ContentGap +
+                if (showWidgetPrompt) WidgetPromptHeight + AppSpacing.Sm else 0.dp,
         animationSpec = tween(250, easing = FastOutSlowInEasing),
         label = "header_spacer"
     )
@@ -453,8 +471,9 @@ fun HomeScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+                .scrollEdgeFade()
+                .padding(horizontal = AppDimens.ScreenHorizontal),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.Xl)
         ) {
             item {
                 Spacer(
@@ -1194,7 +1213,7 @@ fun HomeScreen(
                 }
             }
 
-            item { Spacer(modifier = Modifier.height(110.dp)) }
+            item { Spacer(modifier = Modifier.height(dockClearance() - AppSpacing.Xl)) }
         }
 
         // هدر بالای صفحه
@@ -1203,15 +1222,18 @@ fun HomeScreen(
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 8.dp)
+                .padding(
+                    horizontal = AppDimens.ScreenHorizontal,
+                    vertical = AppDimens.TopBarVerticalPadding
+                )
         ) {
-            val smallShape = RoundedCornerShape(24.dp)
-            val centerShape = RoundedCornerShape(24.dp)
+            val smallShape = AppShapes.TopBar
+            val centerShape = AppShapes.TopBar
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
+                    .height(AppDimens.TopBarHeight),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -1278,8 +1300,8 @@ fun HomeScreen(
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
-                .padding(top = 72.dp)
-                .padding(horizontal = 24.dp)
+                .padding(top = AppDimens.TopBarBlockHeight)
+                .padding(horizontal = AppDimens.ScreenHorizontal)
         ) {
             val capsuleShape = RoundedCornerShape(50)
             val widgetHint = if (isPersian) "لطفاً از منوی ویجت‌ها، ویجت سیدنا را اضافه کنید" else "Please add Cidna widget from the widget menu"
@@ -1287,7 +1309,7 @@ fun HomeScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp)
+                    .height(WidgetPromptHeight)
                     .background(color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f), shape = capsuleShape)
                     .border(width = 1.dp, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), shape = capsuleShape)
                     .clip(capsuleShape),
@@ -1466,7 +1488,7 @@ fun HomeScreen(
                                         if (!item.isRead) notificationViewModel.markAsRead(item.id)
                                     }
 
-                                    val itemShape = RoundedCornerShape(18.dp)
+                                    val itemShape = RoundedCornerShape(16.dp)
                                     val (icon, iconColor) = when (item.type.uppercase()) {
                                         "SUCCESS" -> Icons.Default.CheckCircle to Color(0xFF4CAF50)
                                         "ERROR" -> Icons.Default.Error to Color(0xFFF44336)
@@ -1586,7 +1608,11 @@ fun HomeScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 90.dp, start = 16.dp, end = 16.dp)
+                .padding(
+                    bottom = AppSnackbarDefaults.AboveBottomBar,
+                    start = AppDimens.SnackbarHorizontal,
+                    end = AppDimens.SnackbarHorizontal
+                )
         )
     }
 }

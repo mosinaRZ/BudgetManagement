@@ -719,7 +719,7 @@ private fun GoalSuggestionChip(
     onClick: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(16.dp)
     Row(
         modifier = Modifier
             .height(40.dp)
@@ -820,7 +820,7 @@ private fun GoalIconStep(
                 )
 
                 current != null -> {
-                    val shape = RoundedCornerShape(14.dp)
+                    val shape = RoundedCornerShape(16.dp)
                     Row(
                         modifier = Modifier
                             .clip(shape)

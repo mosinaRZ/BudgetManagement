@@ -1,5 +1,19 @@
 package ir.hamedan.budgetmanagement.ui.screens.transactions
 
+import ir.hamedan.budgetmanagement.ui.components.scrollEdgeFade
+
+import ir.hamedan.budgetmanagement.ui.theme.navigationBarBottom
+
+import ir.hamedan.budgetmanagement.ui.theme.topBarWithFilterClearance
+
+import ir.hamedan.budgetmanagement.ui.theme.AppSpacing
+
+import ir.hamedan.budgetmanagement.ui.theme.AppDimens
+
+import ir.hamedan.budgetmanagement.ui.components.AppTitleTopBar
+
+import androidx.compose.ui.unit.Dp
+
 import ir.hamedan.budgetmanagement.ui.components.TimeFilterBar
 import ir.hamedan.budgetmanagement.ui.components.CountUpText
 import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
@@ -93,6 +107,18 @@ import java.util.Date
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
+// ── فاصله‌های اختصاصی لایه‌ی جستجوی شناور بالای داک ──
+/** فاصله‌ی پایین فیلد جستجو از نوار ناوبری سیستم: داک + ۱۲dp فاصله. */
+private val SearchBarBottomOffset = AppDimens.DockBlockHeight + AppSpacing.Md
+
+/** وقتی کیبورد باز است لیست این‌قدر پایین‌تر شروع می‌شود. */
+private val KeyboardListTopExtra = 140.dp
+
+/** فضای پایین لیست تا آخرین آیتم زیر فیلد جستجو/داک پنهان نشود. */
+@Composable
+private fun searchOverlayClearance(): Dp =
+    navigationBarBottom() + SearchBarBottomOffset + AppDimens.DockHeight + AppSpacing.Lg
+
 @Composable
 fun TransactionsScreen(
     onAddTransactionClick: () -> Unit = {},
@@ -206,7 +232,7 @@ fun TransactionsScreen(
                         Spacer(modifier = Modifier.height(20.dp))
                         Button(
                             onClick = { onAddTransactionClick() },
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null)
@@ -278,12 +304,14 @@ fun TransactionsScreen(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 24.dp),
+                        .scrollEdgeFade()
+                        .padding(horizontal = AppDimens.ScreenHorizontal),
                     contentPadding = PaddingValues(
-                        top = if (keyboardVisible) 310.dp else 170.dp,
-                        bottom = 190.dp
+                        // کیبورد باز: لیست کمی پایین‌تر شروع می‌شود تا فیلد جستجو روی آن نیفتد
+                        top = topBarWithFilterClearance() + if (keyboardVisible) KeyboardListTopExtra else 0.dp,
+                        bottom = searchOverlayClearance()
                     ),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(AppDimens.SectionSpacing)
                 ) {
                     if (showDateHeaders) {
                         groupedTransactions.forEach { (dateHeader, items) ->
@@ -337,7 +365,6 @@ fun TransactionsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
-                .statusBarsPadding()
         ) {
             TransactionsTopBar(isPersian = isPersian)
 
@@ -377,9 +404,13 @@ fun TransactionsScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(start = 24.dp, end = 24.dp, top = 85.dp, bottom = 92.dp),
+                    .padding(
+                        start = AppDimens.ScreenHorizontal,
+                        end = AppDimens.ScreenHorizontal,
+                        bottom = SearchBarBottomOffset
+                    ),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(AppSpacing.Md)
             ) {
                 AnimatedVisibility(
                     visible = showScrollToTopButton,
@@ -508,7 +539,11 @@ fun TransactionsScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 172.dp, start = 24.dp, end = 24.dp)
+                .padding(
+                    bottom = SearchBarBottomOffset + AppDimens.DockHeight + AppDimens.SnackbarGap,
+                    start = AppDimens.SnackbarHorizontal,
+                    end = AppDimens.SnackbarHorizontal
+                )
         )
 
         // ۱. باتم شیت شناور فیلترینگ
@@ -662,7 +697,7 @@ fun TransactionsScreen(
                                         .weight(cancelWeight)
                                         .height(48.dp)
                                         .padding(end = (12 * cancelWeight).dp),
-                                    shape = RoundedCornerShape(14.dp)
+                                    shape = RoundedCornerShape(16.dp)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -688,7 +723,7 @@ fun TransactionsScreen(
                                 modifier = Modifier
                                     .weight(1f) // همیشه فضای باقیمانده را پر می‌کند
                                     .height(48.dp)
-                                    .clip(RoundedCornerShape(14.dp))
+                                    .clip(RoundedCornerShape(16.dp))
                                     .background(MaterialTheme.colorScheme.error)
                                     .pointerInput(Unit) {
                                         detectTapGestures(
@@ -752,9 +787,13 @@ private fun TransactionsSkeletonScreen() {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp),
-        contentPadding = PaddingValues(top = 170.dp, bottom = 190.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .scrollEdgeFade()
+            .padding(horizontal = AppDimens.ScreenHorizontal),
+        contentPadding = PaddingValues(
+            top = topBarWithFilterClearance(),
+            bottom = searchOverlayClearance()
+        ),
+        verticalArrangement = Arrangement.spacedBy(AppDimens.SectionSpacing)
     ) {
         // بخش ۱: هدر اسکلتون
         item {
@@ -1345,35 +1384,8 @@ private fun TransactionMetaInfo(
 
 @Composable
 private fun TransactionsTopBar(isPersian: Boolean) {
-    val centerShape = RoundedCornerShape(24.dp)
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 8.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), centerShape)
-                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), centerShape)
-                .clip(centerShape)
-                .padding(horizontal = 12.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = if (isPersian) "جزئیات تراکنش‌ها" else "Transaction Details",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
+    AppTitleTopBar(title = if (isPersian) "جزئیات تراکنش‌ها" else "Transaction Details")
 }
-
 
 private fun getRelativeDateHeader(timestamp: Long, isPersian: Boolean): String {
     val zone = ZoneId.systemDefault()

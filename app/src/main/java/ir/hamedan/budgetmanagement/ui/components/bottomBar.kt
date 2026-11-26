@@ -327,7 +327,7 @@ private class GlassShader {
 private val LensInset = 4.dp
 
 /** Height shared by the navigation capsule and the add capsule so both always line up. */
-val BottomBarHeight = 64.dp
+val BottomBarHeight = ir.hamedan.budgetmanagement.ui.theme.AppDimens.DockHeight
 
 /** Widest a tab may be; on narrow screens tabs shrink so the bar never overflows. */
 private val MaxItemWidth = 76.dp

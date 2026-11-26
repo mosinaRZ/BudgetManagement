@@ -1,5 +1,15 @@
 package ir.hamedan.budgetmanagement.ui.screens.budgetLimit
 
+import ir.hamedan.budgetmanagement.ui.components.scrollEdgeFade
+
+import ir.hamedan.budgetmanagement.ui.theme.fabClearance
+
+import ir.hamedan.budgetmanagement.ui.theme.topBarClearance
+
+import ir.hamedan.budgetmanagement.ui.theme.AppDimens
+
+import ir.hamedan.budgetmanagement.ui.components.AppBackTopBar
+
 import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
 
 import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
@@ -98,16 +108,17 @@ fun BudgetLimitScreen(
         // ------------------ Main Content List ------------------
         if (limitsListState != null) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().scrollEdgeFade(),
                 // تنظیم فاصله افقی برای کل لیست و آیتم‌ها
                 contentPadding = PaddingValues(
-                    start = 20.dp,
-                    end = 20.dp,
-                    // ایجاد فضای خالی در بالا برای اینکه محتوا زیر تاپ‌بار پنهان نشود
-                    top = 120.dp,
-                    bottom = 120.dp
+                    start = AppDimens.ScreenHorizontal,
+                    end = AppDimens.ScreenHorizontal,
+                    // فاصله‌ی واقعی تا زیر تاپ‌بار (status bar + تاپ‌بار + فاصله‌ی استاندارد)
+                    top = topBarClearance(),
+                    // فضای کافی تا محتوای آخر زیر FAB پنهان نشود
+                    bottom = fabClearance()
                 ),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(AppDimens.SectionSpacing)
             ) {
                 if (limitsList.isEmpty()) {
                     item {
@@ -144,7 +155,7 @@ fun BudgetLimitScreen(
                                 Spacer(modifier = Modifier.height(20.dp))
                                 Button(
                                     onClick = onAddLimitClick,
-                                    shape = RoundedCornerShape(14.dp),
+                                    shape = RoundedCornerShape(16.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                                 ) {
                                     Icon(Icons.Default.Add, contentDescription = null)
@@ -178,57 +189,12 @@ fun BudgetLimitScreen(
         }
 
         // ------------------ Top Bar (Floating on top) ------------------
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopCenter)
-                .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            val shape = RoundedCornerShape(24.dp)
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), shape)
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape)
-                    .clip(shape),
-                contentAlignment = Alignment.Center
-            ) {
-                IconButton(
-                    onClick = onBackClick,
-                    modifier = Modifier
-                        .size(44.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .size(56.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), shape)
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape)
-                    .clip(shape)
-                    .padding(horizontal = 12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (isPersian) "محدودیت‌های بودجه" else "Budget Limits",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-            }
-        }
+        AppBackTopBar(
+            title = if (isPersian) "محدودیت‌های بودجه" else "Budget Limits",
+            onBack = onBackClick,
+            backContentDescription = if (isPersian) "بازگشت" else "Back",
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
 
         // ------------------ Floating Action Button ------------------
         if (limitsListState != null && limitsList.isNotEmpty()) {
@@ -240,8 +206,8 @@ fun BudgetLimitScreen(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
-                    .padding(24.dp)
-                    .size(56.dp)
+                    .padding(AppDimens.FabMargin)
+                    .size(AppDimens.FabSize)
             ) {
                 Icon(Icons.Default.Add, contentDescription = if (isPersian) "افزودن سقف" else "Add limit", modifier = Modifier.size(28.dp))
             }
@@ -254,7 +220,11 @@ fun BudgetLimitScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 90.dp, start = 16.dp, end = 16.dp)
+                .padding(
+                    bottom = AppDimens.FabBlockHeight + AppDimens.SnackbarGap,
+                    start = AppDimens.SnackbarHorizontal,
+                    end = AppDimens.SnackbarHorizontal
+                )
         )
 
         // ------------------ Delete Dialog (Delete) ------------------
@@ -367,7 +337,7 @@ fun BudgetLimitScreen(
                                         .weight(cancelWeight)
                                         .height(48.dp)
                                         .padding(end = (12 * cancelWeight).dp),
-                                    shape = RoundedCornerShape(14.dp)
+                                    shape = RoundedCornerShape(16.dp)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -393,7 +363,7 @@ fun BudgetLimitScreen(
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(48.dp)
-                                    .clip(RoundedCornerShape(14.dp))
+                                    .clip(RoundedCornerShape(16.dp))
                                     .background(MaterialTheme.colorScheme.error)
                                     .pointerInput(Unit) {
                                         detectTapGestures(

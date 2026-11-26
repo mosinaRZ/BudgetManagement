@@ -1,5 +1,17 @@
 package ir.hamedan.budgetmanagement.ui.screens.settings
 
+import ir.hamedan.budgetmanagement.ui.components.scrollEdgeFade
+
+import ir.hamedan.budgetmanagement.ui.theme.dockClearance
+
+import ir.hamedan.budgetmanagement.ui.theme.topBarClearance
+
+import ir.hamedan.budgetmanagement.ui.theme.AppSpacing
+
+import ir.hamedan.budgetmanagement.ui.theme.AppShapes
+
+import ir.hamedan.budgetmanagement.ui.theme.AppDimens
+
 import android.app.Activity
 import ir.hamedan.budgetmanagement.ui.components.showError
 import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
@@ -668,22 +680,22 @@ fun SettingsScreen(
         AuroraBackground()
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
-            contentPadding = PaddingValues(top = 75.dp, bottom = 130.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            modifier = Modifier.fillMaxSize().scrollEdgeFade().padding(horizontal = AppDimens.ScreenHorizontal),
+            contentPadding = PaddingValues(
+                top = topBarClearance(),
+                bottom = dockClearance()
+            ),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.Xl)
         ) {
-            item {
-                Spacer(modifier = Modifier.statusBarsPadding().height(5.dp))
-            }
 
             if (suggestion != null) {
                 item {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(16.dp))
                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
-                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f), RoundedCornerShape(14.dp))
+                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
                             .clickable { searchQuery = suggestion }
                             .padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -1260,7 +1272,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = AppSnackbarDefaults.AboveBottomBar, start = 16.dp, end = 16.dp)
+                .padding(bottom = AppSnackbarDefaults.AboveBottomBar, start = AppDimens.SnackbarHorizontal, end = AppDimens.SnackbarHorizontal)
         )
     }
 }
@@ -1697,18 +1709,21 @@ private fun SettingsTopBar(
     onSearchQueryChange: (String) -> Unit,
     onSearchToggle: () -> Unit
 ) {
-    val barShape = RoundedCornerShape(24.dp)
+    val barShape = AppShapes.TopBar
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 8.dp)
+            .padding(
+                horizontal = AppDimens.ScreenHorizontal,
+                vertical = AppDimens.TopBarVerticalPadding
+            )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
+                .height(AppDimens.TopBarHeight),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {

@@ -750,7 +750,7 @@ private fun LimitAmountStep(
 
         if (category != null) {
             // دسته‌ی انتخاب‌شده؛ لمسش به مرحله‌ی دسته برمی‌گردد.
-            val shape = RoundedCornerShape(14.dp)
+            val shape = RoundedCornerShape(16.dp)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -857,7 +857,7 @@ private fun LimitAmountStep(
 @Composable
 private fun SuggestionPill(text: String, actionLabel: String, accent: Color, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(16.dp)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -1151,7 +1151,7 @@ private fun DateCard(
 @Composable
 private fun InfoBanner(text: String, color: Color, showWarningIcon: Boolean = false) {
     val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(16.dp)
     Row(
         verticalAlignment = Alignment.Top,
         modifier = Modifier

@@ -536,8 +536,8 @@ private fun RecoveryKeyDialog(recoveryKey: String, isPersian: Boolean, onConfirm
                         text = recoveryKey,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
-                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
+                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
                             .padding(14.dp),
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontFamily = FontFamily.Monospace,
@@ -550,7 +550,7 @@ private fun RecoveryKeyDialog(recoveryKey: String, isPersian: Boolean, onConfirm
                 }
                 OutlinedButton(
                     onClick = { copyRecoveryKey(context, recoveryKey); copied = true },
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.ContentCopy, null, modifier = Modifier.size(18.dp))

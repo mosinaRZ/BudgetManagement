@@ -322,7 +322,7 @@ private fun CategoryCard(
             Box(
                 modifier = Modifier
                     .size(44.dp)
-                    .background(chipColor, RoundedCornerShape(14.dp)),
+                    .background(chipColor, RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 val icon = categoryIcon(category)

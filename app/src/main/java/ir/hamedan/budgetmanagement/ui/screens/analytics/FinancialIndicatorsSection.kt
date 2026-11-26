@@ -741,7 +741,7 @@ private fun LegendDot(color: Color, text: String) {
 private fun MiniStat(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f))
             .padding(horizontal = 10.dp, vertical = 9.dp)
     ) {

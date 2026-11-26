@@ -55,7 +55,7 @@ object AppSnackbarDefaults {
      * Bottom padding that lifts a snackbar above the floating capsule navigation bar + FAB
      * (56dp FAB + 5dp gap + breathing room). Screens that show the main bar must use at least this.
      */
-    val AboveBottomBar = 84.dp
+    val AboveBottomBar = ir.hamedan.budgetmanagement.ui.theme.AppDimens.DockBlockHeight + ir.hamedan.budgetmanagement.ui.theme.AppDimens.SnackbarGap
 }
 
 /**
@@ -129,7 +129,7 @@ fun AppSnackbar(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = ir.hamedan.budgetmanagement.ui.theme.AppShapes.Item,
         color = MaterialTheme.colorScheme.surfaceVariant,
         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         tonalElevation = 6.dp,

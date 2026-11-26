@@ -1,5 +1,15 @@
 package ir.hamedan.budgetmanagement.ui.screens.add
 
+import ir.hamedan.budgetmanagement.ui.components.scrollEdgeFade
+
+import ir.hamedan.budgetmanagement.ui.theme.plainBottomClearance
+
+import ir.hamedan.budgetmanagement.ui.theme.topBarClearance
+
+import ir.hamedan.budgetmanagement.ui.theme.AppDimens
+
+import ir.hamedan.budgetmanagement.ui.components.AppBackTopBar
+
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -210,15 +220,18 @@ fun AddScreen(
         AuroraBackground()
 
         // محتوا زیر هدرِ شناور اسکرول می‌شود (مثل آنالیز، تراکنش‌ها و تنظیمات)؛ فاصله‌ی بالا = نوار وضعیت + هدر.
-        val headerClearance = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 12.dp + 72.dp + 12.dp
+        val headerClearance = topBarClearance()
 
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().scrollEdgeFade(),
                 contentPadding = PaddingValues(
-                    start = 24.dp, end = 24.dp, top = headerClearance, bottom = 32.dp
+                    start = AppDimens.ScreenHorizontal,
+                    end = AppDimens.ScreenHorizontal,
+                    top = headerClearance,
+                    bottom = plainBottomClearance()
                 ),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(AppDimens.ItemSpacing)
             ) {
                 if (drafts.isNotEmpty()) {
                     item(key = "drafts") {
@@ -273,10 +286,6 @@ fun AddScreen(
                         }
                     )
                 }
-
-                item(key = "bottom_inset") {
-                    Spacer(Modifier.navigationBarsPadding())
-                }
             }
 
             Column(
@@ -284,7 +293,6 @@ fun AddScreen(
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
             ) {
-                Spacer(modifier = Modifier.statusBarsPadding().padding(top = 12.dp))
                 AddTopBar(isPersian = isPersian, onBackClick = {
                     haptic.perform(AppHapticType.Click)
                     onBackClick()
@@ -298,63 +306,11 @@ fun AddScreen(
 
 @Composable
 private fun AddTopBar(isPersian: Boolean, onBackClick: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    val capsule = RoundedCornerShape(24.dp)
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 8.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // دکمه‌ی بازگشت: همان کپسول ۵۶dpیِ دکمه‌ی فیلتر در آنالیز و تراکنش‌ها
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .background(scheme.surfaceVariant.copy(alpha = 0.75f), capsule)
-                    .border(1.dp, scheme.outline.copy(alpha = 0.15f), capsule)
-                    .clip(capsule),
-                contentAlignment = Alignment.Center
-            ) {
-                IconButton(onClick = onBackClick) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = if (isPersian) "بازگشت" else "Back",
-                        tint = scheme.onSurface
-                    )
-                }
-            }
-
-            // کپسول عنوان
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .background(scheme.surfaceVariant.copy(alpha = 0.75f), capsule)
-                    .border(1.dp, scheme.outline.copy(alpha = 0.15f), capsule)
-                    .clip(capsule)
-                    .padding(horizontal = 12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = if (isPersian) "افزودن و مدیریت" else "Add & Manage",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = scheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-    }
+    AppBackTopBar(
+        title = if (isPersian) "افزودن و مدیریت" else "Add & Manage",
+        onBack = onBackClick,
+        backContentDescription = if (isPersian) "بازگشت" else "Back"
+    )
 }
 
 @Composable
@@ -460,7 +416,7 @@ private fun TransactionHeroCard(
                 Box(
                     modifier = Modifier
                         .size(56.dp)
-                        .clip(RoundedCornerShape(18.dp))
+                        .clip(RoundedCornerShape(16.dp))
                         .background(scheme.primary),
                     contentAlignment = Alignment.Center
                 ) {
@@ -566,7 +522,7 @@ private fun OptionRow(
     onClick: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(24.dp)
     val pulse = rememberHighlightPulse(highlighted)
     val source = remember { MutableInteractionSource() }
 

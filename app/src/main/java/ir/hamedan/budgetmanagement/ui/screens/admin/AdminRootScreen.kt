@@ -1,5 +1,7 @@
 package ir.hamedan.budgetmanagement.ui.screens.admin
 
+import ir.hamedan.budgetmanagement.ui.theme.AppDimens
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -129,7 +131,7 @@ fun AdminRootScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(start = 16.dp, end = 16.dp, bottom = AppSnackbarDefaults.AboveBottomBar)
+                    .padding(start = AppDimens.SnackbarHorizontal, end = AppDimens.SnackbarHorizontal, bottom = AppSnackbarDefaults.AboveBottomBar)
             )
 
             AdminNavBar(
@@ -254,7 +256,7 @@ private fun NavTab(icon: ImageVector, label: String, selected: Boolean, onClick:
     )
     Row(
         Modifier
-            .clip(RoundedCornerShape(26.dp))
+            .clip(RoundedCornerShape(24.dp))
             .background(container)
             .clickable(onClick = onClick)
             .padding(horizontal = 22.dp, vertical = 12.dp),

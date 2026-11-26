@@ -608,7 +608,7 @@ private fun SuggestionChip(
     onClick: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(16.dp)
     Row(
         modifier = Modifier
             .height(40.dp)
@@ -744,7 +744,7 @@ private fun IconStep(
 @Composable
 private fun SelectedIconPill(emoji: String, title: String, accent: Color, isPersian: Boolean) {
     val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(16.dp)
     Row(
         modifier = Modifier
             .clip(shape)

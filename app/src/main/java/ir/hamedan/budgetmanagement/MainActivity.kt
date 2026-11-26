@@ -1197,13 +1197,17 @@ class MainActivity : FragmentActivity() {
                     )
 
                     // ===== Bottom dock: nav bar + add button inside one opaque capsule =====
-                    // The 24.dp side inset matches the screens' content padding.
+                    // The side inset equals the screens' content padding (AppDimens.ScreenHorizontal).
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .align(Alignment.BottomCenter)
                             .navigationBarsPadding()
-                            .padding(bottom = 8.dp, start = 24.dp, end = 24.dp),
+                            .padding(
+                                bottom = ir.hamedan.budgetmanagement.ui.theme.AppDimens.DockBottomMargin,
+                                start = ir.hamedan.budgetmanagement.ui.theme.AppDimens.ScreenHorizontal,
+                                end = ir.hamedan.budgetmanagement.ui.theme.AppDimens.ScreenHorizontal
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         BottomDock(

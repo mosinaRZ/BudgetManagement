@@ -272,7 +272,7 @@ private fun PermissionReminderCard(
                 Box(
                     modifier = Modifier
                         .size(46.dp)
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(16.dp))
                         .background(if (item.granted) colors.primary else colors.primaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
@@ -325,7 +325,7 @@ private fun PermissionReminderCard(
                     OutlinedButton(
                         onClick = onAllow,
                         modifier = Modifier.fillMaxWidth().height(44.dp),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         Icon(Icons.Rounded.Settings, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
@@ -339,7 +339,7 @@ private fun PermissionReminderCard(
                 else -> Button(
                     onClick = onAllow,
                     modifier = Modifier.fillMaxWidth().height(44.dp),
-                    shape = RoundedCornerShape(14.dp)
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     Text(
                         text = if (isPersian) "فعال‌سازی" else "Enable",

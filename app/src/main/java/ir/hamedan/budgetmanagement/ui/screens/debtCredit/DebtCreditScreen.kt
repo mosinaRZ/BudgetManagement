@@ -1,5 +1,17 @@
 package ir.hamedan.budgetmanagement.ui.screens.debtCredit
 
+import ir.hamedan.budgetmanagement.ui.components.scrollEdgeFade
+
+import ir.hamedan.budgetmanagement.ui.theme.AppSpacing
+
+import ir.hamedan.budgetmanagement.ui.theme.fabClearance
+
+import ir.hamedan.budgetmanagement.ui.theme.topBarClearance
+
+import ir.hamedan.budgetmanagement.ui.theme.AppDimens
+
+import ir.hamedan.budgetmanagement.ui.components.AppBackTopBar
+
 import ir.hamedan.budgetmanagement.ui.components.CountUpText
 
 import ir.hamedan.budgetmanagement.ui.components.AppSnackbarHost
@@ -96,14 +108,14 @@ fun DebtCreditScreen(
     ) {
         StatusBarAuroraBackground()
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().scrollEdgeFade(),
             contentPadding = PaddingValues(
-                start = 20.dp,
-                end = 20.dp,
-                top = 120.dp,
-                bottom = 100.dp
+                start = AppDimens.ScreenHorizontal,
+                end = AppDimens.ScreenHorizontal,
+                top = topBarClearance(),
+                bottom = fabClearance()
             ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(AppDimens.ItemSpacing)
         ) {
             if (debtCreditList.isEmpty()) {
                 item {
@@ -147,7 +159,7 @@ fun DebtCreditScreen(
                             Spacer(modifier = Modifier.height(20.dp))
                             Button(
                                 onClick = onAddClick,
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(16.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
                                 Icon(Icons.Default.Add, contentDescription = null)
@@ -182,56 +194,12 @@ fun DebtCreditScreen(
             }
         }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopCenter)
-                .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            val shape = RoundedCornerShape(24.dp)
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), shape)
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape)
-                    .clip(shape),
-                contentAlignment = Alignment.Center
-            ) {
-                IconButton(
-                    onClick = onBackClick,
-                    modifier = Modifier.size(44.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .size(56.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), shape)
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape)
-                    .clip(shape)
-                    .padding(horizontal = 12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (isPersian) "بدهی‌ها و بستانکاری‌ها" else "Debts & Credits",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-            }
-        }
+        AppBackTopBar(
+            title = if (isPersian) "بدهی‌ها و بستانکاری‌ها" else "Debts & Credits",
+            onBack = onBackClick,
+            backContentDescription = if (isPersian) "بازگشت" else "Back",
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
 
         if (debtCreditList.isNotEmpty()) {
             FloatingActionButton(
@@ -242,8 +210,8 @@ fun DebtCreditScreen(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
-                    .padding(24.dp)
-                    .size(56.dp)
+                    .padding(AppDimens.FabMargin)
+                    .size(AppDimens.FabSize)
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Record", modifier = Modifier.size(28.dp))
             }
@@ -255,7 +223,11 @@ fun DebtCreditScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 16.dp, start = 16.dp, end = 16.dp)
+                .padding(
+                    bottom = AppDimens.SnackbarGap + AppSpacing.Xs,
+                    start = AppDimens.SnackbarHorizontal,
+                    end = AppDimens.SnackbarHorizontal
+                )
         )
 
         itemForDeposit?.let { item ->
@@ -343,7 +315,7 @@ fun DebtCreditScreen(
                         OutlinedButton(
                             onClick = { itemForSettlement = null },
                             modifier = Modifier.weight(1f).height(48.dp),
-                            shape = RoundedCornerShape(14.dp)
+                            shape = RoundedCornerShape(16.dp)
                         ) {
                             Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
@@ -355,7 +327,7 @@ fun DebtCreditScreen(
                                 itemForSettlement = null
                             },
                             modifier = Modifier.weight(1f).height(48.dp),
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
                             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -508,7 +480,7 @@ fun DebtCreditScreen(
                                         .weight(cancelWeight)
                                         .height(48.dp)
                                         .padding(end = (12 * cancelWeight).dp),
-                                    shape = RoundedCornerShape(14.dp)
+                                    shape = RoundedCornerShape(16.dp)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -533,7 +505,7 @@ fun DebtCreditScreen(
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(48.dp)
-                                    .clip(RoundedCornerShape(14.dp))
+                                    .clip(RoundedCornerShape(16.dp))
                                     .background(MaterialTheme.colorScheme.error)
                                     .pointerInput(Unit) {
                                         detectTapGestures(

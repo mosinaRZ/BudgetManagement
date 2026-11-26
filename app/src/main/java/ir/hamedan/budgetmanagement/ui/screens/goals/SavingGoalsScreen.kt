@@ -1,5 +1,17 @@
 package ir.hamedan.budgetmanagement.ui.screens.goals
 
+import ir.hamedan.budgetmanagement.ui.components.scrollEdgeFade
+
+import ir.hamedan.budgetmanagement.ui.theme.AppSpacing
+
+import ir.hamedan.budgetmanagement.ui.theme.fabClearance
+
+import ir.hamedan.budgetmanagement.ui.theme.topBarClearance
+
+import ir.hamedan.budgetmanagement.ui.theme.AppDimens
+
+import ir.hamedan.budgetmanagement.ui.components.AppBackTopBar
+
 import ir.hamedan.budgetmanagement.ui.components.CountUpText
 import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
 import androidx.compose.animation.core.Animatable
@@ -164,16 +176,15 @@ fun SavingGoalsScreen(
         // ------------------ Main Content List ------------------
         if (goalsListState != null) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().scrollEdgeFade(),
                 // تنظیم فاصله افقی برای کل لیست و آیتم‌ها
                 contentPadding = PaddingValues(
-                    start = 20.dp,
-                    end = 20.dp,
-                    // ایجاد فضای خالی در بالا برای اینکه محتوا زیر تاپ‌بار پنهان نشود
-                    top = 120.dp,
-                    bottom = 120.dp
+                    start = AppDimens.ScreenHorizontal,
+                    end = AppDimens.ScreenHorizontal,
+                    top = topBarClearance(),
+                    bottom = fabClearance()
                 ),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(AppDimens.SectionSpacing)
             ) {
                 // کارت خلاصه عملکرد کلی
                 item {
@@ -294,7 +305,7 @@ fun SavingGoalsScreen(
                                 Spacer(modifier = Modifier.height(20.dp))
                                 Button(
                                     onClick = onAddGoalClick,
-                                    shape = RoundedCornerShape(14.dp),
+                                    shape = RoundedCornerShape(16.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                                 ) {
                                     Icon(Icons.Default.Add, contentDescription = null)
@@ -325,56 +336,12 @@ fun SavingGoalsScreen(
         }
 
         // ------------------ Floating Header ------------------
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopCenter)
-                .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            val shape = RoundedCornerShape(24.dp)
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), shape)
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape)
-                    .clip(shape),
-                contentAlignment = Alignment.Center
-            ) {
-                IconButton(
-                    onClick = onBackClick,
-                    modifier = Modifier.size(44.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .size(56.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), shape)
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), shape)
-                    .clip(shape)
-                    .padding(horizontal = 12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (isPersian) "مدیریت قلک‌ها" else "Savings Goals",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-            }
-        }
+        AppBackTopBar(
+            title = if (isPersian) "مدیریت قلک‌ها" else "Savings Goals",
+            onBack = onBackClick,
+            backContentDescription = if (isPersian) "بازگشت" else "Back",
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
 
         if (goalsListState != null && goalsList.isNotEmpty()) {
             FloatingActionButton(
@@ -385,8 +352,8 @@ fun SavingGoalsScreen(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
-                    .padding(24.dp)
-                    .size(56.dp)
+                    .padding(AppDimens.FabMargin)
+                    .size(AppDimens.FabSize)
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Goal", modifier = Modifier.size(28.dp))
             }
@@ -399,7 +366,11 @@ fun SavingGoalsScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 16.dp, start = 16.dp, end = 16.dp)
+                .padding(
+                    bottom = AppDimens.SnackbarGap + AppSpacing.Xs,
+                    start = AppDimens.SnackbarHorizontal,
+                    end = AppDimens.SnackbarHorizontal
+                )
         )
 
         // دیالوگ واریز
@@ -596,7 +567,7 @@ fun SavingGoalsScreen(
                                     onClick = { goalToDelete = null },
                                     enabled = !isPressed,
                                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                                    shape = RoundedCornerShape(14.dp)
+                                    shape = RoundedCornerShape(16.dp)
                                 ) {
                                     Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(6.dp))
@@ -632,7 +603,7 @@ fun SavingGoalsScreen(
                                             .weight(cancelWeight)
                                             .height(48.dp)
                                             .padding(end = (12 * cancelWeight).dp),
-                                        shape = RoundedCornerShape(14.dp),
+                                        shape = RoundedCornerShape(16.dp),
                                         enabled = !isPressed
                                     ) {
                                         Row(
@@ -705,7 +676,7 @@ private fun HoldToConfirmButton(
         modifier = modifier
             .height(48.dp)
             .alpha(if (enabled) 1f else 0.38f)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(containerColor)
             .pointerInput(Unit) {
                 detectTapGestures(
@@ -996,7 +967,7 @@ fun AmountActionDialog(
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -1018,7 +989,7 @@ fun AmountActionDialog(
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (isDeposit) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                         ),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
