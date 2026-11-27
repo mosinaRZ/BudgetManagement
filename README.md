@@ -402,8 +402,6 @@ go test ./...
 | مشخصه | مقدار |
 |---|---|
 | Application ID | `ir.hamedan.budgetmanagement` |
-| Version name پیش‌فرض در سورس | `1.2.1` |
-| Version code پیش‌فرض در سورس | `5` |
 | minSdk | `26` |
 | targetSdk | `36` |
 | compileSdk | `36` |
