@@ -1,666 +1,850 @@
 <div align="center">
 
+<img src="cidna-website/static/img/cidna-mark.png" width="92" alt="Cidna logo">
+
 # Cidna · سیدنا
 
-### The New Generation of Financial Managers!
-### نسل جدید مدیر مالی!
+### Your money. Your picture. Your control.
+### تصویر روشن‌تری از پولت؛ با کنترل بیشتر.
 
-**Personal finance, budgeting & savings for Persian and English speakers — private by design, on Android.**
+**A privacy-first personal finance companion for Android.**  
+**همراهی برای مدیریت مالی شخصی؛ با اولویت حریم خصوصی و تجربه‌ای بومی.**
 
-**مدیریت مالی شخصی، بودجه‌بندی و پس‌انداز برای کاربران فارسی‌زبان و انگلیسی‌زبان — با حریم خصوصی از پایه، روی اندروید.**
+[Website](https://cidna.ir) · [فارسی](#فارسی) · [English](#english) · [Technology](#technology) · [Security](#امنیت-و-حریم-خصوصی) · [License](#license)
 
-[English](#english) · [فارسی](#فارسی) · [Legal](#14-legal-information) · [حقوقی](#۱۴-اطلاعات-حقوقی)
+<br>
 
-`AGPL-3.0-or-later` · Kotlin · Jetpack Compose · Go · MongoDB
+<img src="cidna-website/static/img/app-home.webp" width="300" alt="Cidna app preview">
+
+<br>
+
+[![License: AGPL v3 or later](https://img.shields.io/badge/License-AGPL--3.0--or--later-408A71.svg)](LICENSE)
+![Platform: Android](https://img.shields.io/badge/Platform-Android-408A71)
+![Kotlin](https://img.shields.io/badge/Kotlin-2.2.10-7F52FF?logo=kotlin&logoColor=white)
+![Go](https://img.shields.io/badge/Backend-Go%201.26-00ADD8?logo=go&logoColor=white)
+![MongoDB](https://img.shields.io/badge/Database-MongoDB%207-47A248?logo=mongodb&logoColor=white)
+
+</div>
+
+---
+
+<a id="فارسی"></a>
+
+## فارسی
+
+<div dir="rtl" align="right">
+
+# سیدنا؛ مدیریت مالی، فراتر از ثبت هزینه‌ها
+
+پول فقط عددی در حساب بانکی نیست؛ مجموعه‌ای از انتخاب‌های روزمره، هدف‌های آینده، تعهدها و اولویت‌هاست. وقتی درآمدها، هزینه‌ها، بدهی‌ها و پس‌اندازها در جاهای مختلف پراکنده باشند، به‌دست‌آوردن یک تصویر قابل‌اعتماد از وضعیت مالی دشوار می‌شود.
+
+**سیدنا (Cidna)** یک همراه مدیریت مالی شخصی برای اندروید است که این تصویر را در یک فضای یکپارچه جمع می‌کند: از ثبت درآمد و هزینه تا بودجه‌بندی، پس‌انداز، بدهی و طلب، تحلیل مالی و تهیه خروجی.
+
+اما تفاوت سیدنا فقط در تعداد امکانات نیست؛ محصول با سه اصل طراحی شده است:
+
+- **شروع بدون اصطکاک:** برای شروع استفاده روزمره لازم نیست ابتدا حساب بسازید.
+- **حریم خصوصی از ابتدا:** داده‌های مالی در دستگاه رمزنگاری می‌شوند و برای همگام‌سازی نیز پیش از ارسال رمزنگاری سرتاسری دارند.
+- **تجربه بومی و منعطف:** فارسی و انگلیسی، راست‌چین و چپ‌چین، تقویم جلالی و میلادی و نمایش تومان و ریال.
+
+> **وعده محصول:** کمک می‌کنیم بدانید پولتان کجا می‌رود، برای چه چیزی کنار گذاشته می‌شود و چه تعهدهایی پیش روی شماست؛ بدون آنکه مدیریت مالی به کاری پیچیده و وقت‌گیر تبدیل شود.
+
+## چرا سیدنا؟
+
+| چالش روزمره | پاسخ سیدنا |
+|---|---|
+| نمی‌دانم درآمدم کجا خرج می‌شود | ثبت و دسته‌بندی درآمدها و هزینه‌ها و مشاهده سوابق |
+| برای هر هدف پس‌انداز باید جداگانه حساب‌وکتاب کنم | قلک‌ها و اهداف پس‌انداز با امکان ثبت و پیگیری عملیات |
+| سقف هزینه‌هایم از دستم خارج می‌شود | تعیین محدودیت بودجه برای دسته‌بندی‌ها و پیگیری میزان مصرف |
+| بدهی‌ها و طلب‌ها را فراموش می‌کنم | ثبت بدهی و طلب، پرداخت‌های جزئی، سررسید و یادآوری |
+| اپلیکیشن‌ها با زبان و تقویم من هماهنگ نیستند | رابط فارسی و انگلیسی، RTL/LTR و تاریخ جلالی و میلادی |
+| نمی‌خواهم برای امتحان یک اپلیکیشن حساب بسازم | شروع در حالت مهمان و تصمیم‌گیری درباره ساخت حساب در زمان دلخواه |
+| نمی‌خواهم سوابق مالی‌ام به‌سادگی قابل‌خواندن باشند | پایگاه داده محلی رمزنگاری‌شده و رمزنگاری سرتاسری سوابق همگام‌سازی‌شده |
+
+## امکانات؛ از ثبت روزانه تا تصویر جامع مالی
+
+### ۱. درآمد و هزینه؛ ثبت ساده، مرور دقیق
+
+- ثبت تراکنش‌های درآمد و هزینه
+- ثبت عنوان، مبلغ، دسته‌بندی، تاریخ و توضیحات
+- ورود متن با صدا از طریق قابلیت تشخیص گفتار دستگاه
+- میان‌برهای ثبت و دسترسی سریع به عملیات پرتکرار
+- مرور، ویرایش و مدیریت سوابق تراکنش‌ها
+- کارت تصویری تراکنش برای اشتراک‌گذاری
+
+### ۲. دسته‌بندی‌ها؛ متناسب با شیوه مدیریت شما
+
+- دسته‌بندی‌های پیش‌فرض برای شروع سریع
+- ساخت و ویرایش دسته‌بندی‌های شخصی
+- انتخاب آیکون و نماد برای دسته‌بندی‌ها
+- پیشنهاد دسته‌بندی و دسترسی سریع به موارد پرکاربرد
+- تفکیک دسته‌بندی‌های درآمد و هزینه
+
+### ۳. بودجه‌بندی؛ کنترل آگاهانه‌تر هزینه‌ها
+
+- تعریف سقف هزینه برای دسته‌بندی‌ها
+- تعیین بازه زمانی و تاریخ پایان محدودیت
+- مشاهده میزان مصرف بودجه
+- پیگیری وضعیت محدودیت‌ها و دریافت اعلان‌های مرتبط
+
+### ۴. پس‌انداز و قلک‌ها؛ هدف را قابل‌پیگیری کنید
+
+- تعریف هدف‌های مالی و قلک‌های جداگانه
+- تعیین مبلغ هدف
+- ثبت واریز و برداشت
+- مشاهده پیشرفت هر هدف
+- پشتیبانی از واریزهای ماهانه زمان‌بندی‌شده
+- انتخاب آیکون و ظاهر اختصاصی برای هدف‌ها
+
+### ۵. بدهی و طلب؛ تعهدها را فراموش نکنید
+
+- ثبت مبالغ بدهکاری و طلبکاری
+- ثبت طرف حساب و اطلاعات مرتبط
+- تعریف سررسید
+- ثبت پرداخت‌ها و دریافت‌های جزئی
+- مشاهده مانده تعهد
+- یادآوری موعدهای سررسید
+
+### ۶. تحلیل مالی؛ تصمیم بر پایه تصویر روشن‌تر
+
+- مشاهده خلاصه وضعیت مالی
+- نمودارها و شاخص‌های مالی
+- بررسی روند درآمد و هزینه
+- فیلتر و مرور اطلاعات در بازه‌های زمانی
+- پشتیبانی از نمایش تاریخ در تقویم انتخابی برنامه
+
+### ۷. خروجی و اشتراک‌گذاری
+
+- تهیه گزارش PDF
+- خروجی صفحه‌گسترده XLSX
+- انتخاب دوره گزارش
+- اشتراک‌گذاری کارت تصویری تراکنش
+- هماهنگی خروجی‌ها با زبان و جهت نوشتار برنامه در بخش‌های پشتیبانی‌شده
+
+### ۸. تجربه و شخصی‌سازی
+
+- رابط فارسی و انگلیسی
+- پشتیبانی از چیدمان راست‌چین و چپ‌چین
+- تقویم جلالی و میلادی
+- نمایش مبالغ به تومان یا ریال
+- پوسته روشن و تاریک
+- ویجت موجودی در صفحه اصلی اندروید
+- امکان مخفی‌کردن مبالغ
+- اعلان‌ها و یادآورها
+- قفل برنامه و ورود زیست‌سنجی اختیاری
+
+## شروع استفاده؛ بدون اجبار به ساخت حساب
+
+یکی از تصمیم‌های اصلی طراحی سیدنا این است که **ساخت حساب، پیش‌شرط تجربه محصول نیست.**
+
+1. برنامه را نصب و اجرا کنید.
+2. بدون ثبت‌نام، در حالت مهمان اطلاعات مالی خود را ثبت کنید.
+3. هر زمان به همگام‌سازی چنددستگاهی نیاز داشتید، حساب کاربری بسازید.
+4. در فرایند ساخت حساب، درباره انتقال اطلاعات مهمان به حساب جدید یا شروع با اطلاعات خالی تصمیم بگیرید.
+5. برای محافظت از امکان بازیابی، کلید بازیابی نمایش‌داده‌شده در فرایند ثبت‌نام را در محل امن نگهداری کنید.
+
+### دو شیوه نگهداری اطلاعات
+
+| حالت | توضیح |
+|---|---|
+| **محلی / مهمان** | اطلاعات روی همان دستگاه نگهداری می‌شوند و برای استفاده روزمره به حساب آنلاین نیاز ندارید. |
+| **حساب‌دار / همگام‌سازی** | با ساخت حساب می‌توانید داده‌های رمزنگاری‌شده را میان دستگاه‌های خود همگام‌سازی کنید. |
+
+### پشتیبان‌گیری مستقل از حساب
+
+سیدنا علاوه بر همگام‌سازی حساب، امکان تهیه و بازیابی فایل پشتیبان محلی را نیز دارد:
+
+- فایل پشتیبان با گذرواژه مستقل محافظت می‌شود.
+- رمزنگاری فایل با PBKDF2-HMAC-SHA256 و AES-256-GCM انجام می‌شود.
+- فایل پشتیبان به Android Keystore وابسته نیست؛ بنابراین برای بازیابی پس از نصب مجدد یا روی دستگاه دیگر طراحی شده است.
+- هنگام واردکردن نسخه پشتیبان، داده‌های موجود به‌صورت مخرب و یک‌جا حذف نمی‌شوند؛ رکوردها بر اساس شناسه و زمان ویرایش ادغام می‌شوند.
+
+**نکته مهم:** فایل پشتیبان را در محل امن نگهداری کنید و گذرواژه آن را فراموش نکنید. بدون گذرواژه، محتوای فایل قابل بازیابی نیست.
+
+## امنیت و حریم خصوصی
+
+حریم خصوصی در سیدنا یک پیام تبلیغاتی صرف نیست؛ بخشی از طراحی ذخیره‌سازی، همگام‌سازی و احراز هویت است.
+
+### حفاظت روی دستگاه
+
+- پایگاه داده محلی Room با SQLCipher رمزنگاری می‌شود.
+- کلید پایگاه داده به‌صورت تصادفی تولید و با سازوکار متکی بر Android Keystore محافظت می‌شود.
+- اطلاعات حساس نشست و کلیدها در فضای ذخیره‌سازی رمزنگاری‌شده نگهداری می‌شوند.
+- قفل صفحه برنامه و ورود زیست‌سنجی اختیاری در دسترس است.
+- تنظیمات امنیت صفحه از `FLAG_SECURE` برای محدودکردن اسکرین‌شات و نمایش محتوای برنامه در صفحه برنامه‌های اخیر استفاده می‌کند؛ رفتار آن از تنظیمات برنامه قابل تغییر است.
+
+### رمزنگاری سرتاسری همگام‌سازی
+
+- رکوردهای مالی پیش از ارسال به سرور رمزنگاری می‌شوند.
+- رمزنگاری رکوردها با AES-256-GCM و کلید داده تصادفی انجام می‌شود.
+- کلید داده به‌صورت بسته‌بندی‌شده نگهداری می‌شود.
+- کلید بسته‌بندی از گذرواژه روی دستگاه مشتق می‌شود و خود کلید بسته‌بندی به سرور ارسال نمی‌شود.
+- پروتکل مشتق‌سازی کلید نسخه ۲ از PBKDF2-HMAC-SHA256 با ۶۰۰٬۰۰۰ تکرار و HKDF استفاده می‌کند.
+- کلید بازیابی نیز از همین اصل جداسازی کلیدها پیروی می‌کند؛ سرور proof مشتق‌شده را دریافت می‌کند، نه خود کلید بازیابی را.
+
+### حفاظت از حساب و نشست
+
+- ذخیره مقدار احراز هویت مشتق‌شده به‌صورت هش Argon2id در سرور
+- توکن دسترسی JWT با عمر محدود
+- چرخش توکن نوسازی و تشخیص استفاده مجدد
+- محدودیت تلاش برای OTP و ورود
+- محدودسازی نرخ درخواست‌ها
+- امکان مشاهده دستگاه‌های متصل و خروج از نشست دستگاه
+- اعلان رویدادهای امنیتی مرتبط با دستگاه جدید
+
+### شفافیت درباره محدودیت‌ها
+
+برای جلوگیری از برداشت نادرست، دامنه حفاظت را دقیق بیان می‌کنیم:
+
+- رمزنگاری سرتاسری برای **سوابق مالی همگام‌سازی‌شده** اعمال می‌شود؛ این به معنی ناشناس‌بودن کامل حساب یا «Zero-Knowledge بودن همه اطلاعات» نیست.
+- اطلاعاتی که برای ارائه سرویس لازم‌اند، مانند شماره تلفن و برخی فراداده‌های حساب و دستگاه، در سمت سرویس قابل پردازش‌اند.
+- گذرواژه و کلید بازیابی به شکل خام به سرور ارسال نمی‌شوند؛ بااین‌حال، گذرواژه ضعیف می‌تواند ریسک حدس آفلاین را افزایش دهد. از گذرواژه‌ای بلند و منحصربه‌فرد استفاده کنید.
+- اگر هم گذرواژه و هم کلید بازیابی را از دست بدهید، داده‌های همگام‌سازی‌شده قابل رمزگشایی و بازیابی نخواهند بود.
+- حذف حساب ابتدا نرم است: نشست‌ها باطل می‌شوند و حساب تا ۳۰ روز امکان بازیابی دارد؛ پس از آن فرایند پاکسازی دائمی اجرا می‌شود.
+- استفاده از کتابخانه‌های رمزنگاری به‌تنهایی معادل ممیزی امنیتی مستقل نیست.
+
+**گزارش آسیب‌پذیری:** لطفاً جزئیات مشکلات امنیتی را در Issue عمومی منتشر نکنید. برای هماهنگی گزارش خصوصی با تیم پروژه تماس بگیرید: `cidna.app@gmail.com`.
+
+## معماری در یک نگاه
+
+```mermaid
+flowchart TB
+    subgraph Android["Android application"]
+        UI["Jetpack Compose UI"]
+        VM["ViewModels"]
+        REPO["Repositories"]
+        DB[("Room + SQLCipher")]
+        WORK["WorkManager"]
+        CRYPTO["Client-side encryption"]
+        UI --> VM --> REPO
+        REPO <--> DB
+        REPO --> WORK
+        REPO --> CRYPTO
+    end
+
+    CRYPTO -->|"HTTPS · encrypted records"| PROXY["Caddy · TLS"]
+    PROXY --> API["Go HTTP API"]
+    API --> AUTH["Authentication & account services"]
+    API --> SYNC["Encrypted sync service"]
+    AUTH --> MONGO[("MongoDB 7")]
+    SYNC --> MONGO
+    MONGO --> BACKUP["Scheduled database backups"]
+```
+
+**اصل معماری:** برنامه اندروید برای ثبت و مشاهده داده‌های روزمره به پایگاه داده محلی متکی است. بک‌اند مسئول حساب کاربری، احراز هویت، مدیریت دستگاه‌ها و نگهداری داده‌های رمزنگاری‌شده برای همگام‌سازی است.
+
+## فناوری‌های استفاده‌شده
+
+| لایه | فناوری |
+|---|---|
+| زبان اندروید | Kotlin 2.2.10 |
+| رابط کاربری | Jetpack Compose و Material 3 |
+| معماری کلاینت | ViewModel، Repository و `AppContainer` دستی |
+| پایگاه داده محلی | Room |
+| رمزنگاری پایگاه داده | SQLCipher |
+| نگهداری امن کلیدها | Android Keystore و AndroidX Security Crypto |
+| کارهای پس‌زمینه | WorkManager |
+| ویجت | Jetpack Glance |
+| احراز هویت زیست‌سنجی | AndroidX Biometric |
+| خروجی Excel | fastexcel |
+| بک‌اند | Go 1.26 |
+| HTTP routing | chi |
+| احراز هویت API | JWT |
+| هش رمز | Argon2id |
+| پایگاه داده سرور | MongoDB 7 |
+| محدودسازی نرخ | Token bucket درون‌حافظه‌ای |
+| استقرار | Docker Compose و Caddy |
+
+## ساختار مخزن
+
+```text
+BudgetManagement/
+├── app/
+│   ├── src/main/          # برنامه اندروید
+│   ├── src/debug/         # تنظیمات مخصوص نسخه توسعه
+│   ├── src/test/          # تست‌های واحد
+│   ├── src/androidTest/   # تست‌های دستگاه و یکپارچگی
+│   └── schemas/           # اسکیماهای Room
+├── backend/
+│   ├── cmd/
+│   │   ├── api/           # ورودی سرویس API
+│   │   └── purge-deleted/ # پاکسازی دائمی حساب‌های منقضی
+│   ├── internal/
+│   │   ├── domain/
+│   │   ├── usecase/
+│   │   ├── infrastructure/
+│   │   └── interface/http/
+│   └── deployments/       # Docker، Compose، Caddy و بکاپ
+├── cidna-website/         # وب‌سایت و محتوای حقوقی محصول
+├── gradle/
+├── ADMIN_CONSOLE.md
+├── LICENSE
+└── README.md
+```
+
+## راه‌اندازی برای توسعه‌دهندگان
+
+### پیش‌نیازها
+
+- Android Studio سازگار با نسخه Android Gradle Plugin پروژه
+- JDK سازگار با Gradle و Android Gradle Plugin
+- Android SDK و ابزارهای Build متناسب با `compileSdk`
+- Docker Engine و Docker Compose v2 برای اجرای بک‌اند
+- Go مطابق نسخه تعریف‌شده در `backend/go.mod` برای اجرای مستقیم بک‌اند
+- شبیه‌ساز یا دستگاه اندرویدی با Android 8.0 (API 26) یا بالاتر
+
+### دریافت پروژه
+
+```bash
+git clone <YOUR_REPOSITORY_URL>
+cd BudgetManagement
+```
+
+### اجرای بک‌اند در محیط توسعه
+
+```bash
+cd backend/deployments
+
+# ساخت فایل تنظیمات توسعه
+cp ../.env.example .env
+
+# مقادیر نمونه را متناسب با محیط خود تنظیم کنید
+# سپس سرویس‌ها را اجرا کنید
+docker compose -f docker-compose.dev.yml up --build -d
+
+# بررسی سلامت API
+curl http://localhost:8080/health
+```
+
+برای توقف:
+
+```bash
+docker compose -f docker-compose.dev.yml down
+```
+
+> اجرای `down -v` داده‌های volume را نیز حذف می‌کند؛ فقط در صورت قصد پاک‌کردن داده‌های محلی از آن استفاده کنید.
+
+### اجرای مستقیم بک‌اند
+
+```bash
+cd backend
+go test ./...
+go run ./cmd/api
+```
+
+اجرای مستقیم نیز به متغیرهای محیطی معتبر و دسترسی به MongoDB نیاز دارد. برای توسعه معمولاً استفاده از Compose ساده‌تر است.
+
+### ساخت نسخه Debug اندروید
+
+از ریشه پروژه:
+
+```bash
+./gradlew assembleDebug
+```
+
+برای اتصال دستگاه فیزیکی به بک‌اند روی رایانه، آدرس `localhost` کافی نیست. باید IP رایانه در شبکه محلی را به‌عنوان `debugBackendBaseUrl` تنظیم کنید:
+
+```bash
+./gradlew assembleDebug \
+  -PdebugBackendBaseUrl=http://192.168.1.10:8080/
+```
+
+در ویندوز می‌توانید از `gradlew.bat` استفاده کنید.
+
+### اجرای تست‌ها
+
+```bash
+# تست‌های واحد اندروید
+./gradlew testDebugUnitTest
+
+# تست‌های instrumentation اندروید (نیازمند دستگاه یا emulator)
+./gradlew connectedDebugAndroidTest
+
+# تست‌های بک‌اند
+cd backend
+go test ./...
+```
+
+### ساخت نسخه Release
+
+نسخه انتشار به آدرس واقعی HTTPS برای بک‌اند نیاز دارد:
+
+```bash
+./gradlew bundleRelease \
+  -PbackendBaseUrl=https://api.example.com/ \
+  -PversionCode=6 \
+  -PversionName=1.2.2
+```
+
+اطلاعات امضای انتشار را در `keystore.properties` (که نباید وارد Git شود) یا متغیرهای محیطی `RELEASE_*` قرار دهید. برای ساخت AAB انتشار، وجود تنظیمات امضای معتبر الزامی است.
+
+**نکات انتشار:**
+
+- برای هر بار بارگذاری نسخه جدید در فروشگاه، `versionCode` را افزایش دهید.
+- آدرس بک‌اند نسخه Release باید HTTPS باشد.
+- کلید امضا، رمزها، فایل `.env` و secretها را در مخزن Git قرار ندهید.
+- نسخه Release با فعال‌بودن minification و resource shrinking ساخته می‌شود.
+
+## استقرار بک‌اند
+
+برای استقرار Production، یک VPS لینوکسی، دامنه و Docker Compose کافی است. Caddy مسئول HTTPS است و API و MongoDB از طریق شبکه داخلی Docker با یکدیگر ارتباط دارند.
+
+راهنمای کامل و دستورات بازیابی بکاپ در فایل زیر قرار دارد:
+
+[`backend/deployments/README.md`](backend/deployments/README.md)
+
+چند الزام مهم:
+
+- در محیط Production از secretهای تصادفی و مستقل استفاده کنید.
+- تنظیمات واقعی ارسال OTP پیامکی را وارد کنید.
+- `JWT_SECRET` در Production باید حداقل ۶۴ کاراکتر باشد.
+- پورت MongoDB و پورت داخلی API را مستقیماً در اینترنت منتشر نکنید.
+- بکاپ روی همان VPS به‌تنهایی کافی نیست؛ یک نسخه خارج از سرور نیز نگهداری کنید.
+- اجرای روزانه پاکسازی حساب‌های حذف‌شده منقضی‌شده را زمان‌بندی کنید.
+
+## اطلاعات فنی تکمیلی
+
+### مشخصات Android
+
+| مشخصه | مقدار |
+|---|---|
+| Application ID | `ir.hamedan.budgetmanagement` |
+| Version name پیش‌فرض در سورس | `1.2.1` |
+| Version code پیش‌فرض در سورس | `5` |
+| minSdk | `26` |
+| targetSdk | `36` |
+| compileSdk | `36` |
+| Kotlin | `2.2.10` |
+| Android Gradle Plugin | `9.2.1` |
+
+### APIهای اصلی
+
+| مسیر | کاربرد |
+|---|---|
+| `GET /health` | بررسی سلامت سرویس |
+| `POST /auth/otp/request` | درخواست کد یک‌بارمصرف |
+| `POST /auth/register` | ثبت‌نام |
+| `POST /auth/login/params` | دریافت پارامترهای ورود |
+| `POST /auth/login` | ورود |
+| `POST /auth/refresh` | تمدید نشست |
+| `POST /auth/logout` | خروج |
+| `POST /auth/recovery/prepare` | آماده‌سازی بازیابی |
+| `POST /auth/password/reset` | بازنشانی گذرواژه |
+| `POST /api/v1/sync` | همگام‌سازی داده |
+| `GET /api/v1/account/profile` | دریافت نمایه |
+| `PUT /api/v1/account/profile` | به‌روزرسانی نمایه |
+| `GET /api/v1/devices` | فهرست دستگاه‌ها |
+| `DELETE /api/v1/devices/{deviceID}` | حذف نشست دستگاه |
+| `POST /api/v1/account/delete` | درخواست حذف حساب |
+
+قرارداد دقیق ورودی و خروجی هر endpoint در DTOها و handlerهای بک‌اند تعریف شده است؛ در صورت تغییر API، کد سرور مرجع نهایی محسوب می‌شود.
+
+## وب‌سایت و اسناد رسمی
+
+- وب‌سایت: [cidna.ir](https://cidna.ir)
+- سیاست حریم خصوصی: [cidna.ir/privacy](https://cidna.ir/privacy/)
+- نسخه انگلیسی سیاست حریم خصوصی: [cidna.ir/en/privacy](https://cidna.ir/en/privacy/)
+- ایمیل پروژه: [cidna.app@gmail.com](mailto:cidna.app@gmail.com)
+
+اسناد حقوقی باید همواره با رفتار واقعی نسخه منتشرشده برنامه و شیوه پردازش داده‌ها هماهنگ نگه داشته شوند.
+
+## مشارکت در توسعه
+
+از پیشنهادها، گزارش خطاها و مشارکت‌های فنی استقبال می‌شود.
+
+برای مشارکت:
+
+1. ابتدا مسئله یا پیشنهاد را در بخش Issues مطرح کنید.
+2. تغییرات را در یک شاخه مستقل توسعه دهید.
+3. تست‌های مرتبط اندروید یا بک‌اند را اجرا کنید.
+4. توضیح روشن از تغییر، دلیل آن و روش آزمودن را در Pull Request بنویسید.
+5. از ارسال secret، داده واقعی کاربران یا اطلاعات حساس در گزارش‌ها خودداری کنید.
+
+برای گزارش مشکلات امنیتی، از Issue عمومی استفاده نکنید و ابتدا از طریق ایمیل پروژه هماهنگ کنید.
+
+## مجوز
+
+این پروژه تحت مجوز **GNU Affero General Public License v3.0 یا نسخه‌های بعدی** منتشر شده است:
+
+[`AGPL-3.0-or-later`](LICENSE)
+
+استفاده، مطالعه، تغییر و بازتوزیع نرم‌افزار تابع شرایط این مجوز است. در صورت توزیع نسخه تغییریافته یا ارائه نسخه تغییریافته بک‌اند به‌عنوان سرویس شبکه‌ای، تعهدات متناظر AGPL از جمله ارائه کد منبع متناظر اعمال می‌شوند.
+
+مجوز نرم‌افزار به‌معنای اعطای حق استفاده از نام و نشان تجاری **Cidna / سیدنا** نیست. اجزای شخص ثالث نیز تابع مجوزهای مستقل خود هستند.
+
+## تماس
+
+برای پرسش‌های محصول، همکاری، پیشنهاد یا گزارش خطا:
+
+**cidna.app@gmail.com**
 
 </div>
 
 ---
 
 <a id="english"></a>
+
 ## English
 
-## 1. Executive summary
+# Cidna — A clearer way to understand your money
 
-**Cidna** (Persian: **سیدنا**) turns scattered receipts and mental arithmetic into one clear picture of where your money goes — in your language, in your calendar, in your currency, on the phone you already carry.
+**Cidna** is a privacy-first personal finance companion for Android. It brings everyday money management into one coherent experience: income and expenses, budgets, savings goals, debts and receivables, financial insights, and data exports.
 
-**The 30-second pitch.** Most finance apps are built for English, Gregorian-calendar, dollar-thinking users and ask you to hand over your data before they give you any value. Cidna flips that: start in seconds as a guest, record income and expenses in Persian or English, see Jalali dates and Toman or Rial amounts natively, and keep your records in an encrypted database on your own device. Create an account only when you want multi-device sync.
+Cidna is built around three product principles:
 
-| Proof point | What it means for the customer |
+- **Start without friction.** Use the app as a guest before creating an account.
+- **Privacy by design.** Keep an encrypted local database and encrypt financial records on-device before cloud synchronisation.
+- **Designed for real-world localisation.** Persian and English, RTL and LTR layouts, Jalali and Gregorian calendars, and Toman and Rial display.
+
+> **Product promise:** Make it easier to understand where money goes, what you are saving for, and which financial commitments are coming next.
+
+## The product experience
+
+| Capability | What it helps you do |
 |---|---|
-| **2 languages, full RTL/LTR** | Persian and English are both first-class, not a translation afterthought |
-| **Jalali + Gregorian calendars** | Dates look the way people actually read them |
-| **Toman / Rial display** | Amounts shown in the currency people think in |
-| **Guest mode** | Try the real product with no account and no phone number |
-| **Encrypted on device** | Records live in an encrypted local database |
-| **0 ads, 0 analytics, 0 third-party trackers** | The app earns trust instead of monetising attention |
-| **30-day restore window** | Deleted an account by mistake? Sign in within 30 days to restore it |
+| Transactions | Record, organise, edit, and review income and expenses |
+| Voice-assisted entry | Use the device's speech-recognition interface to enter text |
+| Categories | Start with built-in categories or create your own |
+| Budgets | Set category-level spending limits and monitor usage |
+| Savings goals | Create piggy banks, track progress, and record deposits or withdrawals |
+| Debts & receivables | Track amounts owed, partial payments, due dates, and reminders |
+| Analytics | Review financial summaries, charts, and time-based views |
+| PDF & XLSX | Export financial records for offline review |
+| Transaction cards | Share visual transaction summaries |
+| Guest mode | Start using the app without an account |
+| Multi-device sync | Synchronise encrypted financial records through an account |
+| Local backups | Create password-protected backups and restore them on another device |
+| Privacy controls | App lock, optional biometrics, amount hiding, and screen protection |
+| Personalisation | Persian/English, RTL/LTR, Jalali/Gregorian, Toman/Rial, light/dark themes |
+| Home-screen widget | View a balance summary from the Android home screen |
 
-## 2. The problem — and our answer
+## Start as a guest. Create an account when you need sync.
 
-| What people tell us | How Cidna answers |
-|---|---|
-| "I never know where my money went." | Fast entry: quick-add shortcut and voice entry |
-| "Finance apps don't speak my language or use my calendar." | Full Persian/English, RTL/LTR, Jalali dates, Toman/Rial |
-| "I don't want to hand my financial data to a stranger." | Local-first storage, and records are encrypted on the device before any sync upload |
-| "I have to sign up before I can even try it." | Guest mode — start now, decide on an account later |
-| "Goals and debts live in my notes and group chats." | Savings goals, debts and receivables with due dates and reminders |
-| "I can't show anyone what I spent." | Shareable transaction cards that follow the app's language, direction and currency |
+An account is not required for the initial product experience.
 
-## 3. Positioning: three pillars
+1. Open Cidna and start in guest mode.
+2. Record and organise your financial data locally.
+3. Create an account when you want multi-device synchronisation.
+4. Choose whether to transfer existing guest data into the new account or start fresh.
+5. Store your recovery key safely when it is presented during registration.
 
-1. **Local-first.** Your records live in an encrypted on-device database. Day-to-day use is fast and works offline; the backend is only needed for accounts and sync.
-2. **Private by design.** Financial records are **end-to-end encrypted** on the device *before* upload, and your password never leaves the phone; the sync server stores only ciphertext it cannot read (exact scope and limits are stated in [Security model](#9-security-model)).
-3. **Made for Persian and English speakers.** Full RTL/LTR, Jalali calendar and Toman/Rial display.
+### Local-first data model
 
-> **Naming.** The product name is **Cidna** in English and **سیدنا** in Persian. "Budget Management" is only a descriptive phrase for what the app does, and the Kotlin package (`ir.hamedan.budgetmanagement`) is a historical identifier that is kept unchanged because it is the Android application ID.
+Everyday record keeping is designed around the on-device database. An account enables the additional account and synchronisation features; it is not the prerequisite for entering your first transaction.
 
-## 4. Product tour
+Cidna also supports password-protected local backup files. Backups use PBKDF2-HMAC-SHA256 and AES-256-GCM and are intentionally independent of Android Keystore, allowing restoration after reinstalling the app or moving to another device. Import merges records rather than indiscriminately deleting existing data.
 
-| Area | What you get |
-|---|---|
-| **Guest mode** | Start with no account, protected by a passcode or fingerprint. Later, move the data into a new account or start fresh |
-| **Transactions** | Record income and expenses, browse history, quick-add shortcut, voice entry |
-| **Categories** | Predefined categories, custom categories, category suggestions |
-| **Budgets** | Per-category spending limits with progress tracking and alerts |
-| **Savings goals** | Piggy banks, deposits and withdrawals, scheduled monthly deposits |
-| **Debts & receivables** | Money owed and money expected, partial payments, due dates and reminders |
-| **Analytics** | Summaries and charts, Jalali/Gregorian date presentation |
-| **Export & sharing** | PDF and XLSX export; shareable transaction cards (image) that follow the app's language, direction and currency |
-| **Security** | App lock, optional biometric sign-in, encrypted local database, device list with remote sign-out, new-device alerts |
-| **Accounts** | Phone-based registration with OTP, password recovery with a recovery key, soft account deletion with a 30-day restore window |
-| **Convenience** | Light/dark theme, home-screen balance widget, amount-hiding mode, notifications and reminders |
+## Privacy and security
 
-Amounts are stored as integers (Toman) and converted at the UI boundary, so floating-point rounding never reaches the database or the API.
+Security claims should be specific, not absolute. Cidna applies different protections to local storage, synchronised records, authentication, and account metadata.
 
-## 5. The customer journey
+### On-device protection
 
-1. **Try** — open the app as a guest; nothing to sign up for.
-2. **Commit** — create an account with a phone number and one-time SMS code, choose a password, and accept the Terms of Service and Privacy Policy.
-3. **Decide** — if guest data exists on the device, the sign-up screen asks once: move it into the new account, or start fresh. The choice is applied after the first sign-in, so an abandoned registration never loses data.
-4. **Protect** — save the recovery key shown once at the end of registration. It is the only way back in if the password is forgotten.
-5. **Go multi-device** — sign in on another device, sync, and get an alert whenever a new device signs in to your account.
+- Room database encrypted with SQLCipher.
+- Random database key protected using Android Keystore-backed storage.
+- Sensitive session values and keys stored using encrypted preferences.
+- Optional biometric authentication.
+- Screen privacy controls based on Android `FLAG_SECURE`.
 
-## 6. Our trust promise (read with section 8)
+### End-to-end encryption for synced financial records
 
-We say what we can prove: financial records are end-to-end encrypted before upload; your password and recovery key are never sent to our servers (we store only an Argon2id hash of a password-derived sign-in value); there is no advertising, analytics or third-party tracking; and account deletion is soft for 30 days, then permanent. We claim end-to-end encryption of financial records only, not "zero-knowledge" of everything: account details such as phone number are visible to the service — [section 8](#8-security-model) explains the exact scope.
+- Financial records are encrypted on the client before upload.
+- Record encryption uses AES-256-GCM with random data keys.
+- Data keys are stored by the server only as encrypted key envelopes.
+- The password-derived wrapping key remains on the device.
+- Protocol v2 uses PBKDF2-HMAC-SHA256 (600,000 iterations) and HKDF to derive separate authentication and key-wrapping values.
+- Recovery uses a separate random recovery key; the server receives a derived proof, not the recovery key itself.
 
-**Call to action.** Install Cidna from Google Play (or the APK), try it as a guest today, and create an account when you want your records on more than one device. Questions, partnerships or press: **cidna.app@gmail.com**.
+### Account and session security
 
-## 7. Architecture
+- Argon2id hashing of the password-derived authentication value.
+- Short-lived JWT access tokens.
+- Rotating refresh tokens with reuse detection.
+- OTP and authentication attempt limits.
+- Request rate limiting.
+- Device management and remote session revocation.
+- New-device security events.
 
-```text
-┌──────────────────────────── Android app ────────────────────────────┐
-│ Jetpack Compose UI → ViewModels → Use cases → Repositories          │
-│                                         │                           │
-│          Room + SQLCipher (local DB) ◄──┤                           │
-│          WorkManager (sync, reminders)  │                           │
-│          Sync engine ── AES-256-GCM encrypt/decrypt ──┐             │
-└────────────────────────────────────────────────────── │ ───────────┘
-                                                         │ HTTPS
-                       Internet ──► Caddy (automatic HTTPS)
-                                         │
-                                  Go API (chi, JWT)
-                                         │
-                       MongoDB (single-node replica set) + daily dumps
+### Scope and limitations
+
+- End-to-end encryption applies to **synced financial records**, not every piece of account metadata.
+- Phone numbers and operational account/device metadata remain visible to the service where required to operate the account.
+- A weak password can increase offline-guessing risk if an attacker obtains the authentication value. Use a long, unique password.
+- If both the password and recovery key are lost, synced financial records cannot be decrypted.
+- Account deletion is initially a soft delete, with a 30-day restoration period before permanent cleanup.
+- Cryptographic libraries do not replace an independent security audit.
+
+Please do not publish vulnerability details in public issues. Contact the project privately at `cidna.app@gmail.com`.
+
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph Android["Android application"]
+        UI["Jetpack Compose UI"]
+        VM["ViewModels"]
+        REPO["Repositories"]
+        DB[("Room + SQLCipher")]
+        WORK["WorkManager"]
+        CRYPTO["Client-side encryption"]
+        UI --> VM --> REPO
+        REPO <--> DB
+        REPO --> WORK
+        REPO --> CRYPTO
+    end
+
+    CRYPTO -->|"HTTPS · encrypted records"| CADDY["Caddy · TLS"]
+    CADDY --> API["Go HTTP API"]
+    API --> AUTH["Authentication & account services"]
+    API --> SYNC["Encrypted sync service"]
+    AUTH --> MONGO[("MongoDB 7")]
+    SYNC --> MONGO
+    MONGO --> BACKUP["Scheduled database backups"]
 ```
 
-The whole backend (HTTPS, API, MongoDB, backups) runs on one VPS with Docker Compose. No Redis or other external cache is required.
+The Android client is local-first for everyday use. The backend provides account, authentication, device-management, and encrypted synchronisation services.
 
-## 8. Security model
+## Technology
 
-What the project does:
-
-- **On device:** Room database encrypted with SQLCipher; the passphrase is random and kept in `EncryptedSharedPreferences` (Android Keystore-backed). Tokens and keys are stored in encrypted preferences. Optional biometric credential uses a Keystore key that requires strong biometrics.
-- **Before upload:** every synced record is encrypted with a random 256-bit data key using AES-256-GCM. The data key is stored on the server only in *wrapped* form: once under a key derived from the user's password and once under a key derived from the recovery key. **Protocol v2:** the device derives a master key with PBKDF2-HMAC-SHA256 (NFKC-normalised password, 600,000 iterations, per-account salt) and splits it with HKDF into two independent values — a *wrapping key* that never leaves the device and an *authentication secret* that is the only thing sent to the server. Recovery works the same way with a random 256-bit recovery key (a derived *proof* is sent, the key never is). Envelopes are AES-256-GCM, bound to their purpose through AAD. The server therefore holds neither the password, nor the recovery key, nor any key able to unwrap the data key.
-- **Authentication:** the password-derived authentication secret is hashed again with Argon2id (a database leak yields nothing directly usable); clients refuse KDF parameters below the supported minimum; short-lived JWT access tokens (HS256, issuer-checked, session-versioned); rotating refresh tokens with reuse detection; account lockout after repeated failures; OTP with attempt limits; per-IP and per-user rate limiting.
-- **Transport and deployment:** HTTPS only (cleartext is permitted solely in debug builds); MongoDB and the API are reachable only on the internal Docker network; production start-up refuses weak or missing secrets.
-
-Scope and limits (please read):
-
-- Financial records are end-to-end encrypted: neither the operator nor an attacker who controls the server can decrypt them without guessing the user's password. The residual risk is offline guessing of **weak** passwords by someone who captures the authentication secret (the same model as mainstream password managers), which is why long unique passwords are encouraged and the KDF is expensive.
-- Not covered by the encryption: account metadata the service needs to operate (phone number, profile fields, device list, timing and size of sync traffic). Do not describe the project as "zero-knowledge".
-- Screen privacy: the app window is `FLAG_SECURE` by default (no screenshots, blank Recents), user-switchable in Settings. Android backup and device transfer are fully excluded.
-- If a user loses **both** the password and the recovery key, synced data cannot be recovered.
-- Security libraries are not a substitute for an independent audit. Review the implementation and your deployment before making compliance claims.
-
-To report a vulnerability, use a private security report. Please do not open a public issue for security problems.
-
-## 9. Technology stack
-
-| Area | Technology |
+| Layer | Technology |
 |---|---|
-| Android | Kotlin 2.2, Jetpack Compose (Material 3), Navigation, Glance (widget), WorkManager, Room, SQLCipher, AndroidX Security Crypto, Biometric, Lottie, fastexcel |
-| Android SDK | `minSdk 26`, `targetSdk 36`, a single release variant (no product flavors) |
-| Dependency wiring | Manual `AppContainer` (no Hilt) |
-| Backend | Go 1.26, chi, golang-jwt, validator, MongoDB driver, `x/crypto` (Argon2) |
-| Data store | MongoDB 7 (single-node replica set) |
-| Rate limiting | In-process token bucket (single API instance) |
-| Deployment | Docker Compose, Caddy, scheduled `mongodump` backups |
-| Localization | Persian and English resources, Jalali date utilities |
+| Android language | Kotlin 2.2.10 |
+| UI | Jetpack Compose, Material 3 |
+| Client structure | ViewModels, repositories, manual `AppContainer` |
+| Local database | Room |
+| Database encryption | SQLCipher |
+| Key protection | Android Keystore, AndroidX Security Crypto |
+| Background work | WorkManager |
+| Home-screen widget | Jetpack Glance |
+| Biometrics | AndroidX Biometric |
+| XLSX export | fastexcel |
+| Backend | Go 1.26 |
+| HTTP router | chi |
+| Authentication | JWT |
+| Password hashing | Argon2id |
+| Database | MongoDB 7 |
+| Rate limiting | In-memory token bucket |
+| Deployment | Docker Compose, Caddy |
 
-## 10. Repository layout
+## Repository layout
 
 ```text
-cidna/
+BudgetManagement/
 ├── app/
-│   ├── src/main/        # Android client (Kotlin, Compose)
-│   ├── src/debug/       # Debug-only network configuration
-│   ├── src/test/        # Local unit tests
-│   ├── src/androidTest/ # Instrumentation tests
-│   └── schemas/         # Exported Room schemas
+│   ├── src/main/          # Android application
+│   ├── src/debug/         # Development-only configuration
+│   ├── src/test/          # Local unit tests
+│   ├── src/androidTest/   # Instrumented tests
+│   └── schemas/           # Exported Room schemas
 ├── backend/
 │   ├── cmd/
-│   │   ├── api/             # HTTP API entry point
-│   │   └── purge-deleted/   # Permanent purge of expired soft-deleted accounts
-│   ├── internal/            # domain · usecase · infrastructure · interface (HTTP)
-│   └── deployments/         # Dockerfile, Compose files, Caddyfile, backup script
+│   │   ├── api/           # API entry point
+│   │   └── purge-deleted/ # Permanent cleanup of expired accounts
+│   ├── internal/
+│   │   ├── domain/
+│   │   ├── usecase/
+│   │   ├── infrastructure/
+│   │   └── interface/http/
+│   └── deployments/       # Docker, Compose, Caddy, backup scripts
+├── cidna-website/         # Website and legal content
 ├── gradle/
+├── ADMIN_CONSOLE.md
 ├── LICENSE
 └── README.md
 ```
 
-## 11. Getting started
+## Developer setup
 
-### Prerequisites
+### Requirements
 
-- Android Studio compatible with the AGP/Gradle versions in `gradle/libs.versions.toml`, and a matching JDK
-- Docker Engine with Compose v2 (backend), or Go matching `backend/go.mod`
-- An emulator or a physical Android device
+- Android Studio compatible with the project's Android Gradle Plugin.
+- A JDK compatible with the Gradle and Android Gradle Plugin versions.
+- Android SDK and build tools for the configured `compileSdk`.
+- Docker Engine and Docker Compose v2 for the backend.
+- Go matching `backend/go.mod` if running the backend directly.
+- An Android emulator or a physical Android device running Android 8.0 (API 26) or newer.
 
-### Run the backend (development)
+### Clone
+
+```bash
+git clone <YOUR_REPOSITORY_URL>
+cd BudgetManagement
+```
+
+### Run the backend with Docker Compose
 
 ```bash
 cd backend/deployments
-cp ../.env.example .env          # then replace every example value
+cp ../.env.example .env
+
+# Replace example values before starting services.
 docker compose -f docker-compose.dev.yml up --build -d
+
 curl http://localhost:8080/health
 ```
 
-Stop it with `docker compose -f docker-compose.dev.yml down`. Add `-v` only if you intentionally want to delete the local MongoDB data.
-
-### Deploy the backend (production, single VPS)
-
-Follow `backend/deployments/README.md` (Persian). In short: point a DNS name at the server, copy `.env.production.example` to `.env`, fill **every** value, then run `docker compose up -d --build`. Production mode requires real SMS delivery settings and a JWT secret of at least 64 characters.
-
-### Build the Android app
+Stop the development stack:
 
 ```bash
-# Debug (backend URL: -PdebugBackendBaseUrl=http://<LAN-IP>:8080/)
-./gradlew assembleDebug
+docker compose -f docker-compose.dev.yml down
+```
 
-# Unit tests
+Use `down -v` only when you intentionally want to delete local database volumes.
+
+### Run backend tests
+
+```bash
+cd backend
+go test ./...
+```
+
+Running the API directly also requires valid environment variables and a reachable MongoDB instance. Docker Compose is the recommended development path.
+
+### Build the Android debug app
+
+From the repository root:
+
+```bash
+./gradlew assembleDebug
+```
+
+For a physical device, `localhost` refers to the phone itself, not your development computer. Override the debug backend URL with your computer's LAN IP:
+
+```bash
+./gradlew assembleDebug \
+  -PdebugBackendBaseUrl=http://192.168.1.10:8080/
+```
+
+On Windows, use `gradlew.bat`.
+
+### Run Android tests
+
+```bash
+# Local unit tests
 ./gradlew testDebugUnitTest
 
-# Release (HTTPS backend URL is mandatory; bump versionCode for every upload)
-./gradlew bundleRelease -PbackendBaseUrl=https://api.example.com/ -PversionCode=2
+# Instrumented tests (requires a device or emulator)
+./gradlew connectedDebugAndroidTest
 ```
 
-Release signing is read from `keystore.properties` (git-ignored) or `RELEASE_*` environment variables. A phone cannot reach `localhost` on your computer: use the computer's LAN address for debug builds on a physical device.
+### Build a release bundle
 
-## 12. Configuration and API
-
-### Key environment variables
-
-| Variable | Purpose |
-|---|---|
-| `ENV` | `dev`, `test` or `prod` (production enforces stricter checks) |
-| `JWT_SECRET` | Access-token signing secret only (≥ 32 chars; ≥ 64 in production) |
-| `PHONE_HASH_KEY` | HMAC key of the stored phone identifier. Independent random value. Upgrading: set it to the old `JWT_SECRET`, then give `JWT_SECRET` a new value; after rotating it later run `rehash-phones` |
-| `OTP_HMAC_KEY` | HMAC key of stored one-time-code hashes. Independent random value |
-| `LOGIN_DECOY_KEY` | Derives the fake KDF salt for unknown phone numbers. Independent random value |
-| `ARGON2_MAX_CONCURRENCY` / `ARGON2_MAX_WAITING` | Max simultaneous password hashes (default 2; each uses 64 MiB) / queue length before requests get 429 (default 64) |
-| `SYNC_MAX_RECORDS_PER_ACCOUNT` / `SYNC_MAX_BYTES_PER_ACCOUNT` | Per-account storage quota (default 50000 records / 50 MiB) |
-| `MONGO_URI`, `MONGO_DB_NAME` | Database connection |
-| `TLS_TERMINATED_BY_PROXY`, `TRUSTED_PROXY_CIDRS` | Reverse-proxy HTTPS and trusted client-IP headers |
-| `SMS_WEBHOOK_URL`, `SMS_AUTH_TOKEN` | SMS OTP delivery (required in production) |
-| `DEV_LOG_OTP` | Prints OTPs to the log; refused outside `dev`/`test` |
-| `API_DOMAIN`, `BACKUP_RETENTION_DAYS` | Used by the single-VPS Compose stack |
-
-Never commit secrets, keystores or `.env` files.
-
-### HTTP API
-
-```http
-GET  /health
-
-POST /auth/otp/request       POST /auth/register       POST /auth/login/params
-POST /auth/login             POST /auth/refresh        POST /auth/logout
-POST /auth/recovery/prepare  POST /auth/password/reset
-# auth_secret / new_auth_secret / current_auth_secret / recovery_proof are values
-# derived on the device - never the password itself.
-
-# Authenticated (Bearer token)
-POST   /api/v1/auth/password/change
-GET    /api/v1/account/profile      PUT /api/v1/account/profile
-POST /api/v1/account/delete   # soft delete
-POST   /api/v1/sync
-GET    /api/v1/devices              GET /api/v1/devices/events
-DELETE /api/v1/devices/{deviceID}
-PUT    /api/v1/admin/users/{userID}/role                          # admin only
-
-# Public legal pages (also required by app stores)
-GET /privacy-policy   GET /terms   GET /licenses   GET /account-deletion
-```
-
-The server's handlers and DTOs are the source of truth for request and response contracts.
-
-## 13. Legal information
-
-> This section describes the project's licensing and legal posture to the best of the maintainer's knowledge. It is **not legal advice**; consult a qualified lawyer before relying on it, especially for commercial or cross-border use.
-
-### 13.1 Software license
-
-Copyright © 2026 Muhammed Cenna Ramezani Ahdieh.
-
-Cidna is free software released under the **GNU Affero General Public License, version 3 or (at your option) any later version** (`AGPL-3.0-or-later`). The full text is in [`LICENSE`](LICENSE).
-
-In practical terms:
-
-- **Using the app** for personal or commercial purposes is allowed.
-- **Redistributing** the app or a modified version (APK, AAB, or source) requires keeping the license, the copyright notices, and offering the corresponding source code under the same license.
-- **Running a modified backend as a network service** triggers AGPL section 13: you must offer the complete corresponding source of your modified version to the users who interact with it over the network.
-- The license grants **no rights to the name or logo** "Cidna / سیدنا" (see 14.4).
-
-### 13.2 Contributions
-
-Contributions are accepted under the project license (AGPL-3.0-or-later). By submitting a contribution you confirm that you have the right to do so and that it may be distributed under that license. Do not submit code, fonts, images or animations you do not have the right to license.
-
-### 13.3 Third-party components
-
-Each component keeps its own license; those terms continue to apply.
-
-| Component | License |
-|---|---|
-| AndroidX libraries (Compose, Material 3, Navigation, Lifecycle, Room, WorkManager, Glance, Biometric, Security Crypto, …) | Apache-2.0 |
-| Kotlin, kotlinx.serialization, kotlinx.coroutines | Apache-2.0 |
-| Lottie for Android (Airbnb) | Apache-2.0 |
-| fastexcel (Dhatim) | MIT |
-| SQLCipher for Android (Zetetic), Community Edition | BSD-style |
-| Vazirmatn font (The Vazirmatn Project Authors) | SIL Open Font License 1.1 |
-| Inter font (The Inter Project Authors) | SIL Open Font License 1.1 |
-| Go modules: chi, validator, golang-jwt, godotenv, mongo-go-driver, `golang.org/x/*` | MIT / BSD-3-Clause / Apache-2.0 (see each module) |
-
-The running backend also lists these notices at `/licenses`. Distributing the app means passing on the required copyright and license notices of these components (for example the SQLCipher and OFL font notices).
-
-### 13.4 Name, logos and third-party marks
-
-"Cidna" and "سیدنا" identify this project and its provider. Forks must use a different name and icon. WhatsApp, Instagram, X and Gmail are trademarks of their respective owners; their icons appear only to identify share destinations and imply no endorsement.
-
-### 13.5 User-facing legal documents
-
-The Privacy Policy, Terms of Service, open-source notices and account-deletion instructions live on the official website (`cidna-website/content/legal.py`, Persian at `https://cidna.ir/privacy/`, English at `https://cidna.ir/en/privacy/`). The app opens those pages in a Chrome Custom Tab, and the backend's old `/privacy-policy`, `/terms`, `/licenses` and `/account-deletion` addresses permanently redirect to them, so there is only one copy of each text. Enter the website addresses in Google Play Console (Privacy policy URL and the account-deletion URL in the Data safety form). Update the texts in the website whenever they or the app's data handling change. They are a starting point and should be reviewed by a lawyer.
-
-### 13.6 Personal data and retention
-
-| Data | Purpose | Retention |
-|---|---|---|
-| Phone number (name, gender and birth date optional) | Account, sign-in, OTP | While the account exists |
-| Password-derived sign-in value (the password itself is never sent) | Authentication | Stored only as an Argon2id hash |
-| Encrypted financial records and wrapped keys | Multi-device sync | While the account exists |
-| Device name/model, OS and app version, IP (shown masked), installation hash | Device list and new-device alerts | Device activity ≤ 30 days |
-| Temporary sync operations | Sync reliability | ≤ 7 days |
-
-Account deletion is a **soft delete**: sessions are revoked immediately, the account can be restored by signing in within **30 days**, and after that the `purge-deleted` job erases it permanently (run it daily from cron). The app does not include advertising, analytics or third-party trackers.
-
-### 13.7 Disclaimers
-
-- Cidna is a record-keeping tool. It is **not** financial, accounting, legal or tax advice, and it is not connected to any bank account or payment system.
-- Voice input and calculations may be wrong. Verify important figures against your bank records.
-- The software is provided **"as is", without warranty** of any kind, as stated in the AGPL (sections 15 and 16).
-- The Terms of Service are governed by the laws of the Islamic Republic of Iran.
-
-### 13.8 Before publishing a release
-
-- [ ] Confirm that you hold, or may redistribute, every non-code asset: Lottie animations, share-card backgrounds, banners, icons and fonts.
-- [ ] Keep the privacy policy, the Play Data safety form and the actual behavior of the app consistent with each other.
-- [ ] Review the legal texts with a lawyer.
-- [ ] Keep `LICENSE` and the copyright notice in every distributed copy, and publish the corresponding source.
-
-## 14. Contact
-
-Project and legal contact: **cidna.app@gmail.com**
-
----
-
-<a id="فارسی"></a>
-<div dir="rtl">
-
-## فارسی
-
-## ۱. خلاصه مدیریتی
-
-**سیدنا (Cidna)** رسیدهای پراکنده و حساب‌وکتاب‌های ذهنی را به یک تصویر روشن از مسیر پولتان تبدیل می‌کند — به زبان خودتان، با تقویم خودتان، به واحد پول خودتان و روی همان گوشی‌ای که همیشه همراه دارید.
-
-**معرفی ۳۰ ثانیه‌ای.** بیشتر اپلیکیشن‌های مالی برای کاربر انگلیسی‌زبان، تقویم میلادی و ذهنیت دلاری ساخته شده‌اند و پیش از آنکه ارزشی بدهند، اطلاعاتتان را می‌خواهند. سیدنا این رابطه را برعکس می‌کند: در چند ثانیه به‌عنوان مهمان شروع کنید، درآمد و هزینه را فارسی یا انگلیسی ثبت کنید، تاریخ جلالی و مبلغ تومان یا ریال را بومی ببینید و سوابقتان را در پایگاه داده رمزنگاری‌شده روی گوشی خودتان نگه دارید. فقط وقتی همگام‌سازی چنددستگاهی خواستید، حساب بسازید.
-
-| نقطه اتکا | برای مشتری یعنی چه |
-|---|---|
-| **۲ زبان با پشتیبانی کامل RTL/LTR** | فارسی و انگلیسی هر دو شهروند درجه یک‌اند، نه ترجمه‌ای ثانویه |
-| **تقویم جلالی + میلادی** | تاریخ‌ها همان‌طور نمایش داده می‌شوند که مردم می‌خوانند |
-| **نمایش تومان / ریال** | مبالغ به واحدی که مردم در ذهن دارند |
-| **حالت مهمان** | استفاده از محصول واقعی بدون حساب و بدون شماره موبایل |
-| **رمزنگاری روی دستگاه** | سوابق در پایگاه داده رمزنگاری‌شده محلی نگهداری می‌شود |
-| **۰ تبلیغ، ۰ تحلیل رفتار، ۰ ردیاب شخص ثالث** | برنامه اعتماد می‌سازد، نه اینکه از توجه شما پول دربیاورد |
-| **مهلت ۳۰ روزه بازیابی** | حساب را اشتباهی حذف کردید؟ تا ۳۰ روز با ورود دوباره برمی‌گردد |
-
-## ۲. مسئله و پاسخ ما
-
-| مشتری چه می‌گوید | سیدنا چه پاسخی دارد |
-|---|---|
-| «هیچ‌وقت نمی‌دانم پولم کجا رفت.» | ثبت سریع: میان‌بر ثبت سریع و ورود صوتی |
-| «اپ‌های مالی نه زبان مرا می‌فهمند نه تقویم مرا.» | فارسی و انگلیسی کامل، RTL/LTR، تاریخ جلالی، تومان/ریال |
-| «نمی‌خواهم اطلاعات مالی‌ام را به یک غریبه بدهم.» | ذخیره‌سازی محلی‌محور و رمزنگاری سوابق روی دستگاه پیش از هر ارسال برای همگام‌سازی |
-| «حتی برای امتحان کردن هم باید ثبت‌نام کنم.» | حالت مهمان — همین حالا شروع کنید، درباره حساب بعداً تصمیم بگیرید |
-| «هدف‌ها و بدهی‌هایم لای یادداشت‌ها و چت‌ها گم شده.» | اهداف پس‌انداز، بدهی و طلب با سررسید و یادآوری |
-| «نمی‌توانم خرجم را به کسی نشان بدهم.» | کارت تصویری تراکنش که با زبان، جهت متن و واحد پول برنامه هماهنگ است |
-
-## ۳. جایگاه‌یابی: سه ستون
-
-1. **محلی‌محور (Local-first).** سوابق شما در پایگاه داده رمزنگاری‌شده روی خود گوشی است. استفاده روزمره سریع است و آفلاین هم کار می‌کند؛ بک‌اند فقط برای حساب کاربری و همگام‌سازی لازم است.
-2. **حریم خصوصی از ابتدا.** اطلاعات مالی پیش از ارسال روی دستگاه **به‌صورت سرتاسری (End-to-End) رمزنگاری** می‌شوند و گذرواژه‌ی شما هرگز از گوشی خارج نمی‌شود؛ سرور فقط داده‌ی رمزشده‌ای را نگه می‌دارد که نمی‌تواند بخواند (دامنه دقیق و محدودیت‌ها در [مدل امنیتی](#۹-مدل-امنیتی) آمده است).
-3. **ساخته‌شده برای فارسی‌زبان و انگلیسی‌زبان.** پشتیبانی کامل از راست‌به‌چپ و چپ‌به‌راست، تقویم جلالی و نمایش تومان/ریال.
-
-> **درباره نام.** نام محصول در فارسی **سیدنا** و در انگلیسی **Cidna** است. عبارت «مدیریت بودجه» صرفاً توصیف کارکرد برنامه است و نام پکیج کاتلین (`ir.hamedan.budgetmanagement`) یک شناسه تاریخی است که چون همان Application ID اندروید است، عمداً تغییر نکرده است.
-
-## ۴. تور محصول
-
-| بخش | امکانات |
-|---|---|
-| **حالت مهمان** | شروع بدون حساب، با رمز یا اثر انگشت. بعداً می‌توانید اطلاعات را به حساب جدید منتقل کنید یا از صفر شروع کنید |
-| **تراکنش‌ها** | ثبت درآمد و هزینه، مرور سوابق، میان‌بر ثبت سریع، ورود صوتی |
-| **دسته‌بندی‌ها** | دسته‌بندی‌های آماده، دسته‌بندی سفارشی، پیشنهاد دسته‌بندی |
-| **بودجه** | سقف هزینه برای هر دسته، پیگیری پیشرفت و هشدار |
-| **اهداف پس‌انداز** | قلک‌ها، واریز و برداشت، واریز ماهانه زمان‌بندی‌شده |
-| **بدهی و طلب** | مبالغ بدهکار و طلبکار، پرداخت‌های جزئی، سررسید و یادآوری |
-| **تحلیل مالی** | خلاصه‌ها و نمودارها، نمایش تاریخ جلالی/میلادی |
-| **خروجی و اشتراک‌گذاری** | خروجی PDF و XLSX؛ کارت تصویری تراکنش برای اشتراک‌گذاری، هماهنگ با زبان، جهت متن و واحد پول برنامه |
-| **امنیت** | قفل برنامه، ورود زیست‌سنجی اختیاری، پایگاه داده رمزنگاری‌شده، فهرست دستگاه‌ها با امکان خروج از راه دور، اعلان ورود از دستگاه جدید |
-| **حساب کاربری** | ثبت‌نام با شماره موبایل و OTP، بازیابی گذرواژه با کلید بازیابی، حذف نرم حساب با مهلت ۳۰ روزه بازیابی |
-| **امکانات تکمیلی** | تم روشن و تیره، ویجت موجودی، حالت مخفی‌کردن مبالغ، اعلان‌ها و یادآورها |
-
-مبالغ به‌صورت عدد صحیح (تومان) ذخیره و فقط در مرز رابط کاربری تبدیل می‌شوند؛ بنابراین خطای ممیز شناور هرگز به پایگاه داده یا API نمی‌رسد.
-
-## ۵. سفر مشتری
-
-1. **امتحان** — برنامه را به‌عنوان مهمان باز کنید؛ چیزی برای ثبت‌نام نیست.
-2. **تعهد** — با شماره موبایل و کد پیامکی یک‌بارمصرف حساب بسازید، گذرواژه تعیین کنید و قوانین و مقررات و سیاست حریم خصوصی را بپذیرید.
-3. **تصمیم** — اگر روی دستگاه اطلاعات مهمان وجود داشته باشد، صفحه ثبت‌نام یک‌بار می‌پرسد: به حساب جدید منتقل شود یا از صفر شروع کنید. انتخاب شما بعد از اولین ورود اعمال می‌شود، بنابراین ثبت‌نامِ نیمه‌کاره هرگز اطلاعاتتان را از بین نمی‌برد.
-4. **محافظت** — کلید بازیابی را که یک‌بار در پایان ثبت‌نام نمایش داده می‌شود ذخیره کنید. اگر گذرواژه را فراموش کنید، تنها راه بازگشت همین است.
-5. **چنددستگاهی شدن** — روی دستگاه دیگر وارد شوید، همگام‌سازی کنید و با هر ورود از دستگاه جدید اعلان بگیرید.
-
-## ۶. تعهد ما در برابر اعتماد (همراه با بخش ۸ بخوانید)
-
-آنچه می‌توانیم ثابت کنیم را می‌گوییم: سوابق مالی پیش از ارسال به‌صورت سرتاسری رمزنگاری می‌شوند؛ گذرواژه و کلید بازیابی هرگز به سرور ارسال نمی‌شوند (فقط هش Argon2id یک مقدار ورودِ مشتق‌شده از گذرواژه نگهداری می‌شود)؛ هیچ تبلیغ، تحلیل رفتار یا ردیاب شخص ثالثی وجود ندارد؛ و حذف حساب تا ۳۰ روز نرم است و پس از آن دائمی. رمزنگاری سرتاسری را فقط برای سوابق مالی ادعا می‌کنیم، نه «zero-knowledge» برای همه چیز: اطلاعات حساب مانند شماره موبایل برای سرویس قابل‌مشاهده است — دامنه دقیق در [بخش ۸](#۸-مدل-امنیتی) آمده است.
-
-**دعوت به اقدام.** سیدنا را از گوگل‌پلی (یا فایل APK) نصب کنید، همین امروز به‌عنوان مهمان امتحانش کنید و وقتی خواستید سوابقتان روی بیش از یک دستگاه باشد، حساب بسازید. سؤال، همکاری یا رسانه: **cidna.app@gmail.com**.
-
-## ۷. معماری
-
-<div dir="ltr">
-
-```text
-┌──────────────────────────── Android app ────────────────────────────┐
-│ Jetpack Compose UI → ViewModels → Use cases → Repositories          │
-│                                         │                           │
-│          Room + SQLCipher (local DB) ◄──┤                           │
-│          WorkManager (sync, reminders)  │                           │
-│          Sync engine ── AES-256-GCM encrypt/decrypt ──┐             │
-└────────────────────────────────────────────────────── │ ───────────┘
-                                                         │ HTTPS
-                       Internet ──► Caddy (automatic HTTPS)
-                                         │
-                                  Go API (chi, JWT)
-                                         │
-                       MongoDB (single-node replica set) + daily dumps
-```
-
-</div>
-
-کل بک‌اند (HTTPS، API، MongoDB و بکاپ) با Docker Compose روی یک VPS اجرا می‌شود. Redis یا هیچ کش خارجی دیگری لازم نیست.
-
-## ۸. مدل امنیتی
-
-آنچه پروژه انجام می‌دهد:
-
-- **روی دستگاه:** پایگاه داده Room با SQLCipher رمزنگاری می‌شود؛ گذرواژه آن تصادفی است و در `EncryptedSharedPreferences` (متکی بر Android Keystore) نگهداری می‌شود. توکن‌ها و کلیدها در تنظیمات رمزنگاری‌شده ذخیره می‌شوند. اعتبارنامه زیست‌سنجی اختیاری از کلید Keystore استفاده می‌کند که زیست‌سنجی قوی را الزامی می‌کند.
-- **پیش از ارسال:** هر رکورد همگام‌سازی‌شده با یک کلید داده تصادفی ۲۵۶ بیتی و AES-256-GCM رمزنگاری می‌شود. کلید داده روی سرور فقط به‌صورت *بسته‌بندی‌شده* نگه داشته می‌شود: یک‌بار با کلیدی مشتق‌شده از گذرواژه و یک‌بار با کلیدی مشتق‌شده از کلید بازیابی. **پروتکل نسخه ۲:** دستگاه با PBKDF2-HMAC-SHA256 (گذرواژه‌ی نرمال‌شده با NFKC، ۶۰۰٬۰۰۰ تکرار، salt اختصاصی هر حساب) یک کلید اصلی می‌سازد و با HKDF آن را به دو مقدار مستقل تقسیم می‌کند: *کلید بسته‌بندی* که هرگز از دستگاه خارج نمی‌شود و *رمز احراز هویت* که تنها چیزی است که به سرور فرستاده می‌شود. بازیابی هم همین‌طور است (کلید بازیابی ۲۵۶ بیتی تصادفی؛ فقط یک «proof» مشتق‌شده ارسال می‌شود). envelopeها AES-256-GCM هستند و با AAD به کاربردشان گره خورده‌اند. بنابراین سرور نه گذرواژه، نه کلید بازیابی و نه هیچ کلیدی که کلید داده را باز کند در اختیار ندارد.
-- **احراز هویت:** رمز احراز هویتِ مشتق‌شده از گذرواژه دوباره با Argon2id هش می‌شود (نشت پایگاه داده چیز قابل‌استفاده‌ای نمی‌دهد)؛ کلاینت پارامترهای KDF ضعیف‌تر از حداقل را رد می‌کند؛ توکن دسترسی JWT کوتاه‌عمر (HS256، با بررسی issuer و نسخه نشست)؛ توکن نوسازی چرخشی با تشخیص استفاده مجدد؛ قفل حساب پس از تلاش‌های ناموفق مکرر؛ OTP با محدودیت تعداد تلاش؛ محدودسازی نرخ درخواست برای هر IP و هر کاربر.
-- **ارتباط و استقرار:** فقط HTTPS (ترافیک بدون رمز فقط در نسخه debug مجاز است)؛ MongoDB و API فقط روی شبکه داخلی Docker در دسترس‌اند؛ در حالت production اجرای سرویس با secretهای ضعیف یا نامعتبر متوقف می‌شود.
-
-دامنه و محدودیت‌ها (لطفاً بخوانید):
-
-- سوابق مالی سرتاسری رمزنگاری می‌شوند: نه اپراتور و نه مهاجمی که سرور را در اختیار دارد بدون حدس زدن گذرواژه‌ی کاربر نمی‌تواند آن‌ها را رمزگشایی کند. ریسک باقی‌مانده، حدس آفلاینِ گذرواژه‌های **ضعیف** توسط کسی است که رمز احراز هویت را ضبط کرده باشد (همان مدل مدیرهای گذرواژه‌ی رایج)؛ به همین دلیل گذرواژه‌ی بلند و منحصربه‌فرد توصیه می‌شود و KDF سنگین است.
-- زیر پوشش رمزنگاری نیست: فراداده‌ای که سرویس برای کار لازم دارد (شماره موبایل، نمایه، فهرست دستگاه‌ها، زمان و حجم همگام‌سازی). پروژه را «zero-knowledge» معرفی نکنید.
-- حریم صفحه: پنجره‌ی برنامه به‌طور پیش‌فرض `FLAG_SECURE` است (بدون اسکرین‌شات و Recents خالی) و کاربر در تنظیمات می‌تواند آن را تغییر دهد. بکاپ و انتقال دستگاه کاملاً مستثنا شده‌اند.
-- اگر کاربر **هم** گذرواژه **و هم** کلید بازیابی را گم کند، داده‌های همگام‌سازی‌شده قابل بازیابی نیست.
-- کتابخانه‌های امنیتی جایگزین ممیزی مستقل نیستند. پیش از ادعای انطباق با الزامات قانونی، پیاده‌سازی و استقرار را بازبینی کنید.
-
-برای گزارش آسیب‌پذیری، از یک کانال خصوصی و امن گزارش امنیتی استفاده کنید و لطفاً مسائل امنیتی را در Issue عمومی مطرح نکنید.
-
-## ۹. فناوری‌ها
-
-| بخش | فناوری |
-|---|---|
-| اندروید | Kotlin 2.2، Jetpack Compose (Material 3)، Navigation، Glance (ویجت)، WorkManager، Room، SQLCipher، AndroidX Security Crypto، Biometric، Lottie، fastexcel |
-| SDK اندروید | `minSdk 26`، `targetSdk 36`، بدون product flavor (یک نسخهٔ انتشار) |
-| تزریق وابستگی | `AppContainer` دستی (بدون Hilt) |
-| بک‌اند | Go 1.26، chi، golang-jwt، validator، درایور MongoDB، `x/crypto` (Argon2) |
-| پایگاه داده | MongoDB 7 (replica set تک‌نودی) |
-| محدودسازی نرخ | token bucket درون‌حافظه‌ای (یک نمونه API) |
-| استقرار | Docker Compose، Caddy، بکاپ زمان‌بندی‌شده `mongodump` |
-| زبان و تاریخ | منابع فارسی و انگلیسی، ابزارهای تاریخ جلالی |
-
-## ۱۰. ساختار مخزن
-
-<div dir="ltr">
-
-```text
-cidna/
-├── app/
-│   ├── src/main/        # Android client (Kotlin, Compose)
-│   ├── src/debug/       # تنظیمات شبکه مخصوص debug
-│   ├── src/test/        # تست‌های واحد
-│   ├── src/androidTest/ # تست‌های instrumentation
-│   └── schemas/         # اسکیماهای صادرشده Room
-├── backend/
-│   ├── cmd/
-│   │   ├── api/             # ورودی API
-│   │   └── purge-deleted/   # پاکسازی دائمی حساب‌های حذف‌شده منقضی
-│   ├── internal/            # domain · usecase · infrastructure · interface (HTTP)
-│   └── deployments/         # Dockerfile، فایل‌های Compose، Caddyfile، اسکریپت بکاپ
-├── gradle/
-├── LICENSE
-└── README.md
-```
-
-</div>
-
-## ۱۱. راه‌اندازی
-
-### پیش‌نیازها
-
-- Android Studio سازگار با نسخه‌های AGP/Gradle در `gradle/libs.versions.toml` و JDK مناسب
-- Docker Engine همراه با Compose v2 (بک‌اند)، یا Go مطابق `backend/go.mod`
-- شبیه‌ساز یا دستگاه واقعی اندروید
-
-### اجرای بک‌اند (توسعه)
-
-<div dir="ltr">
+A release build requires a real HTTPS backend URL:
 
 ```bash
-cd backend/deployments
-cp ../.env.example .env          # سپس همه مقادیر نمونه را عوض کنید
-docker compose -f docker-compose.dev.yml up --build -d
-curl http://localhost:8080/health
+./gradlew bundleRelease \
+  -PbackendBaseUrl=https://api.example.com/ \
+  -PversionCode=6 \
+  -PversionName=1.2.2
 ```
 
-</div>
+Configure signing through `keystore.properties` (git-ignored) or the `RELEASE_*` environment variables. A valid signing configuration is required for a release bundle.
 
-توقف سرویس‌ها با `docker compose -f docker-compose.dev.yml down` انجام می‌شود. گزینه `-v` را فقط وقتی بزنید که عمداً می‌خواهید داده‌های محلی MongoDB پاک شود.
+Before publishing:
 
-### استقرار بک‌اند (production روی یک VPS)
+- Increase `versionCode` for every store upload.
+- Use HTTPS for the release backend URL.
+- Never commit signing keys, passwords, `.env` files, or secrets.
+- Release builds enable code minification and resource shrinking.
 
-راهنمای `backend/deployments/README.md` را دنبال کنید. خلاصه: یک نام دامنه را روی IP سرور تنظیم کنید، `.env.production.example` را به `.env` کپی کنید، **همه** مقادیر را پر کنید و `docker compose up -d --build` را اجرا کنید. حالت production تنظیمات واقعی ارسال پیامک و JWT secret حداقل ۶۴ کاراکتری می‌خواهد.
+## Backend deployment
 
-### ساخت برنامه اندروید
+A Linux VPS, a domain, and Docker Compose are sufficient for the documented single-server deployment. Caddy handles HTTPS; the API and MongoDB communicate over the private Docker network.
 
-<div dir="ltr">
+See the full guide:
 
-```bash
-# Debug (آدرس بک‌اند: -PdebugBackendBaseUrl=http://<LAN-IP>:8080/)
-./gradlew assembleDebug
+[`backend/deployments/README.md`](backend/deployments/README.md)
 
-# تست‌های واحد
-./gradlew testDebugUnitTest
+Production essentials:
 
-# Release (آدرس HTTPS اجباری است؛ برای هر آپلود versionCode را افزایش دهید)
-./gradlew bundleRelease -PbackendBaseUrl=https://api.example.com/ -PversionCode=2
-```
+- Generate independent, random secrets.
+- Configure a real SMS OTP delivery provider.
+- Use a `JWT_SECRET` of at least 64 characters.
+- Do not expose MongoDB or the internal API port directly to the public internet.
+- Keep an off-server copy of database backups.
+- Schedule permanent cleanup of accounts that have passed the 30-day recovery period.
 
-</div>
+## Technical reference
 
-امضای release از `keystore.properties` (خارج از Git) یا متغیرهای محیطی `RELEASE_*` خوانده می‌شود. گوشی به `localhost` رایانه شما دسترسی ندارد؛ برای تست روی گوشی واقعی از آدرس رایانه در شبکه محلی استفاده کنید.
+### Android configuration
 
-## ۱۲. تنظیمات و API
-
-### متغیرهای محیطی مهم
-
-| متغیر | کاربرد |
+| Property | Value |
 |---|---|
-| `ENV` | `dev`، `test` یا `prod` (حالت production بررسی‌های سخت‌گیرانه‌تری دارد) |
-| `JWT_SECRET` | فقط کلید امضای توکن دسترسی (حداقل ۳۲ و در production حداقل ۶۴ کاراکتر) |
-| `PHONE_HASH_KEY` | کلید HMAC شناسه‌ی تلفن (مستقل و تصادفی). هنگام ارتقا مقدار قدیمیِ `JWT_SECRET` را در آن بگذارید و برای `JWT_SECRET` مقدار تازه بسازید؛ پس از چرخاندن بعدیِ آن `rehash-phones` را اجرا کنید |
-| `OTP_HMAC_KEY` | کلید HMAC هش کدهای یک‌بارمصرف (مستقل و تصادفی) |
-| `LOGIN_DECOY_KEY` | کلید تولید salt ساختگی برای شماره‌های ناشناخته (مستقل و تصادفی) |
-| `ARGON2_MAX_CONCURRENCY` / `ARGON2_MAX_WAITING` | حداکثر هشِ هم‌زمان رمز (پیش‌فرض ۲؛ هرکدام ۶۴ مگابایت) / طول صف قبل از پاسخ ۴۲۹ (پیش‌فرض ۶۴) |
-| `SYNC_MAX_RECORDS_PER_ACCOUNT` / `SYNC_MAX_BYTES_PER_ACCOUNT` | سهمیه‌ی ذخیره‌سازی هر حساب (پیش‌فرض ۵۰٬۰۰۰ رکورد / ۵۰ مگابایت) |
-| `MONGO_URI`، `MONGO_DB_NAME` | اتصال به پایگاه داده |
-| `TLS_TERMINATED_BY_PROXY`، `TRUSTED_PROXY_CIDRS` | HTTPS پشت reverse proxy و اعتماد به هدرهای IP کاربر |
-| `SMS_WEBHOOK_URL`، `SMS_AUTH_TOKEN` | ارسال OTP پیامکی (در production الزامی) |
-| `DEV_LOG_OTP` | چاپ OTP در لاگ؛ خارج از `dev`/`test` پذیرفته نمی‌شود |
-| `API_DOMAIN`، `BACKUP_RETENTION_DAYS` | تنظیمات استقرار تک‌VPS |
+| Application ID | `ir.hamedan.budgetmanagement` |
+| Source default version name | `1.2.1` |
+| Source default version code | `5` |
+| minSdk | `26` |
+| targetSdk | `36` |
+| compileSdk | `36` |
+| Kotlin | `2.2.10` |
+| Android Gradle Plugin | `9.2.1` |
 
-هرگز secret، keystore یا فایل `.env` را commit نکنید.
+### Main API routes
 
-### API
-
-<div dir="ltr">
-
-```http
-GET  /health
-
-POST /auth/otp/request       POST /auth/register       POST /auth/login/params
-POST /auth/login             POST /auth/refresh        POST /auth/logout
-POST /auth/recovery/prepare  POST /auth/password/reset
-# auth_secret / new_auth_secret / current_auth_secret / recovery_proof are values
-# derived on the device - never the password itself.
-
-# Authenticated (Bearer token)
-POST   /api/v1/auth/password/change
-GET    /api/v1/account/profile      PUT /api/v1/account/profile
-POST /api/v1/account/delete   # soft delete
-POST   /api/v1/sync
-GET    /api/v1/devices              GET /api/v1/devices/events
-DELETE /api/v1/devices/{deviceID}
-PUT    /api/v1/admin/users/{userID}/role                          # admin only
-
-# Public legal pages (also required by app stores)
-GET /privacy-policy   GET /terms   GET /licenses   GET /account-deletion
-```
-
-</div>
-
-مرجع نهایی قرارداد درخواست و پاسخ، handlerها و DTOهای سرور هستند.
-
-## ۱۳. اطلاعات حقوقی
-
-> این بخش وضعیت مجوز و ملاحظات حقوقی پروژه را بر اساس بهترین دانش نگهدارنده شرح می‌دهد و **مشاوره حقوقی نیست**. پیش از اتکا به آن، به‌ویژه برای استفاده تجاری یا فرامرزی، با یک وکیل یا مشاور حقوقی مشورت کنید.
-
-### ۱۳.۱ مجوز نرم‌افزار
-
-حق نشر © ۲۰۲۶ محمدسینا رمضانی عهدیه.
-
-سیدنا نرم‌افزار آزاد است و تحت **مجوز عمومی همگانی آفرو گنو (GNU AGPL) نسخه ۳ یا (به انتخاب شما) هر نسخه جدیدتر** (`AGPL-3.0-or-later`) منتشر می‌شود. متن کامل در فایل [`LICENSE`](LICENSE) قرار دارد.
-
-در عمل:
-
-- **استفاده از برنامه** برای مقاصد شخصی و تجاری آزاد است.
-- **بازتوزیع** برنامه یا نسخه تغییریافته (APK، AAB یا سورس) مستلزم حفظ مجوز و اعلان‌های حق نشر و ارائه سورس متناظر با همان مجوز است.
-- **اجرای نسخه تغییریافته بک‌اند به‌عنوان سرویس شبکه‌ای** بند ۱۳ AGPL را فعال می‌کند: باید سورس کامل متناظر نسخه تغییریافته را در اختیار کاربرانی که از طریق شبکه با آن کار می‌کنند قرار دهید.
-- این مجوز **هیچ حقی نسبت به نام و نشان** «سیدنا / Cidna» نمی‌دهد (بند ۱۴.۴).
-
-### ۱۳.۲ مشارکت در توسعه
-
-مشارکت‌ها تحت مجوز پروژه (AGPL-3.0-or-later) پذیرفته می‌شوند. با ارسال مشارکت تأیید می‌کنید که حق ارائه آن را دارید و می‌تواند با همان مجوز توزیع شود. کد، فونت، تصویر یا انیمیشنی را که حق مجوزدهی آن را ندارید ارسال نکنید.
-
-### ۱۳.۳ اجزای شخص ثالث
-
-هر جزء مجوز مستقل خود را دارد و شرایط آن همچنان برقرار است.
-
-<div dir="ltr">
-
-| Component | License |
+| Route | Purpose |
 |---|---|
-| AndroidX libraries (Compose, Material 3, Navigation, Lifecycle, Room, WorkManager, Glance, Biometric, Security Crypto, …) | Apache-2.0 |
-| Kotlin, kotlinx.serialization, kotlinx.coroutines | Apache-2.0 |
-| Lottie for Android (Airbnb) | Apache-2.0 |
-| fastexcel (Dhatim) | MIT |
-| SQLCipher for Android (Zetetic), Community Edition | BSD-style |
-| Vazirmatn font (The Vazirmatn Project Authors) | SIL Open Font License 1.1 |
-| Inter font (The Inter Project Authors) | SIL Open Font License 1.1 |
-| Go modules: chi, validator, golang-jwt, godotenv, mongo-go-driver, `golang.org/x/*` | MIT / BSD-3-Clause / Apache-2.0 |
+| `GET /health` | Health check |
+| `POST /auth/otp/request` | Request a one-time code |
+| `POST /auth/register` | Registration |
+| `POST /auth/login/params` | Retrieve login parameters |
+| `POST /auth/login` | Sign in |
+| `POST /auth/refresh` | Refresh a session |
+| `POST /auth/logout` | Sign out |
+| `POST /auth/recovery/prepare` | Prepare account recovery |
+| `POST /auth/password/reset` | Reset password |
+| `POST /api/v1/sync` | Synchronise encrypted records |
+| `GET /api/v1/account/profile` | Get profile |
+| `PUT /api/v1/account/profile` | Update profile |
+| `GET /api/v1/devices` | List devices |
+| `DELETE /api/v1/devices/{deviceID}` | Revoke a device session |
+| `POST /api/v1/account/delete` | Request account deletion |
 
-</div>
+The backend handlers and DTOs are the source of truth for request and response contracts.
 
-بک‌اند در حال اجرا همین اعلان‌ها را در آدرس `/licenses` نیز نمایش می‌دهد. توزیع برنامه یعنی انتقال اعلان‌های حق نشر و مجوز لازم این اجزا (مثلاً اعلان SQLCipher و فونت‌های OFL).
+## Website and official information
 
-### ۱۳.۴ نام، نشان و علائم تجاری اشخاص ثالث
+- Website: [cidna.ir](https://cidna.ir)
+- Privacy policy: [cidna.ir/privacy](https://cidna.ir/privacy/)
+- Privacy policy in English: [cidna.ir/en/privacy](https://cidna.ir/en/privacy/)
+- Project contact: [cidna.app@gmail.com](mailto:cidna.app@gmail.com)
 
-«سیدنا» و «Cidna» شناسه این پروژه و ارائه‌دهنده آن هستند؛ فورک‌ها باید نام و آیکون متفاوتی به کار ببرند. WhatsApp، Instagram، X و Gmail علائم تجاری صاحبان خود هستند و آیکون آن‌ها فقط برای نشان‌دادن مقصد اشتراک‌گذاری آمده و به معنای تأیید یا همکاری نیست.
+Keep legal documents aligned with the actual behaviour of each published app version and its data processing practices.
 
-### ۱۳.۵ متن‌های حقوقی رو به کاربر
+## Contributing
 
-بک‌اند سیاست حریم خصوصی، قوانین و مقررات، اعلان‌های متن‌باز و راهنمای حذف حساب را به دو زبان فارسی و انگلیسی ارائه می‌دهد. همین آدرس‌ها را در Google Play Console (نشانی Privacy policy و نشانی حذف حساب در فرم Data safety) وارد می‌کنید. با هر تغییر در متن‌ها یا در نحوه برخورد برنامه با داده، `legalVersion` و تاریخ‌ها را در `backend/internal/interface/http/handler/legal_handler.go` به‌روز کنید. این متن‌ها نقطه شروع‌اند و باید توسط وکیل بازبینی شوند.
+Bug reports, product suggestions, and technical contributions are welcome.
 
-### ۱۳.۶ داده‌های شخصی و مدت نگهداری
+1. Open an issue describing the problem or proposal.
+2. Develop changes on a separate branch.
+3. Run the relevant Android or backend tests.
+4. Submit a pull request with a clear explanation and testing notes.
+5. Never include secrets, real user data, or sensitive information in issues or pull requests.
 
-| داده | هدف | مدت نگهداری |
-|---|---|---|
-| شماره موبایل (نام، جنسیت و تاریخ تولد اختیاری) | حساب کاربری، ورود، OTP | تا زمانی که حساب وجود دارد |
-| مقدار ورودِ مشتق‌شده از گذرواژه (خود گذرواژه ارسال نمی‌شود) | احراز هویت | فقط به‌صورت هش Argon2id |
-| سوابق مالی رمزشده و کلیدهای بسته‌بندی‌شده | همگام‌سازی چنددستگاهی | تا زمانی که حساب وجود دارد |
-| نام/مدل دستگاه، نسخه سیستم‌عامل و برنامه، IP (ماسک‌شده نمایش داده می‌شود)، هش نصب | فهرست دستگاه‌ها و اعلان دستگاه جدید | فعالیت دستگاه‌ها حداکثر ۳۰ روز |
-| عملیات موقت همگام‌سازی | پایداری همگام‌سازی | حداکثر ۷ روز |
+Do not use public issues for security vulnerabilities. Contact the project privately first.
 
-حذف حساب **حذف نرم** است: نشست‌ها فوراً باطل می‌شوند، حساب تا **۳۰ روز** با ورود دوباره قابل بازیابی است و پس از آن ابزار `purge-deleted` آن را برای همیشه پاک می‌کند (آن را روزانه با cron اجرا کنید). برنامه ابزار تبلیغاتی، تحلیل رفتار یا ردیاب شخص ثالث ندارد.
+## License
 
-### ۱۳.۷ سلب مسئولیت‌ها
+Cidna is distributed under the **GNU Affero General Public License v3.0 or later**:
 
-- سیدنا ابزار ثبت و نگهداری سوابق است و **مشاوره مالی، حسابداری، حقوقی یا مالیاتی نیست**؛ همچنین به هیچ حساب بانکی یا سامانه پرداختی متصل نیست.
-- ورود صوتی و محاسبات ممکن است نادرست باشند. ارقام مهم را با سوابق بانکی خود تطبیق دهید.
-- نرم‌افزار مطابق بندهای ۱۵ و ۱۶ مجوز AGPL **«همان‌گونه که هست» و بدون هیچ‌گونه ضمانتی** ارائه می‌شود.
-- قوانین و مقررات استفاده تابع قوانین جمهوری اسلامی ایران است.
+[`AGPL-3.0-or-later`](LICENSE)
 
-### ۱۳.۸ پیش از انتشار هر نسخه
+Use, modification, and redistribution are governed by the terms of this license. Distribution of modified versions and offering modified backend versions as network services may trigger corresponding AGPL source-sharing obligations.
 
-- [ ] مطمئن شوید که حق استفاده و بازتوزیع همه دارایی‌های غیرکد را دارید: انیمیشن‌های Lottie، پس‌زمینه کارت‌های اشتراک‌گذاری، بنرها، آیکون‌ها و فونت‌ها.
-- [ ] سیاست حریم خصوصی، فرم Data safety گوگل‌پلی و رفتار واقعی برنامه را با هم هم‌خوان نگه دارید.
-- [ ] متن‌های حقوقی را با وکیل بازبینی کنید.
-- [ ] فایل `LICENSE` و اعلان حق نشر را در هر نسخه توزیع‌شده نگه دارید و سورس متناظر را منتشر کنید.
+The software license does not grant rights to the **Cidna / سیدنا** name or branding. Third-party components remain subject to their respective licenses.
 
-## ۱۴. تماس
+## Contact
 
-تماس پروژه و امور حقوقی: **cidna.app@gmail.com**
+Product enquiries, partnerships, suggestions, and bug reports:
 
-</div>
+**cidna.app@gmail.com**
 
 ---
 
 <div align="center">
 
-**Cidna · سیدنا — Personal Finance Management**
+**Cidna · سیدنا**
 
-Licensed under GNU AGPL v3.0 or later · `AGPL-3.0-or-later`
+*Understand your money. Plan with intention. Keep control.*
+
+[Website](https://cidna.ir)
 
 </div>
