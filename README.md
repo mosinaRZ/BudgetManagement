@@ -12,12 +12,6 @@
 
 [Website](https://cidna.ir) · [فارسی](#فارسی) · [English](#english) · [Technology](#technology) · [Security](#امنیت-و-حریم-خصوصی) · [License](#license)
 
-<br>
-
-<img src="cidna-website/static/img/app-home.webp" width="300" alt="Cidna app preview">
-
-<br>
-
 [![License: AGPL v3 or later](https://img.shields.io/badge/License-AGPL--3.0--or--later-408A71.svg)](LICENSE)
 ![Platform: Android](https://img.shields.io/badge/Platform-Android-408A71)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.2.10-7F52FF?logo=kotlin&logoColor=white)
