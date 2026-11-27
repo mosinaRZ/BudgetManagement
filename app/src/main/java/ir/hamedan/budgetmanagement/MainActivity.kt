@@ -32,6 +32,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
@@ -461,6 +462,9 @@ class MainActivity : FragmentActivity() {
         // A guest workspace is an open session too, but it has no server session behind it.
         val guestSession by app.container.guestModeStore.session.collectAsState()
         val hasSession = sessionAuthenticated || guestSession
+        // true while the registration screen was opened from the guest home "create account" CTA,
+        // so cancelling the guest-data dialog can bring the person back to the guest home.
+        var registerFromGuestHome by rememberSaveable { mutableStateOf(false) }
         val currentRouteEntry by navController.currentBackStackEntryAsState()
         val applicationContext = LocalContext.current.applicationContext
         val updateState by app.container.appUpdateManager.state.collectAsState()
@@ -786,6 +790,7 @@ class MainActivity : FragmentActivity() {
                         }
                     },
                     onRegister = {
+                        registerFromGuestHome = false
                         navController.navigate(AppRoute.Register)
                     },
                     onForgotPassword = {
@@ -1050,6 +1055,7 @@ class MainActivity : FragmentActivity() {
 
             composable<AppRoute.Register> {
                 val leaveRegister: () -> Unit = {
+                    registerFromGuestHome = false
                     // Reached from the guest home screen the stack holds only this screen:
                     // go to the sign-in screen instead of leaving the app.
                     if (navController.previousBackStackEntry == null) {
@@ -1064,13 +1070,34 @@ class MainActivity : FragmentActivity() {
                 androidx.activity.compose.BackHandler(onBack = leaveRegister)
                 RegisterScreen(
                     onRegistered = {
+                        registerFromGuestHome = false
                         navController.navigate(AppRoute.Login()) {
                             popUpTo(AppRoute.Register) {
                                 inclusive = true
                             }
                         }
                     },
-                    onBack = leaveRegister
+                    onBack = leaveRegister,
+                    onGuestChoiceCancel = {
+                        if (registerFromGuestHome) {
+                            // Opened from the guest home CTA: resume the guest workspace and return
+                            // to its home screen. If the guest session cannot be resumed, fall back
+                            // to the regular back behaviour.
+                            registerFromGuestHome = false
+                            authScope.launch {
+                                app.container.guestModeManager.startSession()
+                                    .onSuccess {
+                                        navController.navigate(AppRoute.MainStructure) {
+                                            popUpTo(AppRoute.Register) { inclusive = true }
+                                            launchSingleTop = true
+                                        }
+                                    }
+                                    .onFailure { leaveRegister() }
+                            }
+                        } else {
+                            leaveRegister()
+                        }
+                    }
                 )
             }
 
@@ -1188,6 +1215,7 @@ class MainActivity : FragmentActivity() {
                                     // happens to the guest data) and end the guest session. The
                                     // navigation goes first so the "no session" redirect below
                                     // already sees the Register route and leaves it alone.
+                                    registerFromGuestHome = true
                                     navController.navigate(AppRoute.Register) {
                                         popUpTo(AppRoute.MainStructure) { inclusive = true }
                                         launchSingleTop = true

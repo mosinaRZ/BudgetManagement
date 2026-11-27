@@ -1,5 +1,6 @@
 package ir.hamedan.budgetmanagement.ui.screens.settings
 
+import ir.hamedan.budgetmanagement.ui.components.AppLogoIcon
 import ir.hamedan.budgetmanagement.ui.components.scrollEdgeFade
 
 import ir.hamedan.budgetmanagement.ui.theme.dockClearance
@@ -553,7 +554,8 @@ fun SettingsScreen(
             SettingsRow(
                 title = title("website"),
                 subtitle = subtitle("website"),
-                appLogo = true,
+                icon = AppLogoIcon,
+                tint = settingsBrandText(),
                 onClick = { WebLinks.openSite(context, isPersian, darkTheme) },
                 trailing = { SettingsChevron() }
             )

@@ -97,7 +97,9 @@ private const val REGISTRATION_STEPS = 4
 @Composable
 fun RegisterScreen(
     onRegistered: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    // Cancel in the "what about your guest data?" dialog. Defaults to the normal back action.
+    onGuestChoiceCancel: () -> Unit = onBack
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as BudgetApp
@@ -242,7 +244,7 @@ fun RegisterScreen(
                 moveGuestData = false
                 showGuestDataChoice = false
             },
-            onCancel = onBack
+            onCancel = onGuestChoiceCancel
         )
     }
 
