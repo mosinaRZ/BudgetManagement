@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -190,8 +191,28 @@ internal fun SettingsIconTile(
     icon: ImageVector?,
     @DrawableRes iconRes: Int?,
     tint: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    appLogo: Boolean = false
 ) {
+    if (appLogo) {
+        // لوگوی خود برنامه با همان ترکیب پس‌زمینه و پیش‌زمینه‌ی آیکون لانچر (پیش‌زمینه برای پرکردن کاشی بزرگ‌تر می‌شود).
+        Box(
+            modifier = modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(androidx.compose.ui.res.colorResource(ir.hamedan.budgetmanagement.R.color.icon_background)),
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.foundation.Image(
+                painter = painterResource(ir.hamedan.budgetmanagement.R.mipmap.icon_foreground),
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { scaleX = 1.45f; scaleY = 1.45f }
+            )
+        }
+        return
+    }
     Box(
         modifier = modifier
             .size(40.dp)
@@ -216,6 +237,7 @@ internal fun SettingsRow(
     @DrawableRes iconRes: Int? = null,
     accent: SettingsAccent = SettingsAccent.TEAL,
     tint: Color? = null,
+    appLogo: Boolean = false,
     titleColor: Color = MaterialTheme.colorScheme.onSurface,
     role: Role = Role.Button,
     onClick: (() -> Unit)? = null,
@@ -230,7 +252,7 @@ internal fun SettingsRow(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        SettingsIconTile(icon = icon, iconRes = iconRes, tint = iconTint)
+        SettingsIconTile(icon = icon, iconRes = iconRes, tint = iconTint, appLogo = appLogo)
         Spacer(Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(

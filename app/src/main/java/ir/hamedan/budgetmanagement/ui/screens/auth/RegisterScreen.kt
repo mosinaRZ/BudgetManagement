@@ -217,6 +217,11 @@ fun RegisterScreen(
                                     discardGuestData = moveGuestData != true
                                 )
                             }
+                            // تور معرفی برنامه فقط برای همین کاربرِ تازه‌ثبت‌نام‌شده و در اولین ورودش نمایش داده می‌شود.
+                            ir.hamedan.budgetmanagement.data.preferences.TourPreferences.markPending(
+                                context,
+                                app.container.authSessionStore.userId()
+                            )
                             recoveryKey = result.recoveryKey
                         }
                         .onFailure { error = authErrorMessage(it, isPersian, AuthContext.REGISTER) }

@@ -418,7 +418,8 @@ private fun ExpandToggle(expanded: Boolean, hiddenCount: Int, isPersian: Boolean
 fun FinancialIndicatorsSection(
     isPersian: Boolean,
     currencyUnit: String,
-    indicators: FinancialIndicators?
+    indicators: FinancialIndicators?,
+    targetModifier: Modifier = Modifier
 ) {
     if (indicators == null) return
     val f = remember(isPersian, currencyUnit) { IndicatorFormat(isPersian, currencyUnit) }
@@ -432,6 +433,7 @@ fun FinancialIndicatorsSection(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp)
+            .then(targetModifier)
             .background(
                 Brush.linearGradient(
                     listOf(

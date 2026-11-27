@@ -93,6 +93,13 @@ import ir.hamedan.budgetmanagement.ui.screens.profile.MissingProfileField
 import ir.hamedan.budgetmanagement.ui.screens.profile.ProfileCompletion
 import ir.hamedan.budgetmanagement.ui.components.SwipeToConfirmButton
 import ir.hamedan.budgetmanagement.di.appViewModel
+import androidx.compose.ui.platform.LocalDensity
+import ir.hamedan.budgetmanagement.ui.tour.TourController
+import ir.hamedan.budgetmanagement.ui.tour.TourSampleData
+import ir.hamedan.budgetmanagement.ui.tour.TourTarget
+import ir.hamedan.budgetmanagement.ui.tour.tourTarget
+import ir.hamedan.budgetmanagement.ui.theme.topBarClearance
+import androidx.compose.foundation.lazy.rememberLazyListState
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
 import ir.hamedan.budgetmanagement.ui.components.appSkeletonShimmer
 import ir.hamedan.budgetmanagement.ui.components.BalanceWidgetReceiver
@@ -352,16 +359,30 @@ fun HomeScreen(
         NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
     }
 
-    val transactionsList by transactionViewModel.filteredTransactions.collectAsState()
-    val goalsList by goalsViewModel.savingGoals.collectAsState(initial = null)
-    val limitsList by budgetViewModel.budgetLimitsWithSpent.collectAsState(initial = null)
-    val categoriesList by categoriesViewModel.categories.collectAsState()
-    val debtCreditList by debtCreditViewModel.debtCreditList.collectAsState()
+    val transactionsListLive by transactionViewModel.filteredTransactions.collectAsState()
+    val goalsListLive by goalsViewModel.savingGoals.collectAsState(initial = null)
+    val limitsListLive by budgetViewModel.budgetLimitsWithSpent.collectAsState(initial = null)
+    val categoriesListLive by categoriesViewModel.categories.collectAsState()
+    val debtCreditListLive by debtCreditViewModel.debtCreditList.collectAsState()
+
+    // ===== تور معرفی: تا وقتی تور در جریان است داده‌ی نمونه نشان داده می‌شود (فقط در حافظه) =====
+    val tourSample = TourController.sampleActive
+    val tourTransactions = remember(isPersian) { TourSampleData.transactions(isPersian) }
+    val tourGoals = remember(isPersian) { TourSampleData.goals(isPersian) }
+    val tourLimits = remember { TourSampleData.limits() }
+    val tourCategories = remember(isPersian) { TourSampleData.categories(isPersian) }
+    val tourDebts = remember(isPersian) { TourSampleData.debts(isPersian) }
+    val transactionsList = if (tourSample) tourTransactions else transactionsListLive
+    val goalsList = if (tourSample) tourGoals else goalsListLive
+    val limitsList = if (tourSample) tourLimits else limitsListLive
+    val categoriesList = if (tourSample) tourCategories else categoriesListLive
+    val debtCreditList = if (tourSample) tourDebts else debtCreditListLive
 
     val currencyUnit by transactionViewModel.currencyUnit.collectAsState(initial = "IRT")
 
     val notifications by notificationViewModel.notifications.collectAsState()
-    val unreadCount by notificationViewModel.unreadCount.collectAsState()
+    val unreadCountLive by notificationViewModel.unreadCount.collectAsState()
+    val unreadCount = if (tourSample) TourSampleData.SAMPLE_UNREAD_COUNT else unreadCountLive
 
     // بررسی وضعیت بارگذاری کلی (اگر یکی از لیست‌های اصلی null باشد، در حالت Loading قرار می‌گیرد)
     val isLoading = categoriesList == null || goalsList == null || limitsList == null
@@ -399,7 +420,7 @@ fun HomeScreen(
     // اهلیت فقط یک بار هنگام ورود به صفحه سنجیده می‌شود؛ با بستن، فوراً مخفی می‌شود و
     // زمان‌بندی بعدی (۳ → ۷ → ۱۴ → ۳۰ روز) ذخیره می‌شود.
     var widgetPromptEligible by remember { mutableStateOf(WidgetPromptPreferences.shouldShow(context)) }
-    val showWidgetPrompt = !isWidgetAdded && widgetPromptEligible
+    val showWidgetPrompt = !isWidgetAdded && widgetPromptEligible && !TourController.isRunning
 
     // ===== CTA تکمیل پروفایل (غیرقابل بستن؛ با کامل شدن پروفایل خودبه‌خود حذف می‌شود) =====
     val profileCompletion by profileCompletionViewModel.completion.collectAsState()
@@ -445,7 +466,8 @@ fun HomeScreen(
         pendingDueReminders = pendingDueReminders.drop(1)
     }
 
-    LaunchedEffect(debtCreditList) {
+    LaunchedEffect(debtCreditListLive) {
+        val debtCreditList = debtCreditListLive
         if (!hasCapturedDueReminders && debtCreditList.isNotEmpty() && !DueReminderPreferences.hasShownOnce(context)) {
             hasCapturedDueReminders = true
             DueReminderPreferences.markShownOnce(context)
@@ -473,10 +495,28 @@ fun HomeScreen(
         label = "header_spacer"
     )
 
+    val homeListState = rememberLazyListState()
+    val tourTopClearancePx = with(LocalDensity.current) { topBarClearance().roundToPx() }
+    val tourStepId = if (TourController.isRunning) TourController.currentStep.id else null
+    LaunchedEffect(tourStepId) {
+        if (tourStepId != null && TourController.currentScreen == ir.hamedan.budgetmanagement.ui.tour.TourScreen.HOME) {
+            // ایندکس‌ها ثابت‌اند چون در تور کارت تکمیل پروفایل و کارت مهمان نمایش داده نمی‌شوند.
+            val index = when (TourController.currentStep.target) {
+                TourTarget.HOME_GOALS -> 2
+                TourTarget.HOME_LIMITS -> 3
+                TourTarget.HOME_DEBTS -> 4
+                else -> 0
+            }
+            if (index == 0) homeListState.animateScrollToItem(0)
+            else homeListState.animateScrollToItem(index, -tourTopClearancePx)
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         AuroraBackground()
 
         LazyColumn(
+            state = homeListState,
             modifier = Modifier
                 .fillMaxSize()
                 .scrollEdgeFade()
@@ -612,6 +652,7 @@ fun HomeScreen(
 
                     Box(
                         modifier = Modifier
+                            .tourTarget(TourTarget.HOME_BALANCE)
                             .fillMaxWidth()
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), balanceShape)
                             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), balanceShape)
@@ -709,7 +750,7 @@ fun HomeScreen(
                 }
 
                 // CTA تکمیل پروفایل
-                profileCompletion?.let { completion ->
+                profileCompletion?.takeIf { !tourSample }?.let { completion ->
                     item(key = "profile_completion_cta") {
                         ProfileCompletionCard(
                             completion = completion,
@@ -724,7 +765,7 @@ fun HomeScreen(
                 }
 
                 // CTA ساخت حساب برای مهمان (غیرقابل بستن؛ با خروج از حالت مهمان حذف می‌شود)
-                if (isGuest) {
+                if (isGuest && !tourSample) {
                     item(key = "guest_account_cta") {
                         GuestAccountCtaCard(
                             isPersian = isPersian,
@@ -743,6 +784,7 @@ fun HomeScreen(
                     val piggyShape = RoundedCornerShape(24.dp)
                     Box(
                         modifier = Modifier
+                            .tourTarget(TourTarget.HOME_GOALS)
                             .fillMaxWidth()
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), piggyShape)
                             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), piggyShape)
@@ -832,6 +874,7 @@ fun HomeScreen(
                     val budgetShape = RoundedCornerShape(24.dp)
                     Box(
                         modifier = Modifier
+                            .tourTarget(TourTarget.HOME_LIMITS)
                             .fillMaxWidth()
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), budgetShape)
                             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), budgetShape)
@@ -953,6 +996,7 @@ fun HomeScreen(
 
                     Box(
                         modifier = Modifier
+                            .tourTarget(TourTarget.HOME_DEBTS)
                             .fillMaxWidth()
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), dueShape)
                             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), dueShape)
@@ -1288,6 +1332,7 @@ fun HomeScreen(
 
                 Box(
                     modifier = Modifier
+                        .tourTarget(TourTarget.HOME_NOTIFICATIONS)
                         .size(56.dp)
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f), smallShape)
                         .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), smallShape)

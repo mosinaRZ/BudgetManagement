@@ -80,19 +80,23 @@ fun TimeFilterBar(
     onFilterClick: () -> Unit,
     modifier: Modifier = Modifier,
     clearLabel: String? = null,
-    onClear: (() -> Unit)? = null
+    onClear: (() -> Unit)? = null,
+    chipsModifier: Modifier = Modifier,
+    filterButtonModifier: Modifier = Modifier,
+    barModifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 4.dp)
-            .height(BarHeight),
+            .height(BarHeight)
+            .then(barModifier),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Box(
-            modifier = Modifier
+            modifier = chipsModifier
                 .weight(1f)
                 .fillMaxHeight()
                 .background(colors.surfaceVariant.copy(alpha = 0.5f), BarShape)
@@ -105,7 +109,7 @@ fun TimeFilterBar(
                 SegmentedChips(labels = labels, selectedIndex = selectedIndex, onSelect = onSelect)
             }
         }
-        FilterButton(active = isFilterActive, isPersian = isPersian, onClick = onFilterClick)
+        FilterButton(active = isFilterActive, isPersian = isPersian, onClick = onFilterClick, modifier = filterButtonModifier)
     }
 }
 
@@ -208,7 +212,7 @@ private fun ClearPill(label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun FilterButton(active: Boolean, isPersian: Boolean, onClick: () -> Unit) {
+private fun FilterButton(active: Boolean, isPersian: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -239,7 +243,7 @@ private fun FilterButton(active: Boolean, isPersian: Boolean, onClick: () -> Uni
     }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(BarHeight)
             .graphicsLayer {
                 scaleX = scale

@@ -90,6 +90,9 @@ import ir.hamedan.budgetmanagement.data.draft.DraftStore
 import ir.hamedan.budgetmanagement.data.draft.DraftType
 import ir.hamedan.budgetmanagement.data.preferences.CurrencySharedPreferences
 import ir.hamedan.budgetmanagement.ui.components.AuroraBackground
+import ir.hamedan.budgetmanagement.ui.tour.TourController
+import ir.hamedan.budgetmanagement.ui.tour.TourTarget
+import ir.hamedan.budgetmanagement.ui.tour.tourTarget
 import ir.hamedan.budgetmanagement.ui.components.DraftsSection
 import ir.hamedan.budgetmanagement.utils.AppHapticType
 import ir.hamedan.budgetmanagement.utils.rememberAppHaptics
@@ -223,7 +226,23 @@ fun AddScreen(
         val headerClearance = topBarClearance()
 
         Box(modifier = Modifier.fillMaxSize()) {
+            val addListState = androidx.compose.foundation.lazy.rememberLazyListState()
+            val tourStepId = if (TourController.isRunning) TourController.currentStep.id else null
+            LaunchedEffect(tourStepId) {
+                // ترتیب آیتم‌ها: کارت تراکنش ۰، عنوان بخش ۱، قلک ۲، دسته ۳، محدودیت ۴، بدهی ۵ (پیش‌نویس‌ها در تور نیستند).
+                if (tourStepId != null && TourController.currentScreen == ir.hamedan.budgetmanagement.ui.tour.TourScreen.ADD) {
+                    val index = when (TourController.currentStep.target) {
+                        TourTarget.ADD_GOALS -> 1
+                        TourTarget.ADD_CATEGORIES -> 2
+                        TourTarget.ADD_LIMITS -> 3
+                        TourTarget.ADD_DEBTS -> 4
+                        else -> 0
+                    }
+                    addListState.animateScrollToItem(index)
+                }
+            }
             LazyColumn(
+                state = addListState,
                 modifier = Modifier.fillMaxSize().scrollEdgeFade(),
                 contentPadding = PaddingValues(
                     start = AppDimens.ScreenHorizontal,
@@ -233,7 +252,7 @@ fun AddScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(AppDimens.ItemSpacing)
             ) {
-                if (drafts.isNotEmpty()) {
+                if (drafts.isNotEmpty() && !TourController.isRunning) {
                     item(key = "drafts") {
                         DraftsSection(
                             drafts = drafts,
@@ -253,6 +272,7 @@ fun AddScreen(
                     val highlighted = isAnimationActive &&
                             (highlightId == "transaction" || highlightId == "buy" || highlightId == "sell")
                     TransactionHeroCard(
+                        modifier = Modifier.tourTarget(TourTarget.ADD_TRANSACTION),
                         option = transactionOption,
                         isPersian = isPersian,
                         highlighted = highlighted,
@@ -272,6 +292,12 @@ fun AddScreen(
 
                 items(items = manageOptions, key = { it.id }) { option ->
                     OptionRow(
+                        modifier = when (option.id) {
+                            "piggy" -> Modifier.tourTarget(TourTarget.ADD_GOALS)
+                            "category" -> Modifier.tourTarget(TourTarget.ADD_CATEGORIES)
+                            "limit" -> Modifier.tourTarget(TourTarget.ADD_LIMITS)
+                            else -> Modifier.tourTarget(TourTarget.ADD_DEBTS)
+                        },
                         option = option,
                         isPersian = isPersian,
                         highlighted = isAnimationActive && option.id == highlightId,
@@ -369,6 +395,7 @@ private fun Modifier.pressScale(source: MutableInteractionSource, pressedScale: 
 /** کارت اصلی؛ شامل دو میانبر مستقیم به جریان ثبت هزینه یا درآمد. */
 @Composable
 private fun TransactionHeroCard(
+    modifier: Modifier = Modifier,
     option: AddOptionItem,
     isPersian: Boolean,
     highlighted: Boolean,
@@ -386,7 +413,7 @@ private fun TransactionHeroCard(
     }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(shape)
             .background(
@@ -516,6 +543,7 @@ private fun HeroPill(
 /** ردیف مدیریتی؛ هم‌سبک کارت‌های تنظیمات (surfaceVariant + حاشیهٔ ظریف) با آیکون اختصاصی. */
 @Composable
 private fun OptionRow(
+    modifier: Modifier = Modifier,
     option: AddOptionItem,
     isPersian: Boolean,
     highlighted: Boolean,
@@ -533,7 +561,7 @@ private fun OptionRow(
     }
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .pressScale(source)
             .clip(shape)

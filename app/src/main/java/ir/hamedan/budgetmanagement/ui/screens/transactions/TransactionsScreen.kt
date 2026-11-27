@@ -29,6 +29,11 @@ import ir.hamedan.budgetmanagement.ui.components.AppTitleTopBar
 import androidx.compose.ui.unit.Dp
 
 import ir.hamedan.budgetmanagement.ui.components.TimeFilterBar
+import ir.hamedan.budgetmanagement.ui.tour.TourController
+import ir.hamedan.budgetmanagement.ui.tour.TourSampleData
+import ir.hamedan.budgetmanagement.ui.tour.TourStepIds
+import ir.hamedan.budgetmanagement.ui.tour.TourTarget
+import ir.hamedan.budgetmanagement.ui.tour.tourTarget
 import ir.hamedan.budgetmanagement.ui.components.CountUpText
 import ir.hamedan.budgetmanagement.ui.components.CountUpPairText
 import ir.hamedan.budgetmanagement.di.appViewModel
@@ -119,6 +124,9 @@ private val SearchBarBottomOffset = AppDimens.DockBlockHeight + AppSpacing.Md
 /** وقتی کیبورد باز است لیست این‌قدر پایین‌تر شروع می‌شود. */
 private val KeyboardListTopExtra = 140.dp
 
+/** ردیفی از داده‌ی نمونه که تور روی آن «کلیک» می‌کند. */
+private const val TOUR_ROW_ID = "tour_tx_1"
+
 /** فضای پایین لیست تا آخرین آیتم زیر فیلد جستجو/داک پنهان نشود. */
 @Composable
 private fun searchOverlayClearance(): Dp =
@@ -146,13 +154,40 @@ fun TransactionsScreen(
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
     }
 
-    val isLoading by viewModel.isLoading.collectAsState(initial = false)
+    val isLoadingLive by viewModel.isLoading.collectAsState(initial = false)
     val searchQuery by viewModel.searchQuery.collectAsState()
     val filterState by viewModel.filterState.collectAsState()
-    val transactionsList by viewModel.filteredTransactions.collectAsState()
+    val transactionsListLive by viewModel.filteredTransactions.collectAsState()
 
     val currencyUnit by viewModel.currencyUnit.collectAsState(initial = "IRT")
-    val categories by viewModel.categories.collectAsState()
+    val categoriesLive by viewModel.categories.collectAsState()
+
+    // ===== تور معرفی: داده‌ی نمونه فقط در حافظه؛ دیتابیس دست‌نخورده می‌ماند =====
+    val tourSample = TourController.sampleActive
+    val tourTransactions = remember(isPersian) { TourSampleData.transactions(isPersian) }
+    val tourCategories = remember(isPersian) { TourSampleData.categories(isPersian) }
+    val isLoading = !tourSample && isLoadingLive
+    val transactionsList = if (tourSample) tourTransactions else transactionsListLive
+    val categories = if (tourSample) tourCategories else categoriesLive
+
+    // نمایش خودکارِ «کلیک روی تراکنش»: مرحله‌ی ردیف بعد از مکثی کوتاه ردیف را باز می‌کند و مرحله‌ی دکمه‌ها بازش نگه می‌دارد.
+    val tourStepId = if (TourController.isRunning) TourController.currentStep.id else null
+    var tourRowRevealed by remember { mutableStateOf(false) }
+    LaunchedEffect(tourStepId) {
+        when (tourStepId) {
+            TourStepIds.TX_ROW -> {
+                tourRowRevealed = false
+                listState.animateScrollToItem(0)
+                kotlinx.coroutines.delay(1000)
+                tourRowRevealed = true
+            }
+            TourStepIds.TX_ACTIONS -> tourRowRevealed = true
+            else -> {
+                tourRowRevealed = false
+                if (tourStepId != null) listState.animateScrollToItem(0)
+            }
+        }
+    }
 
     val categoryInfoById = remember(categories, isPersian) {
         categories.associate { category ->
@@ -341,7 +376,9 @@ fun TransactionsScreen(
                                     categoryIcon = categoryInfoById[transaction.categoryId]?.second ?: "📁",
                                     onEdit = { onEditTransaction(transaction.id) },
                                     onShare = { transactionToShare = transaction },
-                                    onDelete = { transactionToDelete = transaction }
+                                    onDelete = { transactionToDelete = transaction },
+                                    isTourRow = tourSample && transaction.id == TOUR_ROW_ID,
+                                    tourReveal = if (tourSample && transaction.id == TOUR_ROW_ID) tourRowRevealed else null
                                 )
                             }
                         }
@@ -357,7 +394,9 @@ fun TransactionsScreen(
                                 categoryIcon = categoryInfoById[transaction.categoryId]?.second ?: "📁",
                                 onEdit = { onEditTransaction(transaction.id) },
                                 onShare = { transactionToShare = transaction },
-                                onDelete = { transactionToDelete = transaction }
+                                onDelete = { transactionToDelete = transaction },
+                                isTourRow = tourSample && transaction.id == TOUR_ROW_ID,
+                                tourReveal = if (tourSample && transaction.id == TOUR_ROW_ID) tourRowRevealed else null
                             )
                         }
                     }
@@ -384,6 +423,8 @@ fun TransactionsScreen(
                     clearLabel = if (isPersian) "حذف فیلترها" else "Clear filters",
                     onClear = if (filterState.isCustomFilterActive) ({ viewModel.clearFilter() }) else null,
                     onFilterClick = { showFilterSheet = true },
+                    chipsModifier = Modifier.tourTarget(TourTarget.TX_TIME_CHIPS),
+                    filterButtonModifier = Modifier.tourTarget(TourTarget.TX_FILTER),
                     onSelect = { index ->
                         val newTimeFilter = TimeFilter.values()[index]
                         val previousTimeFilter = filterState.timeFilter
@@ -1053,12 +1094,15 @@ private fun TransactionRow(
     categoryIcon: String,
     onEdit: () -> Unit,
     onShare: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    isTourRow: Boolean = false,
+    tourReveal: Boolean? = null
 ) {
     val rowShape = RoundedCornerShape(20.dp)
     val isExpense = transaction.type == "EXPENSE"
     val accent = if (isExpense) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     var isRevealed by remember { mutableStateOf(false) }
+    LaunchedEffect(tourReveal) { if (tourReveal != null) isRevealed = tourReveal }
 
     // Three action buttons (share / edit / delete) need a wider reveal than the old two.
     val revealOffsetDp = if (isPersian) 164.dp else (-164).dp
@@ -1084,6 +1128,7 @@ private fun TransactionRow(
 
     Box(
         modifier = Modifier
+            .then(if (isTourRow) Modifier.tourTarget(TourTarget.TX_ROW) else Modifier)
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
     ) {
@@ -1096,59 +1141,64 @@ private fun TransactionRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.End
         ) {
-            IconButton(
-                onClick = {
-                    onShare()
-                    isRevealed = false
-                },
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.14f), CircleShape)
+            Row(
+                modifier = if (isTourRow) Modifier.tourTarget(TourTarget.TX_ACTIONS) else Modifier,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = if (isPersian) "اشتراک‌گذاری" else "Share",
-                    tint = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+                IconButton(
+                    onClick = {
+                        onShare()
+                        isRevealed = false
+                    },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.14f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = if (isPersian) "اشتراک‌گذاری" else "Share",
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
 
-            Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
-            IconButton(
-                onClick = {
-                    onEdit()
-                    isRevealed = false
-                },
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = if (isPersian) "ویرایش" else "Edit",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+                IconButton(
+                    onClick = {
+                        onEdit()
+                        isRevealed = false
+                    },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = if (isPersian) "ویرایش" else "Edit",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
 
-            Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
-            IconButton(
-                onClick = {
-                    onDelete()
-                    isRevealed = false
-                },
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f), CircleShape)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = if (isPersian) "حذف" else "Delete",
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(18.dp)
-                )
+                IconButton(
+                    onClick = {
+                        onDelete()
+                        isRevealed = false
+                    },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = if (isPersian) "حذف" else "Delete",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(8.dp))

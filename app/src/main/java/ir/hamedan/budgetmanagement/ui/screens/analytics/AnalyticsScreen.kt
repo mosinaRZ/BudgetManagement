@@ -11,6 +11,12 @@ import ir.hamedan.budgetmanagement.ui.components.scrollEdgeFade
 import ir.hamedan.budgetmanagement.ui.theme.dockClearance
 
 import ir.hamedan.budgetmanagement.ui.theme.topBarWithFilterClearance
+import ir.hamedan.budgetmanagement.ui.tour.TourController
+import ir.hamedan.budgetmanagement.ui.tour.TourSampleData
+import ir.hamedan.budgetmanagement.ui.tour.TourStepIds
+import ir.hamedan.budgetmanagement.ui.tour.TourTarget
+import ir.hamedan.budgetmanagement.ui.tour.tourTarget
+import androidx.compose.foundation.gestures.animateScrollBy
 
 import ir.hamedan.budgetmanagement.ui.theme.AppSpacing
 
@@ -50,6 +56,8 @@ import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -112,7 +120,32 @@ fun AnalyticsScreen(
         analyticsViewModel.onTimeFilterChanged(TimeFilter.WEEKLY)
     }
 
-    val uiState by analyticsViewModel.uiState.collectAsState()
+    val uiStateLive by analyticsViewModel.uiState.collectAsState()
+
+    // ===== تور معرفی: وضعیت نمونه (فقط در حافظه) + «کلیک» خودکار روی یک ستون نمودار =====
+    val tourSample = TourController.sampleActive
+    var tourBucket by remember { mutableStateOf<Int?>(null) }
+    val tourStepId = if (TourController.isRunning) TourController.currentStep.id else null
+    val scrollState = rememberScrollState()
+    val tourClearancePx = with(LocalDensity.current) { topBarWithFilterClearance().roundToPx() }
+    LaunchedEffect(tourStepId) {
+        tourBucket = null
+        if (tourStepId == null) return@LaunchedEffect
+        if (tourStepId == TourStepIds.AN_BARS) {
+            // کارت نمودار را زیر نوار فیلتر می‌آوریم، کمی مکث می‌کنیم و ستون را «می‌زنیم».
+            val rect = snapshotFlow { TourController.targets[TourTarget.AN_BARS] }
+                .filterNotNull()
+                .first()
+            scrollState.animateScrollBy(rect.top - tourClearancePx)
+            kotlinx.coroutines.delay(900)
+            tourBucket = TourSampleData.demoBucket(isPersian)
+        } else {
+            scrollState.animateScrollTo(0)
+        }
+    }
+    val uiState = if (tourSample) {
+        remember(isPersian, tourBucket) { TourSampleData.analyticsState(isPersian, tourBucket) }
+    } else uiStateLive
     val selectedFilter by analyticsViewModel.selectedTimeFilter.collectAsState()
     val currencyUnit by CurrencySharedPreferences.currencyFlow.collectAsState(initial = "IRT")
 
@@ -153,7 +186,7 @@ fun AnalyticsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .scrollEdgeFade()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scrollState)
             ) {
                 // فاصله‌ی واقعی تا زیر تاپ‌بار و نوار فیلتر (status bar را هم حساب می‌کند)
                 Spacer(modifier = Modifier.height(topBarWithFilterClearance()))
@@ -161,7 +194,8 @@ fun AnalyticsScreen(
                 FinancialIndicatorsSection(
                     isPersian = isPersian,
                     currencyUnit = currencyUnit,
-                    indicators = uiState.indicators
+                    indicators = uiState.indicators,
+                    targetModifier = Modifier.tourTarget(TourTarget.AN_INDICATORS)
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -189,7 +223,8 @@ fun AnalyticsScreen(
                     isIncome = uiState.isIncomeChartSelected,
                     onIncomeChange = { analyticsViewModel.setIncomeChartSelected(it) },
                     selectedIndex = uiState.selectedTimeBucketIndex,
-                    onEntryClick = { analyticsViewModel.onTimeBucketSelected(it) }
+                    onEntryClick = { if (!tourSample) analyticsViewModel.onTimeBucketSelected(it) },
+                    targetModifier = Modifier.tourTarget(TourTarget.AN_BARS)
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -221,6 +256,7 @@ fun AnalyticsScreen(
                 AnalyticsTopBar(isPersian = isPersian)
 
                 TimeFilterBar(
+                    barModifier = Modifier.tourTarget(TourTarget.AN_FILTER_BAR),
                     labels = remember(isPersian) {
                         TimeFilter.values().map { if (isPersian) it.titleFa else it.titleEn }
                     },
@@ -235,7 +271,7 @@ fun AnalyticsScreen(
             // قرارگیری بعد از تاپ‌بار و فیلتر تا روی آن‌ها رسم شود
             AnalyticsInteractionHint(
                 isPersian = isPersian,
-                visible = showAnalyticsInteractionHint && !uiState.isLoading && uiState.hasAnyTransactionInDb,
+                visible = showAnalyticsInteractionHint && !tourSample && !uiState.isLoading && uiState.hasAnyTransactionInDb,
                 onDismiss = { showAnalyticsInteractionHint = false },
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -349,7 +385,8 @@ fun ExpenseTimeBarChartCard(
     isIncome: Boolean,
     onIncomeChange: (Boolean) -> Unit,
     selectedIndex: Int? = null,
-    onEntryClick: ((Int) -> Unit)? = null
+    onEntryClick: ((Int) -> Unit)? = null,
+    targetModifier: Modifier = Modifier
 ) {
     val numberFormatter = remember(isPersian) {
         NumberFormat.getNumberInstance(if (isPersian) Locale("fa", "IR") else Locale.US)
@@ -393,6 +430,7 @@ fun ExpenseTimeBarChartCard(
         scrollToIndex = currentIndex,
         selectedIndex = selectedIndex,
         onEntryClick = onEntryClick,
+        targetModifier = targetModifier,
         valueFormatter = { value ->
             val displayValue = BigDecimal.valueOf(value).let {
                 if (currencyUnit == "IRR") it.multiply(BigDecimal.TEN) else it

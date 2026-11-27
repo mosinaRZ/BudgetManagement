@@ -64,6 +64,7 @@ fun ColumnBarChartCard(
     scrollToIndex: Int? = null,
     selectedIndex: Int? = null,
     onEntryClick: ((Int) -> Unit)? = null,
+    targetModifier: Modifier = Modifier,
     valueFormatter: (Long) -> String = { it.toString() }
 ) {
     val cardShape = RoundedCornerShape(24.dp)
@@ -76,6 +77,7 @@ fun ColumnBarChartCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp)
+            .then(targetModifier)
             // طراحی شیشه‌ای (Glassmorphic) با آلفای پایین
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), cardShape)
             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), cardShape)

@@ -34,7 +34,16 @@ object WebLinks {
      * with Back). Without a Custom Tabs browser it opens the normal browser instead.
      */
     fun open(context: Context, page: Page, isPersian: Boolean, darkTheme: Boolean) {
-        val uri = Uri.parse(url(page, isPersian))
+        launch(context, Uri.parse(url(page, isPersian)), isPersian, darkTheme)
+    }
+
+    /** Opens the website's home page (the English home page is `/en/`) the same way as [open]. */
+    fun openSite(context: Context, isPersian: Boolean, darkTheme: Boolean) {
+        val home = if (isPersian) SITE else "$SITE/en/"
+        launch(context, Uri.parse(home), isPersian, darkTheme)
+    }
+
+    private fun launch(context: Context, uri: Uri, isPersian: Boolean, darkTheme: Boolean) {
         val colorScheme = if (darkTheme) CustomTabsIntent.COLOR_SCHEME_DARK else CustomTabsIntent.COLOR_SCHEME_LIGHT
         val customTab = CustomTabsIntent.Builder()
             .setShowTitle(true)

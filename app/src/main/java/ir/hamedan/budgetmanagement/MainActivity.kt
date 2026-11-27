@@ -71,6 +71,10 @@ import ir.hamedan.budgetmanagement.ui.components.ForceUpdateBottomSheet
 import ir.hamedan.budgetmanagement.data.update.StoreLauncher
 import ir.hamedan.budgetmanagement.ui.components.InAppNotificationHost
 import ir.hamedan.budgetmanagement.ui.components.OnboardingDialog
+import ir.hamedan.budgetmanagement.data.preferences.TourPreferences
+import ir.hamedan.budgetmanagement.ui.tour.TourController
+import ir.hamedan.budgetmanagement.ui.tour.TourOverlay
+import ir.hamedan.budgetmanagement.ui.tour.TourScreen
 import ir.hamedan.budgetmanagement.ui.components.OnboardingPermission
 import ir.hamedan.budgetmanagement.ui.components.PermissionReminderItem
 import ir.hamedan.budgetmanagement.ui.components.BiometricReminderHost
@@ -415,6 +419,11 @@ class MainActivity : FragmentActivity() {
                     }
 
 
+                    // تور معرفی برنامه (اسپات‌لایت تعاملی): بالای همه‌ی صفحه‌ها، پایین‌تر از اعلان‌های درون‌برنامه.
+                    if (updateRequirement == null) {
+                        TourOverlay(isPersian = LocaleHelper.getLanguage(context) == "fa")
+                    }
+
                     // One host for every screen: always above dialogs/sheets, same spot everywhere.
                     InAppNotificationHost(
                         isPersian = LocaleHelper.getLanguage(context) == "fa",
@@ -468,6 +477,24 @@ class MainActivity : FragmentActivity() {
             ) {
                 navController.navigate(AppRoute.Login()) {
                     popUpTo(navController.graph.id) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+        }
+
+        // ===== پل ناوبریِ تور: رفتن به صفحه‌ی «افزودن» و برگشتن؛ قطع تور اگر کاربر از صفحه‌ی اصلی بیرون رفت =====
+        val tourScreen = if (TourController.isRunning) TourController.currentScreen else null
+        LaunchedEffect(tourScreen, currentRouteEntry?.destination?.route) {
+            val route = currentRouteEntry?.destination?.route.orEmpty()
+            if (tourScreen == null || route.isBlank()) return@LaunchedEffect
+            val onMain = route.contains("MainStructure")
+            val onAdd = route.contains("AddScreen")
+            when {
+                // قفل برنامه، خروج از حساب، ورود و... : تور تمام‌نشده می‌ماند و بعداً از اول شروع می‌شود.
+                !onMain && !onAdd -> TourController.abort()
+                tourScreen == TourScreen.ADD && onMain -> navController.navigate(AppRoute.AddScreen())
+                tourScreen != TourScreen.ADD && onAdd -> navController.navigate(AppRoute.MainStructure) {
+                    popUpTo(AppRoute.MainStructure) { inclusive = false }
                     launchSingleTop = true
                 }
             }
@@ -1060,6 +1087,37 @@ class MainActivity : FragmentActivity() {
                 // فقط مجوزهای «remindable» که هنوز داده نشده‌اند و زمانشان رسیده باعث نمایش شیت می‌شوند؛
                 // ولی داخل شیت همهٔ مجوزهای مهم (با وضعیت زنده) دیده می‌شوند تا پیشرفت معنا داشته باشد.
                 var showPermissionSheet by remember { mutableStateOf(false) }
+
+                // ===== تور معرفی: فقط یک‌بار و فقط برای کاربری که تازه ثبت‌نام کرده است =====
+                LaunchedEffect(Unit) {
+                    // مهمان شناسه‌ی حساب ندارد؛ فضای مهمان با یک شناسه‌ی ثابت یک‌بار تور را می‌بیند.
+                    val userId = app.container.authSessionStore.userId()
+                        ?: if (app.container.guestModeStore.isSessionActive) TourPreferences.GUEST_ID else null
+                    if (!TourController.isRunning &&
+                        OnboardingPreferences.isCompleted(context) &&
+                        TourPreferences.shouldShow(context, userId)
+                    ) {
+                        TourController.start(userId)
+                    }
+                }
+                // تب مربوط به مرحله‌ی جاری تور
+                val tourTabScreen = if (TourController.isRunning) TourController.currentScreen else null
+                LaunchedEffect(tourTabScreen) {
+                    val target: MainTabRoute? = when (tourTabScreen) {
+                        TourScreen.HOME -> MainTabRoute.Home
+                        TourScreen.TRANSACTIONS -> MainTabRoute.Transactions
+                        TourScreen.ANALYTICS -> MainTabRoute.Analytics
+                        TourScreen.SETTINGS -> MainTabRoute.Settings
+                        else -> null
+                    }
+                    if (target != null) {
+                        appNavController.navigate(target) {
+                            popUpTo(appNavController.graph.startDestinationId) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                }
                 var reminderItems by remember { mutableStateOf<List<PermissionReminderItem>>(emptyList()) }
 
                 LaunchedEffect(permissionRefreshTrigger) {
@@ -1077,6 +1135,7 @@ class MainActivity : FragmentActivity() {
                     }
 
                     if (!showPermissionSheet &&
+                        !TourController.isRunning &&
                         OnboardingPreferences.isCompleted(context) &&
                         OnboardingPreferences.isReminderGracePeriodOver(context)
                     ) {
@@ -1220,7 +1279,7 @@ class MainActivity : FragmentActivity() {
                     // ===== یادآوری فعال‌سازی ورود با اثر انگشت (بعد از شیت مجوزها، با زمان‌بندی هوشمند) =====
                     BiometricReminderHost(
                         isPersian = isPersian,
-                        blockedByOtherSheet = showPermissionSheet
+                        blockedByOtherSheet = showPermissionSheet || TourController.isRunning
                     )
 
                     // ===== Bottom dock: nav bar + add button inside one opaque capsule =====

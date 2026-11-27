@@ -42,6 +42,11 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.rounded.Language
+import androidx.compose.foundation.lazy.rememberLazyListState
+import ir.hamedan.budgetmanagement.ui.tour.TourController
+import ir.hamedan.budgetmanagement.ui.tour.TourTarget
+import ir.hamedan.budgetmanagement.ui.tour.tourTarget
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
@@ -145,6 +150,7 @@ private val ALL_SETTINGS_ITEMS = listOf(
     SettingsEntry("exportExcel", "خروجی Excel", "Excel export", "جدول قابل‌ویرایش از تراکنش‌ها (XLSX)", "An editable spreadsheet of your transactions (XLSX)"),
     SettingsEntry("exportPdf", "خروجی PDF", "PDF report", "گزارش خوانا برای چاپ و اشتراک‌گذاری", "A readable report to print or share"),
     SettingsEntry("backup", "پشتیبان‌گیری", "Backup", "نسخه‌ی رمزنگاری‌شده از تمام اطلاعات شما", "An encrypted copy of all your data"),
+    SettingsEntry("website", "وب‌سایت رسمی سیدنا", "Official Website", "cidna.ir", "cidna.ir"),
     SettingsEntry("email", "ارسال ایمیل به پشتیبانی", "Email Support", "cidna.app@gmail.com", "cidna.app@gmail.com"),
     SettingsEntry("whatsapp", "واتس‌اپ توسعه‌دهنده", "WhatsApp Contact", "گفتگوی مستقیم با توسعه‌دهنده", "Chat with the developer"),
     SettingsEntry("twitter", "ایکس (توییتر)", "X (Twitter)", "@CidnaApp", "@CidnaApp"),
@@ -543,6 +549,15 @@ fun SettingsScreen(
     )
 
     val supportRows = settingsRows(
+        visible("website") to @Composable {
+            SettingsRow(
+                title = title("website"),
+                subtitle = subtitle("website"),
+                appLogo = true,
+                onClick = { WebLinks.openSite(context, isPersian, darkTheme) },
+                trailing = { SettingsChevron() }
+            )
+        },
         visible("email") to @Composable {
             SettingsRow(
                 title = title("email"),
@@ -676,10 +691,21 @@ fun SettingsScreen(
         }
     )
 
+    // ===== تور معرفی: اسکرول خودکار به بخش در حال معرفی (ترتیب آیتم‌ها: پروفایل، شخصی‌سازی، مدیریت، امنیت، داده‌ها) =====
+    val settingsListState = rememberLazyListState()
+    val tourStepId = if (TourController.isRunning) TourController.currentStep.id else null
+    LaunchedEffect(tourStepId) {
+        if (tourStepId != null && TourController.currentScreen == ir.hamedan.budgetmanagement.ui.tour.TourScreen.SETTINGS) {
+            val index = if (TourController.currentStep.target == TourTarget.SET_EXPORT) 4 else 0
+            settingsListState.animateScrollToItem(index)
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         AuroraBackground()
 
         LazyColumn(
+            state = settingsListState,
             modifier = Modifier.fillMaxSize().scrollEdgeFade().padding(horizontal = AppDimens.ScreenHorizontal),
             contentPadding = PaddingValues(
                 top = topBarClearance(),
@@ -779,20 +805,22 @@ fun SettingsScreen(
                         if (isGuest) (if (isPersian) "کاربر مهمان" else "Guest user")
                         else (if (isPersian) "کاربر سیدنا" else "Cidna user")
                     }
-                    SettingsProfileHero(
-                        isPersian = isPersian,
-                        isGuest = isGuest,
-                        name = displayName,
-                        subtitle = if (isGuest) {
-                            if (isPersian) "داده‌ها فقط روی همین گوشی ذخیره می‌شوند" else "Your data stays on this phone only"
-                        } else {
-                            user?.phoneNumber?.takeIf { it.isNotBlank() }?.let { maskedPhone(it, isPersian) }
-                                ?: subtitle("profile")
-                        },
-                        initials = user?.let { initialsOf(it.firstName, it.lastName, isPersian) }.orEmpty(),
-                        completionPercent = if (isGuest) null else user?.let { ProfileCompletion.of(it).percent },
-                        onClick = onProfileClick
-                    )
+                    Box(modifier = Modifier.tourTarget(TourTarget.SET_PROFILE)) {
+                        SettingsProfileHero(
+                            isPersian = isPersian,
+                            isGuest = isGuest,
+                            name = displayName,
+                            subtitle = if (isGuest) {
+                                if (isPersian) "داده‌ها فقط روی همین گوشی ذخیره می‌شوند" else "Your data stays on this phone only"
+                            } else {
+                                user?.phoneNumber?.takeIf { it.isNotBlank() }?.let { maskedPhone(it, isPersian) }
+                                    ?: subtitle("profile")
+                            },
+                            initials = user?.let { initialsOf(it.firstName, it.lastName, isPersian) }.orEmpty(),
+                            completionPercent = if (isGuest) null else user?.let { ProfileCompletion.of(it).percent },
+                            onClick = onProfileClick
+                        )
+                    }
                 }
             }
 
@@ -823,6 +851,7 @@ fun SettingsScreen(
             if (dataRows.isNotEmpty()) {
                 item(key = "data") {
                     SettingsGroup(
+                        modifier = Modifier.tourTarget(TourTarget.SET_EXPORT),
                         rows = dataRows,
                         title = if (isPersian) "داده‌ها و گزارش‌ها" else "Data & Reports"
                     )
